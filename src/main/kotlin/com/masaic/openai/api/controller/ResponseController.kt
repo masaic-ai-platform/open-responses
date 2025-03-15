@@ -1,25 +1,24 @@
 package com.masaic.openai.api.controller
 
 import com.masaic.openai.api.model.CreateResponseRequest
-import com.masaic.openai.api.model.InputItemList
-import com.masaic.openai.api.model.ResponseObject
-import com.masaic.openai.api.model.StreamingEvent
 import com.masaic.openai.api.service.ResponseNotFoundException
 import com.masaic.openai.api.service.ResponseService
+import com.openai.models.responses.Response
+import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputItem
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.onEach
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.server.reactive.ServerHttpResponse
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import kotlin.jvm.optionals.getOrNull
 
 @RestController
 @RequestMapping("/v1")
@@ -34,7 +33,7 @@ class ResponseController(private val responseService: ResponseService) {
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = ResponseObject::class))]
+                content = [Content(schema = Schema(implementation = Response::class))]
             )
         ]
     )
@@ -60,7 +59,7 @@ class ResponseController(private val responseService: ResponseService) {
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = ResponseObject::class))]
+                content = [Content(schema = Schema(implementation = Response::class))]
             ),
             ApiResponse(
                 responseCode = "404",
@@ -71,7 +70,7 @@ class ResponseController(private val responseService: ResponseService) {
     fun getResponse(
         @Parameter(description = "The ID of the response to retrieve", required = true)
         @PathVariable responseId: String
-    ): ResponseEntity<ResponseObject> {
+    ): ResponseEntity<Response> {
         return try {
             ResponseEntity.ok(responseService.getResponse(responseId))
         } catch (e: ResponseNotFoundException) {
@@ -99,7 +98,7 @@ class ResponseController(private val responseService: ResponseService) {
         @PathVariable responseId: String
     ): ResponseEntity<Void> {
         return try {
-            responseService.deleteResponse(responseId)
+            //responseService.deleteResponse(responseId)
             ResponseEntity.ok().build()
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
@@ -114,7 +113,7 @@ class ResponseController(private val responseService: ResponseService) {
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = InputItemList::class))]
+                content = [Content(schema = Schema(implementation = ResponseInputItem::class))]
             ),
             ApiResponse(
                 responseCode = "404",
@@ -137,12 +136,12 @@ class ResponseController(private val responseService: ResponseService) {
         
         @Parameter(description = "An item ID to list items before, used in pagination.")
         @RequestParam(required = false) before: String?
-    ): ResponseEntity<InputItemList> {
+    ): ResponseEntity<ResponseInputItem?> {
         return try {
             val validLimit = limit.coerceIn(1, 100)
             val validOrder = if (order in listOf("asc", "desc")) order else "desc"
-            
-            ResponseEntity.ok(responseService.getInputItems(responseId, validLimit, validOrder, after, before))
+
+            ResponseEntity.ok(null)
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }

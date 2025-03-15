@@ -1,6 +1,6 @@
 plugins {
-	kotlin("jvm") version "1.9.25"
-	kotlin("plugin.spring") version "1.9.25"
+	kotlin("jvm") version "2.1.0"
+	kotlin("plugin.spring") version "2.1.0"
 	id("org.springframework.boot") version "3.4.3"
 	id("io.spring.dependency-management") version "1.1.7"
 }
@@ -28,6 +28,7 @@ dependencies {
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
 	implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
 	implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0")
+	implementation("com.openai:openai-java:0.34.1")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	implementation("io.projectreactor:reactor-test")
