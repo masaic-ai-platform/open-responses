@@ -1,17 +1,17 @@
 package com.masaic.openai.api.model
 
-import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonAnyGetter
+import com.fasterxml.jackson.annotation.JsonAnySetter
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
-import com.fasterxml.jackson.annotation.JsonIgnore
-import java.time.Instant
+import com.openai.core.JsonValue
 
 // Request models
 data class CreateResponseRequest(
     val model: String,
     val input: Any,
-    val tools: List<Any>? = null,
+    val tools: List<MasaicTool>? = null,
     @JsonProperty("tool_choice") val toolChoice: String? = null,
     val instructions: String? = null,
     val stream: Boolean? = null,
@@ -48,3 +48,23 @@ data class JsonSchemaFormat(
 data class JsonObjectFormat(
     override val type: String = "json_object"
 ) : ResponseFormat()
+
+class MasaicTool {
+    @JsonProperty("type")
+    var type: String? = null
+
+    // Store all other properties that aren't explicitly mapped
+    private val additionalProperties: MutableMap<String, JsonValue> = mutableMapOf()
+
+    // For serializing any additional fields
+    @JsonAnyGetter
+    fun getAdditionalProperties(): Map<String, JsonValue> {
+        return additionalProperties
+    }
+
+    // For deserializing any additional fields
+    @JsonAnySetter
+    fun setAdditionalProperty(name: String, value: JsonValue) {
+        additionalProperties[name] = value
+    }
+}
