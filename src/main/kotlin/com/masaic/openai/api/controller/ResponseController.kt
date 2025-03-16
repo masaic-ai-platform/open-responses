@@ -14,7 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
-import org.springframework.http.server.reactive.ServerHttpResponse
+import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import kotlin.jvm.optionals.getOrNull
@@ -38,15 +38,16 @@ class ResponseController(private val responseService: ResponseService) {
     )
     suspend fun createResponse(
         @RequestBody request: ResponseCreateParams.Body,
-        response: ServerHttpResponse
+        @RequestHeader headers: MultiValueMap<String, String>,
+        @RequestParam queryParams: MultiValueMap<String, String>
     ): ResponseEntity<*> {
         // If streaming is requested, set the appropriate content type and return a flow
         if (request._additionalProperties()["stream"]?.asBoolean()?.getOrNull() == true) {
-            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(responseService.createStreamingResponse(request))
+            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(responseService.createStreamingResponse(request, headers, queryParams))
         }
 
         // For non-streaming, return a regular response
-        val responseObj = responseService.createResponse(request)
+        val responseObj = responseService.createResponse(request, headers, queryParams)
         return ResponseEntity.ok(responseObj)
     }
 
@@ -68,10 +69,12 @@ class ResponseController(private val responseService: ResponseService) {
     )
     fun getResponse(
         @Parameter(description = "The ID of the response to retrieve", required = true)
-        @PathVariable responseId: String
+        @PathVariable responseId: String,
+        @RequestHeader headers: MultiValueMap<String, String>,
+        @RequestParam queryParams: MultiValueMap<String, String>
     ): ResponseEntity<Response> {
         return try {
-            ResponseEntity.ok(responseService.getResponse(responseId))
+            ResponseEntity.ok(responseService.getResponse(responseId, headers, queryParams))
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }

@@ -26,6 +26,19 @@ class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse)
     }
 
+    @ExceptionHandler(IllegalArgumentException::class)
+    fun handleIllegalArgumentException(ex: IllegalArgumentException): ResponseEntity<ErrorResponse> {
+
+        log.error("Illegal argument", ex)
+        val errorResponse = ErrorResponse(
+            type = "invalid_request",
+            message = ex.message ?: "Invalid request",
+            param = null,
+            code = "400"
+        )
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
+    }
+
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatusException(ex: ResponseStatusException): ResponseEntity<ErrorResponse> {
 
