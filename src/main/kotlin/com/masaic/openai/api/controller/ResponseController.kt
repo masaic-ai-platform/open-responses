@@ -1,6 +1,5 @@
 package com.masaic.openai.api.controller
 
-import com.masaic.openai.api.model.CreateResponseRequest
 import com.masaic.openai.api.service.ResponseNotFoundException
 import com.masaic.openai.api.service.ResponseService
 import com.openai.models.responses.Response
@@ -38,11 +37,11 @@ class ResponseController(private val responseService: ResponseService) {
         ]
     )
     suspend fun createResponse(
-        @RequestBody request: CreateResponseRequest,
+        @RequestBody request: ResponseCreateParams.Body,
         response: ServerHttpResponse
     ): ResponseEntity<*> {
         // If streaming is requested, set the appropriate content type and return a flow
-        if (request.stream == true) {
+        if (request._additionalProperties()["stream"]?.asBoolean()?.getOrNull() == true) {
             return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(responseService.createStreamingResponse(request))
         }
 
@@ -136,12 +135,13 @@ class ResponseController(private val responseService: ResponseService) {
         
         @Parameter(description = "An item ID to list items before, used in pagination.")
         @RequestParam(required = false) before: String?
-    ): ResponseEntity<ResponseInputItem?> {
+    ): ResponseEntity<Any> {
         return try {
             val validLimit = limit.coerceIn(1, 100)
             val validOrder = if (order in listOf("asc", "desc")) order else "desc"
 
-            ResponseEntity.ok(null)
+            val inputItems = responseService.listInputItems(responseId, validLimit, validOrder, after, before)
+            ResponseEntity.ok(inputItems)
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }

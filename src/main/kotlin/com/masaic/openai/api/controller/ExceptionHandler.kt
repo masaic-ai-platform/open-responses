@@ -1,6 +1,7 @@
 package com.masaic.openai.api.controller
 
 import com.masaic.openai.api.service.ResponseNotFoundException
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
@@ -10,8 +11,12 @@ import org.springframework.web.server.ResponseStatusException
 @RestControllerAdvice
 class GlobalExceptionHandler {
 
+    val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+
     @ExceptionHandler(ResponseNotFoundException::class)
     fun handleResponseNotFoundException(ex: ResponseNotFoundException): ResponseEntity<ErrorResponse> {
+
+        log.error("Response not found", ex)
         val errorResponse = ErrorResponse(
             type = "not_found",
             message = ex.message ?: "Response not found",
@@ -23,6 +28,8 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatusException(ex: ResponseStatusException): ResponseEntity<ErrorResponse> {
+
+        log.error("Response status error", ex)
         val errorResponse = ErrorResponse(
             type = "api_error",
             message = ex.reason ?: "An error occurred",
@@ -34,6 +41,9 @@ class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception::class)
     fun handleGenericException(ex: Exception): ResponseEntity<ErrorResponse> {
+
+        log.error("Internal server error", ex)
+
         val errorResponse = ErrorResponse(
             type = "api_error",
             message = ex.message ?: "An unexpected error occurred",
