@@ -63,13 +63,43 @@ class ResponseService {
 
     fun createStreamingResponse(request: CreateResponseRequest): Flow<String> = flow {
 
-        val createParams = ResponseCreateParams.builder()
+        val createParamsBuilder = ResponseCreateParams.builder()
             .model(request.model)
             .instructions(request.instructions)
             .input(objectMapper.writeValueAsString(request.input))
-            .build()
 
-        client.responses().createStreaming(createParams).stream().consumeAsFlow().collect {
+        request.tools?.forEach {
+            when(it.type) {
+                "web_search_preview" -> {
+                    val additionalProps = it.getAdditionalProperties()
+                    createParamsBuilder.addTool(WebSearchTool.builder().type(WebSearchTool.Type.of("web_search_preview")).putAllAdditionalProperties(additionalProps).build())
+                }
+
+                "web_search_preview_2025_03_11" -> {
+                    val additionalProps = it.getAdditionalProperties()
+                    createParamsBuilder.addTool(WebSearchTool.builder().type(WebSearchTool.Type.of("web_search_preview_2025_03_11")).putAllAdditionalProperties(additionalProps).build())
+                }
+
+                "file_search" -> {
+                    val additionalProps = it.getAdditionalProperties()
+                    createParamsBuilder.addTool(FileSearchTool.builder().type(JsonValue.from("file_search")).putAllAdditionalProperties(additionalProps).build())
+                }
+
+                "function" -> {
+                    val additionalProps = it.getAdditionalProperties()
+                    createParamsBuilder.addTool(FunctionTool.builder().type(JsonValue.from("function")).putAllAdditionalProperties(additionalProps).build())
+                }
+
+                "computer_use_preview" -> {
+                    val additionalProps = it.getAdditionalProperties()
+                    createParamsBuilder.addTool(ComputerTool.builder().type(JsonValue.from("computer_use_preview")).putAllAdditionalProperties(additionalProps).build())
+                }
+
+                else -> throw IllegalArgumentException("Unknown tool type: ${it.type}")
+            }
+        }
+
+        client.responses().createStreaming(createParamsBuilder.build()).stream().consumeAsFlow().collect {
             emit(EventUtils.convertEvent(it))
         }
     }
