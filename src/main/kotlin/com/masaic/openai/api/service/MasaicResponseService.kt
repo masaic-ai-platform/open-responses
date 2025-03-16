@@ -13,6 +13,7 @@ import com.openai.models.responses.ResponseRetrieveParams
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.stream.consumeAsFlow
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap
 
@@ -58,7 +59,7 @@ class MasaicResponseService {
 
     suspend fun createStreamingResponse(request: ResponseCreateParams.Body,
                                 headers: MultiValueMap<String, String>,
-                                queryParams: MultiValueMap<String, String>): Flow<String> {
+                                queryParams: MultiValueMap<String, String>): Flow<ServerSentEvent<String>> {
         val clientBuilder = OpenAIOkHttpClient.builder()
         val headerBuilder: Headers.Builder = Headers.builder()
         headers.filter { it.key == "Authorization" }.forEach { (key, value) -> headerBuilder.put(key,value) }

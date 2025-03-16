@@ -18,6 +18,7 @@ import com.openai.services.blocking.responses.InputItemService
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.stream.consumeAsFlow
+import org.springframework.http.codec.ServerSentEvent
 
 class MasaicOpenAiResponseServiceImpl(
     private val client: OpenAIClient
@@ -75,7 +76,7 @@ class MasaicOpenAiResponseServiceImpl(
 
     fun createCompletionStream(
         params: ResponseCreateParams
-    ): Flow<String> = flow {
+    ): Flow<ServerSentEvent<String>> = flow {
         val input = params.input()
 
         if(input.isText()){
@@ -89,7 +90,7 @@ class MasaicOpenAiResponseServiceImpl(
                         if (chunk.delta().content().isPresent) {
                             val delta = chunk.delta().content().get()
                             val index = chunk.index()
-                            if (delta.startsWith("[DONE]")) {
+                            if (chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop") {
                                 emit(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofOutputTextDone(

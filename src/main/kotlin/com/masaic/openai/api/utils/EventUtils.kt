@@ -2,174 +2,175 @@ package com.masaic.openai.api.utils
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.ResponseStreamEvent
+import org.springframework.http.codec.ServerSentEvent
 
 class EventUtils {
 
     companion object {
         val objectMapper = ObjectMapper()
 
-        fun convertEvent(event: ResponseStreamEvent): String {
+        fun convertEvent(event: ResponseStreamEvent): ServerSentEvent<String> {
             if(event.isAudioDelta()) {
                 val audioDeltaEvent = event.asAudioDelta()
-                return "event: ${audioDeltaEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(audioDeltaEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(audioDeltaEvent)).event(audioDeltaEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isAudioDone()) {
                 val audioDoneEvent = event.asAudioDone()
-                return "event: ${audioDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(audioDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(audioDoneEvent)).event(audioDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isAudioTranscriptDelta()) {
                 val audioTranscriptDeltaEvent = event.asAudioTranscriptDelta()
-                return "event: ${audioTranscriptDeltaEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(audioTranscriptDeltaEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(audioTranscriptDeltaEvent)).event(audioTranscriptDeltaEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isAudioTranscriptDone()) {
                 val audioTranscriptDoneEvent = event.asAudioTranscriptDone()
-                return "event: ${audioTranscriptDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(audioTranscriptDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(audioTranscriptDoneEvent)).event(audioTranscriptDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCodeInterpreterCallCodeDelta()) {
                 val codeInterpreterCallCodeDeltaEvent = event.asCodeInterpreterCallCodeDelta()
-                return "event: ${codeInterpreterCallCodeDeltaEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(codeInterpreterCallCodeDeltaEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(codeInterpreterCallCodeDeltaEvent)).event(codeInterpreterCallCodeDeltaEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCodeInterpreterCallCodeDone()) {
                 val codeInterpreterCallCodeDoneEvent = event.asCodeInterpreterCallCodeDone()
-                return "event: ${codeInterpreterCallCodeDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(codeInterpreterCallCodeDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(codeInterpreterCallCodeDoneEvent)).event(codeInterpreterCallCodeDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCodeInterpreterCallCompleted()) {
                 val codeInterpreterCallCompletedEvent = event.asCodeInterpreterCallCompleted()
-                return "event: ${codeInterpreterCallCompletedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(codeInterpreterCallCompletedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(codeInterpreterCallCompletedEvent)).event(codeInterpreterCallCompletedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCodeInterpreterCallInProgress()) {
                 val codeInterpreterCallInProgressEvent = event.asCodeInterpreterCallInProgress()
-                return "event: ${codeInterpreterCallInProgressEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(codeInterpreterCallInProgressEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(codeInterpreterCallInProgressEvent)).event(codeInterpreterCallInProgressEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCodeInterpreterCallInterpreting()) {
                 val codeInterpreterCallInterpretingEvent = event.asCodeInterpreterCallInterpreting()
-                return "event: ${codeInterpreterCallInterpretingEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(codeInterpreterCallInterpretingEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(codeInterpreterCallInterpretingEvent)).event(codeInterpreterCallInterpretingEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCompleted()) {
                 val completedEvent = event.asCompleted()
-                return "event: ${completedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(completedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(completedEvent)).event(completedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isContentPartAdded()) {
                 val contentPartAddedEvent = event.asContentPartAdded()
-                return "event: ${contentPartAddedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(contentPartAddedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(contentPartAddedEvent)).event(contentPartAddedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isContentPartDone()) {
                 val contentPartDoneEvent = event.asContentPartDone()
-                return "event: ${contentPartDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(contentPartDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(contentPartDoneEvent)).event(contentPartDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isCreated()) {
                 val createdEvent = event.asCreated()
-                return "event: ${createdEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(createdEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(createdEvent)).event(createdEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isError()) {
                 val errorEvent = event.asError()
-                return "event: ${errorEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(errorEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(errorEvent)).event(errorEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isFileSearchCallCompleted()) {
                 val fileSearchCallCompletedEvent = event.asFileSearchCallCompleted()
-                return "event: ${fileSearchCallCompletedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(fileSearchCallCompletedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(fileSearchCallCompletedEvent)).event(fileSearchCallCompletedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isFileSearchCallInProgress()) {
                 val fileSearchCallInProgressEvent = event.asFileSearchCallInProgress()
-                return "event: ${fileSearchCallInProgressEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(fileSearchCallInProgressEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(fileSearchCallInProgressEvent)).event(fileSearchCallInProgressEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isFileSearchCallSearching()) {
                 val fileSearchCallSearchingEvent = event.asFileSearchCallSearching()
-                return "event: ${fileSearchCallSearchingEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(fileSearchCallSearchingEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(fileSearchCallSearchingEvent)).event(fileSearchCallSearchingEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isFunctionCallArgumentsDelta()) {
                 val functionCallArgumentsDeltaEvent = event.asFunctionCallArgumentsDelta()
-                return "event: ${functionCallArgumentsDeltaEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(functionCallArgumentsDeltaEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(functionCallArgumentsDeltaEvent)).event(functionCallArgumentsDeltaEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isFunctionCallArgumentsDone()) {
                 val functionCallArgumentsDoneEvent = event.asFunctionCallArgumentsDone()
-                return "event: ${functionCallArgumentsDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(functionCallArgumentsDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(functionCallArgumentsDoneEvent)).event(functionCallArgumentsDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isInProgress()) {
                 val inProgressEvent = event.asInProgress()
-                return "event: ${inProgressEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(inProgressEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(inProgressEvent)).event(inProgressEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isFailed()) {
                 val failedEvent = event.asFailed()
-                return "event: ${failedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(failedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(failedEvent)).event(failedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isIncomplete()) {
                 val incompleteEvent = event.asIncomplete()
-                return "event: ${incompleteEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(incompleteEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(incompleteEvent)).event(incompleteEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isOutputItemAdded()) {
                 val outputItemAddedEvent = event.asOutputItemAdded()
-                return "event: ${outputItemAddedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(outputItemAddedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(outputItemAddedEvent)).event(outputItemAddedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isOutputItemDone()) {
                 val outputItemDoneEvent = event.asOutputItemDone()
-                return "event: ${outputItemDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(outputItemDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(outputItemDoneEvent)).event(outputItemDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isRefusalDelta()) {
                 val refusalDeltaEvent = event.asRefusalDelta()
-                return "event: ${refusalDeltaEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(refusalDeltaEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(refusalDeltaEvent)).event(refusalDeltaEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isRefusalDone()) {
                 val refusalDoneEvent = event.asRefusalDone()
-                return "event: ${refusalDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(refusalDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(refusalDoneEvent)).event(refusalDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isOutputTextAnnotationAdded()) {
                 val outputTextAnnotationAddedEvent = event.asOutputTextAnnotationAdded()
-                return "event: ${outputTextAnnotationAddedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(outputTextAnnotationAddedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(outputTextAnnotationAddedEvent)).event(outputTextAnnotationAddedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isOutputTextDelta()) {
                 val outputTextDeltaEvent = event.asOutputTextDelta()
-                return "event: ${outputTextDeltaEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(outputTextDeltaEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(outputTextDeltaEvent)).event(outputTextDeltaEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isOutputTextDone()) {
                 val outputTextDoneEvent = event.asOutputTextDone()
-                return "event: ${outputTextDoneEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(outputTextDoneEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(outputTextDoneEvent)).event(outputTextDoneEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isWebSearchCallCompleted()) {
                 val webSearchCallCompletedEvent = event.asWebSearchCallCompleted()
-                return "event: ${webSearchCallCompletedEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(webSearchCallCompletedEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(webSearchCallCompletedEvent)).event(webSearchCallCompletedEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isWebSearchCallInProgress()) {
                 val webSearchCallInProgressEvent = event.asWebSearchCallInProgress()
-                return "event: ${webSearchCallInProgressEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(webSearchCallInProgressEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(webSearchCallInProgressEvent)).event(webSearchCallInProgressEvent._type().asStringOrThrow()).build()
             }
 
             if(event.isWebSearchCallSearching()) {
                 val webSearchCallSearchingEvent = event.asWebSearchCallSearching()
-                return "event: ${webSearchCallSearchingEvent._type().asStringOrThrow()}\ndata: ${objectMapper.writeValueAsString(webSearchCallSearchingEvent)}\n\n"
+                return ServerSentEvent.builder(objectMapper.writeValueAsString(webSearchCallSearchingEvent)).event(webSearchCallSearchingEvent._type().asStringOrThrow()).build()
             }
 
-            return ""
+            throw IllegalArgumentException("Unknown event type")
         }
     }
 }
