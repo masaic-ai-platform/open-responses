@@ -87,22 +87,25 @@ class MasaicOpenAiResponseServiceImpl(
             response.stream().consumeAsFlow().collect {
                     it.choices().stream().consumeAsFlow().collect {
                         val chunk = it
-                        if (chunk.delta().content().isPresent) {
-                            val delta = chunk.delta().content().get()
-                            val index = chunk.index()
-                            if (chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop") {
-                                emit(
-                                    EventUtils.convertEvent(
-                                        ResponseStreamEvent.ofOutputTextDone(
-                                            ResponseTextDoneEvent.builder().contentIndex(
-                                                index
-                                            )
-                                                .outputIndex(0)
-                                                .itemId(index.toString()).build()
+
+                        if (chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop") {
+                            emit(
+                                EventUtils.convertEvent(
+                                    ResponseStreamEvent.ofOutputTextDone(
+                                        ResponseTextDoneEvent.builder().contentIndex(
+                                            0
                                         )
+                                            .text("")
+                                            .outputIndex(0)
+                                            .itemId("0").build()
                                     )
                                 )
-                            } else {
+                            )
+                        }
+
+                        if (chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank()) {
+                            val delta = chunk.delta().content().get()
+                            val index = chunk.index()
                                 emit(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofOutputTextDelta(
@@ -115,7 +118,7 @@ class MasaicOpenAiResponseServiceImpl(
                                         )
                                     )
                                 )
-                            }
+
                         }
                     }
             }
