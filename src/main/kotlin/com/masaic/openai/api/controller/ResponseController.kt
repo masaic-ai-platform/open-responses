@@ -1,7 +1,7 @@
 package com.masaic.openai.api.controller
 
-import com.masaic.openai.api.service.ResponseNotFoundException
 import com.masaic.openai.api.service.MasaicResponseService
+import com.masaic.openai.api.service.ResponseNotFoundException
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -44,7 +44,8 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
     ): ResponseEntity<*> {
         // If streaming is requested, set the appropriate content type and return a flow
         if (request._additionalProperties()["stream"]?.asBoolean()?.getOrNull() == true) {
-            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM).body(masaicResponseService.createStreamingResponse(request, headers, queryParams))
+            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(masaicResponseService.createStreamingResponse(request, headers, queryParams))
         }
 
         // For non-streaming, return a regular response
@@ -127,16 +128,16 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
     fun listInputItems(
         @Parameter(description = "The ID of the response to retrieve input items for", required = true)
         @PathVariable responseId: String,
-        
+
         @Parameter(description = "A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20.")
         @RequestParam(defaultValue = "20") limit: Int,
-        
+
         @Parameter(description = "Sort order by the created_at timestamp of the object. asc for ascending and desc for descending. Defaults to desc.")
         @RequestParam(defaultValue = "desc") order: String,
-        
+
         @Parameter(description = "An item ID to list items after, used in pagination.")
         @RequestParam(required = false) after: String?,
-        
+
         @Parameter(description = "An item ID to list items before, used in pagination.")
         @RequestParam(required = false) before: String?
     ): ResponseEntity<Any> {

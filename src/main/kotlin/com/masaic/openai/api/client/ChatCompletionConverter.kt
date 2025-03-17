@@ -4,16 +4,8 @@ import com.openai.core.JsonValue
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.completions.CompletionUsage
-import com.openai.models.responses.Response
-import com.openai.models.responses.ResponseCreateParams
-import com.openai.models.responses.ResponseOutputItem
-import com.openai.models.responses.ResponseOutputMessage
-import com.openai.models.responses.ResponseOutputText
-import com.openai.models.responses.ResponseReasoningItem
-import com.openai.models.responses.ResponseStatus
-import com.openai.models.responses.ResponseUsage
-import com.openai.models.responses.ToolChoiceOptions
-import java.util.Optional
+import com.openai.models.responses.*
+import java.util.*
 
 /**
  * Utility function to convert a ChatCompletion object to a Response object.
@@ -47,14 +39,18 @@ object ChatCompletionConverter {
 
             val outputs = mutableListOf<ResponseOutputItem>()
 
-            outputs.add(ResponseOutputItem.ofMessage(
-                ResponseOutputMessage.builder().addContent(ResponseOutputText.builder()
-                    .annotations(emptyList())
-                    .text(messageWithoutReasoning)
-                    .build()).id(choice.index().toString()).status(ResponseOutputMessage.Status.COMPLETED).build())
+            outputs.add(
+                ResponseOutputItem.ofMessage(
+                    ResponseOutputMessage.builder().addContent(
+                        ResponseOutputText.builder()
+                            .annotations(emptyList())
+                            .text(messageWithoutReasoning)
+                            .build()
+                    ).id(choice.index().toString()).status(ResponseOutputMessage.Status.COMPLETED).build()
+                )
             )
 
-            if(reasoning.isNotBlank()) {
+            if (reasoning.isNotBlank()) {
                 outputs.add(
                     ResponseOutputItem.ofReasoning(
                         ResponseReasoningItem.builder()
@@ -99,20 +95,20 @@ object ChatCompletionConverter {
 
     private fun convertToolChoice(toolChoice: Optional<ResponseCreateParams.ToolChoice>): Response.ToolChoice {
 
-        if(toolChoice.isEmpty){
+        if (toolChoice.isEmpty) {
             return Response.ToolChoice.ofOptions(ToolChoiceOptions.NONE)
         }
         val responseToolChoice = Response.ToolChoice
 
-        if(toolChoice.get().isOptions()){
+        if (toolChoice.get().isOptions()) {
             return responseToolChoice.ofOptions(toolChoice.get().asOptions())
         }
 
-        if(toolChoice.get().isFunction()){
+        if (toolChoice.get().isFunction()) {
             return responseToolChoice.ofFunction(toolChoice.get().asFunction())
         }
 
-        if(toolChoice.get().isTypes()){
+        if (toolChoice.get().isTypes()) {
             return responseToolChoice.ofTypes(toolChoice.get().asTypes())
         }
 

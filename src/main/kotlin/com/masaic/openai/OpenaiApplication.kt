@@ -7,5 +7,5 @@ import org.springframework.boot.runApplication
 class OpenaiApplication
 
 fun main(args: Array<String>) {
-	runApplication<OpenaiApplication>(*args)
+    runApplication<OpenaiApplication>(*args)
 }
