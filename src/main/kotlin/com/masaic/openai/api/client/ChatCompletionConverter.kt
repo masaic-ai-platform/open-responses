@@ -29,12 +29,13 @@ object ChatCompletionConverter {
             var reasoning = ""
 
             messageContent.ifPresent {
-                reasoning = it.substringAfter("<think>").substringBefore("</think>")
+                if(it.contains("<think>") && it.contains("</think>"))
+                reasoning = it.substringAfter("<think>").substringBefore("</think>").trim()
             }
             var messageWithoutReasoning = ""
 
             messageContent.ifPresent {
-                messageWithoutReasoning = it.replace("<think>$reasoning</think>", "")
+                messageWithoutReasoning = it.replace("<think>$reasoning</think>", "").trim()
             }
 
             val outputs = mutableListOf<ResponseOutputItem>()
@@ -59,6 +60,28 @@ object ChatCompletionConverter {
                             .build()
                     )
                 )
+            }
+
+            if(choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()){
+                val toolCalls = choice.message().toolCalls().get()
+                toolCalls.forEach {
+                    outputs.add(
+                        ResponseOutputItem.ofFunctionCall(
+                            ResponseFunctionToolCall.builder()
+                                .id(it.id())
+                                .callId(it.id())
+                                .name(it.function().name())
+                                .arguments(it.function().arguments())
+                                .type(it._type())
+                                .build()
+                        )
+                    )
+                }
+            }
+
+            if(choice.message().audio().isPresent ){
+                val audio = choice.message().audio().get()
+                //TODO add audio to response
             }
 
             outputs
