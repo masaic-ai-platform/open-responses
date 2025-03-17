@@ -10,10 +10,23 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.forEach
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.transform
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.stream.consumeAsFlow
 import org.springframework.http.codec.ServerSentEvent
+import reactor.kotlin.core.publisher.toMono
 
 class MasaicOpenAiResponseServiceImpl(
     private val client: OpenAIClient
@@ -58,47 +71,24 @@ class MasaicOpenAiResponseServiceImpl(
 
     fun createCompletionStream(
         params: ResponseCreateParams
-    ): Flow<ServerSentEvent<String>> = flow {
-        val response = client.chat().completions().createStreaming(prepareCompletion(params))
+    ): Flow<ServerSentEvent<String>> = callbackFlow {
+        val response = client.async().chat().completions().createStreaming(prepareCompletion(params))
 
-            response.stream().consumeAsFlow().collect {
-                it.choices().stream().consumeAsFlow().collect {
-                    val chunk = it
-
-                    if (chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop") {
-                        emit(
-                            EventUtils.convertEvent(
-                                ResponseStreamEvent.ofOutputTextDone(
-                                    ResponseTextDoneEvent.builder().contentIndex(
-                                        0
-                                    )
-                                        .text("")
-                                        .outputIndex(0)
-                                        .itemId("0").build()
-                                )
-                            )
-                        )
-                    }
-
-                    if (chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank()) {
-                        val delta = chunk.delta().content().get()
-                        val index = chunk.index()
-                        emit(
-                            EventUtils.convertEvent(
-                                ResponseStreamEvent.ofOutputTextDelta(
-                                    ResponseTextDeltaEvent.builder().contentIndex(
-                                        index
-                                    )
-                                        .outputIndex(0)
-                                        .itemId(index.toString())
-                                        .delta(delta).build()
-                                )
-                            )
-                        )
-
-                    }
+        val subscription = response.subscribe { completion ->
+            completion.choices().forEach { choice ->
+                choice.toResponseStreamEvent()?.let { event ->
+                    trySend(event).isSuccess
                 }
             }
+        }
+
+        launch {
+            subscription.onCompleteFuture().await()
+            close()
+        }
+
+        awaitClose {
+            subscription.onCompleteFuture().cancel(true)
         }
     }
 
@@ -108,7 +98,7 @@ class MasaicOpenAiResponseServiceImpl(
 
         val input = params.input()
 
-        if(input.isText()) {
+        if (input.isText()) {
             return ChatCompletionCreateParams.builder().addMessage(
                 ChatCompletionUserMessageParam.builder().content(input.toString()).build()
             ).model(params.model()).additionalBodyProperties(params._additionalBodyProperties()).build()
@@ -122,11 +112,12 @@ class MasaicOpenAiResponseServiceImpl(
                         ChatCompletionAssistantMessageParam.builder().content(it.content().first().asInputText().text())
                             .build()
                     )
+
                     "system" -> completeMessages.addSystemMessage(it.content().first().asInputText().text())
                     "developer" -> completeMessages.addDeveloperMessage(it.content().first().asInputText().text())
                     else -> {}
                 }
             }
             return completeMessages.build()
-        }
-    }
+        }}
+}
