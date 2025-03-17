@@ -4,6 +4,7 @@ import com.masaic.openai.api.utils.EventUtils
 import com.openai.client.OpenAIClient
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.Response
@@ -40,14 +41,29 @@ class MasaicOpenAiResponseServiceImpl(
         val input = params.input()
 
         if(input.isText()){
-            val response = client.chat().completions().create(ChatCompletionCreateParams.builder().addMessage(
+            val response = client.chat().completions().create(
+                ChatCompletionCreateParams.builder().addMessage(
                 ChatCompletionUserMessageParam.builder().content(input.toString()).build()
             ).model(params.model()).build())
 
             return response.toResponse(params)
         }
         else {
-            TODO()
+            val inputItems = input.asResponse()
+            val completeMessages = ChatCompletionCreateParams.builder()
+            inputItems.filter { it.isMessage() }.map { it.asMessage() }.forEach {
+                when(it.role().asString()){
+                    "user" -> completeMessages.addUserMessage(it.content().first().asInputText().text())
+                    "assistant" -> completeMessages.addMessage(ChatCompletionAssistantMessageParam.builder().content(it.content().first().asInputText().text()).build())
+                    "system" -> completeMessages.addSystemMessage(it.content().first().asInputText().text())
+                    "developer" -> completeMessages.addDeveloperMessage(it.content().first().asInputText().text())
+                    else -> {}
+                }
+            }
+
+            val response = client.chat().completions().create(completeMessages.build())
+
+            return response.toResponse(params)
         }
 
         return Response.builder().build()
@@ -124,7 +140,58 @@ class MasaicOpenAiResponseServiceImpl(
             }
         }
         else {
-            TODO()
+            val inputItems = input.asResponse()
+            val completeMessages = ChatCompletionCreateParams.builder()
+            inputItems.filter { it.isMessage() }.map { it.asMessage() }.forEach {
+                when(it.role().asString()){
+                    "user" -> completeMessages.addUserMessage(it.content().first().asInputText().text())
+                    "assistant" -> completeMessages.addMessage(ChatCompletionAssistantMessageParam.builder().content(it.content().first().asInputText().text()).build())
+                    "system" -> completeMessages.addSystemMessage(it.content().first().asInputText().text())
+                    "developer" -> completeMessages.addDeveloperMessage(it.content().first().asInputText().text())
+                    else -> {}
+                }
+            }
+
+            val response = client.chat().completions().createStreaming(completeMessages.build())
+
+            response.stream().consumeAsFlow().collect {
+                it.choices().stream().consumeAsFlow().collect {
+                    val chunk = it
+
+                    if (chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop") {
+                        emit(
+                            EventUtils.convertEvent(
+                                ResponseStreamEvent.ofOutputTextDone(
+                                    ResponseTextDoneEvent.builder().contentIndex(
+                                        0
+                                    )
+                                        .text("")
+                                        .outputIndex(0)
+                                        .itemId("0").build()
+                                )
+                            )
+                        )
+                    }
+
+                    if (chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank()) {
+                        val delta = chunk.delta().content().get()
+                        val index = chunk.index()
+                        emit(
+                            EventUtils.convertEvent(
+                                ResponseStreamEvent.ofOutputTextDelta(
+                                    ResponseTextDeltaEvent.builder().contentIndex(
+                                        index
+                                    )
+                                        .outputIndex(0)
+                                        .itemId(index.toString())
+                                        .delta(delta).build()
+                                )
+                            )
+                        )
+
+                    }
+                }
+            }
         }
     }
 }
