@@ -2,6 +2,8 @@ package com.masaic.openai.api.client
 
 import com.masaic.openai.api.utils.EventUtils
 import com.openai.models.chat.completions.ChatCompletionChunk
+import com.openai.models.responses.ResponseFunctionCallArgumentsDeltaEvent
+import com.openai.models.responses.ResponseFunctionCallArgumentsDoneEvent
 import com.openai.models.responses.ResponseStreamEvent
 import com.openai.models.responses.ResponseTextDeltaEvent
 import com.openai.models.responses.ResponseTextDoneEvent
@@ -23,7 +25,7 @@ object ChatCompletionChunkConverter {
             )
         }
 
-        if (chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank()) {
+        else if (chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank()) {
             val delta = chunk.delta().content().get()
             val index = chunk.index()
             return EventUtils.convertEvent(
@@ -38,7 +40,35 @@ object ChatCompletionChunkConverter {
             )
         }
 
-        return EventUtils.convertEvent(
+        else if(chunk.delta().toolCalls().isPresent && chunk.delta().toolCalls().get().isNotEmpty()) {
+            val toolCall = chunk.delta().toolCalls().get().first()
+            return EventUtils.convertEvent(
+                ResponseStreamEvent.ofFunctionCallArgumentsDelta(
+                    ResponseFunctionCallArgumentsDeltaEvent.builder()
+                        .outputIndex(0)
+                        .delta(toolCall.function().get().arguments().get())
+                        .itemId(toolCall._id())
+                        .putAllAdditionalProperties(toolCall._additionalProperties())
+                        .build()
+                )
+            )
+        }
+
+        else if(chunk.finishReason().isPresent && (chunk.finishReason().get().asString() == "tool_calls")) {
+
+                return EventUtils.convertEvent(
+                    ResponseStreamEvent.ofFunctionCallArgumentsDone(
+                        ResponseFunctionCallArgumentsDoneEvent.builder()
+                            .outputIndex(0)
+                            .arguments("TODO")
+                            .itemId("0")
+                            .putAllAdditionalProperties(mapOf())
+                            .build()
+                    )
+                )
+        }
+
+        else return EventUtils.convertEvent(
             ResponseStreamEvent.ofOutputTextDelta(
                 ResponseTextDeltaEvent.builder().contentIndex(
                     0
