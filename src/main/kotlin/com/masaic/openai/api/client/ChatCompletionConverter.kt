@@ -29,8 +29,8 @@ object ChatCompletionConverter {
             var reasoning = ""
 
             messageContent.ifPresent {
-                if(it.contains("<think>") && it.contains("</think>"))
-                reasoning = it.substringAfter("<think>").substringBefore("</think>").trim()
+                if (it.contains("<think>") && it.contains("</think>"))
+                    reasoning = it.substringAfter("<think>").substringBefore("</think>").trim()
             }
             var messageWithoutReasoning = ""
 
@@ -62,7 +62,7 @@ object ChatCompletionConverter {
                 )
             }
 
-            if(choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()){
+            if (choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()) {
                 val toolCalls = choice.message().toolCalls().get()
                 toolCalls.forEach {
                     outputs.add(
@@ -79,7 +79,7 @@ object ChatCompletionConverter {
                 }
             }
 
-            if(choice.message().audio().isPresent ){
+            if (choice.message().audio().isPresent) {
                 val audio = choice.message().audio().get()
                 //TODO add audio to response
             }

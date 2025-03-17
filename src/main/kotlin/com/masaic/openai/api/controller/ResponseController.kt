@@ -1,5 +1,7 @@
 package com.masaic.openai.api.controller
 
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.masaic.openai.api.model.CreateResponseRequest
 import com.masaic.openai.api.service.MasaicResponseService
 import com.masaic.openai.api.service.ResponseNotFoundException
 import com.openai.models.responses.Response
@@ -17,7 +19,6 @@ import org.springframework.http.ResponseEntity
 import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
-import kotlin.jvm.optionals.getOrNull
 
 @RestController
 @RequestMapping("/v1")
@@ -38,18 +39,30 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         ]
     )
     suspend fun createResponse(
-        @RequestBody request: ResponseCreateParams.Body,
+        @RequestBody request: CreateResponseRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>
     ): ResponseEntity<*> {
         // If streaming is requested, set the appropriate content type and return a flow
-        if (request._additionalProperties()["stream"]?.asBoolean()?.getOrNull() == true) {
+        if (request.stream == true) {
             return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
-                .body(masaicResponseService.createStreamingResponse(request, headers, queryParams))
+                .body(
+                    masaicResponseService.createStreamingResponse(
+                        jacksonObjectMapper().readValue(
+                            jacksonObjectMapper().writeValueAsString(request),
+                            ResponseCreateParams.Body::class.java
+                        ), headers, queryParams
+                    )
+                )
         }
 
         // For non-streaming, return a regular response
-        val responseObj = masaicResponseService.createResponse(request, headers, queryParams)
+        val responseObj = masaicResponseService.createResponse(
+            jacksonObjectMapper().readValue(
+                jacksonObjectMapper().writeValueAsString(request),
+                ResponseCreateParams.Body::class.java
+            ), headers, queryParams
+        )
         return ResponseEntity.ok(responseObj)
     }
 

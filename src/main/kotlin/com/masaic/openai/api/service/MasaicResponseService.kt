@@ -4,15 +4,19 @@ import com.masaic.openai.api.client.MasaicOpenAiResponseServiceImpl
 import com.masaic.openai.api.extensions.fromBody
 import com.masaic.openai.api.utils.EventUtils
 import com.openai.client.okhttp.OpenAIOkHttpClient
+import com.openai.core.http.AsyncStreamResponse
 import com.openai.core.http.Headers
 import com.openai.core.http.QueryParams
 import com.openai.credential.BearerTokenCredential
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseRetrieveParams
+import com.openai.models.responses.ResponseStreamEvent
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.stream.consumeAsFlow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap
@@ -104,17 +108,34 @@ class MasaicResponseService {
                     headers.getFirst("Authorization")?.trim() ?: throw IllegalArgumentException("api-key is missing.")
                 )
             )
-            clientBuilder.build().responses().createStreaming(
-                ResponseCreateParams.builder().fromBody(request).additionalHeaders(
-                    headerBuilder.build()
-                ).additionalQueryParams(
-                    queryBuilder.build()
-                ).build()
-            ).stream().consumeAsFlow().map {
-                EventUtils.convertEvent(it)
-            }
+
+            return streamOpenAiResponse(
+                clientBuilder.build().async().responses().createStreaming(
+                    ResponseCreateParams.builder().fromBody(request).additionalHeaders(
+                        headerBuilder.build()
+                    ).additionalQueryParams(
+                        queryBuilder.build()
+                    ).build()
+                )
+            )
         }
     }
+
+    private fun streamOpenAiResponse(response: AsyncStreamResponse<ResponseStreamEvent>): Flow<ServerSentEvent<String>> =
+        callbackFlow {
+            val subscription = response.subscribe { completion ->
+                trySend(EventUtils.convertEvent(completion)).isSuccess
+            }
+
+            launch {
+                subscription.onCompleteFuture().await()
+                close()
+            }
+
+            awaitClose {
+                subscription.onCompleteFuture().cancel(false)
+            }
+        }
 
     fun getResponse(
         responseId: String,

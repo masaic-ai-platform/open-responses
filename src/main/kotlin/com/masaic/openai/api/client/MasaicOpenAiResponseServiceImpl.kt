@@ -7,19 +7,7 @@ import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
 import com.openai.models.FunctionDefinition
-import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
-import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
-import com.openai.models.chat.completions.ChatCompletionContentPart
-import com.openai.models.chat.completions.ChatCompletionContentPartImage
-import com.openai.models.chat.completions.ChatCompletionContentPartRefusal
-import com.openai.models.chat.completions.ChatCompletionContentPartText
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionDeveloperMessageParam
-import com.openai.models.chat.completions.ChatCompletionNamedToolChoice
-import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
-import com.openai.models.chat.completions.ChatCompletionTool
-import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
-import com.openai.models.chat.completions.ChatCompletionUserMessageParam
+import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
@@ -100,13 +88,14 @@ class MasaicOpenAiResponseServiceImpl(
 
         val input = params.input()
 
-        val completionRequest:ChatCompletionCreateParams.Builder  = if (input.isText()) {
-             ChatCompletionCreateParams.builder().addMessage(
+        val completionRequest: ChatCompletionCreateParams.Builder = if (input.isText()) {
+            ChatCompletionCreateParams.builder().addMessage(
                 ChatCompletionUserMessageParam.builder().content(input.toString()).build()
             )
         } else {
             val inputItems =
-                jacksonObjectMapper().readValue(jacksonObjectMapper().writeValueAsString(input._json().get()),
+                jacksonObjectMapper().readValue(
+                    jacksonObjectMapper().writeValueAsString(input._json().get()),
                     object : TypeReference<List<ResponseInputItem>>() {})
             val completeMessages = ChatCompletionCreateParams.builder()
             inputItems.forEach { it ->
@@ -127,11 +116,13 @@ class MasaicOpenAiResponseServiceImpl(
                                 )
                             } else if (easyInputMessage.content().isResponseInputMessageContentList()) {
                                 val contentList = easyInputMessage.content().asResponseInputMessageContentList()
-                                completeMessages.addMessage(ChatCompletionUserMessageParam.builder().content(
-                                    ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                    prepareUserContent(contentList)
-                                    )
-                                ).build())
+                                completeMessages.addMessage(
+                                    ChatCompletionUserMessageParam.builder().content(
+                                        ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                            prepareUserContent(contentList)
+                                        )
+                                    ).build()
+                                )
                             } else
                                 completeMessages.addMessage(
                                     ChatCompletionUserMessageParam.builder().content(
@@ -144,96 +135,107 @@ class MasaicOpenAiResponseServiceImpl(
                                 )
                         }
                     }
-                        "assistant" -> {
-                            if (it.isEasyInputMessage()) {
+
+                    "assistant" -> {
+                        if (it.isEasyInputMessage()) {
+                            completeMessages.addMessage(
+                                ChatCompletionAssistantMessageParam.builder().content(
+                                    ChatCompletionAssistantMessageParam.Content.ofText(
+                                        it.asEasyInputMessage().content().asTextInput()
+                                    )
+                                ).build()
+                            )
+                        } else if (it.isResponseOutputMessage()) {
+                            it.asResponseOutputMessage().content().forEach {
+                                val outputText = it.asOutputText().text()
                                 completeMessages.addMessage(
                                     ChatCompletionAssistantMessageParam.builder().content(
-                                        ChatCompletionAssistantMessageParam.Content.ofText(
-                                            it.asEasyInputMessage().content().asTextInput()
-                                        )
+                                        ChatCompletionAssistantMessageParam.Content.ofText(outputText)
                                     ).build()
                                 )
-                            } else if (it.isResponseOutputMessage()) {
-                                it.asResponseOutputMessage().content().forEach {
-                                    val outputText = it.asOutputText().text()
-                                    completeMessages.addMessage(
-                                        ChatCompletionAssistantMessageParam.builder().content(
-                                            ChatCompletionAssistantMessageParam.Content.ofText(outputText)
-                                        ).build()
-                                    )
-                                }
-
                             }
-                        }
-                        "system" -> {
-                            if (it.isEasyInputMessage()) {
-                                completeMessages.addMessage(
-                                    ChatCompletionSystemMessageParam.builder()
-                                        .content(
-                                            it.asEasyInputMessage().content().asTextInput()
-                                        ).build()
-                                )
-                            }
-                        }
 
-                        "developer" -> {
+                        }
+                    }
+
+                    "system" -> {
+                        if (it.isEasyInputMessage()) {
                             completeMessages.addMessage(
-                                ChatCompletionDeveloperMessageParam.builder()
+                                ChatCompletionSystemMessageParam.builder()
                                     .content(
                                         it.asEasyInputMessage().content().asTextInput()
                                     ).build()
                             )
                         }
                     }
-                }
 
-                 completeMessages
+                    "developer" -> {
+                        completeMessages.addMessage(
+                            ChatCompletionDeveloperMessageParam.builder()
+                                .content(
+                                    it.asEasyInputMessage().content().asTextInput()
+                                ).build()
+                        )
+                    }
+                }
             }
 
+            completeMessages
+        }
+
         completionRequest.model(params.model())
-        if(params.toolChoice().isPresent){
+        if (params.toolChoice().isPresent) {
             completionRequest.toolChoice(
-                if(params.toolChoice().get().isTypes()){
-                    ChatCompletionToolChoiceOption.ofNamedToolChoice(ChatCompletionNamedToolChoice.builder().type(JsonValue.from(params.toolChoice().get().asTypes().type().asString().lowercase())).build())
-                } else if(params.toolChoice().get().isFunction()){
-                    ChatCompletionToolChoiceOption.ofNamedToolChoice(ChatCompletionNamedToolChoice.builder().function(JsonValue.from(params.toolChoice().get().asFunction().name().lowercase())).function(
-                        ChatCompletionNamedToolChoice.Function.builder().name(params.toolChoice().get().asFunction().name()).build()
-                    ).build())
-                }
-                else if(params.toolChoice().get().isOptions()){
+                if (params.toolChoice().get().isTypes()) {
+                    ChatCompletionToolChoiceOption.ofNamedToolChoice(
+                        ChatCompletionNamedToolChoice.builder()
+                            .type(JsonValue.from(params.toolChoice().get().asTypes().type().asString().lowercase()))
+                            .build()
+                    )
+                } else if (params.toolChoice().get().isFunction()) {
+                    ChatCompletionToolChoiceOption.ofNamedToolChoice(
+                        ChatCompletionNamedToolChoice.builder()
+                            .function(JsonValue.from(params.toolChoice().get().asFunction().name().lowercase()))
+                            .function(
+                                ChatCompletionNamedToolChoice.Function.builder()
+                                    .name(params.toolChoice().get().asFunction().name()).build()
+                            ).build()
+                    )
+                } else if (params.toolChoice().get().isOptions()) {
                     val toolChoiceOptions = params.toolChoice().get().asOptions()
-                    if (toolChoiceOptions.asString().lowercase() == "auto"){
+                    if (toolChoiceOptions.asString().lowercase() == "auto") {
                         ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.AUTO)
-                    }
-                    else {
+                    } else {
                         ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
                     }
-                }
-                else {
+                } else {
                     throw IllegalArgumentException("Unsupported tool choice")
                 }
             )
         }
 
-        if(params.tools().isPresent && params.tools().get().isNotEmpty()){
+        if (params.tools().isPresent && params.tools().get().isNotEmpty()) {
             val tools = params.tools().get().map {
                 val responseTool = it
-                if(responseTool.isFunction()){
+                if (responseTool.isFunction()) {
                     val functionTool = responseTool.asFunction()
                     return@map ChatCompletionTool.builder().function(
-                        jacksonObjectMapper().readValue(jacksonObjectMapper().writeValueAsString(functionTool), FunctionDefinition::class.java)
+                        jacksonObjectMapper().readValue(
+                            jacksonObjectMapper().writeValueAsString(functionTool),
+                            FunctionDefinition::class.java
+                        )
                     ).build()
-                }
-                else throw IllegalArgumentException("Unsupported tool type")
+                } else throw IllegalArgumentException("Unsupported tool type")
             }
 
             completionRequest.tools(tools)
         }
         return completionRequest.build()
     }
-    }
+}
 
-private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> = prepareUserContent(message.content())
+private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> =
+    prepareUserContent(message.content())
 
 private fun prepareUserContent(contentList: List<ResponseInputContent>): List<ChatCompletionContentPart> =
     contentList.map {
@@ -250,7 +252,11 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
                 ChatCompletionContentPartImage.builder().type(JsonValue.from("image_url")).imageUrl(
                     ChatCompletionContentPartImage.ImageUrl.builder()
                         .url(inputImage._imageUrl())
-                        .detail(ChatCompletionContentPartImage.ImageUrl.Detail.of(inputImage.detail().value().name.lowercase()))
+                        .detail(
+                            ChatCompletionContentPartImage.ImageUrl.Detail.of(
+                                inputImage.detail().value().name.lowercase()
+                            )
+                        )
                         .putAllAdditionalProperties(inputImage._additionalProperties())
                         .build()
                 ).build()
