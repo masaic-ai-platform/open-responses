@@ -1,8 +1,11 @@
 package com.masaic.openai.api.model
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.Metadata
 
@@ -69,7 +72,7 @@ data class WebSearchTool(
 // Request models
 data class CreateResponseRequest(
     val model: String,
-    val input: Any,
+    var input: Any,
     val instructions: String? = null,
     @JsonProperty("max_output_tokens")
     val maxOutputTokens: Int? = null,
@@ -83,12 +86,21 @@ data class CreateResponseRequest(
     val reasoning: Reasoning? = null,
     val metadata: Metadata? = null,
     val text: ResponseTextConfig? = null,
-)
+){
+    init {
+        if(!(input is String)) {
+            input =ObjectMapper().readValue(
+                ObjectMapper().writeValueAsString(input),
+                object : TypeReference<List<InputMessageItem>>() {}
+            )
+        }
+    }
+}
 
 // Response for listing InputItems
 data class ResponseItemList(
     val `object`: String = "list",
-    val data: List<InputItem>,
+    val data: List<InputMessageItem>,
     @JsonProperty("first_id")
     val firstId: String?,
     @JsonProperty("last_id")
@@ -97,41 +109,15 @@ data class ResponseItemList(
     val hasMore: Boolean
 )
 
-// InputItem
-@JsonTypeInfo(
-    use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
-)
-@JsonSubTypes(
-    JsonSubTypes.Type(value = InputMessageItem::class, name = "message")
-)
-sealed class InputItem {
-    abstract val id: String
-}
-
 data class InputMessageItem(
-    override val id: String,
-    val role: String,
-    val content: List<InputContent>
-) : InputItem()
-
-@JsonTypeInfo(
-    use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    val role: String? = "user",
+    val content: List<InputContent>? = null,
+    val type: String = "message"
 )
-@JsonSubTypes(
-    JsonSubTypes.Type(value = InputText::class, name = "input_text"),
-    JsonSubTypes.Type(value = InputImage::class, name = "input_image")
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
+class InputContent(
+    val type: String? = null,
+    val text: String? = null,
+    val imageUrl: String? = null
 )
-sealed class InputContent
-
-data class InputText(
-    val text: String
-) : InputContent()
-
-data class InputImage(
-    @JsonProperty("image_url")
-    val imageUrl: String
-) : InputContent()

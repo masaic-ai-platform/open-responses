@@ -8,6 +8,7 @@ import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
 import com.openai.models.FunctionDefinition
 import com.openai.models.ReasoningEffort
+import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
@@ -101,7 +102,7 @@ class MasaicOpenAiResponseServiceImpl(
             val completeMessages = ChatCompletionCreateParams.builder()
             inputItems.forEach { it ->
                 if (it.isEasyInputMessage() || it.isMessage() || it.isResponseOutputMessage()) {
-                    converInputMessages(it, completeMessages)
+                    convertInputMessages(it, completeMessages)
                 }
                 else if(it.isFunctionCallOutput()){
                     completeMessages.addMessage(ChatCompletionToolMessageParam.builder().content(it.asFunctionCallOutput().output()).toolCallId(
@@ -166,13 +167,32 @@ class MasaicOpenAiResponseServiceImpl(
         completionRequest.metadata(params.metadata())
         completionRequest.topP(params.topP())
         completionRequest.store(params.store())
+        if(params.text().isPresent && params.text().get().format().isPresent)
+        {
+            val format = params.text().get().format().get()
+            if(format.isText()){
+                completionRequest.responseFormat(format.asText())
+            }
+            else if(format.isJsonObject()){
+                completionRequest.responseFormat(format.asJsonObject())
+            }
+            else if(format.isJsonSchema()){
+                completionRequest.responseFormat(
+                    ResponseFormatJsonSchema.builder()
+                    .type(format.asJsonSchema()._type())
+                        .jsonSchema(jacksonObjectMapper().readValue(jacksonObjectMapper().writeValueAsString(format.asJsonSchema().schema()),
+                            ResponseFormatJsonSchema.JsonSchema::class.java))
+                        .build()
+                )
+            }
+        }
         if(params.reasoning().isPresent && params.reasoning().get().effort().isPresent)
         completionRequest.reasoningEffort(ReasoningEffort.of(params.reasoning().get().effort().get().asString()))
 
         return completionRequest.build()
     }
 
-    private fun converInputMessages(
+    private fun convertInputMessages(
         it: ResponseInputItem,
         completeMessages: ChatCompletionCreateParams.Builder
     ) {
@@ -237,22 +257,44 @@ class MasaicOpenAiResponseServiceImpl(
 
             "system" -> {
                 if (it.isEasyInputMessage()) {
+                    val easyInputMessage = it.asEasyInputMessage()
+                    if(easyInputMessage.content().isTextInput()){
+                        completeMessages.addMessage(
+                            ChatCompletionSystemMessageParam.builder()
+                                .content(
+                                    easyInputMessage.content().asTextInput()
+                                ).build()
+                        )
+                    }
+                    else if(easyInputMessage.content().isResponseInputMessageContentList())
                     completeMessages.addMessage(
                         ChatCompletionSystemMessageParam.builder()
                             .content(
-                                it.asEasyInputMessage().content().asTextInput()
+                                easyInputMessage.content().asResponseInputMessageContentList().first().asInputText().text()
                             ).build()
                     )
                 }
             }
 
             "developer" -> {
-                completeMessages.addMessage(
-                    ChatCompletionDeveloperMessageParam.builder()
-                        .content(
-                            it.asEasyInputMessage().content().asTextInput()
-                        ).build()
-                )
+                if (it.isEasyInputMessage()) {
+                    val easyInputMessage = it.asEasyInputMessage()
+                    if(easyInputMessage.content().isTextInput()){
+                        completeMessages.addMessage(
+                            ChatCompletionDeveloperMessageParam.builder()
+                                .content(
+                                    easyInputMessage.content().asTextInput()
+                                ).build()
+                        )
+                    }
+                    else if(easyInputMessage.content().isResponseInputMessageContentList())
+                        completeMessages.addMessage(
+                            ChatCompletionDeveloperMessageParam.builder()
+                                .content(
+                                    easyInputMessage.content().asResponseInputMessageContentList().first().asInputText().text()
+                                ).build()
+                        )
+                }
             }
         }
     }
