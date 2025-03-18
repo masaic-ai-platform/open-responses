@@ -2,8 +2,11 @@ package com.masaic.openai.api.controller
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.masaic.openai.api.model.CreateResponseRequest
+import com.masaic.openai.api.model.MasaicManagedTool
+import com.masaic.openai.api.model.Tool
 import com.masaic.openai.api.service.MasaicResponseService
 import com.masaic.openai.api.service.ResponseNotFoundException
+import com.masaic.openai.tool.ToolService
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -24,7 +27,7 @@ import org.springframework.web.server.ResponseStatusException
 @RequestMapping("/v1")
 @CrossOrigin("*")
 @Tag(name = "Responses", description = "OpenAI Response API")
-class ResponseController(private val masaicResponseService: MasaicResponseService) {
+class ResponseController(private val masaicResponseService: MasaicResponseService, private val toolService: ToolService) {
 
     val mapper = jacksonObjectMapper()
 
@@ -45,7 +48,7 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>
     ): ResponseEntity<*> {
-
+        updateMasaicManagedTools(request)
         request.parseInput(mapper)
         // If streaming is requested, set the appropriate content type and return a flow
         if (request.stream == true) {
@@ -167,5 +170,20 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }
+    }
+
+    private fun updateMasaicManagedTools(request: CreateResponseRequest) {
+        val updatedTools = mutableListOf<Tool>()
+        request.tools?.let { updatedTools.addAll(it) }
+        request.tools?.forEach { tool ->
+            if (tool is MasaicManagedTool) {
+                val functionTool = toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Define tool ${tool.type} properly"
+                )
+                updatedTools.add(functionTool)
+            }
+        }
+        request.tools = updatedTools
     }
 } 

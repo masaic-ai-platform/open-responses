@@ -16,6 +16,7 @@ data class Reasoning(
 )
 
 data class FileSearchTool(
+    override val type: String,
     val filters: Any? = null,
     @JsonProperty("max_num_results")
     val maxNumResults: Int = 20,
@@ -23,7 +24,7 @@ data class FileSearchTool(
     val rankingOptions: RankingOptions,
     @JsonProperty("vector_store_ids")
     val vectorStoreIds: List<String>
-) : Tool()
+) : Tool
 
 data class RankingOptions(
     val ranker: String = "auto",
@@ -33,25 +34,36 @@ data class RankingOptions(
 
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
-    include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    include = JsonTypeInfo.As.EXISTING_PROPERTY,
+    property = "type",
+    visible = true,
+    defaultImpl = MasaicManagedTool::class
 )
 @JsonSubTypes(
-    JsonSubTypes.Type(value = FunctionTool::class, name = "function"),
     JsonSubTypes.Type(value = WebSearchTool::class, name = "web_search_preview"),
-    JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search")
+    JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search"),
+    JsonSubTypes.Type(value = FunctionTool::class, name = "function")
 )
-sealed class Tool
+interface Tool {
+    val type: String
+}
 
 data class FunctionTool(
+    override val type: String = "function",
     val description: String,
     val name: String,
     val parameters: MutableMap<String, Any>,
     val strict: Boolean = true
-) : Tool() {
+) : Tool {
     init {
         parameters["additionalProperties"] = false
     }
+}
+
+data class MasaicManagedTool(
+    override val type: String,
+) : Tool {
+
 }
 
 data class UserLocation(
@@ -63,12 +75,13 @@ data class UserLocation(
 )
 
 data class WebSearchTool(
+    override val type: String,
     val domains: List<String> = emptyList(),
     @JsonProperty("search_context_size")
     val searchContextSize: String = "medium",
     @JsonProperty("user_location")
     val userLocation: UserLocation
-) : Tool()
+) : Tool
 
 // Request models
 data class CreateResponseRequest(
@@ -77,7 +90,7 @@ data class CreateResponseRequest(
     val instructions: String? = null,
     @JsonProperty("max_output_tokens")
     val maxOutputTokens: Int? = null,
-    val tools: List<Tool>? = null,
+    var tools: List<Tool>? = null,
     val temperature: Double? = null,
     val previousResponseId: String? = null,
     @JsonProperty("top_p")
