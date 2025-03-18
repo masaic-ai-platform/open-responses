@@ -7,6 +7,7 @@ import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
 import com.openai.models.FunctionDefinition
+import com.openai.models.ReasoningEffort
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
@@ -99,84 +100,13 @@ class MasaicOpenAiResponseServiceImpl(
                     object : TypeReference<List<ResponseInputItem>>() {})
             val completeMessages = ChatCompletionCreateParams.builder()
             inputItems.forEach { it ->
-                val role = if (it.isEasyInputMessage()) it.asEasyInputMessage()
-                    .role() else if (it.isResponseOutputMessage()) it.asResponseOutputMessage()
-                    ._role() else it.asMessage().role()
-                when (role.toString().lowercase()) {
-                    "user" -> {
-                        if (it.isEasyInputMessage()) {
-                            val easyInputMessage = it.asEasyInputMessage()
-                            if (easyInputMessage.content().isTextInput()) {
-                                completeMessages.addMessage(
-                                    ChatCompletionUserMessageParam.builder().content(
-                                        ChatCompletionUserMessageParam.Content.ofText(
-                                            it.asEasyInputMessage().content().asTextInput()
-                                        )
-                                    ).build()
-                                )
-                            } else if (easyInputMessage.content().isResponseInputMessageContentList()) {
-                                val contentList = easyInputMessage.content().asResponseInputMessageContentList()
-                                completeMessages.addMessage(
-                                    ChatCompletionUserMessageParam.builder().content(
-                                        ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                            prepareUserContent(contentList)
-                                        )
-                                    ).build()
-                                )
-                            } else
-                                completeMessages.addMessage(
-                                    ChatCompletionUserMessageParam.builder().content(
-                                        ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                            prepareUserContent(
-                                                it.asMessage()
-                                            )
-                                        )
-                                    ).build()
-                                )
-                        }
-                    }
-
-                    "assistant" -> {
-                        if (it.isEasyInputMessage()) {
-                            completeMessages.addMessage(
-                                ChatCompletionAssistantMessageParam.builder().content(
-                                    ChatCompletionAssistantMessageParam.Content.ofText(
-                                        it.asEasyInputMessage().content().asTextInput()
-                                    )
-                                ).build()
-                            )
-                        } else if (it.isResponseOutputMessage()) {
-                            it.asResponseOutputMessage().content().forEach {
-                                val outputText = it.asOutputText().text()
-                                completeMessages.addMessage(
-                                    ChatCompletionAssistantMessageParam.builder().content(
-                                        ChatCompletionAssistantMessageParam.Content.ofText(outputText)
-                                    ).build()
-                                )
-                            }
-
-                        }
-                    }
-
-                    "system" -> {
-                        if (it.isEasyInputMessage()) {
-                            completeMessages.addMessage(
-                                ChatCompletionSystemMessageParam.builder()
-                                    .content(
-                                        it.asEasyInputMessage().content().asTextInput()
-                                    ).build()
-                            )
-                        }
-                    }
-
-                    "developer" -> {
-                        completeMessages.addMessage(
-                            ChatCompletionDeveloperMessageParam.builder()
-                                .content(
-                                    it.asEasyInputMessage().content().asTextInput()
-                                ).build()
-                        )
-                    }
+                if (it.isEasyInputMessage() || it.isMessage() || it.isResponseOutputMessage()) {
+                    converInputMessages(it, completeMessages)
+                }
+                else if(it.isFunctionCallOutput()){
+                    completeMessages.addMessage(ChatCompletionToolMessageParam.builder().content(it.asFunctionCallOutput().output()).toolCallId(
+                        it.asFunctionCallOutput().callId()
+                    ).build())
                 }
             }
 
@@ -230,7 +160,101 @@ class MasaicOpenAiResponseServiceImpl(
 
             completionRequest.tools(tools)
         }
+
+        completionRequest.temperature(params.temperature())
+        completionRequest.maxCompletionTokens(params.maxOutputTokens())
+        completionRequest.metadata(params.metadata())
+        completionRequest.topP(params.topP())
+        completionRequest.store(params.store())
+        if(params.reasoning().isPresent && params.reasoning().get().effort().isPresent)
+        completionRequest.reasoningEffort(ReasoningEffort.of(params.reasoning().get().effort().get().asString()))
+
         return completionRequest.build()
+    }
+
+    private fun converInputMessages(
+        it: ResponseInputItem,
+        completeMessages: ChatCompletionCreateParams.Builder
+    ) {
+        val role = if (it.isEasyInputMessage()) it.asEasyInputMessage()
+            .role() else if (it.isResponseOutputMessage()) it.asResponseOutputMessage()
+            ._role() else it.asMessage().role()
+        when (role.toString().lowercase()) {
+            "user" -> {
+                if (it.isEasyInputMessage()) {
+                    val easyInputMessage = it.asEasyInputMessage()
+                    if (easyInputMessage.content().isTextInput()) {
+                        completeMessages.addMessage(
+                            ChatCompletionUserMessageParam.builder().content(
+                                ChatCompletionUserMessageParam.Content.ofText(
+                                    it.asEasyInputMessage().content().asTextInput()
+                                )
+                            ).build()
+                        )
+                    } else if (easyInputMessage.content().isResponseInputMessageContentList()) {
+                        val contentList = easyInputMessage.content().asResponseInputMessageContentList()
+                        completeMessages.addMessage(
+                            ChatCompletionUserMessageParam.builder().content(
+                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                    prepareUserContent(contentList)
+                                )
+                            ).build()
+                        )
+                    } else
+                        completeMessages.addMessage(
+                            ChatCompletionUserMessageParam.builder().content(
+                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                    prepareUserContent(
+                                        it.asMessage()
+                                    )
+                                )
+                            ).build()
+                        )
+                }
+            }
+
+            "assistant" -> {
+                if (it.isEasyInputMessage()) {
+                    completeMessages.addMessage(
+                        ChatCompletionAssistantMessageParam.builder().content(
+                            ChatCompletionAssistantMessageParam.Content.ofText(
+                                it.asEasyInputMessage().content().asTextInput()
+                            )
+                        ).build()
+                    )
+                } else if (it.isResponseOutputMessage()) {
+                    it.asResponseOutputMessage().content().forEach {
+                        val outputText = it.asOutputText().text()
+                        completeMessages.addMessage(
+                            ChatCompletionAssistantMessageParam.builder().content(
+                                ChatCompletionAssistantMessageParam.Content.ofText(outputText)
+                            ).build()
+                        )
+                    }
+
+                }
+            }
+
+            "system" -> {
+                if (it.isEasyInputMessage()) {
+                    completeMessages.addMessage(
+                        ChatCompletionSystemMessageParam.builder()
+                            .content(
+                                it.asEasyInputMessage().content().asTextInput()
+                            ).build()
+                    )
+                }
+            }
+
+            "developer" -> {
+                completeMessages.addMessage(
+                    ChatCompletionDeveloperMessageParam.builder()
+                        .content(
+                            it.asEasyInputMessage().content().asTextInput()
+                        ).build()
+                )
+            }
+        }
     }
 }
 
