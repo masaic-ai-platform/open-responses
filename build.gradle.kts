@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.spring") version "2.1.0"
     id("org.springframework.boot") version "3.4.3"
     id("io.spring.dependency-management") version "1.1.7"
+    kotlin("plugin.serialization") version "1.9.25"
 }
 
 group = "com.masaic"
@@ -29,6 +30,8 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0")
     implementation("com.openai:openai-java:0.34.1")
+    implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     implementation("io.projectreactor:reactor-test")
