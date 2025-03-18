@@ -167,7 +167,26 @@ class MasaicOpenAiResponseServiceImpl(
                             FunctionDefinition::class.java
                         )
                     ).build()
-                } else throw IllegalArgumentException("Unsupported tool type")
+                }
+                else if (responseTool.isWebSearch()){
+                    val webSearchTool = responseTool.asWebSearch()
+                    return@map ChatCompletionTool.builder().type(JsonValue.from("function")).function(
+                        FunctionDefinition.builder().name(webSearchTool.type().asString()).build()
+                    ).build()
+                }
+                else if (responseTool.isFileSearch()){
+                    val fileSearchTool = responseTool.asFileSearch()
+                    return@map ChatCompletionTool.builder().type(JsonValue.from("function")).function(
+                        FunctionDefinition.builder().name(fileSearchTool._type()).build()
+                    ).build()
+                }
+                else if (responseTool.isComputerUsePreview()){
+                    val computerUsePreviewTool = responseTool.asComputerUsePreview()
+                    return@map ChatCompletionTool.builder().type(JsonValue.from("function")).function(
+                        FunctionDefinition.builder().name(computerUsePreviewTool._type()).build()
+                    ).build()
+                }
+                else throw IllegalArgumentException("Unsupported tool")
             }
 
             completionRequest.tools(tools)

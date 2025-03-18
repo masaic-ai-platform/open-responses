@@ -44,9 +44,9 @@ data class RankingOptions(
 sealed class Tool
 
 data class FunctionTool(
-    val description: String,
-    val name: String,
-    val parameters: MutableMap<String, Any>,
+    val description: String? = null,
+    val name: String? = null,
+    val parameters: MutableMap<String, Any> = mutableMapOf(),
     val strict: Boolean = true
 ) : Tool() {
     init {
@@ -67,7 +67,7 @@ data class WebSearchTool(
     @JsonProperty("search_context_size")
     val searchContextSize: String = "medium",
     @JsonProperty("user_location")
-    val userLocation: UserLocation
+    val userLocation: UserLocation? = null
 ) : Tool()
 
 // Request models
