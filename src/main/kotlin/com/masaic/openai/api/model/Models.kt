@@ -3,6 +3,7 @@ package com.masaic.openai.api.model
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
+import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.Metadata
 
 data class Reasoning(
@@ -80,7 +81,8 @@ data class CreateResponseRequest(
     val toolChoice: String? = null,
     val stream: Boolean? = null,
     val reasoning: Reasoning? = null,
-    val metadata: Metadata? = null
+    val metadata: Metadata? = null,
+    val text: ResponseTextConfig? = null,
 )
 
 // Response for listing InputItems

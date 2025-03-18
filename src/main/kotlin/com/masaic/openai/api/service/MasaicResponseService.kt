@@ -24,13 +24,17 @@ import org.springframework.util.MultiValueMap
 @Service
 class MasaicResponseService {
 
+    val client = OpenAIOkHttpClient.builder().credential(
+        BearerTokenCredential.create {
+            System.getenv("OPENAI_API_KEY") ?: throw IllegalArgumentException("api-key is missing.")
+        }
+    ).baseUrl(System.getenv("OPENAI_API_BASE_URL") ?: "https://api.openai.com/v1").build()
+
     suspend fun createResponse(
         request: ResponseCreateParams.Body,
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>
     ): Response {
-
-        val clientBuilder = OpenAIOkHttpClient.builder()
 
         val headerBuilder: Headers.Builder = Headers.builder()
         headers.filter { it.key == "Authorization" }.forEach { (key, value) -> headerBuilder.put(key, value) }
@@ -39,16 +43,9 @@ class MasaicResponseService {
 
         queryParams.forEach { (key, value) -> queryBuilder.put(key, value) }
 
-        if (request.metadata().isPresent && request.metadata().get()._additionalProperties().containsKey("baseUrl")) {
-            clientBuilder.baseUrl(request.metadata().get()._additionalProperties()["baseUrl"].toString())
-            clientBuilder.credential(
-                BearerTokenCredential.create(
-                    headers.getFirst("Authorization")?.toString()?.replace("Bearer", "")?.trim()
-                        ?: throw IllegalArgumentException("api-key is missing.")
-                )
-            )
+        if (System.getenv("OPENAI_API_BASE_URL") != "https://api.openai.com/v1"  ) {
 
-            return MasaicOpenAiResponseServiceImpl(clientBuilder.build()).create(
+            return MasaicOpenAiResponseServiceImpl(client).create(
                 ResponseCreateParams.builder().fromBody(request).additionalHeaders(
                     headerBuilder.build()
                 ).additionalQueryParams(
@@ -57,12 +54,7 @@ class MasaicResponseService {
                     .build()
             )
         } else {
-            clientBuilder.credential(
-                BearerTokenCredential.create(
-                    headers.getFirst("Authorization")?.trim() ?: throw IllegalArgumentException("api-key is missing.")
-                )
-            )
-            return clientBuilder.build().responses().create(
+            return client.responses().create(
                 ResponseCreateParams.builder().fromBody(request).additionalHeaders(
                     headerBuilder.build()
                 ).additionalQueryParams(
@@ -77,7 +69,6 @@ class MasaicResponseService {
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>
     ): Flow<ServerSentEvent<String>> {
-        val clientBuilder = OpenAIOkHttpClient.builder()
         val headerBuilder: Headers.Builder = Headers.builder()
         headers.filter { it.key == "Authorization" }.forEach { (key, value) -> headerBuilder.put(key, value) }
 
@@ -85,17 +76,9 @@ class MasaicResponseService {
 
         queryParams.forEach { (key, value) -> queryBuilder.put(key, value) }
 
-        return if (request.metadata().isPresent && request.metadata().get()._additionalProperties()
-                .containsKey("baseUrl")
-        ) {
-            clientBuilder.baseUrl(request.metadata().get()._additionalProperties()["baseUrl"].toString())
-            clientBuilder.credential(
-                BearerTokenCredential.create(
-                    headers.getFirst("Authorization")?.toString()?.replace("Bearer", "")?.trim()
-                        ?: throw IllegalArgumentException("api-key is missing.")
-                )
-            )
-            MasaicOpenAiResponseServiceImpl(clientBuilder.build()).createCompletionStream(
+        return if (System.getenv("OPENAI_API_BASE_URL") != "https://api.openai.com/v1") {
+
+            MasaicOpenAiResponseServiceImpl(client).createCompletionStream(
                 ResponseCreateParams.builder().fromBody(request).additionalHeaders(
                     headerBuilder.build()
                 ).additionalQueryParams(
@@ -103,14 +86,8 @@ class MasaicResponseService {
                 ).build()
             )
         } else {
-            clientBuilder.credential(
-                BearerTokenCredential.create(
-                    headers.getFirst("Authorization")?.trim() ?: throw IllegalArgumentException("api-key is missing.")
-                )
-            )
-
             return streamOpenAiResponse(
-                clientBuilder.build().async().responses().createStreaming(
+                client.async().responses().createStreaming(
                     ResponseCreateParams.builder().fromBody(request).additionalHeaders(
                         headerBuilder.build()
                     ).additionalQueryParams(
