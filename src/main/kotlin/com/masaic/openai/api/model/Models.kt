@@ -1,6 +1,5 @@
 package com.masaic.openai.api.model
 
-import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
@@ -88,7 +87,7 @@ data class CreateResponseRequest(
     val stream: Boolean? = null,
     val reasoning: Reasoning? = null,
     val metadata: Metadata? = null,
-    val truncation: Response.Truncation,
+    val truncation: Response.Truncation?=null,
     val text: ResponseTextConfig? = null,
 ){
 
