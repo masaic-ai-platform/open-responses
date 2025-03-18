@@ -55,6 +55,7 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         val filePath = System.getenv("MCP_SERVER_CONFIG_FILE_PATH")
         if (filePath == null) {
             log.warn("MCP_SERVER_CONFIG_FILE_PATH environment variable not set. No MCP tools will be loaded.")
+            return
         }
 
         val mcpServerConfigJson = File(filePath).readText()
