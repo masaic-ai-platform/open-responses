@@ -125,6 +125,7 @@ data class InputMessageItem(
     val tool_call_id: String? = null,
     val call_id: String? = null,
     val output: String? = null,
+    val status: String? = null
 ) {
     init {
         if (call_id != null) {
