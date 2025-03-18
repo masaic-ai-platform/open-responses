@@ -95,10 +95,7 @@ class MasaicOpenAiResponseServiceImpl(
                 ChatCompletionUserMessageParam.builder().content(input.toString()).build()
             )
         } else {
-            val inputItems =
-                jacksonObjectMapper().readValue(
-                    jacksonObjectMapper().writeValueAsString(input._json().get()),
-                    object : TypeReference<List<ResponseInputItem>>() {})
+            val inputItems = input.asResponse()
             val completeMessages = ChatCompletionCreateParams.builder()
             inputItems.forEach { it ->
                 if (it.isEasyInputMessage() || it.isMessage() || it.isResponseOutputMessage()) {

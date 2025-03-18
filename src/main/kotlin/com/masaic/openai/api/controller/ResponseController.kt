@@ -26,6 +26,8 @@ import org.springframework.web.server.ResponseStatusException
 @Tag(name = "Responses", description = "OpenAI Response API")
 class ResponseController(private val masaicResponseService: MasaicResponseService) {
 
+    val mapper = jacksonObjectMapper()
+
     @PostMapping("/responses", produces = [MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE])
     @Operation(
         summary = "Creates a model response",
@@ -43,13 +45,15 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>
     ): ResponseEntity<*> {
+
+        request.parseInput(mapper)
         // If streaming is requested, set the appropriate content type and return a flow
         if (request.stream == true) {
             return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(
                     masaicResponseService.createStreamingResponse(
-                        jacksonObjectMapper().readValue(
-                            jacksonObjectMapper().writeValueAsString(request),
+                        mapper.readValue(
+                            mapper.writeValueAsString(request),
                             ResponseCreateParams.Body::class.java
                         ), headers, queryParams
                     )
@@ -58,8 +62,8 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
 
         // For non-streaming, return a regular response
         val responseObj = masaicResponseService.createResponse(
-            jacksonObjectMapper().readValue(
-                jacksonObjectMapper().writeValueAsString(request),
+            mapper.readValue(
+                mapper.writeValueAsString(request),
                 ResponseCreateParams.Body::class.java
             ), headers, queryParams
         )

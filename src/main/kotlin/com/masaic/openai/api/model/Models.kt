@@ -8,6 +8,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.Metadata
+import com.openai.models.responses.Response
 
 data class Reasoning(
     val effort: String? = null,
@@ -78,19 +79,23 @@ data class CreateResponseRequest(
     val maxOutputTokens: Int? = null,
     val tools: List<Tool>? = null,
     val temperature: Double? = null,
+    val previousResponseId: String? = null,
     @JsonProperty("top_p")
     val topP: Double? = null,
     @JsonProperty("tool_choice")
     val toolChoice: String? = null,
+    val store: Boolean? = null,
     val stream: Boolean? = null,
     val reasoning: Reasoning? = null,
     val metadata: Metadata? = null,
+    val truncation: Response.Truncation,
     val text: ResponseTextConfig? = null,
 ){
-    init {
+
+    fun parseInput(objectMapper: ObjectMapper){
         if(!(input is String)) {
-            input =ObjectMapper().readValue(
-                ObjectMapper().writeValueAsString(input),
+            input = objectMapper.readValue(
+                objectMapper.writeValueAsString(input),
                 object : TypeReference<List<InputMessageItem>>() {}
             )
         }
@@ -110,14 +115,7 @@ data class ResponseItemList(
 )
 
 data class InputMessageItem(
-    val role: String? = "user",
-    val content: List<InputContent>? = null,
+    val role: String? = null,
+    val content: Any? = null,
     val type: String = "message"
-)
-
-@JsonInclude(JsonInclude.Include.NON_NULL)
-class InputContent(
-    val type: String? = null,
-    val text: String? = null,
-    val imageUrl: String? = null
 )
