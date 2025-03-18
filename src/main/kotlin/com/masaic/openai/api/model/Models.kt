@@ -50,9 +50,9 @@ interface Tool {
 
 data class FunctionTool(
     override val type: String = "function",
-    val description: String,
-    val name: String,
-    val parameters: MutableMap<String, Any>,
+    val description: String? = null,
+    val name: String? = null,
+    val parameters: MutableMap<String, Any> = mutableMapOf(),
     val strict: Boolean = true
 ) : Tool {
     init {
@@ -80,7 +80,7 @@ data class WebSearchTool(
     @JsonProperty("search_context_size")
     val searchContextSize: String = "medium",
     @JsonProperty("user_location")
-    val userLocation: UserLocation
+    val userLocation: UserLocation? = null
 ) : Tool
 
 // Request models
@@ -138,6 +138,7 @@ data class InputMessageItem(
     val tool_call_id: String? = null,
     val call_id: String? = null,
     val output: String? = null,
+    val status: String? = null
 ) {
     init {
         if (call_id != null) {

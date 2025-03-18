@@ -26,6 +26,25 @@ object ChatCompletionConverter {
 
             val messageContent = choice.message().content()
 
+            val responseOutputTextBuilder = ResponseOutputText.builder()
+            if(choice.message().annotations().isPresent) {
+                responseOutputTextBuilder.annotations(choice.message().annotations().map {
+                    it.map {
+                        ResponseOutputText.Annotation.ofUrlCitation(
+                            ResponseOutputText.Annotation.UrlCitation.builder()
+                                .url(it.urlCitation().url())
+                                .endIndex(it.urlCitation().endIndex())
+                                .type(it._type())
+                                .startIndex(it.urlCitation().startIndex())
+                                .title(it.urlCitation().title())
+                                .build()
+                        )
+                    }
+                }.get())
+            }
+
+
+
             var reasoning = ""
 
             messageContent.ifPresent {
@@ -43,9 +62,7 @@ object ChatCompletionConverter {
             outputs.add(
                 ResponseOutputItem.ofMessage(
                     ResponseOutputMessage.builder().addContent(
-                        ResponseOutputText.builder()
-                            .annotations(emptyList())
-                            .text(messageWithoutReasoning)
+                        responseOutputTextBuilder.text(messageWithoutReasoning)
                             .build()
                     ).id(choice.index().toString()).status(ResponseOutputMessage.Status.COMPLETED).build()
                 )

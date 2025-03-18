@@ -1,6 +1,5 @@
 package com.masaic.openai.api.client
 
-import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -20,26 +19,50 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.springframework.http.codec.ServerSentEvent
 
+/**
+ * Implementation of ResponseService for Masaic OpenAI API client.
+ * This service handles communication with OpenAI's API for chat completions
+ * and provides methods to create, retrieve, and stream responses.
+ *
+ * @param client The OpenAI client used to make API requests
+ */
 class MasaicOpenAiResponseServiceImpl(
     private val client: OpenAIClient
 ) : ResponseService {
 
+    val objectMapper = jacksonObjectMapper()
+
+    /**
+     * Not implemented: Returns a version of this service that includes raw HTTP response data.
+     */
     override fun withRawResponse(): ResponseService.WithRawResponse {
         TODO("Not yet implemented")
     }
 
+    /**
+     * Not implemented: Returns the input items service for this response service.
+     */
     override fun inputItems(): InputItemService {
         TODO("Not yet implemented")
     }
 
+    /**
+     * Creates a new completion response based on provided parameters.
+     *
+     * @param params Parameters for creating the response
+     * @param requestOptions Options for the HTTP request
+     * @return Response object containing completion data
+     */
     override fun create(
         params: ResponseCreateParams,
         requestOptions: RequestOptions
     ): Response {
-
         return client.chat().completions().create(prepareCompletion(params)).toResponse(params)
     }
 
+    /**
+     * Not implemented: Creates a streaming response.
+     */
     override fun createStreaming(
         params: ResponseCreateParams,
         requestOptions: RequestOptions
@@ -47,6 +70,9 @@ class MasaicOpenAiResponseServiceImpl(
         TODO("Not yet implemented")
     }
 
+    /**
+     * Not implemented: Retrieves a specific response by ID.
+     */
     override fun retrieve(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions
@@ -54,6 +80,9 @@ class MasaicOpenAiResponseServiceImpl(
         TODO("Not yet implemented")
     }
 
+    /**
+     * Not implemented: Deletes a response by ID.
+     */
     override fun delete(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions
@@ -61,6 +90,13 @@ class MasaicOpenAiResponseServiceImpl(
         TODO("Not yet implemented")
     }
 
+    /**
+     * Creates a streaming completion that emits ServerSentEvents.
+     * This allows for real-time response processing.
+     *
+     * @param params Parameters for creating the completion
+     * @return Flow of ServerSentEvents containing response chunks
+     */
     fun createCompletionStream(
         params: ResponseCreateParams
     ): Flow<ServerSentEvent<String>> = callbackFlow {
@@ -84,282 +120,559 @@ class MasaicOpenAiResponseServiceImpl(
         }
     }
 
+    /**
+     * Prepares a chat completion request from response parameters.
+     * This is the main function that transforms ResponseCreateParams into ChatCompletionCreateParams.
+     *
+     * @param params Parameters for creating the response
+     * @return ChatCompletionCreateParams object ready to send to OpenAI API
+     */
     private fun prepareCompletion(
         params: ResponseCreateParams
     ): ChatCompletionCreateParams {
-
         val input = params.input()
+        val completionRequest = createBaseCompletionRequest(input)
 
-        val completionRequest: ChatCompletionCreateParams.Builder = if (input.isText()) {
-            ChatCompletionCreateParams.builder().addMessage(
-                ChatCompletionUserMessageParam.builder().content(input.toString()).build()
-            )
-        } else {
-            val inputItems = input.asResponse()
-            val completeMessages = ChatCompletionCreateParams.builder()
-            inputItems.forEach { it ->
-                if (it.isEasyInputMessage() || it.isMessage() || it.isResponseOutputMessage()) {
-                    convertInputMessages(it, completeMessages)
-                }
-                else if(it.isFunctionCall()){
-                    val functionCall = it.asFunctionCall()
-                    completeMessages.addMessage(ChatCompletionAssistantMessageParam.builder()
-                        .addToolCall(
-                            ChatCompletionMessageToolCall.builder()
-                                .id(functionCall.callId())
-                                .function(ChatCompletionMessageToolCall.Function.builder()
-                                    .arguments(functionCall.arguments())
-                                    .name(functionCall.name())
-                                    .build()
-                                )
-                                .build())
-                        .build())
-                }
-                else if(it.isFunctionCallOutput()){
-                    completeMessages.addMessage(ChatCompletionToolMessageParam.builder().content(it.asFunctionCallOutput().output()).toolCallId(
-                        it.asFunctionCallOutput().callId()
-                    ).build())
-                }
-            }
-
-            completeMessages
-        }
-
-        completionRequest.model(params.model())
-        if (params.toolChoice().isPresent) {
-            completionRequest.toolChoice(
-                if (params.toolChoice().get().isTypes()) {
-                    ChatCompletionToolChoiceOption.ofNamedToolChoice(
-                        ChatCompletionNamedToolChoice.builder()
-                            .type(JsonValue.from(params.toolChoice().get().asTypes().type().asString().lowercase()))
-                            .build()
-                    )
-                } else if (params.toolChoice().get().isFunction()) {
-                    ChatCompletionToolChoiceOption.ofNamedToolChoice(
-                        ChatCompletionNamedToolChoice.builder()
-                            .function(JsonValue.from(params.toolChoice().get().asFunction().name().lowercase()))
-                            .function(
-                                ChatCompletionNamedToolChoice.Function.builder()
-                                    .name(params.toolChoice().get().asFunction().name()).build()
-                            ).build()
-                    )
-                } else if (params.toolChoice().get().isOptions()) {
-                    val toolChoiceOptions = params.toolChoice().get().asOptions()
-                    if (toolChoiceOptions.asString().lowercase() == "auto") {
-                        ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.AUTO)
-                    } else {
-                        ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
-                    }
-                } else {
-                    throw IllegalArgumentException("Unsupported tool choice")
-                }
-            )
-        }
-
-        if (params.tools().isPresent && params.tools().get().isNotEmpty()) {
-            val tools = params.tools().get().map {
-                val responseTool = it
-                if (responseTool.isFunction()) {
-                    val functionTool = responseTool.asFunction()
-                    return@map ChatCompletionTool.builder().function(
-                        jacksonObjectMapper().readValue(
-                            jacksonObjectMapper().writeValueAsString(functionTool),
-                            FunctionDefinition::class.java
-                        )
-                    ).build()
-                } else throw IllegalArgumentException("Unsupported tool type")
-            }
-
-            completionRequest.tools(tools)
-        }
-
-        completionRequest.temperature(params.temperature())
-        completionRequest.maxCompletionTokens(params.maxOutputTokens())
-        completionRequest.metadata(params.metadata())
-        completionRequest.topP(params.topP())
-        completionRequest.store(params.store())
-        if(params.text().isPresent && params.text().get().format().isPresent)
-        {
-            val format = params.text().get().format().get()
-            if(format.isText()){
-                completionRequest.responseFormat(format.asText())
-            }
-            else if(format.isJsonObject()){
-                completionRequest.responseFormat(format.asJsonObject())
-            }
-            else if(format.isJsonSchema()){
-                completionRequest.responseFormat(
-                    ResponseFormatJsonSchema.builder()
-                    .type(format.asJsonSchema()._type())
-                        .jsonSchema(jacksonObjectMapper().readValue(jacksonObjectMapper().writeValueAsString(format.asJsonSchema().schema()),
-                            ResponseFormatJsonSchema.JsonSchema::class.java))
-                        .build()
-                )
-            }
-        }
-        if(params.reasoning().isPresent && params.reasoning().get().effort().isPresent)
-        completionRequest.reasoningEffort(ReasoningEffort.of(params.reasoning().get().effort().get().asString()))
+        applyModelAndParameters(completionRequest, params)
+        applyToolConfiguration(completionRequest, params)
+        applyResponseFormatting(completionRequest, params)
+        applyReasoningEffort(completionRequest, params)
 
         return completionRequest.build()
     }
 
-    private fun convertInputMessages(
-        it: ResponseInputItem,
-        completeMessages: ChatCompletionCreateParams.Builder
+    /**
+     * Creates the base completion request with messages.
+     *
+     * @param input The input from response parameters
+     * @return Builder for ChatCompletionCreateParams with messages set
+     */
+    private fun createBaseCompletionRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+        return if (input.isText()) {
+            createTextBasedRequest(input)
+        } else {
+            createMessageBasedRequest(input)
+        }
+    }
+
+    /**
+     * Creates a completion request for simple text input.
+     *
+     * @param input The text input
+     * @return Builder with a single user message
+     */
+    private fun createTextBasedRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+        return ChatCompletionCreateParams.builder().addMessage(
+            ChatCompletionUserMessageParam.builder().content(input.toString()).build()
+        )
+    }
+
+    /**
+     * Creates a completion request for complex message-based input.
+     *
+     * @param input The input containing multiple messages
+     * @return Builder with all messages properly converted and added
+     */
+    private fun createMessageBasedRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+        val inputItems = input.asResponse()
+        val completionBuilder = ChatCompletionCreateParams.builder()
+
+        inputItems.forEach { item ->
+            when {
+                item.isEasyInputMessage() || item.isMessage() || item.isResponseOutputMessage() -> {
+                    convertInputMessages(item, completionBuilder)
+                }
+                item.isFunctionCall() -> {
+                    addFunctionCallMessage(item, completionBuilder)
+                }
+                item.isFunctionCallOutput() -> {
+                    addFunctionCallOutputMessage(item, completionBuilder)
+                }
+            }
+        }
+
+        return completionBuilder
+    }
+
+    /**
+     * Adds a function call message to the completion request.
+     *
+     * @param item The function call input item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun addFunctionCallMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
     ) {
+        val functionCall = item.asFunctionCall()
+        completionBuilder.addMessage(
+            ChatCompletionAssistantMessageParam.builder()
+                .addToolCall(
+                    ChatCompletionMessageToolCall.builder()
+                        .id(functionCall.callId())
+                        .function(
+                            ChatCompletionMessageToolCall.Function.builder()
+                                .arguments(functionCall.arguments())
+                                .name(functionCall.name())
+                                .build()
+                        )
+                        .build()
+                )
+                .build()
+        )
+    }
 
-        val role = if (it.isEasyInputMessage()) it.asEasyInputMessage()
-            .role() else if (it.isResponseOutputMessage()) it.asResponseOutputMessage()
-            ._role() else it.asMessage().role()
-        when (role.toString().lowercase()) {
-            "user" -> {
-                if (it.isEasyInputMessage()) {
-                    val easyInputMessage = it.asEasyInputMessage()
-                    if (easyInputMessage.content().isTextInput()) {
-                        completeMessages.addMessage(
-                            ChatCompletionUserMessageParam.builder().content(
-                                ChatCompletionUserMessageParam.Content.ofText(
-                                    it.asEasyInputMessage().content().asTextInput()
-                                )
-                            ).build()
-                        )
-                    } else if (easyInputMessage.content().isResponseInputMessageContentList()) {
-                        val contentList = easyInputMessage.content().asResponseInputMessageContentList()
-                        completeMessages.addMessage(
-                            ChatCompletionUserMessageParam.builder().content(
-                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                    prepareUserContent(contentList)
-                                )
-                            ).build()
-                        )
-                    } else
-                        completeMessages.addMessage(
-                            ChatCompletionUserMessageParam.builder().content(
-                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                    prepareUserContent(
-                                        it.asMessage()
-                                    )
-                                )
-                            ).build()
-                        )
-                }
+    /**
+     * Adds a function call output message to the completion request.
+     *
+     * @param item The function call output input item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun addFunctionCallOutputMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        val output = item.asFunctionCallOutput()
+        completionBuilder.addMessage(
+            ChatCompletionToolMessageParam.builder()
+                .content(output.output())
+                .toolCallId(output.callId())
+                .build()
+        )
+    }
+
+    /**
+     * Applies model and basic parameters to the completion request.
+     *
+     * @param completionBuilder The builder to add parameters to
+     * @param params The source parameters
+     */
+    private fun applyModelAndParameters(
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
+    ) {
+        completionBuilder.model(params.model())
+        completionBuilder.temperature(params.temperature())
+        completionBuilder.maxCompletionTokens(params.maxOutputTokens())
+        completionBuilder.metadata(params.metadata())
+        completionBuilder.topP(params.topP())
+        completionBuilder.store(params.store())
+    }
+
+    /**
+     * Applies tool configuration to the completion request.
+     *
+     * @param completionBuilder The builder to add tool configuration to
+     * @param params The source parameters
+     */
+    private fun applyToolConfiguration(
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
+    ) {
+        if (params.toolChoice().isPresent) {
+            completionBuilder.toolChoice(createToolChoiceOption(params.toolChoice().get()))
+        }
+
+        if (params.tools().isPresent && params.tools().get().isNotEmpty()) {
+            completionBuilder.tools(convertTools(params.tools().get()))
+        }
+    }
+
+    /**
+     * Creates a tool choice option based on the provided tool choice.
+     *
+     * @param toolChoice The tool choice from response parameters
+     * @return ChatCompletionToolChoiceOption for the completion request
+     */
+    private fun createToolChoiceOption(toolChoice: ResponseCreateParams.ToolChoice): ChatCompletionToolChoiceOption {
+        return when {
+            toolChoice.isTypes() -> {
+                ChatCompletionToolChoiceOption.ofNamedToolChoice(
+                    ChatCompletionNamedToolChoice.builder()
+                        .type(JsonValue.from(toolChoice.asTypes().type().asString().lowercase()))
+                        .build()
+                )
             }
-
-            "assistant" -> {
-                if (it.isEasyInputMessage()) {
-                    completeMessages.addMessage(
-                        ChatCompletionAssistantMessageParam.builder().content(
-                            ChatCompletionAssistantMessageParam.Content.ofText(
-                                it.asEasyInputMessage().content().asTextInput()
-                            )
+            toolChoice.isFunction() -> {
+                ChatCompletionToolChoiceOption.ofNamedToolChoice(
+                    ChatCompletionNamedToolChoice.builder()
+                        .function(JsonValue.from(toolChoice.asFunction().name().lowercase()))
+                        .function(
+                            ChatCompletionNamedToolChoice.Function.builder()
+                                .name(toolChoice.asFunction().name()).build()
                         ).build()
+                )
+            }
+            toolChoice.isOptions() -> {
+                val toolChoiceOptions = toolChoice.asOptions()
+                if (toolChoiceOptions.asString().lowercase() == "auto") {
+                    ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.AUTO)
+                } else {
+                    ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
+                }
+            }
+            else -> throw IllegalArgumentException("Unsupported tool choice")
+        }
+    }
+
+    /**
+     * Converts response tools to chat completion tools.
+     *
+     * @param tools The tools from response parameters
+     * @return List of ChatCompletionTool for the completion request
+     */
+    private fun convertTools(tools: List<Tool>): List<ChatCompletionTool> {
+
+        return tools.map { responseTool ->
+            when {
+                responseTool.isFunction() -> {
+                    val functionTool = responseTool.asFunction()
+                    ChatCompletionTool.builder().function(
+                        objectMapper.readValue(
+                            objectMapper.writeValueAsString(functionTool),
+                            FunctionDefinition::class.java
+                        )
+                    ).build()
+                }
+                responseTool.isWebSearch() -> {
+                    val webSearchTool = responseTool.asWebSearch()
+                    ChatCompletionTool.builder()
+                        .type(JsonValue.from("function"))
+                        .function(
+                            FunctionDefinition.builder()
+                                .name(webSearchTool.type().asString())
+                                .build()
+                        )
+                        .build()
+                }
+                responseTool.isFileSearch() -> {
+                    val fileSearchTool = responseTool.asFileSearch()
+                    ChatCompletionTool.builder()
+                        .type(JsonValue.from("function"))
+                        .function(
+                            FunctionDefinition.builder()
+                                .name(fileSearchTool._type())
+                                .build()
+                        )
+                        .build()
+                }
+                responseTool.isComputerUsePreview() -> {
+                    val computerUsePreviewTool = responseTool.asComputerUsePreview()
+                    ChatCompletionTool.builder()
+                        .type(JsonValue.from("function"))
+                        .function(
+                            FunctionDefinition.builder()
+                                .name(computerUsePreviewTool._type())
+                                .build()
+                        )
+                        .build()
+                }
+                else -> throw IllegalArgumentException("Unsupported tool")
+            }
+        }
+    }
+
+    /**
+     * Applies response formatting to the completion request.
+     *
+     * @param completionBuilder The builder to add formatting to
+     * @param params The source parameters
+     */
+    private fun applyResponseFormatting(
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
+    ) {
+        if (params.text().isPresent && params.text().get().format().isPresent) {
+            val format = params.text().get().format().get()
+            when {
+                format.isText() -> {
+                    completionBuilder.responseFormat(format.asText())
+                }
+                format.isJsonObject() -> {
+                    completionBuilder.responseFormat(format.asJsonObject())
+                }
+                format.isJsonSchema() -> {
+                    completionBuilder.responseFormat(
+                        ResponseFormatJsonSchema.builder()
+                            .type(format.asJsonSchema()._type())
+                            .jsonSchema(
+                                objectMapper.readValue(
+                                    objectMapper.writeValueAsString(format.asJsonSchema().schema()),
+                                    ResponseFormatJsonSchema.JsonSchema::class.java
+                                )
+                            )
+                            .build()
                     )
-                } else if (it.isResponseOutputMessage()) {
-                    it.asResponseOutputMessage().content().forEach {
-                        val outputText = it.asOutputText().text()
-                        completeMessages.addMessage(
-                            ChatCompletionAssistantMessageParam.builder().content(
-                                ChatCompletionAssistantMessageParam.Content.ofText(outputText)
-                            ).build()
-                        )
-                    }
-
-                }
-            }
-
-            "system" -> {
-                if (it.isEasyInputMessage()) {
-                    val easyInputMessage = it.asEasyInputMessage()
-                    if(easyInputMessage.content().isTextInput()){
-                        completeMessages.addMessage(
-                            ChatCompletionSystemMessageParam.builder()
-                                .content(
-                                    easyInputMessage.content().asTextInput()
-                                ).build()
-                        )
-                    }
-                    else if(easyInputMessage.content().isResponseInputMessageContentList())
-                    completeMessages.addMessage(
-                        ChatCompletionSystemMessageParam.builder()
-                            .content(
-                                easyInputMessage.content().asResponseInputMessageContentList().first().asInputText().text()
-                            ).build()
-                    )
-                }
-            }
-
-            "developer" -> {
-                if (it.isEasyInputMessage()) {
-                    val easyInputMessage = it.asEasyInputMessage()
-                    if(easyInputMessage.content().isTextInput()){
-                        completeMessages.addMessage(
-                            ChatCompletionDeveloperMessageParam.builder()
-                                .content(
-                                    easyInputMessage.content().asTextInput()
-                                ).build()
-                        )
-                    }
-                    else if(easyInputMessage.content().isResponseInputMessageContentList())
-                        completeMessages.addMessage(
-                            ChatCompletionDeveloperMessageParam.builder()
-                                .content(
-                                    easyInputMessage.content().asResponseInputMessageContentList().first().asInputText().text()
-                                ).build()
-                        )
-                }
-            }
-
-            "tool" -> {
-                if(it.isEasyInputMessage()){
-                    val easyInputMessage = it.asEasyInputMessage()
-                    completeMessages.addMessage(ChatCompletionToolMessageParam.builder().content(easyInputMessage.content().asTextInput()).toolCallId(
-                        easyInputMessage._additionalProperties()["tool_call_id"].toString()
-                    ).build())
                 }
             }
         }
     }
+
+    /**
+     * Applies reasoning effort to the completion request if present.
+     *
+     * @param completionBuilder The builder to add reasoning effort to
+     * @param params The source parameters
+     */
+    private fun applyReasoningEffort(
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
+    ) {
+        if (params.reasoning().isPresent && params.reasoning().get().effort().isPresent) {
+            completionBuilder.reasoningEffort(
+                ReasoningEffort.of(params.reasoning().get().effort().get().asString())
+            )
+        }
+    }
+
+    /**
+     * Converts input messages to chat completion messages based on their role.
+     *
+     * @param item The input item to convert
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun convertInputMessages(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        val role = when {
+            item.isEasyInputMessage() -> item.asEasyInputMessage().role()
+            item.isResponseOutputMessage() -> item.asResponseOutputMessage()._role()
+            else -> item.asMessage().role()
+        }
+
+        when (role.toString().lowercase()) {
+            "user" -> handleUserMessage(item, completionBuilder)
+            "assistant" -> handleAssistantMessage(item, completionBuilder)
+            "system" -> handleSystemMessage(item, completionBuilder)
+            "developer" -> handleDeveloperMessage(item, completionBuilder)
+            "tool" -> handleToolMessage(item, completionBuilder)
+        }
+    }
+
+    /**
+     * Handles conversion of user messages.
+     *
+     * @param item The user message item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun handleUserMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        if (item.isEasyInputMessage()) {
+            val easyInputMessage = item.asEasyInputMessage()
+            when {
+                easyInputMessage.content().isTextInput() -> {
+                    completionBuilder.addMessage(
+                        ChatCompletionUserMessageParam.builder().content(
+                            ChatCompletionUserMessageParam.Content.ofText(
+                                easyInputMessage.content().asTextInput()
+                            )
+                        ).build()
+                    )
+                }
+                easyInputMessage.content().isResponseInputMessageContentList() -> {
+                    val contentList = easyInputMessage.content().asResponseInputMessageContentList()
+                    completionBuilder.addMessage(
+                        ChatCompletionUserMessageParam.builder().content(
+                            ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                prepareUserContent(contentList)
+                            )
+                        ).build()
+                    )
+                }
+                else -> {
+                    completionBuilder.addMessage(
+                        ChatCompletionUserMessageParam.builder().content(
+                            ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                prepareUserContent(
+                                    item.asMessage()
+                                )
+                            )
+                        ).build()
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Handles conversion of assistant messages.
+     *
+     * @param item The assistant message item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun handleAssistantMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        if (item.isEasyInputMessage()) {
+            completionBuilder.addMessage(
+                ChatCompletionAssistantMessageParam.builder().content(
+                    ChatCompletionAssistantMessageParam.Content.ofText(
+                        item.asEasyInputMessage().content().asTextInput()
+                    )
+                ).build()
+            )
+        } else if (item.isResponseOutputMessage()) {
+            item.asResponseOutputMessage().content().forEach {
+                val outputText = it.asOutputText().text()
+                completionBuilder.addMessage(
+                    ChatCompletionAssistantMessageParam.builder().content(
+                        ChatCompletionAssistantMessageParam.Content.ofText(outputText)
+                    ).build()
+                )
+            }
+        }
+    }
+
+    /**
+     * Handles conversion of system messages.
+     *
+     * @param item The system message item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun handleSystemMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        if (item.isEasyInputMessage()) {
+            val easyInputMessage = item.asEasyInputMessage()
+            when {
+                easyInputMessage.content().isTextInput() -> {
+                    completionBuilder.addMessage(
+                        ChatCompletionSystemMessageParam.builder()
+                            .content(
+                                easyInputMessage.content().asTextInput()
+                            ).build()
+                    )
+                }
+                easyInputMessage.content().isResponseInputMessageContentList() -> {
+                    completionBuilder.addMessage(
+                        ChatCompletionSystemMessageParam.builder()
+                            .content(
+                                easyInputMessage.content().asResponseInputMessageContentList()
+                                    .first().asInputText().text()
+                            ).build()
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Handles conversion of developer messages.
+     *
+     * @param item The developer message item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun handleDeveloperMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        if (item.isEasyInputMessage()) {
+            val easyInputMessage = item.asEasyInputMessage()
+            when {
+                easyInputMessage.content().isTextInput() -> {
+                    completionBuilder.addMessage(
+                        ChatCompletionDeveloperMessageParam.builder()
+                            .content(
+                                easyInputMessage.content().asTextInput()
+                            ).build()
+                    )
+                }
+                easyInputMessage.content().isResponseInputMessageContentList() -> {
+                    completionBuilder.addMessage(
+                        ChatCompletionDeveloperMessageParam.builder()
+                            .content(
+                                easyInputMessage.content().asResponseInputMessageContentList()
+                                    .first().asInputText().text()
+                            ).build()
+                    )
+                }
+            }
+        }
+    }
+
+    /**
+     * Handles conversion of tool messages.
+     *
+     * @param item The tool message item
+     * @param completionBuilder The builder to add the message to
+     */
+    private fun handleToolMessage(
+        item: ResponseInputItem,
+        completionBuilder: ChatCompletionCreateParams.Builder
+    ) {
+        if (item.isEasyInputMessage()) {
+            val easyInputMessage = item.asEasyInputMessage()
+            completionBuilder.addMessage(
+                ChatCompletionToolMessageParam.builder()
+                    .content(easyInputMessage.content().asTextInput())
+                    .toolCallId(
+                        easyInputMessage._additionalProperties()["tool_call_id"].toString()
+                    )
+                    .build()
+            )
+        }
+    }
 }
 
+/**
+ * Prepares user content from a message.
+ *
+ * @param message The message to extract content from
+ * @return List of ChatCompletionContentPart objects
+ */
 private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> =
     prepareUserContent(message.content())
 
+/**
+ * Prepares user content from a list of response input content.
+ * Converts various input types (text, image, file) to appropriate ChatCompletionContentPart objects.
+ *
+ * @param contentList List of response input content
+ * @return List of ChatCompletionContentPart objects
+ */
 private fun prepareUserContent(contentList: List<ResponseInputContent>): List<ChatCompletionContentPart> =
-    contentList.map {
-        if (it.isInputText()) {
-            val inputText = it.asInputText()
-            return@map ChatCompletionContentPart.ofText(
-                ChatCompletionContentPartText.builder().text(
-                    inputText.text()
-                ).build()
-            )
-        } else if (it.isInputImage()) {
-            val inputImage = it.asInputImage()
-            return@map ChatCompletionContentPart.ofImageUrl(
-                ChatCompletionContentPartImage.builder().type(JsonValue.from("image_url")).imageUrl(
-                    ChatCompletionContentPartImage.ImageUrl.builder()
-                        .url(inputImage._imageUrl())
-                        .detail(
-                            ChatCompletionContentPartImage.ImageUrl.Detail.of(
-                                inputImage.detail().value().name.lowercase()
+    contentList.map { content ->
+        when {
+            content.isInputText() -> {
+                val inputText = content.asInputText()
+                ChatCompletionContentPart.ofText(
+                    ChatCompletionContentPartText.builder().text(
+                        inputText.text()
+                    ).build()
+                )
+            }
+            content.isInputImage() -> {
+                val inputImage = content.asInputImage()
+                ChatCompletionContentPart.ofImageUrl(
+                    ChatCompletionContentPartImage.builder().type(JsonValue.from("image_url")).imageUrl(
+                        ChatCompletionContentPartImage.ImageUrl.builder()
+                            .url(inputImage._imageUrl())
+                            .detail(
+                                ChatCompletionContentPartImage.ImageUrl.Detail.of(
+                                    inputImage.detail().value().name.lowercase()
+                                )
                             )
-                        )
-                        .putAllAdditionalProperties(inputImage._additionalProperties())
-                        .build()
-                ).build()
-            )
-        } else if (it.isInputFile()) {
-            val inputFile = it.asInputFile()
-
-            return@map ChatCompletionContentPart.ofFile(
-                ChatCompletionContentPart.File.builder().type(JsonValue.from("file")).file(
-                    ChatCompletionContentPart.File.FileObject.builder()
-                        .fileData(inputFile._fileData())
-                        .fileId(inputFile._fileId())
-                        .fileName(inputFile._filename()).build()
-                ).build()
-            )
-        } else {
-            throw IllegalArgumentException("Unsupported input type")
+                            .putAllAdditionalProperties(inputImage._additionalProperties())
+                            .build()
+                    ).build()
+                )
+            }
+            content.isInputFile() -> {
+                val inputFile = content.asInputFile()
+                ChatCompletionContentPart.ofFile(
+                    ChatCompletionContentPart.File.builder().type(JsonValue.from("file")).file(
+                        ChatCompletionContentPart.File.FileObject.builder()
+                            .fileData(inputFile._fileData())
+                            .fileId(inputFile._fileId())
+                            .fileName(inputFile._filename()).build()
+                    ).build()
+                )
+            }
+            else -> throw IllegalArgumentException("Unsupported input type")
         }
     }
