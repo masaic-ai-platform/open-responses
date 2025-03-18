@@ -1,5 +1,6 @@
 package com.masaic.openai.api.model
 
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
@@ -113,8 +114,25 @@ data class ResponseItemList(
     val hasMore: Boolean
 )
 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class InputMessageItem(
     val role: String? = null,
     val content: Any? = null,
-    val type: String = "message"
-)
+    var type: String = "message",
+    val id: String? = null,
+    val arguments: String? = null,
+    val name: String? = null,
+    val tool_call_id: String? = null,
+    val call_id: String? = null,
+    val output: String? = null,
+) {
+    init {
+        if (call_id != null) {
+            if (output != null) {
+                type = "function_call_output"
+            } else {
+                type = "function_call"
+            }
+        }
+    }
+}

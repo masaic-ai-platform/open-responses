@@ -101,6 +101,20 @@ class MasaicOpenAiResponseServiceImpl(
                 if (it.isEasyInputMessage() || it.isMessage() || it.isResponseOutputMessage()) {
                     convertInputMessages(it, completeMessages)
                 }
+                else if(it.isFunctionCall()){
+                    val functionCall = it.asFunctionCall()
+                    completeMessages.addMessage(ChatCompletionAssistantMessageParam.builder()
+                        .addToolCall(
+                            ChatCompletionMessageToolCall.builder()
+                                .id(functionCall.callId())
+                                .function(ChatCompletionMessageToolCall.Function.builder()
+                                    .arguments(functionCall.arguments())
+                                    .name(functionCall.name())
+                                    .build()
+                                )
+                                .build())
+                        .build())
+                }
                 else if(it.isFunctionCallOutput()){
                     completeMessages.addMessage(ChatCompletionToolMessageParam.builder().content(it.asFunctionCallOutput().output()).toolCallId(
                         it.asFunctionCallOutput().callId()
@@ -193,6 +207,7 @@ class MasaicOpenAiResponseServiceImpl(
         it: ResponseInputItem,
         completeMessages: ChatCompletionCreateParams.Builder
     ) {
+
         val role = if (it.isEasyInputMessage()) it.asEasyInputMessage()
             .role() else if (it.isResponseOutputMessage()) it.asResponseOutputMessage()
             ._role() else it.asMessage().role()
@@ -291,6 +306,15 @@ class MasaicOpenAiResponseServiceImpl(
                                     easyInputMessage.content().asResponseInputMessageContentList().first().asInputText().text()
                                 ).build()
                         )
+                }
+            }
+
+            "tool" -> {
+                if(it.isEasyInputMessage()){
+                    val easyInputMessage = it.asEasyInputMessage()
+                    completeMessages.addMessage(ChatCompletionToolMessageParam.builder().content(easyInputMessage.content().asTextInput()).toolCallId(
+                        easyInputMessage._additionalProperties()["tool_call_id"].toString()
+                    ).build())
                 }
             }
         }
