@@ -1,6 +1,7 @@
 package com.masaic.openai.api.client
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.masaic.openai.api.utils.EventUtils
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
@@ -102,10 +103,52 @@ class MasaicOpenAiResponseServiceImpl(
     ): Flow<ServerSentEvent<String>> = callbackFlow {
         val response = client.async().chat().completions().createStreaming(prepareCompletion(params))
 
+        val functionCallAccumulator = mutableListOf<ResponseStreamEvent>()
+        val textAccumulator = mutableListOf<ResponseStreamEvent>()
+
         val subscription = response.subscribe { completion ->
             completion.choices().forEach { choice ->
-                choice.toResponseStreamEvent()?.let { event ->
-                    trySend(event).isSuccess
+                choice.toResponseStreamEvent().let { event ->
+                    event.forEach {
+                        if (it.isFunctionCallArgumentsDelta()) {
+                            functionCallAccumulator.add(it)
+                            trySend(EventUtils.convertEvent(it)).isSuccess
+                        } else if (it.isOutputTextDelta()) {
+                            textAccumulator.add(it)
+                            trySend(EventUtils.convertEvent(it)).isSuccess
+                        } else if(it.isFunctionCallArgumentsDone()) {
+                            functionCallAccumulator.groupBy { it.asFunctionCallArgumentsDelta().outputIndex() }.forEach {
+                               val content =  it.value.joinToString("") { it.asFunctionCallArgumentsDelta().delta() }
+
+                                trySend(EventUtils.convertEvent(ResponseStreamEvent.ofFunctionCallArgumentsDone(
+                                    ResponseFunctionCallArgumentsDoneEvent.builder()
+                                        .outputIndex(it.key)
+                                        .arguments(content)
+                                        .itemId(it.value.first().asFunctionCallArgumentsDelta().itemId())
+                                        .putAllAdditionalProperties(it.value.first().asFunctionCallArgumentsDelta()._additionalProperties())
+                                        .build()
+                                ))).isSuccess
+                            }
+                        } else if(it.isOutputTextDone()) {
+
+                            textAccumulator.groupBy { it.asOutputTextDelta().outputIndex() }.forEach {
+                               val content =  it.value.joinToString("") { it.asOutputTextDelta().delta() }
+
+                                trySend(EventUtils.convertEvent(ResponseStreamEvent.ofOutputTextDone(
+                                    ResponseTextDoneEvent.builder()
+                                        .contentIndex(it.key)
+                                        .text(content)
+                                        .outputIndex(it.key)
+                                        .itemId(it.value.first().asOutputTextDelta().itemId())
+                                        .build()
+                                ))).isSuccess
+                            }
+                        }
+                        else
+                         {
+                            trySend(EventUtils.convertEvent(it)).isSuccess
+                        }
+                    }
                 }
             }
         }

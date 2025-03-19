@@ -1,13 +1,11 @@
 package com.masaic.openai.api.client
 
-import com.masaic.openai.api.utils.EventUtils
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.responses.ResponseFunctionCallArgumentsDeltaEvent
 import com.openai.models.responses.ResponseFunctionCallArgumentsDoneEvent
 import com.openai.models.responses.ResponseStreamEvent
 import com.openai.models.responses.ResponseTextDeltaEvent
 import com.openai.models.responses.ResponseTextDoneEvent
-import org.springframework.http.codec.ServerSentEvent
 
 object ChatCompletionChunkConverter {
 
@@ -17,15 +15,15 @@ object ChatCompletionChunkConverter {
      * @param chunk The ChatCompletionChunk.Choice to convert
      * @return The converted ServerSentEvent
      */
-    fun toResponseStreamEvent(chunk: ChatCompletionChunk.Choice): ServerSentEvent<String> {
+    fun toResponseStreamEvent(chunk: ChatCompletionChunk.Choice): List<ResponseStreamEvent> {
         return when {
             chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop" -> {
-                EventUtils.convertEvent(
+                listOf(
                     ResponseStreamEvent.ofOutputTextDone(
                         ResponseTextDoneEvent.builder()
-                            .contentIndex(0)
+                            .contentIndex(chunk.index())
                             .text("")
-                            .outputIndex(0)
+                            .outputIndex(chunk.index())
                             .itemId("0")
                             .build()
                     )
@@ -34,7 +32,7 @@ object ChatCompletionChunkConverter {
             chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank() -> {
                 val delta = chunk.delta().content().get()
                 val index = chunk.index()
-                EventUtils.convertEvent(
+                listOf(
                     ResponseStreamEvent.ofOutputTextDelta(
                         ResponseTextDeltaEvent.builder()
                             .contentIndex(index)
@@ -47,10 +45,10 @@ object ChatCompletionChunkConverter {
             }
             chunk.delta().toolCalls().isPresent && chunk.delta().toolCalls().get().isNotEmpty() -> {
                 val toolCall = chunk.delta().toolCalls().get().first()
-                EventUtils.convertEvent(
+                listOf(
                     ResponseStreamEvent.ofFunctionCallArgumentsDelta(
                         ResponseFunctionCallArgumentsDeltaEvent.builder()
-                            .outputIndex(0)
+                            .outputIndex(toolCall.index())
                             .delta(toolCall.function().get().arguments().get())
                             .itemId(toolCall._id())
                             .putAllAdditionalProperties(toolCall._additionalProperties())
@@ -59,28 +57,20 @@ object ChatCompletionChunkConverter {
                 )
             }
             chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "tool_calls" -> {
-                EventUtils.convertEvent(
+
+                listOf(
                     ResponseStreamEvent.ofFunctionCallArgumentsDone(
                         ResponseFunctionCallArgumentsDoneEvent.builder()
                             .outputIndex(0)
-                            .arguments("TODO")
+                            .arguments("")
                             .itemId("0")
-                            .putAllAdditionalProperties(mapOf())
+                            .putAllAdditionalProperties(chunk._additionalProperties())
                             .build()
                     )
                 )
             }
             else -> {
-                EventUtils.convertEvent(
-                    ResponseStreamEvent.ofOutputTextDelta(
-                        ResponseTextDeltaEvent.builder()
-                            .contentIndex(0)
-                            .outputIndex(0)
-                            .itemId("0")
-                            .delta("")
-                            .build()
-                    )
-                )
+                listOf()
             }
         }
     }
@@ -91,6 +81,6 @@ object ChatCompletionChunkConverter {
  *
  * @return The converted ServerSentEvent
  */
-fun ChatCompletionChunk.Choice.toResponseStreamEvent(): ServerSentEvent<String>? {
+fun ChatCompletionChunk.Choice.toResponseStreamEvent(): List<ResponseStreamEvent> {
     return ChatCompletionChunkConverter.toResponseStreamEvent(this)
 }
