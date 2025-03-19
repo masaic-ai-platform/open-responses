@@ -8,177 +8,283 @@ import com.openai.models.responses.*
 import java.util.*
 
 /**
- * Utility function to convert a ChatCompletion object to a Response object.
- * This allows for compatibility between different API formats.
+ * Utility class to convert OpenAI's ChatCompletion objects to Masaic API Response objects.
+ * This converter enables seamless integration between different API formats and ensures
+ * compatibility across the platform.
  */
 object ChatCompletionConverter {
 
     /**
      * Converts a ChatCompletion object to a Response object.
      *
-     * @param chatCompletion The ChatCompletion object to convert
-     * @return A Response object with equivalent data
+     * @param chatCompletion The OpenAI ChatCompletion object to convert
+     * @param params The ResponseCreateParams containing configuration for the response
+     * @return A fully populated Response object with equivalent data from the ChatCompletion
      */
     fun toResponse(chatCompletion: ChatCompletion, params: ResponseCreateParams): Response {
-        // Extract the first choice's message content if available
-        // Create output items from the choices
-        val outputItems = chatCompletion.choices().map { choice ->
-
-            val messageContent = choice.message().content()
-
-            val responseOutputTextBuilder = ResponseOutputText.builder()
-            if(choice.message().annotations().isPresent) {
-                responseOutputTextBuilder.annotations(choice.message().annotations().map {
-                    it.map {
-                        ResponseOutputText.Annotation.ofUrlCitation(
-                            ResponseOutputText.Annotation.UrlCitation.builder()
-                                .url(it.urlCitation().url())
-                                .endIndex(it.urlCitation().endIndex())
-                                .type(it._type())
-                                .startIndex(it.urlCitation().startIndex())
-                                .title(it.urlCitation().title())
-                                .build()
-                        )
-                    }
-                }.get())
-            }
-
-
-
-            var reasoning = ""
-
-            messageContent.ifPresent {
-                if (it.contains("<think>") && it.contains("</think>"))
-                    reasoning = it.substringAfter("<think>").substringBefore("</think>").trim()
-            }
-            var messageWithoutReasoning = ""
-
-            messageContent.ifPresent {
-                messageWithoutReasoning = it.replace("<think>$reasoning</think>", "").trim()
-            }
-
-            val outputs = mutableListOf<ResponseOutputItem>()
-
-            outputs.add(
-                ResponseOutputItem.ofMessage(
-                    ResponseOutputMessage.builder().addContent(
-                        responseOutputTextBuilder.text(messageWithoutReasoning)
-                            .build()
-                    ).id(choice.index().toString()).status(ResponseOutputMessage.Status.COMPLETED).build()
-                )
-            )
-
-            if (reasoning.isNotBlank()) {
-                outputs.add(
-                    ResponseOutputItem.ofReasoning(
-                        ResponseReasoningItem.builder()
-                            .addSummary(ResponseReasoningItem.Summary.builder().text(reasoning).build())
-                            .id(choice.index().toString())
-                            .build()
-                    )
-                )
-            }
-
-            if (choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()) {
-                val toolCalls = choice.message().toolCalls().get()
-                toolCalls.forEach {
-                    outputs.add(
-                        ResponseOutputItem.ofFunctionCall(
-                            ResponseFunctionToolCall.builder()
-                                .id(it.id())
-                                .callId(it.id())
-                                .name(it.function().name())
-                                .arguments(it.function().arguments())
-                                .type(it._type())
-                                .build()
-                        )
-                    )
-                }
-            }
-
-            if (choice.message().audio().isPresent) {
-                val audio = choice.message().audio().get()
-                //TODO add audio to response
-            }
-
-            outputs
-        }.flatten()
-
-        // Convert created timestamp from epoch seconds to epoch milliseconds
+        // Process all choices and flatten the resulting output items
+        val outputItems = processChoices(chatCompletion.choices())
+        
+        // Convert created timestamp from epoch seconds to double
         val createdAtDouble = chatCompletion.created().toDouble()
 
-        // Build the response
-        // Build the response with all required fields
+        // Build and return the complete response
+        return buildResponse(chatCompletion, params, outputItems, createdAtDouble)
+    }
+    
+    /**
+     * Processes each choice from the ChatCompletion and converts them to ResponseOutputItems.
+     * 
+     * @param choices The list of choices from the ChatCompletion
+     * @return A flattened list of ResponseOutputItems
+     */
+    private fun processChoices(choices: List<ChatCompletion.Choice>): List<ResponseOutputItem> {
+        return choices.map { choice ->
+            val messageContent = choice.message().content()
+            val responseOutputTextBuilder = buildOutputTextWithAnnotations(choice)
+            
+            // Extract reasoning if present within <think> tags
+            val reasoning = extractReasoning(messageContent)
+            val messageWithoutReasoning = removeReasoningTags(messageContent, reasoning)
+            
+            // Build the list of output items for this choice
+            val outputs = mutableListOf<ResponseOutputItem>()
+            
+            // Add the main message output
+            outputs.add(createMessageOutput(choice, responseOutputTextBuilder, messageWithoutReasoning))
+            
+            // Add reasoning output if present
+            if (reasoning.isNotBlank()) {
+                outputs.add(createReasoningOutput(choice, reasoning))
+            }
+            
+            // Add tool calls if present
+            addToolCallOutputs(choice, outputs)
+            
+            // Handle audio content if present
+            if (choice.message().audio().isPresent) {
+                // TODO: Add audio to response when implementation is ready
+            }
+            
+            outputs
+        }.flatten()
+    }
+    
+    /**
+     * Builds a ResponseOutputText.Builder with annotations if present.
+     * 
+     * @param choice The ChatCompletion choice to extract annotations from
+     * @return A configured ResponseOutputText.Builder
+     */
+    private fun buildOutputTextWithAnnotations(choice: ChatCompletion.Choice): ResponseOutputText.Builder {
+        val builder = ResponseOutputText.builder()
+        
+        if (choice.message().annotations().isPresent) {
+            builder.annotations(choice.message().annotations().map { annotationList ->
+                annotationList.map { annotation ->
+                    ResponseOutputText.Annotation.ofUrlCitation(
+                        ResponseOutputText.Annotation.UrlCitation.builder()
+                            .url(annotation.urlCitation().url())
+                            .endIndex(annotation.urlCitation().endIndex())
+                            .type(annotation._type())
+                            .startIndex(annotation.urlCitation().startIndex())
+                            .title(annotation.urlCitation().title())
+                            .build()
+                    )
+                }
+            }.get())
+        }
+        
+        return builder
+    }
+    
+    /**
+     * Extracts reasoning content from message if enclosed in <think> tags.
+     * 
+     * @param messageContent The Optional<String> content from the message
+     * @return The extracted reasoning text or empty string if none
+     */
+    private fun extractReasoning(messageContent: Optional<String>): String {
+        var reasoning = ""
+        messageContent.ifPresent {
+            if (it.contains("<think>") && it.contains("</think>")) {
+                reasoning = it.substringAfter("<think>").substringBefore("</think>").trim()
+            }
+        }
+        return reasoning
+    }
+    
+    /**
+     * Removes reasoning tags from the message content.
+     * 
+     * @param messageContent The Optional<String> content from the message
+     * @param reasoning The reasoning text to remove with its tags
+     * @return The message without reasoning tags
+     */
+    private fun removeReasoningTags(messageContent: Optional<String>, reasoning: String): String {
+        var messageWithoutReasoning = ""
+        messageContent.ifPresent {
+            messageWithoutReasoning = it.replace("<think>$reasoning</think>", "").trim()
+        }
+        return messageWithoutReasoning
+    }
+    
+    /**
+     * Creates a message output item from the choice.
+     * 
+     * @param choice The ChatCompletion choice
+     * @param builder The ResponseOutputText.Builder to use
+     * @param messageText The text content for the message
+     * @return A ResponseOutputItem containing the message
+     */
+    private fun createMessageOutput(
+        choice: ChatCompletion.Choice, 
+        builder: ResponseOutputText.Builder, 
+        messageText: String
+    ): ResponseOutputItem {
+        return ResponseOutputItem.ofMessage(
+            ResponseOutputMessage.builder().addContent(
+                builder.text(messageText).build()
+            ).id(choice.index().toString())
+             .status(ResponseOutputMessage.Status.COMPLETED)
+             .build()
+        )
+    }
+    
+    /**
+     * Creates a reasoning output item from the choice.
+     * 
+     * @param choice The ChatCompletion choice
+     * @param reasoning The reasoning text
+     * @return A ResponseOutputItem containing the reasoning
+     */
+    private fun createReasoningOutput(choice: ChatCompletion.Choice, reasoning: String): ResponseOutputItem {
+        return ResponseOutputItem.ofReasoning(
+            ResponseReasoningItem.builder()
+                .addSummary(ResponseReasoningItem.Summary.builder().text(reasoning).build())
+                .id(choice.index().toString())
+                .build()
+        )
+    }
+    
+    /**
+     * Adds tool call outputs to the outputs list if present in the choice.
+     * 
+     * @param choice The ChatCompletion choice
+     * @param outputs The mutable list of outputs to add to
+     */
+    private fun addToolCallOutputs(choice: ChatCompletion.Choice, outputs: MutableList<ResponseOutputItem>) {
+        if (choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()) {
+            val toolCalls = choice.message().toolCalls().get()
+            toolCalls.forEach { toolCall ->
+                outputs.add(
+                    ResponseOutputItem.ofFunctionCall(
+                        ResponseFunctionToolCall.builder()
+                            .id(toolCall.id())
+                            .callId(toolCall.id())
+                            .name(toolCall.function().name())
+                            .arguments(toolCall.function().arguments())
+                            .type(toolCall._type())
+                            .build()
+                    )
+                )
+            }
+        }
+    }
+    
+    /**
+     * Builds the complete Response object from all components.
+     * 
+     * @param chatCompletion The original ChatCompletion
+     * @param params The ResponseCreateParams
+     * @param outputItems The processed output items
+     * @param createdAtDouble The creation timestamp
+     * @return A fully configured Response object
+     */
+    private fun buildResponse(
+        chatCompletion: ChatCompletion,
+        params: ResponseCreateParams,
+        outputItems: List<ResponseOutputItem>,
+        createdAtDouble: Double
+    ): Response {
         return Response.builder()
             .id(chatCompletion.id())
             .createdAt(createdAtDouble)
-            .error(null) // Required field, but null since we assume no error
-            .incompleteDetails(null) // Required field, but null since we assume complete response
-            .instructions(params.instructions()) // Required field, default to empty string
-            .metadata(params.metadata()) // Required field
+            .error(null) // Required field, null since we assume no error
+            .incompleteDetails(null) // Required field, null since we assume complete response
+            .instructions(params.instructions())
+            .metadata(params.metadata())
             .model(convertModel(chatCompletion.model()))
             .object_(JsonValue.from("response")) // Standard value
             .output(outputItems)
-            .temperature(params.temperature()) // Required field, default to 0.0
-            .parallelToolCalls(params._parallelToolCalls()) // Required field, default to false
-            .tools(params._tools()) // Required field, default to empty list
+            .temperature(params.temperature())
+            .parallelToolCalls(params._parallelToolCalls())
+            .tools(params._tools())
             .toolChoice(convertToolChoice(params.toolChoice()))
-            .topP(params.topP()) // Required field, default to 1.0
-            .maxOutputTokens(params.maxOutputTokens()) // Optional field
-            .previousResponseId(params.previousResponseId()) // Optional field
-            .reasoning(params.reasoning()) // Optional field
-            .status(ResponseStatus.COMPLETED) // Default to COMPLETE
-            // Optional field
-            .usage(convertUsage(chatCompletion.usage().get()))
+            .topP(params.topP())
+            .maxOutputTokens(params.maxOutputTokens())
+            .previousResponseId(params.previousResponseId())
+            .reasoning(params.reasoning())
+            .status(ResponseStatus.COMPLETED)
+            .usage(chatCompletion.usage().map(this::convertUsage).orElse(null))
             .build()
     }
 
+    /**
+     * Converts a ResponseCreateParams.ToolChoice to a Response.ToolChoice.
+     * 
+     * @param toolChoice The optional tool choice from the parameters
+     * @return The converted Response.ToolChoice
+     */
     private fun convertToolChoice(toolChoice: Optional<ResponseCreateParams.ToolChoice>): Response.ToolChoice {
-
         if (toolChoice.isEmpty) {
             return Response.ToolChoice.ofOptions(ToolChoiceOptions.NONE)
         }
+        
         val responseToolChoice = Response.ToolChoice
-
-        if (toolChoice.get().isOptions()) {
-            return responseToolChoice.ofOptions(toolChoice.get().asOptions())
+        val toolChoiceValue = toolChoice.get()
+        
+        return when {
+            toolChoiceValue.isOptions() -> responseToolChoice.ofOptions(toolChoiceValue.asOptions())
+            toolChoiceValue.isFunction() -> responseToolChoice.ofFunction(toolChoiceValue.asFunction())
+            toolChoiceValue.isTypes() -> responseToolChoice.ofTypes(toolChoiceValue.asTypes())
+            else -> responseToolChoice.ofOptions(ToolChoiceOptions.NONE)
         }
-
-        if (toolChoice.get().isFunction()) {
-            return responseToolChoice.ofFunction(toolChoice.get().asFunction())
-        }
-
-        if (toolChoice.get().isTypes()) {
-            return responseToolChoice.ofTypes(toolChoice.get().asTypes())
-        }
-
-        return responseToolChoice.ofOptions(ToolChoiceOptions.NONE)
     }
 
     /**
-     * Converts a string model name to ChatModel enum
+     * Converts a string model name to ChatModel enum.
+     * 
+     * @param modelString The model name as a string
+     * @return The corresponding ChatModel enum value
      */
     private fun convertModel(modelString: String): ChatModel {
         return ChatModel.of(modelString)
     }
 
     /**
-     * Converts CompletionUsage to ResponseUsage
+     * Converts OpenAI's CompletionUsage to Masaic's ResponseUsage.
+     * Maps token counts and adds default reasoning tokens.
+     * 
+     * @param completionUsage The CompletionUsage from OpenAI
+     * @return A ResponseUsage object with equivalent data
      */
     private fun convertUsage(completionUsage: CompletionUsage): ResponseUsage {
-        return completionUsage.let {
-            ResponseUsage.builder()
-                .inputTokens(it.promptTokens().toLong())
-                .outputTokens(it.completionTokens().toLong())
-                .totalTokens(it.totalTokens().toLong())
-                .outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(0).build())
-                .build()
-        }
+        return ResponseUsage.builder()
+            .inputTokens(completionUsage.promptTokens().toLong())
+            .outputTokens(completionUsage.completionTokens().toLong())
+            .totalTokens(completionUsage.totalTokens().toLong())
+            .outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(0).build())
+            .build()
     }
 }
 
 /**
- * Extension function for cleaner conversion syntax
+ * Extension function for cleaner conversion syntax.
+ * Allows calling toResponse directly on a ChatCompletion object.
+ * 
+ * @param params The ResponseCreateParams containing configuration for the response
+ * @return A fully populated Response object
  */
 fun ChatCompletion.toResponse(params: ResponseCreateParams): Response {
     return ChatCompletionConverter.toResponse(this, params)

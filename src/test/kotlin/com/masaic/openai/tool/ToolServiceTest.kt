@@ -40,9 +40,9 @@ class ToolServiceTest {
         assert(tool != null) { "Tool should not be null" }
 
         // Now we can safely use non-null assertion
-        assert(tool!!.name.isNotEmpty()) { "Tool name should not be empty" }
-        assert(tool.description.isNotEmpty()) { "Tool description should not be empty" }
-        assert(tool.parameters.isNotEmpty()) { "Tool parameters should not be empty" }
+        assert(tool?.name?.isNotEmpty() == true) { "Tool name should not be empty" }
+        assert(tool?.description?.isNotEmpty() == true) { "Tool description should not be empty" }
+        assert(tool?.parameters?.isNotEmpty() == true) { "Tool parameters should not be empty" }
     }
 
     @Test
