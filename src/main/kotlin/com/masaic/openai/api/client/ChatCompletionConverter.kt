@@ -91,7 +91,7 @@ object ChatCompletionConverter {
      */
     fun toResponse(chatCompletion: ChatCompletion, params: ResponseCreateParams): Response {
         // Process all choices and flatten the resulting output items
-        val outputItems = processChoices(chatCompletion.choices())
+        val outputItems = processChoices(chatCompletion)
         
         // Convert created timestamp from epoch seconds to double
         val createdAtDouble = chatCompletion.created().toDouble()
@@ -103,11 +103,11 @@ object ChatCompletionConverter {
     /**
      * Processes each choice from the ChatCompletion and converts them to ResponseOutputItems.
      * 
-     * @param choices The list of choices from the ChatCompletion
+     * @param completion The ChatCompletion to process
      * @return A flattened list of ResponseOutputItems
      */
-    private fun processChoices(choices: List<ChatCompletion.Choice>): List<ResponseOutputItem> {
-        return choices.map { choice ->
+    private fun processChoices(completion: ChatCompletion): List<ResponseOutputItem> {
+        return completion.choices().map { choice ->
             val messageContent = choice.message().content()
             val responseOutputTextBuilder = buildOutputTextWithAnnotations(choice)
             
@@ -119,6 +119,7 @@ object ChatCompletionConverter {
             val outputs = mutableListOf<ResponseOutputItem>()
             
             // Add the main message output
+            if(messageWithoutReasoning.isNotBlank())
             outputs.add(createMessageOutput(choice, responseOutputTextBuilder, messageWithoutReasoning))
             
             // Add reasoning output if present
@@ -127,7 +128,7 @@ object ChatCompletionConverter {
             }
             
             // Add tool calls if present
-            addToolCallOutputs(choice, outputs)
+            addToolCallOutputs(choice, outputs, completion = completion)
             
             // Handle audio content if present
             if (choice.message().audio().isPresent) {
@@ -241,18 +242,19 @@ object ChatCompletionConverter {
      * @param choice The ChatCompletion choice
      * @param outputs The mutable list of outputs to add to
      */
-    private fun addToolCallOutputs(choice: ChatCompletion.Choice, outputs: MutableList<ResponseOutputItem>) {
+    private fun addToolCallOutputs(choice: ChatCompletion.Choice, outputs: MutableList<ResponseOutputItem>, completion: ChatCompletion) {
         if (choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()) {
             val toolCalls = choice.message().toolCalls().get()
             toolCalls.forEach { toolCall ->
                 outputs.add(
                     ResponseOutputItem.ofFunctionCall(
                         ResponseFunctionToolCall.builder()
-                            .id(toolCall.id())
+                            .id(completion.id())
                             .callId(toolCall.id())
                             .name(toolCall.function().name())
                             .arguments(toolCall.function().arguments())
-                            .type(toolCall._type())
+                            .type(JsonValue.from("function_call"))
+                            .status(ResponseFunctionToolCall.Status.COMPLETED)
                             .build()
                     )
                 )

@@ -49,6 +49,7 @@ object ChatCompletionChunkConverter {
                                             .callId(toolCall._id())
                                             .putAllAdditionalProperties(toolCall._additionalProperties())
                                             .id(completion._id())
+                                            .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
                                             .build()
                                     ))
                                     .build()

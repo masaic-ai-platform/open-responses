@@ -67,7 +67,7 @@ class MasaicOpenAiResponseServiceImpl(
     ): Response {
         val chatCompletions = client.chat().completions().create(prepareCompletion(params))
         val responseInputItems = handleMasaicToolCall(chatCompletions, params)
-        if (responseInputItems.isEmpty()) {
+        if (responseInputItems.filter { it.isFunctionCall() }.size > responseInputItems.filter { it.isFunctionCallOutput() }.size) {
             return chatCompletions.toResponse(params)
         }
         else if(responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls){
@@ -88,21 +88,24 @@ class MasaicOpenAiResponseServiceImpl(
 
         if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
             val message = chatChoice.message()
-            val responseInputItems = params.input().asResponse().toMutableList()
+            val responseInputItems = if(params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
+                ResponseInputItem.ofEasyInputMessage(
+                    EasyInputMessage.builder().content(params.input().asText()).role(EasyInputMessage.Role.USER).build()
+                )
+            )
 
             message.toolCalls().get().forEach { tool ->
                 val function = tool.function()
+                responseInputItems.add(
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall.builder().callId(tool.id())
+                            .id(tool.id())
+                            .name(function.name()).arguments(function.arguments()).build()
+                    )
+                )
                 val toolResult =
                     toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
                 toolResult?.let {
-                    responseInputItems.add(
-                        ResponseInputItem.ofFunctionCall(
-                            ResponseFunctionToolCall.builder().callId(tool.id())
-                                .id(tool.id())
-                                .name(function.name()).arguments(function.arguments()).build()
-                        )
-                    )
-
                     responseInputItems.add(
                         ResponseInputItem.ofFunctionCallOutput(
                             FunctionCallOutput.builder().callId(tool.id())
@@ -120,24 +123,17 @@ class MasaicOpenAiResponseServiceImpl(
 
     fun handleMasaicToolCall(params: ResponseCreateParams, response: Response): List<ResponseInputItem> {
             val responseInputItems = params.input().asResponse().toMutableList()
-            val newInputItems = mutableListOf<ResponseInputItem>()
 
             response.output().filter {
                 it.isFunctionCall()
-            }.forEach { tool ->
+            }.forEachIndexed { index, tool ->
                 val function = tool.asFunctionCall()
                 val toolResult =
                     toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
                 toolResult?.let {
-                    newInputItems.add(
-                        ResponseInputItem.ofFunctionCall(
-                            ResponseFunctionToolCall.builder().callId(function.callId())
-                                .id(function.id())
-                                .name(function.name()).arguments(function.arguments()).build()
-                        )
-                    )
-
-                    newInputItems.add(
+                    //append at it + 1 index to the last function call
+                    responseInputItems.add(
+                        index + 1,
                         ResponseInputItem.ofFunctionCallOutput(
                             FunctionCallOutput.builder().callId(function.callId())
                                 .id(function.id())
@@ -146,7 +142,7 @@ class MasaicOpenAiResponseServiceImpl(
                     )
                 }
             }
-            return if(newInputItems.isNotEmpty()) responseInputItems + newInputItems else listOf() //If no new items then return empty list
+            return responseInputItems
     }
 
     /**
@@ -260,31 +256,39 @@ class MasaicOpenAiResponseServiceImpl(
                             .role(JsonValue.from("assistant"))
                             .build()
                     ))
-
-                val response = ChatCompletionConverter.buildFinalResponse(
-                    params,
-                    ResponseStatus.COMPLETED,
-                    responseId,
-                    responseOutputItemAccumulator
-                )
-
-                if(internalToolItemIds.isEmpty()) {
-                    trySend(EventUtils.convertEvent(ResponseStreamEvent.ofCompleted(ResponseCompletedEvent.builder()
-                        .response(response).build())))
-                        .isSuccess
-                }
-                else {
-                    // Rebuild the params with the updated input items.
-                    val newParams = params.toBuilder()
-                        .input(ResponseCreateParams.Input.ofResponse(handleMasaicToolCall(params, response)))
-                        .build()
-
-                    // Recreate the chat completions with the updated params.
-                    createCompletionStream(newParams)
-                }
             }
             else {
                 convertAndPublish(completion, functionCallAccumulator, textAccumulator, responseOutputItemAccumulator, internalToolItemIds)
+
+                if(completion.choices().any { it.finishReason().isPresent && it.finishReason().get().asString() == "tool_calls" }){
+                    val response = ChatCompletionConverter.buildFinalResponse(
+                        params,
+                        ResponseStatus.COMPLETED,
+                        responseId,
+                        responseOutputItemAccumulator
+                    )
+
+                    if(internalToolItemIds.isEmpty()) {
+                        trySend(EventUtils.convertEvent(ResponseStreamEvent.ofCompleted(ResponseCompletedEvent.builder()
+                            .response(response).build())))
+                            .isSuccess
+                    }
+                    else {
+
+                        val toolResponseItems = handleMasaicToolCall(params, response)
+                        // Rebuild the params with the updated input items.
+                        val newParams = params.toBuilder()
+                            .input(ResponseCreateParams.Input.ofResponse(toolResponseItems))
+                            .build()
+
+                            // Recreate the chat completions with the updated params.
+                            launch {
+                                createCompletionStream(newParams).collect {
+                                    trySend(it).isSuccess
+                                }
+                            }
+                    }
+                }
             }
         }
 
@@ -330,22 +334,22 @@ class MasaicOpenAiResponseServiceImpl(
                     functionCallAccumulator.forEach {
                         val content = it.value.joinToString("") { it.asFunctionCallArgumentsDelta().delta() }
 
-                        trySend(
-                            EventUtils.convertEvent(
-                                ResponseStreamEvent.ofFunctionCallArgumentsDone(
-                                    ResponseFunctionCallArgumentsDoneEvent.builder()
-                                        .outputIndex(it.key)
-                                        .arguments(content)
-                                        .itemId(it.value.first().asFunctionCallArgumentsDelta().itemId())
-                                        .putAllAdditionalProperties(
-                                            it.value.first().asFunctionCallArgumentsDelta()._additionalProperties()
-                                        )
-                                        .build()
+                        if(!internalToolItemIds.contains(completion.id())) {
+                            trySend(
+                                EventUtils.convertEvent(
+                                    ResponseStreamEvent.ofFunctionCallArgumentsDone(
+                                        ResponseFunctionCallArgumentsDoneEvent.builder()
+                                            .outputIndex(it.key)
+                                            .arguments(content)
+                                            .itemId(it.value.first().asFunctionCallArgumentsDelta().itemId())
+                                            .putAllAdditionalProperties(
+                                                it.value.first().asFunctionCallArgumentsDelta()._additionalProperties()
+                                            )
+                                            .build()
+                                    )
                                 )
-                            )
-                        ).isSuccess
-
-                        //TODO Send out item done event
+                            ).isSuccess
+                        }
                     }
                 }
                 else if(it.isOutputItemDone()){
