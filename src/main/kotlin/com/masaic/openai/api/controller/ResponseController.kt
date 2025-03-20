@@ -1,9 +1,11 @@
 package com.masaic.openai.api.controller
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.masaic.openai.api.model.CreateResponseRequest
 import com.masaic.openai.api.model.MasaicManagedTool
-import com.masaic.openai.api.model.Tool
 import com.masaic.openai.api.service.MasaicResponseService
 import com.masaic.openai.api.service.ResponseNotFoundException
 import com.masaic.openai.tool.ToolService
@@ -70,7 +72,8 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
                 ResponseCreateParams.Body::class.java
             ), headers, queryParams
         )
-        return ResponseEntity.ok(responseObj)
+
+        return ResponseEntity.ok(updateMasaicManagedTools(responseObj))
     }
 
     @GetMapping("/responses/{responseId}", produces = [MediaType.APPLICATION_JSON_VALUE])
@@ -173,17 +176,46 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
     }
 
     private fun updateMasaicManagedTools(request: CreateResponseRequest) {
-        val updatedTools = mutableListOf<Tool>()
-        request.tools?.let { updatedTools.addAll(it) }
-        request.tools?.forEach { tool ->
+        request.tools = request.tools?.map { tool ->
             if (tool is MasaicManagedTool) {
-                val functionTool = toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
+                toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Define tool ${tool.type} properly"
                 )
-                updatedTools.add(functionTool)
+            } else {
+                tool
+            }
+        }?.toMutableList()
+    }
+
+    private fun updateMasaicManagedTools(response: Response): JsonNode {
+        // Convert the Response object to a mutable JSON tree
+        val rootNode = mapper.valueToTree<JsonNode>(response) as ObjectNode
+
+        // Get the "tools" array node (if present)
+        val toolsNode = rootNode.get("tools") as? ArrayNode
+        if (toolsNode != null) {
+            // Iterate over each tool node in the array
+            for (i in 0 until toolsNode.size()) {
+                val toolNode = toolsNode.get(i) as? ObjectNode ?: continue
+
+                // Check if this tool is a function tool by looking at its "type" field.
+                // Here we assume function tools have "type" == "function" and a "name" field.
+                if (toolNode.has("type") && toolNode.get("type").asText() == "function" && toolNode.has("name")) {
+                    val functionName = toolNode.get("name").asText()
+                    // Use your toolService to check if this function should be modified
+                    val toolMetadata = toolService.getAvailableTool(functionName)
+                    if (toolMetadata != null) {
+                        // Create a new ObjectNode with only the "type" field set to the function name.
+                        // This satisfies your requirement to include only the type parameter.
+                        val newToolNode = mapper.createObjectNode()
+                        newToolNode.put("type", functionName)
+                        // Replace the current tool node with the new one.
+                        toolsNode.set(i, newToolNode)
+                    }
+                }
             }
         }
-        request.tools = updatedTools
+        return rootNode
     }
-} 
+}

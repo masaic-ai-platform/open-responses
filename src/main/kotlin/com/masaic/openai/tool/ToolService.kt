@@ -31,8 +31,8 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         }
     }
 
-    fun getAvailableTool(name: String): ToolMetadata {
-        val tool = mcpToolRegistry.findByName(name) ?: throw IllegalArgumentException("Tool not found")
+    fun getAvailableTool(name: String): ToolMetadata? {
+        val tool = mcpToolRegistry.findByName(name) ?: return null
         return ToolMetadata(
             id = tool.id,
             name = tool.name,
@@ -107,7 +107,8 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         return FunctionTool(
             name = this.name,
             description = this.description,
-            parameters = parametersMap
+            parameters = parametersMap,
+            strict = false
         )
     }
 
@@ -175,34 +176,3 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
 }
 
 data class ToolMetadata(val id: String, val name: String, val description: String)
-
-fun main() {
-    val mcpServerConfigJson = """
-                {
-  "mcpServers": {
-    "github": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "GITHUB_PERSONAL_ACCESS_TOKEN",
-        "mcp/github"
-      ],
-      "env": {
-        "GITHUB_PERSONAL_ACCESS_TOKEN": "<GITHUB_PAT>"
-      }
-    },
-    "browser-use-mcp-server": {
-      "url": "http://localhost:8000/sse"
-    }
-  }
-}
-    """
-
-//    val toolRegistry = MCPToolRegistry()
-//    val toolService = ToolService(toolRegistry)
-//    toolRegistry.registerMCPTools(mcpServerConfigJson.replace("<GITHUB_PAT>", System.getenv("GITHUB_PAT")))
-//    toolRegistry.shutdown()
-}

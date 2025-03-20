@@ -2,6 +2,7 @@ package com.masaic.openai.api.client
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.masaic.openai.api.utils.EventUtils
+import com.masaic.openai.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
@@ -11,6 +12,7 @@ import com.openai.models.ReasoningEffort
 import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
+import com.openai.models.responses.ResponseInputItem.FunctionCallOutput
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
 import kotlinx.coroutines.channels.awaitClose
@@ -28,7 +30,8 @@ import org.springframework.http.codec.ServerSentEvent
  * @param client The OpenAI client used to make API requests
  */
 class MasaicOpenAiResponseServiceImpl(
-    private val client: OpenAIClient
+    private val client: OpenAIClient,
+    private val toolService: ToolService
 ) : ResponseService {
 
     val objectMapper = jacksonObjectMapper()
@@ -58,7 +61,55 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseCreateParams,
         requestOptions: RequestOptions
     ): Response {
-        return client.chat().completions().create(prepareCompletion(params)).toResponse(params)
+        val chatCompletions = client.chat().completions().create(prepareCompletion(params))
+        val responseInputItems = handleMasaicToolCall(chatCompletions, params)
+        if (responseInputItems.isEmpty()) {
+            return chatCompletions.toResponse(params)
+        }
+
+        // Rebuild the params with the updated input items.
+        val newParams = params.toBuilder()
+            .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+            .build()
+
+        // Recreate the chat completions with the updated params.
+        val newChatCompletions = client.chat().completions().create(prepareCompletion(newParams))
+        return newChatCompletions.toResponse(newParams)
+    }
+
+    fun handleMasaicToolCall(chatCompletion: ChatCompletion, params: ResponseCreateParams): List<ResponseInputItem> {
+        val chatChoice = chatCompletion.choices()[0]
+
+        if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
+            val message = chatChoice.message()
+            val responseInputItems = params.input().asResponse().toMutableList()
+
+            message.toolCalls().get().forEach { tool ->
+                val function = tool.function()
+                val toolResult =
+                    toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
+                toolResult?.let {
+                    responseInputItems.add(
+                        ResponseInputItem.ofFunctionCall(
+                            ResponseFunctionToolCall.builder().callId(tool.id())
+                                .id(tool.id())
+                                .name(function.name()).arguments(function.arguments()).build()
+                        )
+                    )
+
+                    responseInputItems.add(
+                        ResponseInputItem.ofFunctionCallOutput(
+                            FunctionCallOutput.builder().callId(tool.id())
+                                .id(tool.id())
+                                .output(toolResult).build()
+                        )
+                    )
+                }
+            }
+            return responseInputItems
+        } else {
+            return emptyList()
+        }
     }
 
     /**

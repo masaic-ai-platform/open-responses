@@ -3,6 +3,7 @@ package com.masaic.openai.api.service
 import com.masaic.openai.api.client.MasaicOpenAiResponseServiceImpl
 import com.masaic.openai.api.extensions.fromBody
 import com.masaic.openai.api.utils.EventUtils
+import com.masaic.openai.tool.ToolService
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.core.http.AsyncStreamResponse
 import com.openai.core.http.Headers
@@ -22,7 +23,7 @@ import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap
 
 @Service
-class MasaicResponseService {
+class MasaicResponseService(private val toolService: ToolService) {
 
     val client = OpenAIOkHttpClient.builder().credential(
         BearerTokenCredential.create {
@@ -45,7 +46,7 @@ class MasaicResponseService {
 
         if (System.getenv("OPENAI_API_BASE_URL") != "https://api.openai.com/v1"  ) {
 
-            return MasaicOpenAiResponseServiceImpl(client).create(
+            return MasaicOpenAiResponseServiceImpl(client, toolService).create(
                 ResponseCreateParams.builder().fromBody(request).additionalHeaders(
                     headerBuilder.build()
                 ).additionalQueryParams(
@@ -78,7 +79,7 @@ class MasaicResponseService {
 
         return if (System.getenv("OPENAI_API_BASE_URL") != "https://api.openai.com/v1") {
 
-            MasaicOpenAiResponseServiceImpl(client).createCompletionStream(
+            MasaicOpenAiResponseServiceImpl(client, toolService).createCompletionStream(
                 ResponseCreateParams.builder().fromBody(request).additionalHeaders(
                     headerBuilder.build()
                 ).additionalQueryParams(
