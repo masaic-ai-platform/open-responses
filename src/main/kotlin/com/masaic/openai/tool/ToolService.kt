@@ -52,13 +52,14 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
 
     @PostConstruct
     fun loadTools() {
-        val filePath = System.getenv("MCP_SERVER_CONFIG_FILE_PATH")
-        if (filePath == null) {
+        val filePath = System.getenv("MCP_SERVER_CONFIG_FILE_PATH") ?: "src/main/resources/mcp-servers-config.json"
+        val mcpServerConfigJson = try {
+            File(filePath).readText()
+        } catch (e: Exception) {
             log.warn("MCP_SERVER_CONFIG_FILE_PATH environment variable not set. No MCP tools will be loaded.")
             return
         }
 
-        val mcpServerConfigJson = File(filePath).readText()
         if (mcpServerConfigJson.isEmpty()) {
             log.warn("MCP server config file is empty. No MCP tools will be loaded.")
         }
@@ -76,8 +77,17 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
     private fun loadToolRegistry(mcpServerConfigJson: String) {
         val servers = json.decodeFromString(MCPServers.serializer(), mcpServerConfigJson)
         servers.mcpServers.forEach { (name, server) ->
-            val mcpClient = mcpToolExecutor.connectServer(name, server)
-            mcpToolRegistry.registerMCPTools(name, mcpClient)
+            try {
+                val mcpClient = mcpToolExecutor.connectServer(name, server)
+                mcpToolRegistry.registerMCPTools(name, mcpClient)
+                log.info("Successfully loaded tools for MCP server: $name")
+            } catch (e: Exception) {
+                log.warn(
+                    "Failed to connect to MCP server '$name': ${e.message}. If this server is necessary then fix the MCP config or server and restart the application.",
+                    e
+                )
+                // Continue with next server instead of aborting
+            }
         }
     }
 
