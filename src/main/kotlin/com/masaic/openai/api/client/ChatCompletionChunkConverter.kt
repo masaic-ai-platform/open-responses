@@ -3,74 +3,86 @@ package com.masaic.openai.api.client
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.responses.ResponseFunctionCallArgumentsDeltaEvent
 import com.openai.models.responses.ResponseFunctionCallArgumentsDoneEvent
+import com.openai.models.responses.ResponseFunctionToolCall
+import com.openai.models.responses.ResponseOutputItem
+import com.openai.models.responses.ResponseOutputItemAddedEvent
 import com.openai.models.responses.ResponseStreamEvent
 import com.openai.models.responses.ResponseTextDeltaEvent
-import com.openai.models.responses.ResponseTextDoneEvent
 
 object ChatCompletionChunkConverter {
 
     /**
      * Converts a ChatCompletionChunk.Choice to a ServerSentEvent.
      *
-     * @param chunk The ChatCompletionChunk.Choice to convert
+     * @param completion The ChatCompletionChunk to convert
      * @return The converted ServerSentEvent
      */
-    fun toResponseStreamEvent(chunk: ChatCompletionChunk.Choice): List<ResponseStreamEvent> {
-        return when {
-            chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "stop" -> {
-                listOf(
-                    ResponseStreamEvent.ofOutputTextDone(
-                        ResponseTextDoneEvent.builder()
-                            .contentIndex(chunk.index())
-                            .text("")
-                            .outputIndex(chunk.index())
-                            .itemId("0")
-                            .build()
+    fun toResponseStreamEvent(completion: ChatCompletionChunk): List<ResponseStreamEvent> {
+        return completion.choices().flatMap {chunk ->
+            when {
+                chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank() -> {
+                    val delta = chunk.delta().content().get()
+                    val index = chunk.index()
+                    listOf(
+                        ResponseStreamEvent.ofOutputTextDelta(
+                            ResponseTextDeltaEvent.builder()
+                                .contentIndex(index) //TODO: Check if this is correct
+                                .outputIndex(index)
+                                .itemId(completion._id())
+                                .delta(delta)
+                                .build()
+                        )
                     )
-                )
-            }
-            chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank() -> {
-                val delta = chunk.delta().content().get()
-                val index = chunk.index()
-                listOf(
-                    ResponseStreamEvent.ofOutputTextDelta(
-                        ResponseTextDeltaEvent.builder()
-                            .contentIndex(index)
-                            .outputIndex(0)
-                            .itemId(index.toString())
-                            .delta(delta)
-                            .build()
-                    )
-                )
-            }
-            chunk.delta().toolCalls().isPresent && chunk.delta().toolCalls().get().isNotEmpty() -> {
-                val toolCall = chunk.delta().toolCalls().get().first()
-                listOf(
-                    ResponseStreamEvent.ofFunctionCallArgumentsDelta(
-                        ResponseFunctionCallArgumentsDeltaEvent.builder()
-                            .outputIndex(toolCall.index())
-                            .delta(toolCall.function().get().arguments().get())
-                            .itemId(toolCall._id())
-                            .putAllAdditionalProperties(toolCall._additionalProperties())
-                            .build()
-                    )
-                )
-            }
-            chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "tool_calls" -> {
+                }
 
-                listOf(
-                    ResponseStreamEvent.ofFunctionCallArgumentsDone(
-                        ResponseFunctionCallArgumentsDoneEvent.builder()
-                            .outputIndex(0)
-                            .arguments("")
-                            .itemId("0")
-                            .putAllAdditionalProperties(chunk._additionalProperties())
-                            .build()
+                chunk.delta().toolCalls().isPresent && chunk.delta().toolCalls().get().isNotEmpty() -> {
+                    chunk.delta().toolCalls().get().map {  toolCall ->
+
+                        if(toolCall.function().isPresent && toolCall.function().get().name().isPresent){
+                            ResponseStreamEvent.ofOutputItemAdded(
+                                ResponseOutputItemAddedEvent.builder()
+                                    .outputIndex(toolCall.index())
+                                    .item(ResponseOutputItem.ofFunctionCall(
+                                        ResponseFunctionToolCall.builder()
+                                            .name(toolCall.function().get().name().get())
+                                            .arguments(toolCall.function().get().arguments().get())
+                                            .callId(toolCall._id())
+                                            .putAllAdditionalProperties(toolCall._additionalProperties())
+                                            .id(completion._id())
+                                            .build()
+                                    ))
+                                    .build()
+                            )
+                        }
+                        else {
+                            ResponseStreamEvent.ofFunctionCallArgumentsDelta(
+                                ResponseFunctionCallArgumentsDeltaEvent.builder()
+                                    .outputIndex(toolCall.index())
+                                    .delta(toolCall.function().get().arguments().get())
+                                    .itemId(completion._id())
+                                    .putAllAdditionalProperties(toolCall._additionalProperties())
+                                    .build()
+                            )
+                        }
+                    }
+                }
+
+                chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "tool_calls" -> {
+                    listOf(
+                        ResponseStreamEvent.ofFunctionCallArgumentsDone(
+                            ResponseFunctionCallArgumentsDoneEvent.builder()
+                                .outputIndex(chunk.index())
+                                .arguments("")
+                                .itemId(completion._id())
+                                .putAllAdditionalProperties(chunk._additionalProperties())
+                                .build()
+                        )
                     )
-                )
-            }
-            else -> {
-                listOf()
+                }
+
+                else -> {
+                    listOf()
+                }
             }
         }
     }
@@ -81,6 +93,6 @@ object ChatCompletionChunkConverter {
  *
  * @return The converted ServerSentEvent
  */
-fun ChatCompletionChunk.Choice.toResponseStreamEvent(): List<ResponseStreamEvent> {
+fun ChatCompletionChunk.toResponseStreamEvent(): List<ResponseStreamEvent> {
     return ChatCompletionChunkConverter.toResponseStreamEvent(this)
 }

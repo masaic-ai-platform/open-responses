@@ -91,14 +91,14 @@ data class CreateResponseRequest(
     @JsonProperty("max_output_tokens")
     val maxOutputTokens: Int? = null,
     var tools: List<Tool>? = null,
-    val temperature: Double? = null,
+    val temperature: Double = 1.0,
     val previousResponseId: String? = null,
     @JsonProperty("top_p")
     val topP: Double? = null,
     @JsonProperty("tool_choice")
     val toolChoice: String? = null,
-    val store: Boolean? = null,
-    val stream: Boolean? = null,
+    val store: Boolean = true,
+    val stream: Boolean = false,
     val reasoning: Reasoning? = null,
     val metadata: Metadata? = null,
     val truncation: Response.Truncation?=null,

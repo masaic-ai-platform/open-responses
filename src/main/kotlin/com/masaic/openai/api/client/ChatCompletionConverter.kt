@@ -5,6 +5,7 @@ import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.completions.CompletionUsage
 import com.openai.models.responses.*
+import java.time.Instant
 import java.util.*
 
 /**
@@ -13,6 +14,73 @@ import java.util.*
  * compatibility across the platform.
  */
 object ChatCompletionConverter {
+
+    /**
+     * Builds the complete Response object from all components.
+     *
+     * @param params The ResponseCreateParams
+     * @return A fully configured Response object
+     */
+    fun buildIntermediateResponse(
+        params: ResponseCreateParams,
+        status: ResponseStatus,
+        id: String
+    ): Response {
+        return Response.builder()
+            .id(id)
+            .createdAt(Instant.now().toEpochMilli().toDouble())
+            .error(null) // Required field, null since we assume no error
+            .incompleteDetails(null) // Required field, null since we assume complete response
+            .instructions(params.instructions())
+            .metadata(params.metadata())
+            .model(params.model())
+            .object_(JsonValue.from("response")) // Standard value
+            .temperature(params.temperature())
+            .parallelToolCalls(params._parallelToolCalls())
+            .tools(params._tools())
+            .toolChoice(convertToolChoice(params.toolChoice()))
+            .topP(params.topP())
+            .maxOutputTokens(params.maxOutputTokens())
+            .previousResponseId(params.previousResponseId())
+            .reasoning(params.reasoning())
+            .status(status)
+            .output(listOf())
+            .build()
+    }
+
+    /**
+     * Builds the complete Response object from all components.
+     *
+     * @param params The ResponseCreateParams
+     * @return A fully configured Response object
+     */
+    fun buildFinalResponse(
+        params: ResponseCreateParams,
+        status: ResponseStatus,
+        id: String,
+        outputItems: List<ResponseOutputItem>
+    ): Response {
+        return Response.builder()
+            .id(id)
+            .createdAt(Instant.now().toEpochMilli().toDouble())
+            .error(null) // Required field, null since we assume no error
+            .incompleteDetails(null) // Required field, null since we assume complete response
+            .instructions(params.instructions())
+            .metadata(params.metadata())
+            .model(params.model())
+            .object_(JsonValue.from("response")) // Standard value
+            .temperature(params.temperature())
+            .parallelToolCalls(params._parallelToolCalls())
+            .tools(params._tools())
+            .toolChoice(convertToolChoice(params.toolChoice()))
+            .topP(params.topP())
+            .maxOutputTokens(params.maxOutputTokens())
+            .previousResponseId(params.previousResponseId())
+            .reasoning(params.reasoning())
+            .status(status)
+            .output(outputItems)
+            .build()
+    }
 
     /**
      * Converts a ChatCompletion object to a Response object.
