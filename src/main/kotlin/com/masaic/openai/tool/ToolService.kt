@@ -62,6 +62,7 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
 
         if (mcpServerConfigJson.isEmpty()) {
             log.warn("MCP server config file is empty. No MCP tools will be loaded.")
+            return
         }
 
         loadToolRegistry(mcpServerConfigJson)

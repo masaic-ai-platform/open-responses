@@ -9,6 +9,7 @@ import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.util.concurrent.*
 
 @Component
 class MCPToolExecutor() {
@@ -61,16 +62,38 @@ class MCPToolExecutor() {
                 val envValue = envVar?.let { System.getenv(it) ?: it }
                 add(envValue?.let { "$arg=$it" } ?: arg)
             }
+            add("2>&1")
         }
 
-        log.info("command to start server: ${command.joinToString(" ")}")
-        val transport: McpTransport = StdioMcpTransport.Builder()
-            .command(command)
-            .build()
+        log.info("command to start server will be: ${command.joinToString(" ")}")
 
-        val mcpClient = DefaultMcpClient.Builder()
-            .transport(transport)
-            .build()
+// Create an executor with a single thread dedicated to this blocking operation
+        val executor = Executors.newSingleThreadExecutor()
+
+        val mcpClient = try {
+            val future: Future<McpClient> = executor.submit(Callable {
+                // Build the transport (this should be fast or already cooperative)
+                val transport: McpTransport = StdioMcpTransport.Builder()
+                    .command(command)
+                    .logEvents(true)
+                    .build()
+
+                // This call is blocking and may run infinitely if not cooperative.
+                DefaultMcpClient.Builder()
+                    .transport(transport)
+                    .build()
+            })
+
+            // Try to get the result within 20 seconds.
+            future.get(20, TimeUnit.SECONDS)
+
+            // Use mcpClient for further operations...
+        } catch (e: TimeoutException) {
+            // Cancel the task if it's still running.
+            throw IllegalStateException("Timed out while connecting to MCP server $serverName", e)
+        } finally {
+            executor.shutdownNow()
+        }
 
         log.info("MCP StdIO client connected for $serverName server with command: ${command.joinToString(" ")}")
         return mcpClient
