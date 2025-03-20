@@ -40,6 +40,7 @@ class MasaicOpenAiResponseServiceImpl(
     val objectMapper = jacksonObjectMapper()
 
     val allowedMaxToolCalls = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10
+    val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L // 60 seconds max total processing time
 
     /**
      * Not implemented: Returns a version of this service that includes raw HTTP response data.
@@ -203,6 +204,9 @@ class MasaicOpenAiResponseServiceImpl(
         var responseId = UUID.randomUUID().toString()
         var shouldContinue = true
         var inProgressEventFired = false
+        // Timeout mechanism
+        val startTime = System.currentTimeMillis()
+
         val responseInputItems= if(initialParams.input().isResponse()) initialParams.input().asResponse().toMutableList() else mutableListOf(
             ResponseInputItem.ofEasyInputMessage(
                 EasyInputMessage.builder().content(initialParams.input().asText()).role(EasyInputMessage.Role.USER).build()
@@ -210,12 +214,26 @@ class MasaicOpenAiResponseServiceImpl(
         )
 
         if(responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls){
+            emit(EventUtils.convertEvent(ResponseStreamEvent.ofError(
+                    ResponseErrorEvent.builder()
+                        .message("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
+                        .build()
+                )))
             throw UnsupportedOperationException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
         }
 
         while (shouldContinue) {
             // Create a mutable variable to track whether to continue after this iteration
             var nextIteration = false
+            val elapsedTime = System.currentTimeMillis() - startTime
+
+            if(elapsedTime > maxDuration){
+                emit(EventUtils.convertEvent(ResponseStreamEvent.ofError(
+                    ResponseErrorEvent.builder()
+                        .message("Timeout while processing. Increase the timeout limit by setting MASAIC_MAX_STREAMING_TIMEOUT environment variable.")
+                        .build()
+                )))
+            }
 
             // Use a separate flow to handle each API call
             callbackFlow {
