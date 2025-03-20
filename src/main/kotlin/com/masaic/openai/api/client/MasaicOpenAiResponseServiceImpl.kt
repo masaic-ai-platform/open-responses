@@ -128,12 +128,20 @@ class MasaicOpenAiResponseServiceImpl(
                 it.isFunctionCall()
             }.forEachIndexed { index, tool ->
                 val function = tool.asFunctionCall()
+
+                responseInputItems.add(
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall.builder().callId(function.callId())
+                            .id(function.id())
+                            .name(function.name()).arguments(function.arguments()).build()
+                    )
+                )
+
                 val toolResult =
                     toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
                 toolResult?.let {
                     //append at it + 1 index to the last function call
                     responseInputItems.add(
-                        index + 1,
                         ResponseInputItem.ofFunctionCallOutput(
                             FunctionCallOutput.builder().callId(function.callId())
                                 .id(function.id())
@@ -192,6 +200,7 @@ class MasaicOpenAiResponseServiceImpl(
         val responseOutputItemAccumulator = mutableListOf<ResponseOutputItem>()
         val internalToolItemIds = mutableSetOf<String>()
         var responseId = UUID.randomUUID().toString()
+        val functionNameAccumulator = mutableMapOf<Long, Pair<String,String>>()
         var inProgressEventFired = false //TODO AK: This is a hack to fire inProgress event only once
 
         trySend(EventUtils.convertEvent(
@@ -258,7 +267,14 @@ class MasaicOpenAiResponseServiceImpl(
                     ))
             }
             else {
-                convertAndPublish(completion, functionCallAccumulator, textAccumulator, responseOutputItemAccumulator, internalToolItemIds)
+                convertAndPublish(
+                    completion,
+                    functionCallAccumulator,
+                    textAccumulator,
+                    responseOutputItemAccumulator,
+                    internalToolItemIds,
+                    functionNameAccumulator
+                )
 
                 if(completion.choices().any { it.finishReason().isPresent && it.finishReason().get().asString() == "tool_calls" }){
                     val response = ChatCompletionConverter.buildFinalResponse(
@@ -307,7 +323,8 @@ class MasaicOpenAiResponseServiceImpl(
         functionCallAccumulator: MutableMap<Long, MutableList<ResponseStreamEvent>>,
         textAccumulator: MutableMap<Long, MutableList<ResponseStreamEvent>>,
         responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
-        internalToolItemIds: MutableSet<String>
+        internalToolItemIds: MutableSet<String>,
+        functionNameAccumulator: MutableMap<Long, Pair<String, String>>
     ) {
         completion.toResponseStreamEvent().let { event ->
             event.forEach {
@@ -320,6 +337,7 @@ class MasaicOpenAiResponseServiceImpl(
                 }
                 else if(it.isOutputItemAdded() && it.asOutputItemAdded().item().isFunctionCall()){
                     val functionName = it.asOutputItemAdded().item().asFunctionCall().name()
+                    functionNameAccumulator[it.asOutputItemAdded().outputIndex()] = Pair(functionName, it.asOutputItemAdded().item().asFunctionCall().callId())
                     if(toolService.getFunctionTool(functionName) != null){
                         internalToolItemIds.add(completion.id())
                     }
@@ -350,6 +368,18 @@ class MasaicOpenAiResponseServiceImpl(
                                 )
                             ).isSuccess
                         }
+
+                        responseOutputItemAccumulator.add(ResponseOutputItem.ofFunctionCall(
+                            ResponseFunctionToolCall.builder()
+                                .name(functionNameAccumulator.getValue(it.key).first)
+                                .arguments(content)
+                                .callId(functionNameAccumulator.getValue(it.key).second)
+                                .id(it.value.first().asFunctionCallArgumentsDelta().itemId())
+                                .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                .putAllAdditionalProperties(it.value.first().asFunctionCallArgumentsDelta()._additionalProperties())
+                                .type(JsonValue.from("function_call"))
+                                .build()
+                        ))
                     }
                 }
                 else if(it.isOutputItemDone()){

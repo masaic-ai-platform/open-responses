@@ -60,6 +60,7 @@ object ChatCompletionConverter {
         id: String,
         outputItems: List<ResponseOutputItem>
     ): Response {
+
         return Response.builder()
             .id(id)
             .createdAt(Instant.now().toEpochMilli().toDouble())
