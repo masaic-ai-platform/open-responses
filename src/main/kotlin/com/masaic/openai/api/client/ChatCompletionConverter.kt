@@ -214,7 +214,7 @@ object ChatCompletionConverter {
     ): ResponseOutputItem {
         return ResponseOutputItem.ofMessage(
             ResponseOutputMessage.builder().addContent(
-                builder.text(messageText).build()
+                builder.text(messageText).annotations(listOf()).build()
             ).id(choice.index().toString())
              .status(ResponseOutputMessage.Status.COMPLETED)
              .build()

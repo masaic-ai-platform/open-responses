@@ -40,7 +40,8 @@ class MasaicOpenAiResponseServiceImpl(
     val objectMapper = jacksonObjectMapper()
 
     val allowedMaxToolCalls = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10
-    val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L // 60 seconds max total processing time
+    val maxDuration: Long =
+        System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L // 60 seconds max total processing time
 
     /**
      * Not implemented: Returns a version of this service that includes raw HTTP response data.
@@ -71,8 +72,7 @@ class MasaicOpenAiResponseServiceImpl(
         val responseInputItems = handleMasaicToolCall(chatCompletions, params)
         if (responseInputItems.filter { it.isFunctionCall() }.size > responseInputItems.filter { it.isFunctionCallOutput() }.size) {
             return chatCompletions.toResponse(params)
-        }
-        else if(responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls){
+        } else if (responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls) {
             throw IllegalArgumentException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
         }
 
@@ -90,11 +90,13 @@ class MasaicOpenAiResponseServiceImpl(
 
         if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
             val message = chatChoice.message()
-            val responseInputItems = if(params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
-                ResponseInputItem.ofEasyInputMessage(
-                    EasyInputMessage.builder().content(params.input().asText()).role(EasyInputMessage.Role.USER).build()
+            val responseInputItems =
+                if (params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
+                    ResponseInputItem.ofEasyInputMessage(
+                        EasyInputMessage.builder().content(params.input().asText()).role(EasyInputMessage.Role.USER)
+                            .build()
+                    )
                 )
-            )
 
             message.toolCalls().get().forEach { tool ->
                 val function = tool.function()
@@ -125,39 +127,40 @@ class MasaicOpenAiResponseServiceImpl(
 
     fun handleMasaicToolCall(params: ResponseCreateParams, response: Response): List<ResponseInputItem> {
 
-            val responseInputItems = if(params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
+        val responseInputItems =
+            if (params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
                 ResponseInputItem.ofEasyInputMessage(
                     EasyInputMessage.builder().content(params.input().asText()).role(EasyInputMessage.Role.USER).build()
                 )
             )
 
-            response.output().filter {
-                it.isFunctionCall()
-            }.forEachIndexed { index, tool ->
-                val function = tool.asFunctionCall()
+        response.output().filter {
+            it.isFunctionCall()
+        }.forEachIndexed { index, tool ->
+            val function = tool.asFunctionCall()
 
+            responseInputItems.add(
+                ResponseInputItem.ofFunctionCall(
+                    ResponseFunctionToolCall.builder().callId(function.callId())
+                        .id(function.id())
+                        .name(function.name()).arguments(function.arguments()).build()
+                )
+            )
+
+            val toolResult =
+                toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
+            toolResult?.let {
+                //append at it + 1 index to the last function call
                 responseInputItems.add(
-                    ResponseInputItem.ofFunctionCall(
-                        ResponseFunctionToolCall.builder().callId(function.callId())
+                    ResponseInputItem.ofFunctionCallOutput(
+                        FunctionCallOutput.builder().callId(function.callId())
                             .id(function.id())
-                            .name(function.name()).arguments(function.arguments()).build()
+                            .output(toolResult).build()
                     )
                 )
-
-                val toolResult =
-                    toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
-                toolResult?.let {
-                    //append at it + 1 index to the last function call
-                    responseInputItems.add(
-                        ResponseInputItem.ofFunctionCallOutput(
-                            FunctionCallOutput.builder().callId(function.callId())
-                                .id(function.id())
-                                .output(toolResult).build()
-                        )
-                    )
-                }
             }
-            return responseInputItems
+        }
+        return responseInputItems
     }
 
     /**
@@ -207,18 +210,24 @@ class MasaicOpenAiResponseServiceImpl(
         // Timeout mechanism
         val startTime = System.currentTimeMillis()
 
-        val responseInputItems= if(initialParams.input().isResponse()) initialParams.input().asResponse().toMutableList() else mutableListOf(
+        val responseInputItems = if (initialParams.input().isResponse()) initialParams.input().asResponse()
+            .toMutableList() else mutableListOf(
             ResponseInputItem.ofEasyInputMessage(
-                EasyInputMessage.builder().content(initialParams.input().asText()).role(EasyInputMessage.Role.USER).build()
+                EasyInputMessage.builder().content(initialParams.input().asText()).role(EasyInputMessage.Role.USER)
+                    .build()
             )
         )
 
-        if(responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls){
-            emit(EventUtils.convertEvent(ResponseStreamEvent.ofError(
-                    ResponseErrorEvent.builder()
-                        .message("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
-                        .build()
-                )))
+        if (responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls) {
+            emit(
+                EventUtils.convertEvent(
+                    ResponseStreamEvent.ofError(
+                        ResponseErrorEvent.builder()
+                            .message("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
+                            .build()
+                    )
+                )
+            )
             throw UnsupportedOperationException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
         }
 
@@ -227,12 +236,16 @@ class MasaicOpenAiResponseServiceImpl(
             var nextIteration = false
             val elapsedTime = System.currentTimeMillis() - startTime
 
-            if(elapsedTime > maxDuration){
-                emit(EventUtils.convertEvent(ResponseStreamEvent.ofError(
-                    ResponseErrorEvent.builder()
-                        .message("Timeout while processing. Increase the timeout limit by setting MASAIC_MAX_STREAMING_TIMEOUT environment variable.")
-                        .build()
-                )))
+            if (elapsedTime > maxDuration) {
+                emit(
+                    EventUtils.convertEvent(
+                        ResponseStreamEvent.ofError(
+                            ResponseErrorEvent.builder()
+                                .message("Timeout while processing. Increase the timeout limit by setting MASAIC_MAX_STREAMING_TIMEOUT environment variable.")
+                                .build()
+                        )
+                    )
+                )
             }
 
             // Use a separate flow to handle each API call
@@ -247,132 +260,155 @@ class MasaicOpenAiResponseServiceImpl(
 
                 // Send initial created event only for the first iteration
                 if (currentParams == initialParams) {
-                    trySend(EventUtils.convertEvent(
-                        ResponseStreamEvent.ofCreated(
-                            ResponseCreatedEvent.builder()
-                                .response(ChatCompletionConverter.buildIntermediateResponse(currentParams, ResponseStatus.IN_PROGRESS, responseId))
-                                .build()
+                    trySend(
+                        EventUtils.convertEvent(
+                            ResponseStreamEvent.ofCreated(
+                                ResponseCreatedEvent.builder()
+                                    .response(
+                                        ChatCompletionConverter.buildIntermediateResponse(
+                                            currentParams,
+                                            ResponseStatus.IN_PROGRESS,
+                                            responseId
+                                        )
+                                    )
+                                    .build()
+                            )
                         )
-                    )).isSuccess
+                    ).isSuccess
                 }
 
                 val subscription = response.subscribe { completion ->
-                    // Send in progress event if not already sent
-                    if (!inProgressEventFired) {
-                        trySend(
-                            EventUtils.convertEvent(
-                                ResponseStreamEvent.ofInProgress(
-                                    ResponseInProgressEvent.builder()
-                                        .response(
-                                            ChatCompletionConverter.buildIntermediateResponse(
-                                                currentParams,
-                                                ResponseStatus.IN_PROGRESS,
-                                                responseId
-                                            )
-                                        )
-                                        .build()
-                                )
-                            )
-                        ).isSuccess
-                        inProgressEventFired = true
-                    }
 
-                    if (completion.choices().any { it.finishReason().isPresent && it.finishReason().get().asString() == "stop" }) {
-                        // Handle normal completion
-                        textAccumulator.forEach {
-                            val content = it.value.joinToString("") { it.asOutputTextDelta().delta() }
-
+                    if (!completion._choices().isMissing()) {
+                        // Send in progress event if not already sent
+                        if (!inProgressEventFired) {
                             trySend(
                                 EventUtils.convertEvent(
-                                    ResponseStreamEvent.ofOutputTextDone(
-                                        ResponseTextDoneEvent.builder()
-                                            .contentIndex(it.key)
-                                            .text(content)
-                                            .outputIndex(it.key)
-                                            .itemId(it.value.first().asOutputTextDelta().itemId())
+                                    ResponseStreamEvent.ofInProgress(
+                                        ResponseInProgressEvent.builder()
+                                            .response(
+                                                ChatCompletionConverter.buildIntermediateResponse(
+                                                    currentParams,
+                                                    ResponseStatus.IN_PROGRESS,
+                                                    responseId
+                                                )
+                                            )
                                             .build()
                                     )
                                 )
                             ).isSuccess
+                            inProgressEventFired = true
                         }
 
-                        responseOutputItemAccumulator.add(
-                            ResponseOutputItem.ofMessage(
-                                ResponseOutputMessage.builder()
-                                    .content(textAccumulator.map { ResponseOutputMessage.Content.ofOutputText(
-                                        ResponseOutputText.builder().text(it.value.joinToString("") { it.asOutputTextDelta().delta() }).annotations(
-                                            listOf()
-                                        ).build()
-                                    ) }
-                                    ).id(
-                                        UUID.randomUUID().toString()
+                        if (completion.choices()
+                                .any { it.finishReason().isPresent && it.finishReason().get().asString() == "stop" }
+                        ) {
+                            // Handle normal completion
+                            textAccumulator.forEach {
+                                val content = it.value.joinToString("") { it.asOutputTextDelta().delta() }
+
+                                trySend(
+                                    EventUtils.convertEvent(
+                                        ResponseStreamEvent.ofOutputTextDone(
+                                            ResponseTextDoneEvent.builder()
+                                                .contentIndex(it.key)
+                                                .text(content)
+                                                .outputIndex(it.key)
+                                                .itemId(it.value.first().asOutputTextDelta().itemId())
+                                                .build()
+                                        )
                                     )
-                                    .status(ResponseOutputMessage.Status.COMPLETED)
-                                    .role(JsonValue.from("assistant"))
-                                    .build()
-                            ))
+                                ).isSuccess
+                            }
 
-                        // Signal completion - explicitly set to false to end the while loop
-                        nextIteration = false
+                            responseOutputItemAccumulator.add(
+                                ResponseOutputItem.ofMessage(
+                                    ResponseOutputMessage.builder()
+                                        .content(textAccumulator.map {
+                                            ResponseOutputMessage.Content.ofOutputText(
+                                                ResponseOutputText.builder()
+                                                    .text(it.value.joinToString("") { it.asOutputTextDelta().delta() })
+                                                    .annotations(
+                                                        listOf()
+                                                    ).build()
+                                            )
+                                        }
+                                        ).id(
+                                            UUID.randomUUID().toString()
+                                        )
+                                        .status(ResponseOutputMessage.Status.COMPLETED)
+                                        .role(JsonValue.from("assistant"))
+                                        .build()
+                                ))
 
-                        // Send completed event
-                        val finalResponse = ChatCompletionConverter.buildFinalResponse(
-                            currentParams,
-                            ResponseStatus.COMPLETED,
-                            responseId,
-                            responseOutputItemAccumulator
-                        )
+                            // Signal completion - explicitly set to false to end the while loop
+                            nextIteration = false
 
-                        trySend(EventUtils.convertEvent(
-                            ResponseStreamEvent.ofCompleted(
-                                ResponseCompletedEvent.builder()
-                                    .response(finalResponse)
-                                    .build()
-                            )
-                        )).isSuccess
-                    } else {
-                        // Process ongoing completion
-                        convertAndPublish(
-                            completion,
-                            functionCallAccumulator,
-                            textAccumulator,
-                            responseOutputItemAccumulator,
-                            internalToolItemIds,
-                            functionNameAccumulator
-                        )
-
-                        // Check for tool calls
-                        if (completion.choices().any { it.finishReason().isPresent && it.finishReason().get().asString() == "tool_calls" }) {
-                            val response = ChatCompletionConverter.buildFinalResponse(
+                            // Send completed event
+                            val finalResponse = ChatCompletionConverter.buildFinalResponse(
                                 currentParams,
                                 ResponseStatus.COMPLETED,
                                 responseId,
                                 responseOutputItemAccumulator
                             )
 
-                            if (internalToolItemIds.isEmpty()) {
-                                // No internal tools to process, finish
-                                nextIteration = false
-                                trySend(EventUtils.convertEvent(
+                            trySend(
+                                EventUtils.convertEvent(
                                     ResponseStreamEvent.ofCompleted(
                                         ResponseCompletedEvent.builder()
-                                            .response(response)
+                                            .response(finalResponse)
                                             .build()
                                     )
-                                )).isSuccess
-                            } else {
-                                // Handle tool calls and prepare for next iteration
-                                val toolResponseItems = handleMasaicToolCall(currentParams, response)
-                                // Update params for the next iteration
-                                currentParams = currentParams.toBuilder()
-                                    .input(ResponseCreateParams.Input.ofResponse(toolResponseItems))
-                                    .build()
+                                )
+                            ).isSuccess
+                        } else {
+                            // Process ongoing completion
+                            convertAndPublish(
+                                completion,
+                                functionCallAccumulator,
+                                textAccumulator,
+                                responseOutputItemAccumulator,
+                                internalToolItemIds,
+                                functionNameAccumulator
+                            )
 
-                                // Signal to continue the outer loop with new params
-                                nextIteration = true
+                            // Check for tool calls
+                            if (completion.choices().any {
+                                    it.finishReason().isPresent && it.finishReason().get().asString() == "tool_calls"
+                                }) {
+                                val response = ChatCompletionConverter.buildFinalResponse(
+                                    currentParams,
+                                    ResponseStatus.COMPLETED,
+                                    responseId,
+                                    responseOutputItemAccumulator
+                                )
 
-                                // Close this inner flow to move to next iteration
-                                close()
+                                if (internalToolItemIds.isEmpty()) {
+                                    // No internal tools to process, finish
+                                    nextIteration = false
+                                    trySend(
+                                        EventUtils.convertEvent(
+                                            ResponseStreamEvent.ofCompleted(
+                                                ResponseCompletedEvent.builder()
+                                                    .response(response)
+                                                    .build()
+                                            )
+                                        )
+                                    ).isSuccess
+                                } else {
+                                    // Handle tool calls and prepare for next iteration
+                                    val toolResponseItems = handleMasaicToolCall(currentParams, response)
+                                    // Update params for the next iteration
+                                    currentParams = currentParams.toBuilder()
+                                        .input(ResponseCreateParams.Input.ofResponse(toolResponseItems))
+                                        .build()
+
+                                    // Signal to continue the outer loop with new params
+                                    nextIteration = true
+
+                                    // Close this inner flow to move to next iteration
+                                    close()
+                                }
                             }
                         }
                     }
@@ -410,18 +446,17 @@ class MasaicOpenAiResponseServiceImpl(
                     functionCallAccumulator.getOrPut(it.asFunctionCallArgumentsDelta().outputIndex()) {
                         mutableListOf()
                     }.add(it)
-                    if(!internalToolItemIds.contains(completion.id()))
-                    trySend(EventUtils.convertEvent(it)).isSuccess
-                }
-                else if(it.isOutputItemAdded() && it.asOutputItemAdded().item().isFunctionCall()){
+                    if (!internalToolItemIds.contains(completion.id()))
+                        trySend(EventUtils.convertEvent(it)).isSuccess
+                } else if (it.isOutputItemAdded() && it.asOutputItemAdded().item().isFunctionCall()) {
                     val functionName = it.asOutputItemAdded().item().asFunctionCall().name()
-                    functionNameAccumulator[it.asOutputItemAdded().outputIndex()] = Pair(functionName, it.asOutputItemAdded().item().asFunctionCall().callId())
-                    if(toolService.getFunctionTool(functionName) != null){
+                    functionNameAccumulator[it.asOutputItemAdded().outputIndex()] =
+                        Pair(functionName, it.asOutputItemAdded().item().asFunctionCall().callId())
+                    if (toolService.getFunctionTool(functionName) != null) {
                         internalToolItemIds.add(completion.id())
                     }
                     trySend(EventUtils.convertEvent(it)).isSuccess
-                }
-                else if (it.isOutputTextDelta()) {
+                } else if (it.isOutputTextDelta()) {
                     textAccumulator.getOrPut(it.asOutputTextDelta().outputIndex()) {
                         mutableListOf()
                     }.add(it)
@@ -430,7 +465,7 @@ class MasaicOpenAiResponseServiceImpl(
                     functionCallAccumulator.forEach {
                         val content = it.value.joinToString("") { it.asFunctionCallArgumentsDelta().delta() }
 
-                        if(!internalToolItemIds.contains(completion.id())) {
+                        if (!internalToolItemIds.contains(completion.id())) {
                             trySend(
                                 EventUtils.convertEvent(
                                     ResponseStreamEvent.ofFunctionCallArgumentsDone(
@@ -447,24 +482,26 @@ class MasaicOpenAiResponseServiceImpl(
                             ).isSuccess
                         }
 
-                        responseOutputItemAccumulator.add(ResponseOutputItem.ofFunctionCall(
-                            ResponseFunctionToolCall.builder()
-                                .name(functionNameAccumulator.getValue(it.key).first)
-                                .arguments(content)
-                                .callId(functionNameAccumulator.getValue(it.key).second)
-                                .id(it.value.first().asFunctionCallArgumentsDelta().itemId())
-                                .status(ResponseFunctionToolCall.Status.COMPLETED)
-                                .putAllAdditionalProperties(it.value.first().asFunctionCallArgumentsDelta()._additionalProperties())
-                                .type(JsonValue.from("function_call"))
-                                .build()
-                        ))
+                        responseOutputItemAccumulator.add(
+                            ResponseOutputItem.ofFunctionCall(
+                                ResponseFunctionToolCall.builder()
+                                    .name(functionNameAccumulator.getValue(it.key).first)
+                                    .arguments(content)
+                                    .callId(functionNameAccumulator.getValue(it.key).second)
+                                    .id(it.value.first().asFunctionCallArgumentsDelta().itemId())
+                                    .status(ResponseFunctionToolCall.Status.COMPLETED)
+                                    .putAllAdditionalProperties(
+                                        it.value.first().asFunctionCallArgumentsDelta()._additionalProperties()
+                                    )
+                                    .type(JsonValue.from("function_call"))
+                                    .build()
+                            )
+                        )
                     }
-                }
-                else if(it.isOutputItemDone()){
+                } else if (it.isOutputItemDone()) {
                     responseOutputItemAccumulator.add(it.asOutputItemDone().item())
                     trySend(EventUtils.convertEvent(it)).isSuccess
-                }
-                else {
+                } else {
                     trySend(EventUtils.convertEvent(it)).isSuccess
                 }
             }
@@ -533,9 +570,11 @@ class MasaicOpenAiResponseServiceImpl(
                 item.isEasyInputMessage() || item.isMessage() || item.isResponseOutputMessage() -> {
                     convertInputMessages(item, completionBuilder)
                 }
+
                 item.isFunctionCall() -> {
                     addFunctionCallMessage(item, completionBuilder)
                 }
+
                 item.isFunctionCallOutput() -> {
                     addFunctionCallOutputMessage(item, completionBuilder)
                 }
@@ -605,9 +644,9 @@ class MasaicOpenAiResponseServiceImpl(
         completionBuilder.model(params.model())
         completionBuilder.temperature(params.temperature())
         completionBuilder.maxCompletionTokens(params.maxOutputTokens())
-        completionBuilder.metadata(params.metadata())
+        // completionBuilder.metadata(params.metadata()) //TODO Unsupported in groq
         completionBuilder.topP(params.topP())
-        completionBuilder.store(params.store())
+        //completionBuilder.store(params.store()) //TODO Unsupported in groq
     }
 
     /**
@@ -644,6 +683,7 @@ class MasaicOpenAiResponseServiceImpl(
                         .build()
                 )
             }
+
             toolChoice.isFunction() -> {
                 ChatCompletionToolChoiceOption.ofNamedToolChoice(
                     ChatCompletionNamedToolChoice.builder()
@@ -654,6 +694,7 @@ class MasaicOpenAiResponseServiceImpl(
                         ).build()
                 )
             }
+
             toolChoice.isOptions() -> {
                 val toolChoiceOptions = toolChoice.asOptions()
                 if (toolChoiceOptions.asString().lowercase() == "auto") {
@@ -662,6 +703,7 @@ class MasaicOpenAiResponseServiceImpl(
                     ChatCompletionToolChoiceOption.ofAuto(ChatCompletionToolChoiceOption.Auto.NONE)
                 }
             }
+
             else -> throw IllegalArgumentException("Unsupported tool choice")
         }
     }
@@ -685,6 +727,7 @@ class MasaicOpenAiResponseServiceImpl(
                         )
                     ).build()
                 }
+
                 responseTool.isWebSearch() -> {
                     val webSearchTool = responseTool.asWebSearch()
                     ChatCompletionTool.builder()
@@ -696,6 +739,7 @@ class MasaicOpenAiResponseServiceImpl(
                         )
                         .build()
                 }
+
                 responseTool.isFileSearch() -> {
                     val fileSearchTool = responseTool.asFileSearch()
                     ChatCompletionTool.builder()
@@ -707,6 +751,7 @@ class MasaicOpenAiResponseServiceImpl(
                         )
                         .build()
                 }
+
                 responseTool.isComputerUsePreview() -> {
                     val computerUsePreviewTool = responseTool.asComputerUsePreview()
                     ChatCompletionTool.builder()
@@ -718,6 +763,7 @@ class MasaicOpenAiResponseServiceImpl(
                         )
                         .build()
                 }
+
                 else -> throw IllegalArgumentException("Unsupported tool")
             }
         }
@@ -739,9 +785,11 @@ class MasaicOpenAiResponseServiceImpl(
                 format.isText() -> {
                     completionBuilder.responseFormat(format.asText())
                 }
+
                 format.isJsonObject() -> {
                     completionBuilder.responseFormat(format.asJsonObject())
                 }
+
                 format.isJsonSchema() -> {
                     completionBuilder.responseFormat(
                         ResponseFormatJsonSchema.builder()
@@ -823,6 +871,7 @@ class MasaicOpenAiResponseServiceImpl(
                         ).build()
                     )
                 }
+
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     val contentList = easyInputMessage.content().asResponseInputMessageContentList()
                     completionBuilder.addMessage(
@@ -833,6 +882,7 @@ class MasaicOpenAiResponseServiceImpl(
                         ).build()
                     )
                 }
+
                 else -> {
                     completionBuilder.addMessage(
                         ChatCompletionUserMessageParam.builder().content(
@@ -899,6 +949,7 @@ class MasaicOpenAiResponseServiceImpl(
                             ).build()
                     )
                 }
+
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     completionBuilder.addMessage(
                         ChatCompletionSystemMessageParam.builder()
@@ -933,6 +984,7 @@ class MasaicOpenAiResponseServiceImpl(
                             ).build()
                     )
                 }
+
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     completionBuilder.addMessage(
                         ChatCompletionDeveloperMessageParam.builder()
@@ -997,6 +1049,7 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
                     ).build()
                 )
             }
+
             content.isInputImage() -> {
                 val inputImage = content.asInputImage()
                 ChatCompletionContentPart.ofImageUrl(
@@ -1013,6 +1066,7 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
                     ).build()
                 )
             }
+
             content.isInputFile() -> {
                 val inputFile = content.asInputFile()
                 ChatCompletionContentPart.ofFile(
@@ -1024,6 +1078,7 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
                     ).build()
                 )
             }
+
             else -> throw IllegalArgumentException("Unsupported input type")
         }
     }

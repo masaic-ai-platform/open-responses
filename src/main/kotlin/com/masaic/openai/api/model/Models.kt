@@ -84,6 +84,7 @@ data class WebSearchTool(
 ) : Tool
 
 // Request models
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class CreateResponseRequest(
     val model: String,
     var input: Any,
