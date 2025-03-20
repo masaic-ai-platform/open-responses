@@ -101,4 +101,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details. 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## MCP Servers Configured:
+1. Brave search - https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search
+2. Github - https://github.com/modelcontextprotocol/servers/tree/main/src/github
+3. Browser-use - https://github.com/co-browser/browser-use-mcp-server
