@@ -59,10 +59,11 @@ class MCPToolExecutor() {
             mcpServer.args.forEach { arg ->
                 val envVar = mcpServer.env[arg]
                 val envValue = envVar?.let { System.getenv(it) ?: it }
-                add(envValue ?: arg)
+                add(envValue?.let { "$arg=$it" } ?: arg)
             }
         }
 
+        log.info("command to start server: ${command.joinToString(" ")}")
         val transport: McpTransport = StdioMcpTransport.Builder()
             .command(command)
             .build()

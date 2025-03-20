@@ -16,6 +16,20 @@
     },
     "browser-use-mcp-server": {
       "url": "http://localhost:8000/sse"
+    },
+    "perplexity-ask": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "PERPLEXITY_API_KEY",
+        "mcp/perplexity-ask"
+      ],
+      "env": {
+        "PERPLEXITY_API_KEY": "PPLX_API_KEY_HERE"
+      }
     }
   }
 }
