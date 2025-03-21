@@ -16,13 +16,29 @@ import org.springframework.stereotype.Service
 import java.io.File
 
 /**
- * Currently responsible for loading, listing, and executing only MCP tools.
+ * Service responsible for managing tool operations including loading, listing, and executing MCP tools.
+ * 
+ * This service handles the lifecycle of tools, from loading them at application startup,
+ * providing access to available tools, and executing tool operations.
+ * 
+ * @property mcpToolRegistry Registry that manages tool definitions
+ * @property mcpToolExecutor Executor that handles tool execution
  */
 @Service
 class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpToolExecutor: MCPToolExecutor) {
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(ToolService::class.java)
+    
+    private companion object {
+        const val DEFAULT_CONFIG_PATH = "src/main/resources/mcp-servers-config.json"
+        const val MCP_CONFIG_ENV_VAR = "MCP_SERVER_CONFIG_FILE_PATH"
+    }
 
+    /**
+     * Lists all available tools.
+     *
+     * @return List of tool metadata representing all available tools
+     */
     fun listAvailableTools(): List<ToolMetadata> {
         return mcpToolRegistry.findAll().map { tool ->
             ToolMetadata(
@@ -33,6 +49,12 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         }
     }
 
+    /**
+     * Retrieves a specific tool by name.
+     *
+     * @param name Name of the tool to retrieve
+     * @return Tool metadata if found, null otherwise
+     */
     fun getAvailableTool(name: String): ToolMetadata? {
         val tool = mcpToolRegistry.findByName(name) ?: return null
         return ToolMetadata(
@@ -42,23 +64,42 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         )
     }
 
+    /**
+     * Retrieves a tool as a FunctionTool by name.
+     *
+     * @param name Name of the tool to retrieve
+     * @return FunctionTool representation if found, null otherwise
+     */
     fun getFunctionTool(name: String): FunctionTool? {
         val toolDefinition = mcpToolRegistry.findByName(name) ?: return null
         return (toolDefinition as McpToolDefinition).toFunctionTool()
     }
 
+    /**
+     * Executes a tool with the provided arguments.
+     *
+     * @param name Name of the tool to execute
+     * @param arguments JSON string containing the arguments for tool execution
+     * @return Result of the tool execution as a string, or null if the tool isn't found
+     */
     fun executeTool(name: String, arguments: String): String? {
         val tool = mcpToolRegistry.findByName(name) ?: return null
         return mcpToolExecutor.executeTool(tool, arguments)
     }
 
+    /**
+     * Initializes and loads all tools on application startup.
+     * 
+     * Reads configuration from the file specified by MCP_SERVER_CONFIG_FILE_PATH 
+     * environment variable or uses the default path.
+     */
     @PostConstruct
     fun loadTools() {
-        val filePath = System.getenv("MCP_SERVER_CONFIG_FILE_PATH") ?: "src/main/resources/mcp-servers-config.json"
+        val filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
         val mcpServerConfigJson = try {
             File(filePath).readText()
         } catch (e: Exception) {
-            log.warn("MCP_SERVER_CONFIG_FILE_PATH environment variable not set. No MCP tools will be loaded.")
+            log.warn("$MCP_CONFIG_ENV_VAR environment variable not set or file not found. No MCP tools will be loaded.")
             return
         }
 
@@ -68,15 +109,22 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         }
 
         loadToolRegistry(mcpServerConfigJson)
-        return
     }
 
+    /**
+     * Cleans up resources when the application is shutting down.
+     */
     @PreDestroy
     fun cleanup() {
         mcpToolRegistry.cleanUp()
         mcpToolExecutor.shutdown()
     }
 
+    /**
+     * Loads tool registry from the provided configuration JSON.
+     *
+     * @param mcpServerConfigJson JSON configuration string for MCP servers
+     */
     private fun loadToolRegistry(mcpServerConfigJson: String) {
         val servers = json.decodeFromString(MCPServers.serializer(), mcpServerConfigJson)
         servers.mcpServers.forEach { (name, server) ->
@@ -94,6 +142,11 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         }
     }
 
+    /**
+     * Converts an MCP tool definition to a FunctionTool.
+     * 
+     * @return FunctionTool representation of this MCP tool definition
+     */
     private fun McpToolDefinition.toFunctionTool(): FunctionTool {
         // Convert JsonObjectSchema to MutableMap<String, Any>
         val parametersMap = mutableMapOf<String, Any>()
@@ -125,59 +178,22 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
         )
     }
 
+    /**
+     * Maps a JsonSchemaElement to a map structure that can be used in a FunctionTool.
+     *
+     * @param schema The schema element to map
+     * @return A map representing the schema element
+     */
     private fun mapJsonSchemaToMap(schema: JsonSchemaElement): MutableMap<String, Any> {
         val result = mutableMapOf<String, Any>()
 
         when (schema) {
-            is JsonObjectSchema -> {
-                result["type"] = "object"
-                schema.description()?.let { result["description"] = it }
-
-                val properties = mutableMapOf<String, Any>()
-                schema.properties().forEach { (name, prop) ->
-                    properties[name] = mapJsonSchemaToMap(prop)
-                }
-                if (properties.isNotEmpty()) {
-                    result["properties"] = properties
-                }
-
-                schema.required()?.let {
-                    if (it.isNotEmpty()) {
-                        result["required"] = it
-                    }
-                }
-
-                schema.additionalProperties()?.let {
-                    result["additionalProperties"] = it
-                }
-            }
-
-            is JsonArraySchema -> {
-                result["type"] = "array"
-                schema.description()?.let { result["description"] = it }
-                schema.items()?.let { result["items"] = mapJsonSchemaToMap(it) }
-            }
-
-            is JsonStringSchema -> {
-                result["type"] = "string"
-                schema.description()?.let { result["description"] = it }
-            }
-
-            is JsonIntegerSchema -> {
-                result["type"] = "integer"
-                schema.description()?.let { result["description"] = it }
-            }
-
-            is JsonNumberSchema -> {
-                result["type"] = "number"
-                schema.description()?.let { result["description"] = it }
-            }
-
-            is JsonBooleanSchema -> {
-                result["type"] = "boolean"
-                schema.description()?.let { result["description"] = it }
-            }
-
+            is JsonObjectSchema -> mapObjectSchema(schema, result)
+            is JsonArraySchema -> mapArraySchema(schema, result)
+            is JsonStringSchema -> mapPrimitiveSchema(schema, result, "string")
+            is JsonIntegerSchema -> mapPrimitiveSchema(schema, result, "integer")
+            is JsonNumberSchema -> mapPrimitiveSchema(schema, result, "number")
+            is JsonBooleanSchema -> mapPrimitiveSchema(schema, result, "boolean")
             else -> {
                 // Default to string for unknown types
                 result["type"] = "string"
@@ -186,6 +202,71 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
 
         return result
     }
+    
+    /**
+     * Maps an object schema to a map structure.
+     *
+     * @param schema The object schema to map
+     * @param result The result map to populate
+     */
+    private fun mapObjectSchema(schema: JsonObjectSchema, result: MutableMap<String, Any>) {
+        result["type"] = "object"
+        schema.description()?.let { result["description"] = it }
+
+        val properties = mutableMapOf<String, Any>()
+        schema.properties().forEach { (name, prop) ->
+            properties[name] = mapJsonSchemaToMap(prop)
+        }
+        if (properties.isNotEmpty()) {
+            result["properties"] = properties
+        }
+
+        schema.required()?.let {
+            if (it.isNotEmpty()) {
+                result["required"] = it
+            }
+        }
+
+        schema.additionalProperties()?.let {
+            result["additionalProperties"] = it
+        }
+    }
+    
+    /**
+     * Maps an array schema to a map structure.
+     *
+     * @param schema The array schema to map
+     * @param result The result map to populate
+     */
+    private fun mapArraySchema(schema: JsonArraySchema, result: MutableMap<String, Any>) {
+        result["type"] = "array"
+        schema.description()?.let { result["description"] = it }
+        schema.items()?.let { result["items"] = mapJsonSchemaToMap(it) }
+    }
+    
+    /**
+     * Maps a primitive schema to a map structure.
+     *
+     * @param schema The primitive schema to map
+     * @param result The result map to populate
+     * @param type The type of the primitive schema
+     */
+    private fun mapPrimitiveSchema(schema: JsonSchemaElement, result: MutableMap<String, Any>, type: String) {
+        result["type"] = type
+        when (schema) {
+            is JsonStringSchema -> schema.description()?.let { result["description"] = it }
+            is JsonIntegerSchema -> schema.description()?.let { result["description"] = it }
+            is JsonNumberSchema -> schema.description()?.let { result["description"] = it }
+            is JsonBooleanSchema -> schema.description()?.let { result["description"] = it }
+        }
+    }
 }
 
+/**
+ * Data class representing metadata about a tool.
+ * 
+ * @property id Unique identifier for the tool
+ * @property name Human-readable name of the tool
+ * @property description Detailed description of what the tool does
+ */
 data class ToolMetadata(val id: String, val name: String, val description: String)

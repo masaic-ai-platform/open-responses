@@ -6,33 +6,66 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.*
 
-@Disabled("Tests temporarily disabled")
+/**
+ * Tests for the [ToolService] class.
+ *
+ * These tests verify the functionality of the tool service, including listing tools,
+ * retrieving specific tools, and executing tools with arguments.
+ * 
+ * Note: Tests are currently disabled as they require specific MCP server setup.
+ */
+@Disabled("Tests temporarily disabled until MCP server configuration is available")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ToolServiceTest {
     private val toolService = ToolService(MCPToolRegistry(), MCPToolExecutor())
 
+    /**
+     * Sets up the test environment by loading MCP tools.
+     * 
+     * This method is executed once before all tests in this class.
+     */
     @BeforeAll
     fun loadMCPTools() {
         toolService.loadTools()
     }
 
+    /**
+     * Cleans up resources after all tests have completed.
+     * 
+     * This method is executed once after all tests in this class.
+     */
     @AfterAll
     fun shutdown() {
         toolService.cleanup()
     }
 
+    /**
+     * Tests that available tools can be listed.
+     * 
+     * Verifies that the list of tools returned by the service is not empty.
+     */
     @Test
     fun `test list available tools`() {
         val tools = toolService.listAvailableTools()
-        assert(tools.isNotEmpty())
+        assert(tools.isNotEmpty()) { "Tool list should not be empty" }
     }
 
+    /**
+     * Tests that a specific tool can be retrieved by name.
+     * 
+     * Verifies that a tool with a specific name can be found in the repository.
+     */
     @Test
     fun `get available tool`() {
         val tool = toolService.getAvailableTool("search_repositories")
-        assert(tool?.name == "search_repositories")
+        assert(tool?.name == "search_repositories") { "Tool with name 'search_repositories' should be available" }
     }
 
+    /**
+     * Tests that a tool can be retrieved as a function tool.
+     * 
+     * Verifies that a tool can be converted to a function tool with valid properties.
+     */
     @Test
     fun `get function tool`() {
         val tool = toolService.getFunctionTool("create_or_update_file")
@@ -45,6 +78,11 @@ class ToolServiceTest {
         assert(tool?.parameters?.isNotEmpty() == true) { "Tool parameters should not be empty" }
     }
 
+    /**
+     * Tests that a browser use tool can be executed with arguments.
+     * 
+     * Verifies that the tool can be executed and returns a valid result.
+     */
     @Test
     fun `execute browser use tool`() {
         val execResult = toolService.executeTool(
