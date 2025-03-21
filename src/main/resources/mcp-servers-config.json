@@ -1,21 +1,10 @@
 {
   "mcpServers": {
-    "browser-use-mcp-server": {
-      "url": "http://localhost:8000/sse"
+    "@modelcontextprotocol/google-maps": {
+      "url": "https://router.mcp.so/sse/3d9p0fm8ipcrxs"
     },
-    "brave-search": {
-      "command": "docker",
-      "args": [
-        "run",
-        "-i",
-        "--rm",
-        "-e",
-        "BRAVE_API_KEY",
-        "mcp/brave-search"
-      ],
-      "env": {
-        "BRAVE_API_KEY": "BRAVE_API_KEY"
-      }
+    "@modelcontextprotocol/brave-search": {
+      "url": "https://router.mcp.so/sse/oxxkd3m8ip5cmy"
     }
   }
 }
