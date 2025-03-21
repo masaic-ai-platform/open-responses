@@ -33,7 +33,7 @@ class MasaicOpenAiResponseServiceImpl(
     // Helper objects for SRP compliance
     private val parameterConverter = MasaicParameterConverter()
     private val toolHandler = MasaicToolHandler(toolService)
-    private val streamingService = MasaicStreamingService(client, toolHandler, parameterConverter)
+    private val streamingService = MasaicStreamingService(client, toolHandler, parameterConverter, toolService)
 
     /**
      * Not implemented: Returns a version of this service that includes raw HTTP response data.
@@ -62,22 +62,25 @@ class MasaicOpenAiResponseServiceImpl(
     ): Response {
         // Convert params to OpenAI format and create the chat completion
         val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
+
+        if(!chatCompletions.choices().any { it.finishReason().value().name.lowercase() == "tool_calls"}){
+            return chatCompletions.toResponse(params)
+        }
         
         // Process any tool calls in the response
         val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
-        
-        // Check if we need to make follow-up requests for tool calls
-        if (!responseInputItems.any { it.isFunctionCall() } || 
-            (responseInputItems.filter { it.isFunctionCall() }.size > responseInputItems.filter { it.isFunctionCallOutput() }.size)) {
-            return chatCompletions.toResponse(params)
-        } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
-            throw IllegalArgumentException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
-        }
 
         // Rebuild the params with the updated input items for the follow-up request
         val newParams = params.toBuilder()
             .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
             .build()
+
+        // Check if we need to make follow-up requests for tool calls
+        if (newParams.input().asResponse().filter { it.isFunctionCall() }.size > newParams.input().asResponse().filter { it.isFunctionCallOutput() }.size) {
+            return chatCompletions.toResponse(newParams)
+        } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
+            throw IllegalArgumentException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
+        }
 
         // Recursively make the next request with the updated params
         return create(newParams, requestOptions)

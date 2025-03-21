@@ -1,6 +1,7 @@
 package com.masaic.openai.api.client
 
 import com.masaic.openai.api.utils.EventUtils
+import com.masaic.openai.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletionChunk
@@ -22,7 +23,8 @@ import java.util.UUID
 class MasaicStreamingService(
     private val client: OpenAIClient,
     private val toolHandler: MasaicToolHandler,
-    private val parameterConverter: MasaicParameterConverter
+    private val parameterConverter: MasaicParameterConverter,
+    private val toolService: ToolService
 ) {
     private val allowedMaxToolCalls = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10
     private val maxDuration: Long =
@@ -275,60 +277,62 @@ class MasaicStreamingService(
         responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
         prepend: Boolean = false
     ) {
-        // Send text done events
-        textAccumulator.forEach {
-            val content = it.value.joinToString("") { it.asOutputTextDelta().delta() }
+        if(textAccumulator.isNotEmpty()) {
+            // Send text done events
+            textAccumulator.forEach {
+                val content = it.value.joinToString("") { it.asOutputTextDelta().delta() }
 
-            trySend(
-                EventUtils.convertEvent(
-                    ResponseStreamEvent.ofOutputTextDone(
-                        ResponseTextDoneEvent.builder()
-                            .contentIndex(it.key)
-                            .text(content)
-                            .outputIndex(it.key)
-                            .itemId(it.value.first().asOutputTextDelta().itemId())
-                            .build()
+                trySend(
+                    EventUtils.convertEvent(
+                        ResponseStreamEvent.ofOutputTextDone(
+                            ResponseTextDoneEvent.builder()
+                                .contentIndex(it.key)
+                                .text(content)
+                                .outputIndex(it.key)
+                                .itemId(it.value.first().asOutputTextDelta().itemId())
+                                .build()
+                        )
                     )
-                )
-            ).isSuccess
-        }
+                ).isSuccess
+            }
 
 
-        // Add the text message to output items
-        if (prepend) {
-            responseOutputItemAccumulator.addFirst(
-                ResponseOutputItem.ofMessage(
-                    ResponseOutputMessage.builder()
-                        .content(textAccumulator.map {
-                            ResponseOutputMessage.Content.ofOutputText(
-                                ResponseOutputText.builder()
-                                    .text(it.value.joinToString("") { it.asOutputTextDelta().delta() })
-                                    .annotations(listOf())
-                                    .build()
-                            )
-                        }
-                        ).id(UUID.randomUUID().toString())
-                        .status(ResponseOutputMessage.Status.COMPLETED)
-                        .role(JsonValue.from("assistant"))
-                        .build()
-                ))
-        } else {
-            responseOutputItemAccumulator.add(
-                ResponseOutputItem.ofMessage(
-                    ResponseOutputMessage.builder()
-                        .content(textAccumulator.map {
-                            ResponseOutputMessage.Content.ofOutputText(
-                                ResponseOutputText.builder()
-                                    .text(it.value.joinToString("") { it.asOutputTextDelta().delta() })
-                                    .annotations(listOf())
-                                    .build()
-                            )
-                        }
-                        ).id(UUID.randomUUID().toString())
-                        .status(ResponseOutputMessage.Status.COMPLETED)
-                        .role(JsonValue.from("assistant"))
-                        .build()
-                ))
+            // Add the text message to output items
+            if (prepend) {
+                responseOutputItemAccumulator.addFirst(
+                    ResponseOutputItem.ofMessage(
+                        ResponseOutputMessage.builder()
+                            .content(textAccumulator.map {
+                                ResponseOutputMessage.Content.ofOutputText(
+                                    ResponseOutputText.builder()
+                                        .text(it.value.joinToString("") { it.asOutputTextDelta().delta() })
+                                        .annotations(listOf())
+                                        .build()
+                                )
+                            }
+                            ).id(UUID.randomUUID().toString())
+                            .status(ResponseOutputMessage.Status.COMPLETED)
+                            .role(JsonValue.from("assistant"))
+                            .build()
+                    ))
+            } else {
+                responseOutputItemAccumulator.add(
+                    ResponseOutputItem.ofMessage(
+                        ResponseOutputMessage.builder()
+                            .content(textAccumulator.map {
+                                ResponseOutputMessage.Content.ofOutputText(
+                                    ResponseOutputText.builder()
+                                        .text(it.value.joinToString("") { it.asOutputTextDelta().delta() })
+                                        .annotations(listOf())
+                                        .build()
+                                )
+                            }
+                            ).id(UUID.randomUUID().toString())
+                            .status(ResponseOutputMessage.Status.COMPLETED)
+                            .role(JsonValue.from("assistant"))
+                            .build()
+                    ))
+            }
         }
     }
 
@@ -406,7 +410,11 @@ class MasaicStreamingService(
         val functionName = event.asOutputItemAdded().item().asFunctionCall().name()
         functionNameAccumulator[event.asOutputItemAdded().outputIndex()] =
             Pair(functionName, event.asOutputItemAdded().item().asFunctionCall().callId())
-            
+
+        if(toolService.getFunctionTool(functionName) != null) {
+            internalToolItemIds.add(event.asOutputItemAdded().item().asFunctionCall().id())
+        }
+
         trySend(EventUtils.convertEvent(event)).isSuccess
     }
 
