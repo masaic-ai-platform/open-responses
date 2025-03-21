@@ -58,14 +58,15 @@ object ChatCompletionConverter {
         params: ResponseCreateParams,
         status: ResponseStatus,
         id: String,
-        outputItems: List<ResponseOutputItem>
+        outputItems: List<ResponseOutputItem>,
+        incompleteDetails: Response.IncompleteDetails? = null
     ): Response {
 
         return Response.builder()
             .id(id)
             .createdAt(Instant.now().toEpochMilli().toDouble())
             .error(null) // Required field, null since we assume no error
-            .incompleteDetails(null) // Required field, null since we assume complete response
+            .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
             .instructions(params.instructions())
             .metadata(params.metadata())
             .model(params.model())
@@ -278,6 +279,54 @@ object ChatCompletionConverter {
         outputItems: List<ResponseOutputItem>,
         createdAtDouble: Double
     ): Response {
+
+        if(chatCompletion.choices().any { it.finishReason().asString() == "length" }) {
+            return Response.builder()
+                .id(chatCompletion.id())
+                .createdAt(createdAtDouble)
+                .error(null) // Required field, null since we assume no error
+                .incompleteDetails(Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS).build()) // Required field, null since we assume complete response
+                .instructions(params.instructions())
+                .metadata(params.metadata())
+                .model(convertModel(chatCompletion.model()))
+                .object_(JsonValue.from("response")) // Standard value
+                .output(outputItems)
+                .temperature(params.temperature())
+                .parallelToolCalls(params._parallelToolCalls())
+                .tools(params._tools())
+                .toolChoice(convertToolChoice(params.toolChoice()))
+                .topP(params.topP())
+                .maxOutputTokens(params.maxOutputTokens())
+                .previousResponseId(params.previousResponseId())
+                .reasoning(params.reasoning())
+                .status(ResponseStatus.INCOMPLETE)
+                .usage(chatCompletion.usage().map(this::convertUsage).orElse(null))
+                .build()
+        }
+        else if(chatCompletion.choices().any { it.finishReason().asString() == "content_filter" }) {
+            return Response.builder()
+                .id(chatCompletion.id())
+                .createdAt(createdAtDouble)
+                .error(ResponseError.builder().message("The message violated our content policy").code(ResponseError.Code.SERVER_ERROR).build()) // Required field, null since we assume no error
+                .incompleteDetails(Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.CONTENT_FILTER).build()) // Required field, null since we assume complete response
+                .instructions(params.instructions())
+                .metadata(params.metadata())
+                .model(convertModel(chatCompletion.model()))
+                .object_(JsonValue.from("response")) // Standard value
+                .output(outputItems)
+                .temperature(params.temperature())
+                .parallelToolCalls(params._parallelToolCalls())
+                .tools(params._tools())
+                .toolChoice(convertToolChoice(params.toolChoice()))
+                .topP(params.topP())
+                .maxOutputTokens(params.maxOutputTokens())
+                .previousResponseId(params.previousResponseId())
+                .reasoning(params.reasoning())
+                .status(ResponseStatus.FAILED)
+                .usage(chatCompletion.usage().map(this::convertUsage).orElse(null))
+                .build()
+        }
+
         return Response.builder()
             .id(chatCompletion.id())
             .createdAt(createdAtDouble)

@@ -70,7 +70,7 @@ class MasaicOpenAiResponseServiceImpl(
     ): Response {
         val chatCompletions = client.chat().completions().create(prepareCompletion(params))
         val responseInputItems = handleMasaicToolCall(chatCompletions, params)
-        if (responseInputItems.filter { it.isFunctionCall() }.size > responseInputItems.filter { it.isFunctionCallOutput() }.size) {
+        if (!responseInputItems.any { it.isFunctionCall() } || (responseInputItems.filter { it.isFunctionCall() }.size > responseInputItems.filter { it.isFunctionCallOutput() }.size)) {
             return chatCompletions.toResponse(params)
         } else if (responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls) {
             throw IllegalArgumentException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
@@ -344,8 +344,9 @@ class MasaicOpenAiResponseServiceImpl(
                         }
 
                         if (completion.choices()
-                                .any { it.finishReason().isPresent && it.finishReason().get().asString() == "stop" }
-                        ) {
+                                .any { it.finishReason().isPresent && (it.finishReason().get().asString() == "stop"
+                                        || it.finishReason().get().asString() == "length"
+                                        || it.finishReason().get().asString() == "content_filter") }) {
                             // Handle normal completion
                             textAccumulator.forEach {
                                 val content = it.value.joinToString("") { it.asOutputTextDelta().delta() }
@@ -387,23 +388,43 @@ class MasaicOpenAiResponseServiceImpl(
                             // Signal completion - explicitly set to false
                             nextIteration = false
 
-                            // Send completed event
-                            val finalResponse = ChatCompletionConverter.buildFinalResponse(
-                                currentParams,
-                                ResponseStatus.COMPLETED,
-                                responseId,
-                                responseOutputItemAccumulator
-                            )
-
-                            trySend(
-                                EventUtils.convertEvent(
-                                    ResponseStreamEvent.ofCompleted(
-                                        ResponseCompletedEvent.builder()
-                                            .response(finalResponse)
-                                            .build()
-                                    )
+                            if(completion.choices().any{it.finishReason().get().asString() == "stop"}) {
+                                // Send completed event
+                                val finalResponse = ChatCompletionConverter.buildFinalResponse(
+                                    currentParams,
+                                    ResponseStatus.COMPLETED,
+                                    responseId,
+                                    responseOutputItemAccumulator
                                 )
-                            ).isSuccess
+
+                                trySend(
+                                    EventUtils.convertEvent(
+                                        ResponseStreamEvent.ofCompleted(
+                                            ResponseCompletedEvent.builder()
+                                                .response(finalResponse)
+                                                .build()
+                                        )
+                                    )
+                                ).isSuccess
+                            } else {
+                                val finalResponse = ChatCompletionConverter.buildFinalResponse(
+                                    currentParams,
+                                    ResponseStatus.INCOMPLETE,
+                                    responseId,
+                                    responseOutputItemAccumulator,
+                                    if(completion.choices().any{it.finishReason().get().asString() == "length"}) Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS).build()
+                                    else Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.CONTENT_FILTER).build()
+                                )
+                                trySend(
+                                    EventUtils.convertEvent(
+                                        ResponseStreamEvent.ofIncomplete(
+                                            ResponseIncompleteEvent.builder()
+                                                .response(finalResponse)
+                                                .build()
+                                        )
+                                    )
+                                ).isSuccess
+                            }
                         } else {
                             // Process ongoing completion
                             convertAndPublish(

@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
+import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
@@ -30,7 +31,7 @@ import org.springframework.web.server.ResponseStatusException
 @CrossOrigin("*")
 @Tag(name = "Responses", description = "OpenAI Response API")
 class ResponseController(private val masaicResponseService: MasaicResponseService, private val toolService: ToolService) {
-
+    private val log = LoggerFactory.getLogger(ResponseController::class.java)
     val mapper = jacksonObjectMapper()
 
     @PostMapping("/responses", produces = [MediaType.APPLICATION_JSON_VALUE, MediaType.TEXT_EVENT_STREAM_VALUE])
@@ -52,13 +53,15 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
     ): ResponseEntity<*> {
         updateMasaicManagedTools(request)
         request.parseInput(mapper)
+        val requestBodyJson = mapper.writeValueAsString(request)
+        log.debug("Request body: $requestBodyJson")
+
         // If streaming is requested, set the appropriate content type and return a flow
         if (request.stream == true) {
             return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
                 .body(
                     masaicResponseService.createStreamingResponse(
-                        mapper.readValue(
-                            mapper.writeValueAsString(request),
+                        mapper.readValue(requestBodyJson,
                             ResponseCreateParams.Body::class.java
                         ), headers, queryParams
                     )
@@ -68,11 +71,12 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         // For non-streaming, return a regular response
         val responseObj = masaicResponseService.createResponse(
             mapper.readValue(
-                mapper.writeValueAsString(request),
+                requestBodyJson,
                 ResponseCreateParams.Body::class.java
             ), headers, queryParams
         )
 
+        log.debug("Response Body: $responseObj")
         return ResponseEntity.ok(updateMasaicManagedTools(responseObj))
     }
 
