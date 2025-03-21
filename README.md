@@ -6,14 +6,6 @@ This project provides a compatibility layer that implements OpenAI's API respons
 
 The OpenAI Compatibility Layer acts as a bridge between various LLM providers and applications that are built to work with OpenAI's completion API. By implementing the same API structure and response format as OpenAI's Responses API, this project enables seamless integration with tools and applications that expect OpenAI's Responses API without modifying their codebase.
 
-## Features
-
-- **OpenAI API Compatibility**: Implements OpenAI's API endpoints and response structure
-- **Tool Integration**: Supports various tools including web search and file search
-- **Streaming Responses**: Supports both streaming and non-streaming response formats
-- **Input/Output Management**: Handles a variety of input formats and generates appropriate outputs
-- **Flexible Configuration**: Supports various parameters for customizing model responses
-
 ## API Endpoints
 
 The API implements the following OpenAI-compatible endpoints:
@@ -23,46 +15,27 @@ The API implements the following OpenAI-compatible endpoints:
 - `DELETE /v1/responses/{responseId}` - Delete a response
 - `GET /v1/responses/{responseId}/input_items` - List input items for a response
 
-## Getting Started
+## Setup with Docker
 
-### Prerequisites
+You can run the application using Docker:
 
-- JDK 21 or higher
-- Gradle
-
-### Building the Project
-
-```bash
-./gradlew build
-```
-
-### Running the Application
-
-```bash
-./gradlew bootRun
-```
-
-The API will be available at `http://localhost:8080`.
-
-### Docker Support
-
-You can also run the application using Docker:
-
-#### Build the Docker Image
+### Build the Docker Image
 
 ```bash
 docker build -t openai-compatibility-layer .
 ```
 
-#### Run the Docker Container
+### Run the Docker Container
 
 ```bash
 docker run -p 8080:8080 openai-compatibility-layer
 ```
 
-### Example Usage
+The API will be available at `http://localhost:8080`.
 
-Create a response using the API:
+## API Examples
+
+### Create a Response
 
 ```bash
 curl -X POST http://localhost:8080/v1/responses \
@@ -79,31 +52,47 @@ curl -X POST http://localhost:8080/v1/responses \
   }'
 ```
 
-## Project Structure
+### Create a Streaming Response
 
-- `/api/controller` - API endpoint definitions
-- `/api/model` - Data models and structures
-- `/api/service` - Business logic implementation
-- `/api/client` - Client implementations for various LLM providers
-- `/tool` - Implementation of tool functionalities
+```bash
+curl -X POST http://localhost:8080/v1/responses \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-model",
+    "input": [
+      {
+        "role": "user",
+        "content": "Write a short story about a robot."
+      }
+    ],
+    "stream": true
+  }'
+```
 
-## Dependencies
+### Retrieve a Response
 
-- Spring Boot Webflux
-- Kotlin Coroutines
-- Jackson for JSON processing
-- OpenAI Java SDK
-- LangChain4j
+```bash
+curl -X GET http://localhost:8080/v1/responses/{responseId}
+```
 
-## Contributing
+### Delete a Response
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+```bash
+curl -X DELETE http://localhost:8080/v1/responses/{responseId}
+```
 
-## License
+## Configuration
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+The application supports the following environment variables:
 
-## MCP Servers Configured:
+- `MCP_SERVER_CONFIG_FILE_PATH`: Path to MCP server configuration
+- `MASAIC_MAX_TOOL_CALLS`: Maximum number of allowed tool calls (default: 10)
+- `MASAIC_MAX_STREAMING_TIMEOUT`: Maximum streaming timeout in milliseconds (default: 60000)
+
+## MCP Servers Configured
+
+The following MCP servers are configured by default:
+
 1. Brave search - https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search
 2. Github - https://github.com/modelcontextprotocol/servers/tree/main/src/github
 3. Browser-use - https://github.com/co-browser/browser-use-mcp-server
