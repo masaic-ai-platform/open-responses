@@ -107,3 +107,17 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 1. Brave search - https://github.com/modelcontextprotocol/servers/tree/main/src/brave-search
 2. Github - https://github.com/modelcontextprotocol/servers/tree/main/src/github
 3. Browser-use - https://github.com/co-browser/browser-use-mcp-server
+
+## Docker build steps
+1. docker build --tag open-responses -f Dockerfile .
+2. docker run
+```
+docker run \
+-v /var/run/docker.sock:/var/run/docker.sock \                                  
+-p 8080:8080 \
+-e GITHUB_TOKEN=GITHUB_TOKEN_VALUE \
+-e OPENAI_API_KEY=OPENAI_API_KEY_VALUE \
+-e BRAVE_API_KEY=BRAVE_API_KEY_VALUE \
+-e MCP_SERVER_CONFIG_FILE_PATH=/app/mcp-servers-config.json open-responses
+
+```

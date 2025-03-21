@@ -1,28 +1,20 @@
-FROM eclipse-temurin:21-jdk-alpine as build
+# Stage 1: Get the Docker CLI from the official Docker image
+FROM docker:20.10 as docker-cli
 
-WORKDIR /workspace/app
+# Stage 2: Build your app image based on amazoncorretto
+FROM amazoncorretto:21
 
-COPY gradle gradle
-COPY build.gradle.kts settings.gradle.kts gradlew ./
-COPY src src
+WORKDIR /app
 
-RUN ./gradlew build -x test
-RUN mkdir -p build/dependency && (cd build/dependency; jar -xf ../libs/*.jar)
+# Copy the built JAR and config
+COPY build/libs/openai-0.0.1-SNAPSHOT.jar /app/openai-0.0.1-SNAPSHOT.jar
+COPY src/main/resources/mcp-servers-config.json /app/mcp-servers-config.json
 
-FROM eclipse-temurin:21-jre-alpine
+# Copy the Docker CLI from the previous stage
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
-VOLUME /tmp
+# (Optional) Make sure docker is executable
+RUN chmod +x /usr/local/bin/docker
 
-ARG DEPENDENCY=/workspace/app/build/dependency
-
-# Copy project dependencies
-COPY --from=build ${DEPENDENCY}/BOOT-INF/lib /app/lib
-COPY --from=build ${DEPENDENCY}/META-INF /app/META-INF
-COPY --from=build ${DEPENDENCY}/BOOT-INF/classes /app
-
-ENV OPENAI_API_BASE_URL=""
-
-# Expose the application port
-EXPOSE ${SERVER_PORT}
-
-ENTRYPOINT ["java", "-cp", "app:app/lib/*", "com.masaic.openai.OpenaiApplicationKt"] 
+# Set the entry point
+ENTRYPOINT ["java", "-jar", "/app/openai-0.0.1-SNAPSHOT.jar"]

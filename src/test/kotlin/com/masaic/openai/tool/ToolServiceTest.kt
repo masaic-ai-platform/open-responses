@@ -30,7 +30,7 @@ class ToolServiceTest {
     @Test
     fun `get available tool`() {
         val tool = toolService.getAvailableTool("search_repositories")
-        assert(tool.name == "search_repositories")
+        assert(tool?.name == "search_repositories")
     }
 
     @Test
