@@ -86,43 +86,70 @@ class MasaicOpenAiResponseServiceImpl(
     }
 
     fun handleMasaicToolCall(chatCompletion: ChatCompletion, params: ResponseCreateParams): List<ResponseInputItem> {
-        val chatChoice = chatCompletion.choices()[0]
 
-        if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
-            val message = chatChoice.message()
-            val responseInputItems =
-                if (params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
-                    ResponseInputItem.ofEasyInputMessage(
-                        EasyInputMessage.builder().content(params.input().asText()).role(EasyInputMessage.Role.USER)
-                            .build()
-                    )
+        val responseInputItems =
+            if (params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
+                ResponseInputItem.ofEasyInputMessage(
+                    EasyInputMessage.builder().content(params.input().asText()).role(EasyInputMessage.Role.USER)
+                        .build()
                 )
+            )
+        val parked = mutableListOf<ResponseInputItem>()
 
-            message.toolCalls().get().forEach { tool ->
-                val function = tool.function()
-                responseInputItems.add(
-                    ResponseInputItem.ofFunctionCall(
-                        ResponseFunctionToolCall.builder().callId(tool.id())
-                            .id(tool.id())
-                            .name(function.name()).arguments(function.arguments()).build()
-                    )
-                )
-                val toolResult =
-                    toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
-                toolResult?.let {
-                    responseInputItems.add(
-                        ResponseInputItem.ofFunctionCallOutput(
-                            FunctionCallOutput.builder().callId(tool.id())
-                                .id(tool.id())
-                                .output(toolResult).build()
+        chatCompletion.choices().filter { it.message().content().isPresent && it.message().content().get().isNotBlank() }.forEach {
+            parked.add(ResponseInputItem.ofResponseOutputMessage(
+                ResponseOutputMessage.builder().content(
+                    listOf(
+                        ResponseOutputMessage.Content.ofOutputText(
+                            ResponseOutputText.builder().text(it.message().content().get()).annotations(listOf()).build()
                         )
                     )
+                ).id(UUID.randomUUID().toString()).role(JsonValue.from("assistant")).status(ResponseOutputMessage.Status.COMPLETED).build()
+            ))
+        }
+
+        chatCompletion.choices().forEach { chatChoice ->
+
+            if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
+                val message = chatChoice.message()
+
+                message.toolCalls().get().forEach { tool ->
+                    val function = tool.function()
+                    if(toolService.getFunctionTool(function.name()) != null) {
+                        responseInputItems.add(
+                            ResponseInputItem.ofFunctionCall(
+                                ResponseFunctionToolCall.builder().callId(tool.id())
+                                    .id(tool.id())
+                                    .name(function.name()).arguments(function.arguments()).build()
+                            )
+                        )
+                        val toolResult =
+                            toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
+                        toolResult?.let {
+                            responseInputItems.add(
+                                ResponseInputItem.ofFunctionCallOutput(
+                                    FunctionCallOutput.builder().callId(tool.id())
+                                        .id(tool.id())
+                                        .output(toolResult).build()
+                                )
+                            )
+                        }
+                    }
+                    else {
+                        parked.add(
+                            ResponseInputItem.ofFunctionCall(
+                                ResponseFunctionToolCall.builder().callId(tool.id())
+                                    .id(tool.id())
+                                    .name(function.name()).arguments(function.arguments()).build()
+                            )
+                        )
+                    }
                 }
             }
-            return responseInputItems
-        } else {
-            return emptyList()
         }
+        responseInputItems.addAll(parked) // Add parked tools to the end for client to handle
+
+        return responseInputItems
     }
 
     fun handleMasaicToolCall(params: ResponseCreateParams, response: Response): List<ResponseInputItem> {
@@ -134,32 +161,48 @@ class MasaicOpenAiResponseServiceImpl(
                 )
             )
 
+        val parked = mutableListOf<ResponseInputItem>()
+
+        response.output().filter { it.isMessage() && it.message().get().content().isNotEmpty() }.forEach{ parked.add(ResponseInputItem.ofResponseOutputMessage(it.asMessage())) }
+
         response.output().filter {
             it.isFunctionCall()
         }.forEachIndexed { index, tool ->
             val function = tool.asFunctionCall()
 
-            responseInputItems.add(
-                ResponseInputItem.ofFunctionCall(
-                    ResponseFunctionToolCall.builder().callId(function.callId())
-                        .id(function.id())
-                        .name(function.name()).arguments(function.arguments()).build()
-                )
-            )
-
-            val toolResult =
-                toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
-            toolResult?.let {
-                //append at it + 1 index to the last function call
+            if(toolService.getFunctionTool(function.name()) != null) {
                 responseInputItems.add(
-                    ResponseInputItem.ofFunctionCallOutput(
-                        FunctionCallOutput.builder().callId(function.callId())
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall.builder().callId(function.callId())
                             .id(function.id())
-                            .output(toolResult).build()
+                            .name(function.name()).arguments(function.arguments()).build()
+                    )
+                )
+
+                val toolResult =
+                    toolService.executeTool(function.name(), function.arguments()) //TODO: JB Handle exceptions
+                toolResult?.let {
+                    responseInputItems.add(
+                        ResponseInputItem.ofFunctionCallOutput(
+                            FunctionCallOutput.builder().callId(function.callId())
+                                .id(function.id())
+                                .output(toolResult).build()
+                        )
+                    )
+                }
+            }
+            else {
+                parked.add(
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall.builder().callId(function.callId())
+                            .id(function.id())
+                            .name(function.name()).arguments(function.arguments()).build()
                     )
                 )
             }
         }
+
+        responseInputItems.addAll(parked) // Add parked tools to the end for client to handle
         return responseInputItems
     }
 
@@ -341,7 +384,7 @@ class MasaicOpenAiResponseServiceImpl(
                                         .build()
                                 ))
 
-                            // Signal completion - explicitly set to false to end the while loop
+                            // Signal completion - explicitly set to false
                             nextIteration = false
 
                             // Send completed event
@@ -376,6 +419,45 @@ class MasaicOpenAiResponseServiceImpl(
                             if (completion.choices().any {
                                     it.finishReason().isPresent && it.finishReason().get().asString() == "tool_calls"
                                 }) {
+
+                                // Handle normal completion
+                                textAccumulator.forEach {
+                                    val content = it.value.joinToString("") { it.asOutputTextDelta().delta() }
+
+                                    trySend(
+                                        EventUtils.convertEvent(
+                                            ResponseStreamEvent.ofOutputTextDone(
+                                                ResponseTextDoneEvent.builder()
+                                                    .contentIndex(it.key)
+                                                    .text(content)
+                                                    .outputIndex(it.key)
+                                                    .itemId(it.value.first().asOutputTextDelta().itemId())
+                                                    .build()
+                                            )
+                                        )
+                                    ).isSuccess
+                                }
+
+                                responseOutputItemAccumulator.addFirst(
+                                    ResponseOutputItem.ofMessage(
+                                        ResponseOutputMessage.builder()
+                                            .content(textAccumulator.map {
+                                                ResponseOutputMessage.Content.ofOutputText(
+                                                    ResponseOutputText.builder()
+                                                        .text(it.value.joinToString("") { it.asOutputTextDelta().delta() })
+                                                        .annotations(
+                                                            listOf()
+                                                        ).build()
+                                                )
+                                            }
+                                            ).id(
+                                                UUID.randomUUID().toString()
+                                            )
+                                            .status(ResponseOutputMessage.Status.COMPLETED)
+                                            .role(JsonValue.from("assistant"))
+                                            .build()
+                                    ))
+
                                 val response = ChatCompletionConverter.buildFinalResponse(
                                     currentParams,
                                     ResponseStatus.COMPLETED,
