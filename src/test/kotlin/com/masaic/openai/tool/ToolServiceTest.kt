@@ -5,6 +5,8 @@ import com.masaic.openai.tool.mcp.MCPToolRegistry
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.*
+import org.springframework.core.io.DefaultResourceLoader
+import org.springframework.core.io.ResourceLoader
 
 /**
  * Tests for the [ToolService] class.
@@ -17,7 +19,7 @@ import org.junit.jupiter.api.*
 @Disabled("Tests temporarily disabled until MCP server configuration is available")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ToolServiceTest {
-    private val toolService = ToolService(MCPToolRegistry(), MCPToolExecutor())
+    private val toolService = ToolService(MCPToolRegistry(), MCPToolExecutor(), DefaultResourceLoader())
 
     /**
      * Sets up the test environment by loading MCP tools.

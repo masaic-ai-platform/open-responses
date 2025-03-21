@@ -12,8 +12,10 @@ import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.core.io.ResourceLoader
 import org.springframework.stereotype.Service
 import java.io.File
+import java.nio.charset.Charset
 
 /**
  * Service responsible for managing tool operations including loading, listing, and executing MCP tools.
@@ -25,12 +27,12 @@ import java.io.File
  * @property mcpToolExecutor Executor that handles tool execution
  */
 @Service
-class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpToolExecutor: MCPToolExecutor) {
+class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpToolExecutor: MCPToolExecutor, private val resourceLoader: ResourceLoader) {
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(ToolService::class.java)
     
     private companion object {
-        const val DEFAULT_CONFIG_PATH = "src/main/resources/mcp-servers-config.json"
+        const val DEFAULT_CONFIG_PATH = "classpath:mcp-servers-config.json"
         const val MCP_CONFIG_ENV_VAR = "MCP_SERVER_CONFIG_FILE_PATH"
     }
 
@@ -95,10 +97,14 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
      */
     @PostConstruct
     fun loadTools() {
-        val filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
+        var filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
+        if(!filePath.startsWith("classpath:") && !filePath.startsWith("file:") && !filePath.startsWith("http")) {
+            filePath = "file:${filePath}"
+        }
         val mcpServerConfigJson = try {
-            File(filePath).readText()
+            resourceLoader.getResource(filePath).getContentAsString(Charset.defaultCharset())
         } catch (e: Exception) {
+            e.printStackTrace()
             log.warn("$MCP_CONFIG_ENV_VAR environment variable not set or file not found. No MCP tools will be loaded.")
             return
         }
