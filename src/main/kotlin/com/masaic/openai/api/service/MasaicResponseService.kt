@@ -29,11 +29,21 @@ import org.springframework.util.MultiValueMap
  * @property toolService Service for managing and executing tools
  */
 @Service
-class MasaicResponseService(private val toolService: ToolService) {
+class MasaicResponseService(
+    private val toolService: ToolService,
+    private val openAIResponseService: MasaicOpenAiResponseServiceImpl) {
 
-    private companion object {
+    companion object {
         const val MODEL_BASE_URL = "MODEL_BASE_URL"
-        const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+        const val MODEL_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+        /**
+         * Gets an environment variable - extracted for testability
+         *
+         * @param name Name of the environment variable
+         * @return The value of the environment variable or null if not found
+         */
+        fun getEnvVar(name: String): String? = System.getenv(name)
     }
 
     /**
@@ -53,8 +63,8 @@ class MasaicResponseService(private val toolService: ToolService) {
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        return MasaicOpenAiResponseServiceImpl(client, toolService).create(
-            createRequestParams(
+        return openAIResponseService.create(
+            client,createRequestParams(
                 request,
                 headerBuilder,
                 queryBuilder
@@ -79,8 +89,8 @@ class MasaicResponseService(private val toolService: ToolService) {
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        return MasaicOpenAiResponseServiceImpl(client, toolService).createCompletionStream(
-            createRequestParams(
+        return openAIResponseService.createCompletionStream(
+            client,createRequestParams(
                 request,
                 headerBuilder,
                 queryBuilder
@@ -212,13 +222,6 @@ class MasaicResponseService(private val toolService: ToolService) {
     }
 
     /**
-     * Checks if a custom API base URL is configured.
-     *
-     * @return True if a custom API base URL is configured, false otherwise
-     */
-    private fun isCustomApiBaseUrl(): Boolean = System.getenv(MODEL_BASE_URL) != null
-
-    /**
      * Gets the API base URL to use for requests.
      *
      * @return The API base URL
@@ -229,6 +232,9 @@ class MasaicResponseService(private val toolService: ToolService) {
             "https://api.anthropic.com/v1"
         } else if (headers.getFirst("x-model-provider")?.lowercase() == "openai") {
             "https://api.openai.com/v1"
+        }
+        else if (headers.getFirst("x-model-provider") == "groq") {
+            "https://api.groq.com/openai/v1"
         } else {
             System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
         }

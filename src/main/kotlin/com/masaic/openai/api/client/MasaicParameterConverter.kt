@@ -7,12 +7,14 @@ import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.core.JsonValue
+import org.springframework.stereotype.Component
 
 /**
  * Handles conversion of response parameters to chat completion parameters.
  * Encapsulates all the logic for transforming Masaic API request parameters
  * into OpenAI's API format.
  */
+@Component
 class MasaicParameterConverter {
     private val objectMapper = jacksonObjectMapper()
 
