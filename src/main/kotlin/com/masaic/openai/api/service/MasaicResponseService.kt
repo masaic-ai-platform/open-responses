@@ -34,8 +34,8 @@ class MasaicResponseService(
     private val openAIResponseService: MasaicOpenAiResponseServiceImpl) {
 
     companion object {
-        const val OPENAI_API_BASE_URL_ENV = "OPENAI_API_BASE_URL"
-        const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+        const val MODEL_BASE_URL = "MODEL_BASE_URL"
+        const val MODEL_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
         /**
          * Gets an environment variable - extracted for testability
@@ -222,13 +222,6 @@ class MasaicResponseService(
     }
 
     /**
-     * Checks if a custom API base URL is configured.
-     *
-     * @return True if a custom API base URL is configured, false otherwise
-     */
-    private fun isCustomApiBaseUrl(): Boolean = System.getenv(MODEL_BASE_URL) != null
-
-    /**
      * Gets the API base URL to use for requests.
      *
      * @return The API base URL
@@ -239,6 +232,9 @@ class MasaicResponseService(
             "https://api.anthropic.com/v1"
         } else if (headers.getFirst("x-model-provider") == "openAI") {
             "https://api.openai.com/v1"
+        }
+        else if (headers.getFirst("x-model-provider") == "groq") {
+            "https://api.groq.com/openai/v1"
         } else {
             System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
         }

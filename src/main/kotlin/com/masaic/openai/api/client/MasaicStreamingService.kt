@@ -57,24 +57,6 @@ class MasaicStreamingService(
             )
         )
 
-        if (currentParams == initialParams) {
-            emit(
-                EventUtils.convertEvent(
-                    ResponseStreamEvent.ofCreated(
-                        ResponseCreatedEvent.builder()
-                            .response(
-                                ChatCompletionConverter.buildIntermediateResponse(
-                                    currentParams,
-                                    ResponseStatus.IN_PROGRESS,
-                                    responseId
-                                )
-                            )
-                            .build()
-                    )
-                )
-            )
-        }
-
         // Check for tool call limit
         if (responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls) {
             emit(
@@ -123,6 +105,22 @@ class MasaicStreamingService(
                     if (!completion._choices().isMissing()) {
                         // Send in progress event if not already sent
                         if (!inProgressEventFired) {
+                            trySend(
+                                EventUtils.convertEvent(
+                                    ResponseStreamEvent.ofCreated(
+                                        ResponseCreatedEvent.builder()
+                                            .response(
+                                                ChatCompletionConverter.buildIntermediateResponse(
+                                                    currentParams,
+                                                    ResponseStatus.IN_PROGRESS,
+                                                    responseId
+                                                )
+                                            )
+                                            .build()
+                                    )
+                                )
+                            ).isSuccess
+
                             trySend(
                                 EventUtils.convertEvent(
                                     ResponseStreamEvent.ofInProgress(
