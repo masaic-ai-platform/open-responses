@@ -29,11 +29,21 @@ import org.springframework.util.MultiValueMap
  * @property toolService Service for managing and executing tools
  */
 @Service
-class MasaicResponseService(private val toolService: ToolService) {
+class MasaicResponseService(
+    private val toolService: ToolService,
+    private val openAIResponseService: MasaicOpenAiResponseServiceImpl) {
 
-    private companion object {
+    companion object {
         const val OPENAI_API_BASE_URL_ENV = "OPENAI_API_BASE_URL"
         const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+        
+        /**
+         * Gets an environment variable - extracted for testability
+         * 
+         * @param name Name of the environment variable
+         * @return The value of the environment variable or null if not found
+         */
+        fun getEnvVar(name: String): String? = System.getenv(name)
     }
 
     /**
@@ -54,7 +64,8 @@ class MasaicResponseService(private val toolService: ToolService) {
         val client = createClient(headers)
 
         return if (isCustomApiBaseUrl()) {
-            MasaicOpenAiResponseServiceImpl(client, toolService).create(
+            openAIResponseService.create(
+                client,
                 createRequestParams(request, headerBuilder, queryBuilder)
             )
         } else {
@@ -82,7 +93,8 @@ class MasaicResponseService(private val toolService: ToolService) {
         val client = createClient(headers)
 
         return if (isCustomApiBaseUrl()) {
-            MasaicOpenAiResponseServiceImpl(client, toolService).createCompletionStream(
+            openAIResponseService.createCompletionStream(
+                client,
                 createRequestParams(request, headerBuilder, queryBuilder)
             )
         } else {
@@ -226,14 +238,14 @@ class MasaicResponseService(private val toolService: ToolService) {
      *
      * @return True if a custom API base URL is configured, false otherwise
      */
-    private fun isCustomApiBaseUrl(): Boolean = System.getenv(OPENAI_API_BASE_URL_ENV) != null
+    private fun isCustomApiBaseUrl(): Boolean = getEnvVar(OPENAI_API_BASE_URL_ENV) != null
 
     /**
      * Gets the API base URL to use for requests.
      *
      * @return The API base URL
      */
-    private fun getApiBaseUrl(): String = System.getenv(OPENAI_API_BASE_URL_ENV) ?: DEFAULT_OPENAI_BASE_URL
+    private fun getApiBaseUrl(): String = getEnvVar(OPENAI_API_BASE_URL_ENV) ?: DEFAULT_OPENAI_BASE_URL
 }
 
 /**

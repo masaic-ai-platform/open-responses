@@ -1,6 +1,5 @@
 package com.masaic.openai.api.client
 
-import com.masaic.openai.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
@@ -13,6 +12,7 @@ import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
 import kotlinx.coroutines.flow.Flow
 import org.springframework.http.codec.ServerSentEvent
+import org.springframework.stereotype.Service
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.
@@ -22,18 +22,13 @@ import org.springframework.http.codec.ServerSentEvent
  * This implementation follows the Single Responsibility Principle by delegating
  * specific tasks to specialized helper classes.
  *
- * @param client The OpenAI client used to make API requests
- * @param toolService The service for managing tool operations
  */
+@Service
 class MasaicOpenAiResponseServiceImpl(
-    private val client: OpenAIClient,
-    private val toolService: ToolService
+    private val parameterConverter: MasaicParameterConverter,
+    private val toolHandler: MasaicToolHandler,
+    private val streamingService: MasaicStreamingService
 ) : ResponseService {
-
-    // Helper objects for SRP compliance
-    private val parameterConverter = MasaicParameterConverter()
-    private val toolHandler = MasaicToolHandler(toolService)
-    private val streamingService = MasaicStreamingService(client, toolHandler, parameterConverter, toolService)
 
     /**
      * Not implemented: Returns a version of this service that includes raw HTTP response data.
@@ -49,16 +44,22 @@ class MasaicOpenAiResponseServiceImpl(
         throw UnsupportedOperationException("Not yet implemented")
     }
 
+    override fun create(
+        params: ResponseCreateParams,
+        requestOptions: RequestOptions
+    ): Response {
+        throw UnsupportedOperationException("Not yet implemented")
+    }
+
     /**
      * Creates a new completion response based on provided parameters.
      *
      * @param params Parameters for creating the response
-     * @param requestOptions Options for the HTTP request
      * @return Response object containing completion data
      */
-    override fun create(
-        params: ResponseCreateParams,
-        requestOptions: RequestOptions
+    fun create(
+        client: OpenAIClient,
+        params: ResponseCreateParams
     ): Response {
         // Convert params to OpenAI format and create the chat completion
         val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
@@ -83,7 +84,7 @@ class MasaicOpenAiResponseServiceImpl(
         }
 
         // Recursively make the next request with the updated params
-        return create(newParams, requestOptions)
+        return create(client,newParams)
     }
 
     /**
@@ -94,9 +95,10 @@ class MasaicOpenAiResponseServiceImpl(
      * @return Flow of ServerSentEvents containing response chunks
      */
     fun createCompletionStream(
+        client: OpenAIClient,
         initialParams: ResponseCreateParams
     ): Flow<ServerSentEvent<String>> {
-        return streamingService.createCompletionStream(initialParams)
+        return streamingService.createCompletionStream(client,initialParams)
     }
     
     /**

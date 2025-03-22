@@ -14,14 +14,15 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.springframework.http.codec.ServerSentEvent
+import org.springframework.stereotype.Service
 import java.util.UUID
 
 /**
  * Handles streaming operations for OpenAI API responses.
  * This service is responsible for creating and managing streaming completion flows.
  */
+@Service
 class MasaicStreamingService(
-    private val client: OpenAIClient,
     private val toolHandler: MasaicToolHandler,
     private val parameterConverter: MasaicParameterConverter,
     private val toolService: ToolService
@@ -38,6 +39,7 @@ class MasaicStreamingService(
      * @return Flow of ServerSentEvents containing response chunks
      */
     fun createCompletionStream(
+        client: OpenAIClient,
         initialParams: ResponseCreateParams
     ): Flow<ServerSentEvent<String>> = flow {
         var currentParams = initialParams
@@ -54,6 +56,24 @@ class MasaicStreamingService(
                     .build()
             )
         )
+
+        if (currentParams == initialParams) {
+            emit(
+                EventUtils.convertEvent(
+                    ResponseStreamEvent.ofCreated(
+                        ResponseCreatedEvent.builder()
+                            .response(
+                                ChatCompletionConverter.buildIntermediateResponse(
+                                    currentParams,
+                                    ResponseStatus.IN_PROGRESS,
+                                    responseId
+                                )
+                            )
+                            .build()
+                    )
+                )
+            )
+        }
 
         // Check for tool call limit
         if (responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls) {
@@ -98,23 +118,6 @@ class MasaicStreamingService(
                 val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
                 // Send initial created event only for the first iteration
-                if (currentParams == initialParams) {
-                    trySend(
-                        EventUtils.convertEvent(
-                            ResponseStreamEvent.ofCreated(
-                                ResponseCreatedEvent.builder()
-                                    .response(
-                                        ChatCompletionConverter.buildIntermediateResponse(
-                                            currentParams,
-                                            ResponseStatus.IN_PROGRESS,
-                                            responseId
-                                        )
-                                    )
-                                    .build()
-                            )
-                        )
-                    ).isSuccess
-                }
 
                 val subscription = response.subscribe { completion ->
                     if (!completion._choices().isMissing()) {
@@ -361,7 +364,7 @@ class MasaicStreamingService(
                         handleFunctionCallDelta(it, functionCallAccumulator, internalToolItemIds, completion)
                     }
                     it.isOutputItemAdded() && it.asOutputItemAdded().item().isFunctionCall() -> {
-                        handleOutputItemAdded(it, functionNameAccumulator, internalToolItemIds)
+                        handleOutputItemAdded(it, functionNameAccumulator,responseOutputItemAccumulator, internalToolItemIds)
                     }
                     it.isOutputTextDelta() -> {
                         handleOutputTextDelta(it, textAccumulator)
@@ -405,14 +408,32 @@ class MasaicStreamingService(
     private fun ProducerScope<ServerSentEvent<String>>.handleOutputItemAdded(
         event: ResponseStreamEvent,
         functionNameAccumulator: MutableMap<Long, Pair<String, String>>,
+        responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
         internalToolItemIds: MutableSet<String>
     ) {
-        val functionName = event.asOutputItemAdded().item().asFunctionCall().name()
+        val functionCall = event.asOutputItemAdded().item().asFunctionCall()
+        val functionName = functionCall.name()
         functionNameAccumulator[event.asOutputItemAdded().outputIndex()] =
-            Pair(functionName, event.asOutputItemAdded().item().asFunctionCall().callId())
+            Pair(functionName, functionCall.callId())
 
         if(toolService.getFunctionTool(functionName) != null) {
-            internalToolItemIds.add(event.asOutputItemAdded().item().asFunctionCall().id())
+            internalToolItemIds.add(functionCall.id())
+        }
+
+        if(functionCall.arguments().isNotBlank()){ //assuming full argument is present. For e.g. in case of groq
+            responseOutputItemAccumulator.add(
+                ResponseOutputItem.ofFunctionCall(
+                    ResponseFunctionToolCall.builder()
+                        .name(functionName)
+                        .arguments(functionCall.arguments())
+                        .callId(functionCall.callId())
+                        .id(functionCall.id())
+                        .status(ResponseFunctionToolCall.Status.COMPLETED)
+                        .putAllAdditionalProperties(functionCall._additionalProperties())
+                        .type(JsonValue.from("function_call"))
+                        .build()
+                )
+            )
         }
 
         trySend(EventUtils.convertEvent(event)).isSuccess
@@ -442,19 +463,19 @@ class MasaicStreamingService(
         internalToolItemIds: MutableSet<String>,
         completion: ChatCompletionChunk
     ) {
-        functionCallAccumulator.forEach {
-            val content = it.value.joinToString("") { it.asFunctionCallArgumentsDelta().delta() }
+        functionCallAccumulator.forEach { key, value ->
+            val content = value.joinToString("") { it.asFunctionCallArgumentsDelta().delta() }
 
             if (!internalToolItemIds.contains(completion.id())) {
                 trySend(
                     EventUtils.convertEvent(
                         ResponseStreamEvent.ofFunctionCallArgumentsDone(
                             ResponseFunctionCallArgumentsDoneEvent.builder()
-                                .outputIndex(it.key)
+                                .outputIndex(key)
                                 .arguments(content)
-                                .itemId(it.value.first().asFunctionCallArgumentsDelta().itemId())
+                                .itemId(value.first().asFunctionCallArgumentsDelta().itemId())
                                 .putAllAdditionalProperties(
-                                    it.value.first().asFunctionCallArgumentsDelta()._additionalProperties()
+                                    value.first().asFunctionCallArgumentsDelta()._additionalProperties()
                                 )
                                 .build()
                         )
@@ -462,21 +483,23 @@ class MasaicStreamingService(
                 ).isSuccess
             }
 
-            responseOutputItemAccumulator.add(
-                ResponseOutputItem.ofFunctionCall(
-                    ResponseFunctionToolCall.builder()
-                        .name(functionNameAccumulator.getValue(it.key).first)
-                        .arguments(content)
-                        .callId(functionNameAccumulator.getValue(it.key).second)
-                        .id(it.value.first().asFunctionCallArgumentsDelta().itemId())
-                        .status(ResponseFunctionToolCall.Status.COMPLETED)
-                        .putAllAdditionalProperties(
-                            it.value.first().asFunctionCallArgumentsDelta()._additionalProperties()
-                        )
-                        .type(JsonValue.from("function_call"))
-                        .build()
+            if(!responseOutputItemAccumulator.filter { it.isFunctionCall() }.any { it.asFunctionCall().name() == functionNameAccumulator.getValue(key).first }) {
+                responseOutputItemAccumulator.add(
+                    ResponseOutputItem.ofFunctionCall(
+                        ResponseFunctionToolCall.builder()
+                            .name(functionNameAccumulator.getValue(key).first)
+                            .arguments(content)
+                            .callId(functionNameAccumulator.getValue(key).second)
+                            .id(value.first().asFunctionCallArgumentsDelta().itemId())
+                            .status(ResponseFunctionToolCall.Status.COMPLETED)
+                            .putAllAdditionalProperties(
+                                value.first().asFunctionCallArgumentsDelta()._additionalProperties()
+                            )
+                            .type(JsonValue.from("function_call"))
+                            .build()
+                    )
                 )
-            )
+            }
         }
     }
 } 
