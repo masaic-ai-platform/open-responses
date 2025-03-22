@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+  open-responses:
+    image: jasbir/open-responses:test-version
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - GITHUB_TOKEN=GIT_PAT_TOKEN
+      - BRAVE_API_KEY=BRAVE_API_KEY
