@@ -85,8 +85,16 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
      * @return Result of the tool execution as a string, or null if the tool isn't found
      */
     fun executeTool(name: String, arguments: String): String? {
-        val tool = mcpToolRegistry.findByName(name) ?: return null
-        return mcpToolExecutor.executeTool(tool, arguments)
+        try {
+            val tool = mcpToolRegistry.findByName(name) ?: return null
+            val toolResult = mcpToolExecutor.executeTool(tool, arguments)
+            log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
+            return toolResult
+        } catch (e: Exception) {
+            val errorMessage = "Tool $name execution with arguments $arguments failed with error message: ${e.message}"
+            log.error(errorMessage, e)
+            return errorMessage
+        }
     }
 
     /**
