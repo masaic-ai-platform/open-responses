@@ -57,6 +57,24 @@ class MasaicStreamingService(
             )
         )
 
+        if (currentParams == initialParams) {
+            emit(
+                EventUtils.convertEvent(
+                    ResponseStreamEvent.ofCreated(
+                        ResponseCreatedEvent.builder()
+                            .response(
+                                ChatCompletionConverter.buildIntermediateResponse(
+                                    currentParams,
+                                    ResponseStatus.IN_PROGRESS,
+                                    responseId
+                                )
+                            )
+                            .build()
+                    )
+                )
+            )
+        }
+
         // Check for tool call limit
         if (responseInputItems.filter { it.isFunctionCall() }.size > allowedMaxToolCalls) {
             emit(
