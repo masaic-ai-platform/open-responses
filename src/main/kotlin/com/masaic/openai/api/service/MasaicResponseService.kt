@@ -29,11 +29,21 @@ import org.springframework.util.MultiValueMap
  * @property toolService Service for managing and executing tools
  */
 @Service
-class MasaicResponseService(private val toolService: ToolService) {
+class MasaicResponseService(
+    private val toolService: ToolService,
+    private val openAIResponseService: MasaicOpenAiResponseServiceImpl) {
 
-    private companion object {
-        const val MODEL_BASE_URL = "MODEL_BASE_URL"
-        const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+    companion object {
+        const val OPENAI_API_BASE_URL_ENV = "OPENAI_API_BASE_URL"
+        const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+
+        /**
+         * Gets an environment variable - extracted for testability
+         *
+         * @param name Name of the environment variable
+         * @return The value of the environment variable or null if not found
+         */
+        fun getEnvVar(name: String): String? = System.getenv(name)
     }
 
     /**
@@ -53,8 +63,8 @@ class MasaicResponseService(private val toolService: ToolService) {
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        return MasaicOpenAiResponseServiceImpl(client, toolService).create(
-            createRequestParams(
+        return openAIResponseService.create(
+            client,createRequestParams(
                 request,
                 headerBuilder,
                 queryBuilder
@@ -79,8 +89,8 @@ class MasaicResponseService(private val toolService: ToolService) {
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        return MasaicOpenAiResponseServiceImpl(client, toolService).createCompletionStream(
-            createRequestParams(
+        return openAIResponseService.createCompletionStream(
+            client,createRequestParams(
                 request,
                 headerBuilder,
                 queryBuilder

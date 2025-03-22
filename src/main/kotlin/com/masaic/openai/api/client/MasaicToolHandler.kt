@@ -4,12 +4,14 @@ import com.masaic.openai.tool.ToolService
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
+import org.springframework.stereotype.Component
 import java.util.UUID
 
 /**
  * Handles tool-related operations for the Masaic OpenAI API integration.
  * Encapsulates the logic for processing tool calls and tool outputs.
  */
+@Component
 class MasaicToolHandler(private val toolService: ToolService) {
 
     /**
