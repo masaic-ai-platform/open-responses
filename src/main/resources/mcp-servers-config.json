@@ -1,7 +1,10 @@
 {
   "mcpServers": {
-    "@modelcontextprotocol/google-maps": {
-      "url": "https://router.mcp.so/sse/3d9p0fm8ipcrxs"
+    "@modelcontextprotocol/time": {
+      "url": "https://router.mcp.so/sse/ag6zwzm8juaqt5"
+    },
+    "@modelcontextprotocol/github": {
+      "url": "https://router.mcp.so/sse/9qxl5ym8jufeuh"
     },
     "@modelcontextprotocol/brave-search": {
       "url": "https://router.mcp.so/sse/oxxkd3m8ip5cmy"

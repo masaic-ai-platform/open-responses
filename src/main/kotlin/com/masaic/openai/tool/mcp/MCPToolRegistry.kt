@@ -9,6 +9,8 @@ import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
+import java.time.Duration
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.*
 
 /**
@@ -82,6 +84,7 @@ class MCPToolExecutor() {
 
         val mcpClient = DefaultMcpClient.Builder()
             .transport(transport)
+            .toolExecutionTimeout(Duration.of(3, ChronoUnit.MINUTES))
             .build()
         log.info("MCP HTTP client connected for $serverName server at: ${mcpServer.url}")
         return mcpClient
