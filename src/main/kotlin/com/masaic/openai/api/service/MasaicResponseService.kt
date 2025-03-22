@@ -225,9 +225,9 @@ class MasaicResponseService(private val toolService: ToolService) {
      */
 //    private fun getApiBaseUrl(): String = System.getenv(OPENAI_API_BASE_URL_ENV) ?: DEFAULT_OPENAI_BASE_URL
     private fun getApiBaseUrl(headers: MultiValueMap<String, String>): String {
-        return if (headers.getFirst("x-model-provider") == "claude") {
+        return if (headers.getFirst("x-model-provider")?.lowercase() == "claude") {
             "https://api.anthropic.com/v1"
-        } else if (headers.getFirst("x-model-provider") == "openAI") {
+        } else if (headers.getFirst("x-model-provider")?.lowercase() == "openai") {
             "https://api.openai.com/v1"
         } else {
             System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
