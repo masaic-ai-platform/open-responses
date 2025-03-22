@@ -1,11 +1,22 @@
 package com.masaic.openai.tool
 
+import com.masaic.openai.tool.mcp.MCPServerInfo
 import com.masaic.openai.tool.mcp.MCPToolExecutor
 import com.masaic.openai.tool.mcp.MCPToolRegistry
-import kotlinx.serialization.encodeToString
+import com.masaic.openai.tool.mcp.McpToolDefinition
+import dev.langchain4j.model.chat.request.json.JsonObjectSchema
+import io.mockk.every
+import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.serialization.json.Json
-import org.junit.jupiter.api.*
-import org.springframework.core.io.DefaultResourceLoader
+import kotlinx.serialization.serializer
+import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestInstance
 import org.springframework.core.io.ResourceLoader
 
 /**
@@ -19,7 +30,15 @@ import org.springframework.core.io.ResourceLoader
 @Disabled("Tests temporarily disabled until MCP server configuration is available")
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ToolServiceTest {
-    private val toolService = ToolService(MCPToolRegistry(), MCPToolExecutor(), DefaultResourceLoader())
+    private lateinit var toolService: ToolService
+    private val mcpToolRegistry = mockk<MCPToolRegistry>()
+    private val mcpToolExecutor = mockk<MCPToolExecutor>()
+    private val resourceLoader = mockk<ResourceLoader>()
+
+    @BeforeEach
+    fun setUp() {
+        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader)
+    }
 
     /**
      * Sets up the test environment by loading MCP tools.
@@ -41,15 +60,45 @@ class ToolServiceTest {
         toolService.cleanup()
     }
 
-    /**
-     * Tests that available tools can be listed.
-     * 
-     * Verifies that the list of tools returned by the service is not empty.
-     */
     @Test
-    fun `test list available tools`() {
-        val tools = toolService.listAvailableTools()
-        assert(tools.isNotEmpty()) { "Tool list should not be empty" }
+    fun `listAvailableTools should return mapped tool metadata`() {
+        // Given
+        val mockTools: List<McpToolDefinition>  = listOf(
+            McpToolDefinition(
+                id = "tool1",
+                protocol = ToolProtocol.MCP,
+                hosting = ToolHosting.MASAIC_MANAGED,
+                name = "Test Tool 1",
+                description = "A test tool",
+                parameters = JsonObjectSchema.builder().build(),
+                serverInfo = MCPServerInfo("test")
+            ),
+            McpToolDefinition(
+                id = "tool2",
+                protocol = ToolProtocol.MCP,
+                hosting = ToolHosting.MASAIC_MANAGED,
+                name = "Test Tool 2",
+                description = "A test tool",
+                parameters = JsonObjectSchema.builder().build(),
+                serverInfo = MCPServerInfo("test")
+            )
+        )
+        
+        every { mcpToolRegistry.findAll() } returns mockTools
+
+        // When
+        val result = toolService.listAvailableTools()
+
+        // Then
+        assertEquals(2, result.size)
+        assertEquals("tool1", result[0].id)
+        assertEquals("Test Tool 1", result[0].name)
+        assertEquals("A test tool", result[0].description)
+        assertEquals("tool2", result[1].id)
+        assertEquals("Test Tool 2", result[1].name)
+        assertEquals("Another test tool", result[1].description)
+        
+        verify { mcpToolRegistry.findAll() }
     }
 
     /**
@@ -89,7 +138,7 @@ class ToolServiceTest {
     fun `execute browser use tool`() {
         val execResult = toolService.executeTool(
             "browser_use",
-            Json.encodeToString(
+            Json.encodeToString(serializer(),
                 mapOf(
                     "url" to "https://preview--telco-service-portal.lovable.app/",
                     "action" to "navigate to link and search the bill details like due date, bill amount of customer CUS10001"

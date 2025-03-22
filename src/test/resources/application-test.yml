@@ -1,0 +1,21 @@
+spring:
+  main:
+    banner-mode: "off"
+    web-application-type: reactive
+
+# Test MCP server configuration
+mcp:
+  servers:
+    - id: test-server
+      url: http://localhost:8090
+      name: Test MCP Server
+      tools:
+        - id: test-tool
+          name: Test Tool
+          description: A test tool for unit testing
+          type: function
+          parameters:
+            - name: param1
+              type: string
+              description: Test parameter
+              required: true 
