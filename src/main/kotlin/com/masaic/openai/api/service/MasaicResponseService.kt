@@ -32,8 +32,8 @@ import org.springframework.util.MultiValueMap
 class MasaicResponseService(private val toolService: ToolService) {
 
     private companion object {
-        const val OPENAI_API_BASE_URL_ENV = "OPENAI_API_BASE_URL"
-        const val DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1"
+        const val MODEL_BASE_URL = "MODEL_BASE_URL"
+        const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
     }
 
     /**
@@ -53,15 +53,13 @@ class MasaicResponseService(private val toolService: ToolService) {
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        return if (isCustomApiBaseUrl()) {
-            MasaicOpenAiResponseServiceImpl(client, toolService).create(
-                createRequestParams(request, headerBuilder, queryBuilder)
+        return MasaicOpenAiResponseServiceImpl(client, toolService).create(
+            createRequestParams(
+                request,
+                headerBuilder,
+                queryBuilder
             )
-        } else {
-            client.responses().create(
-                createRequestParams(request, headerBuilder, queryBuilder)
-            )
-        }
+        )
     }
 
     /**
@@ -81,17 +79,13 @@ class MasaicResponseService(private val toolService: ToolService) {
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        return if (isCustomApiBaseUrl()) {
-            MasaicOpenAiResponseServiceImpl(client, toolService).createCompletionStream(
-                createRequestParams(request, headerBuilder, queryBuilder)
+        return MasaicOpenAiResponseServiceImpl(client, toolService).createCompletionStream(
+            createRequestParams(
+                request,
+                headerBuilder,
+                queryBuilder
             )
-        } else {
-            streamOpenAiResponse(
-                client.async().responses().createStreaming(
-                    createRequestParams(request, headerBuilder, queryBuilder)
-                )
-            )
-        }
+        )
     }
 
     /**
@@ -206,18 +200,14 @@ class MasaicResponseService(private val toolService: ToolService) {
     private fun createClient(headers: MultiValueMap<String, String>): OpenAIClient {
         val authHeader = headers.getFirst("Authorization") 
             ?: throw IllegalArgumentException("api-key is missing.")
-        
-        val credential = if (isCustomApiBaseUrl()) {
-            BearerTokenCredential.create {
+
+        val credential = BearerTokenCredential.create {
                 authHeader.split(" ").getOrNull(1) ?: throw IllegalArgumentException("api-key is missing.")
             }
-        } else {
-            BearerTokenCredential.create { authHeader }
-        }
 
         return OpenAIOkHttpClient.builder()
             .credential(credential)
-            .baseUrl(getApiBaseUrl())
+            .baseUrl(getApiBaseUrl(headers))
             .build()
     }
 
@@ -226,14 +216,23 @@ class MasaicResponseService(private val toolService: ToolService) {
      *
      * @return True if a custom API base URL is configured, false otherwise
      */
-    private fun isCustomApiBaseUrl(): Boolean = System.getenv(OPENAI_API_BASE_URL_ENV) != null
+    private fun isCustomApiBaseUrl(): Boolean = System.getenv(MODEL_BASE_URL) != null
 
     /**
      * Gets the API base URL to use for requests.
      *
      * @return The API base URL
      */
-    private fun getApiBaseUrl(): String = System.getenv(OPENAI_API_BASE_URL_ENV) ?: DEFAULT_OPENAI_BASE_URL
+//    private fun getApiBaseUrl(): String = System.getenv(OPENAI_API_BASE_URL_ENV) ?: DEFAULT_OPENAI_BASE_URL
+    private fun getApiBaseUrl(headers: MultiValueMap<String, String>): String {
+        return if (headers.getFirst("x-model-provider") == "claude") {
+            "https://api.anthropic.com/v1"
+        } else if (headers.getFirst("x-model-provider") == "openAI") {
+            "https://api.openai.com/v1"
+        } else {
+            System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
+        }
+    }
 }
 
 /**
