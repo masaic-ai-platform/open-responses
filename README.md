@@ -105,7 +105,6 @@ docker run \
 -v /var/run/docker.sock:/var/run/docker.sock \                                  
 -p 8080:8080 \
 -e GITHUB_TOKEN=GITHUB_TOKEN_VALUE \
--e OPENAI_API_KEY=OPENAI_API_KEY_VALUE \
 -e BRAVE_API_KEY=BRAVE_API_KEY_VALUE \
 -e MCP_SERVER_CONFIG_FILE_PATH=/app/mcp-servers-config.json open-responses
 

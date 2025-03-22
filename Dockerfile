@@ -16,5 +16,9 @@ COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 # (Optional) Make sure docker is executable
 RUN chmod +x /usr/local/bin/docker
 
+# Copy the entrypoint script into the container
+COPY run_service.sh /app/run_service.sh
+RUN chmod +x /app/run_service.sh
+
 # Set the entry point
-ENTRYPOINT ["java", "-jar", "/app/openai-0.0.1-SNAPSHOT.jar"]
+ENTRYPOINT ["/app/run_service.sh"]
