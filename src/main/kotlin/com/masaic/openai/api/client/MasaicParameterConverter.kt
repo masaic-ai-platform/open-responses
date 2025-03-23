@@ -339,10 +339,12 @@ class MasaicParameterConverter {
                         ResponseFormatJsonSchema.builder()
                             .type(format.asJsonSchema()._type())
                             .jsonSchema(
-                                objectMapper.readValue(
-                                    objectMapper.writeValueAsString(format.asJsonSchema().schema()),
-                                    ResponseFormatJsonSchema.JsonSchema::class.java
-                                )
+                                    ResponseFormatJsonSchema.JsonSchema.builder().name(format.asJsonSchema()._name()).schema(
+                                        objectMapper.readValue(
+                                            objectMapper.writeValueAsString(format.asJsonSchema().schema()),
+                                            ResponseFormatJsonSchema.JsonSchema.Schema::class.java
+                                        )
+                                    ).build()
                             )
                             .build()
                     )
