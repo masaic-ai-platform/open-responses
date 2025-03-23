@@ -8,13 +8,11 @@ import com.masaic.openai.tool.mcp.McpToolDefinition
 import dev.langchain4j.model.chat.request.json.*
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.core.io.ResourceLoader
+import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
-import java.io.File
 import java.nio.charset.Charset
 
 /**
@@ -27,7 +25,12 @@ import java.nio.charset.Charset
  * @property mcpToolExecutor Executor that handles tool execution
  */
 @Service
-class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpToolExecutor: MCPToolExecutor, private val resourceLoader: ResourceLoader) {
+class ToolService(
+    private val mcpToolRegistry: MCPToolRegistry,
+    private val mcpToolExecutor: MCPToolExecutor,
+    private val resourceLoader: ResourceLoader,
+    private val nativeToolRegistry: NativeToolRegistry
+) {
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(ToolService::class.java)
     
@@ -42,13 +45,22 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
      * @return List of tool metadata representing all available tools
      */
     fun listAvailableTools(): List<ToolMetadata> {
-        return mcpToolRegistry.findAll().map { tool ->
+        val availableTools = nativeToolRegistry.findAll().map { tool ->
             ToolMetadata(
                 id = tool.id,
                 name = tool.name,
                 description = tool.description
             )
-        }
+        }.toMutableList()
+
+        availableTools.addAll(mcpToolRegistry.findAll().map { tool ->
+            ToolMetadata(
+                id = tool.id,
+                name = tool.name,
+                description = tool.description
+            )
+        })
+        return availableTools
     }
 
     /**
@@ -58,7 +70,7 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
      * @return Tool metadata if found, null otherwise
      */
     fun getAvailableTool(name: String): ToolMetadata? {
-        val tool = mcpToolRegistry.findByName(name) ?: return null
+        val tool = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
         return ToolMetadata(
             id = tool.id,
             name = tool.name,
@@ -73,8 +85,11 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
      * @return FunctionTool representation if found, null otherwise
      */
     fun getFunctionTool(name: String): FunctionTool? {
-        val toolDefinition = mcpToolRegistry.findByName(name) ?: return null
-        return (toolDefinition as McpToolDefinition).toFunctionTool()
+        val toolDefinition = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
+        return when {
+            toolDefinition is NativeToolDefinition -> return NativeToolDefinition.toFunctionTool(toolDefinition)
+            else -> (toolDefinition as McpToolDefinition).toFunctionTool()
+        }
     }
 
     /**
@@ -86,8 +101,11 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
      */
     fun executeTool(name: String, arguments: String): String? {
         try {
-            val tool = mcpToolRegistry.findByName(name) ?: return null
-            val toolResult = mcpToolExecutor.executeTool(tool, arguments)
+            val tool = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
+            val toolResult = when (tool.protocol) {
+                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments)
+                ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
+            }
             log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
             return toolResult
         } catch (e: Exception) {
@@ -273,6 +291,52 @@ class ToolService(private val mcpToolRegistry: MCPToolRegistry, private val mcpT
             is JsonNumberSchema -> schema.description()?.let { result["description"] = it }
             is JsonBooleanSchema -> schema.description()?.let { result["description"] = it }
         }
+    }
+}
+
+@Component
+class NativeToolRegistry {
+    private val log = LoggerFactory.getLogger(NativeToolRegistry::class.java)
+    private val toolRepository = mutableMapOf<String, ToolDefinition>()
+
+    init {
+        toolRepository["think"] = loadExtendedThinkTool()
+    }
+
+    fun findByName(name: String): ToolDefinition? {
+        return toolRepository[name]
+    }
+
+    fun findAll(): List<ToolDefinition> {
+        return toolRepository.values.toList()
+    }
+
+    fun executeTool(name: String, arguments: String): String? {
+        val tool = toolRepository[name] ?: return null
+        log.debug("Executing tool $name with arguments: $arguments")
+        return "Your thought has been logged."
+    }
+    /**
+     * Loads the extended "think" tool definition.
+     *
+     * This function creates a `NativeToolDefinition` for the "think" tool with predefined parameters.
+     * The tool is designed to append a thought to the log without obtaining new information or changing the database.
+     *
+     * @return A `NativeToolDefinition` instance representing the "think" tool.
+     */
+    private fun loadExtendedThinkTool(): NativeToolDefinition {
+        val parameters = mutableMapOf(
+            "type" to "object",
+            "properties" to mapOf("thought" to mapOf("type" to "string", "description" to "A thought to think about")),
+            "required" to listOf("thought"),
+            "additionalProperties" to false
+        )
+
+        return NativeToolDefinition(
+            name = "think",
+            description = "Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log.",
+            parameters = parameters
+        )
     }
 }
 
