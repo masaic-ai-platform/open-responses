@@ -29,10 +29,9 @@ class MasaicParameterConverter {
      */
     fun prepareCompletion(params: ResponseCreateParams): ChatCompletionCreateParams {
         logger.debug { "Converting ResponseCreateParams to ChatCompletionCreateParams" }
-        val input = params.input()
-        
+
         try {
-            val completionRequest = createBaseCompletionRequest(input)
+            val completionRequest = createBaseCompletionRequest(params)
 
             applyModelAndParameters(completionRequest, params)
             applyToolConfiguration(completionRequest, params)
@@ -53,13 +52,14 @@ class MasaicParameterConverter {
      * @param input The input from response parameters
      * @return Builder for ChatCompletionCreateParams with messages set
      */
-    private fun createBaseCompletionRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+    private fun createBaseCompletionRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
+        val input = params.input()
         return if (input.isText()) {
             logger.debug { "Creating text-based request" }
-            createTextBasedRequest(input)
+            createTextBasedRequest(params)
         } else if (input.isResponse()) {
             logger.debug { "Creating message-based request" }
-            createMessageBasedRequest(input)
+            createMessageBasedRequest(params)
         } else {
             val errorMsg = "Unsupported input type: ${input.javaClass.simpleName}"
             logger.error { errorMsg }
@@ -70,23 +70,34 @@ class MasaicParameterConverter {
     /**
      * Creates a completion request for simple text input.
      *
-     * @param input The text input
+     * @param params The source parameters
      * @return Builder with a single user message
      */
-    private fun createTextBasedRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+    private fun createTextBasedRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
+
+        val input = params.input().asText()
         logger.trace { "Converting text input to user message" }
-        return ChatCompletionCreateParams.builder().addMessage(
+        val builder =  ChatCompletionCreateParams.builder()
+
+        if(params.instructions().isPresent){
+            builder.addMessage(
+                ChatCompletionSystemMessageParam.builder().content(params.instructions().get()).build()
+            )
+        }
+        builder.addMessage(
             ChatCompletionUserMessageParam.builder().content(input.toString()).build()
         )
+        return builder
     }
 
     /**
      * Creates a completion request for complex message-based input.
      *
-     * @param input The input containing multiple messages
+     * @param params The source parameters
      * @return Builder with all messages properly converted and added
      */
-    private fun createMessageBasedRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+    private fun createMessageBasedRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
+        val input = params.input()
         val inputItems = input.asResponse()
         logger.debug { "Processing ${inputItems.size} input messages" }
         val completionBuilder = ChatCompletionCreateParams.builder()
@@ -174,11 +185,16 @@ class MasaicParameterConverter {
         params: ResponseCreateParams
     ) {
         completionBuilder.model(params.model())
+        if(params.temperature().isPresent)
         completionBuilder.temperature(params.temperature())
+        if(params.maxOutputTokens().isPresent)
         completionBuilder.maxCompletionTokens(params.maxOutputTokens())
-        // completionBuilder.metadata(params.metadata()) //TODO Unsupported in groq
+        if(params.metadata().isPresent)
+        completionBuilder.metadata(params.metadata())
+        if(params.topP().isPresent)
         completionBuilder.topP(params.topP())
-        //completionBuilder.store(params.store()) //TODO Unsupported in groq
+        if(params.store().isPresent)
+        completionBuilder.store(params.store())
     }
 
     /**

@@ -38,9 +38,9 @@ data class FileSearchTool(
     @JsonProperty("max_num_results")
     val maxNumResults: Int = 20,
     @JsonProperty("ranking_options")
-    val rankingOptions: RankingOptions,
+    val rankingOptions: RankingOptions ?= null,
     @JsonProperty("vector_store_ids")
-    val vectorStoreIds: List<String>
+    val vectorStoreIds: List<String>? = null
 ) : Tool
 
 /**
