@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
+    <!-- Load log file location from application properties -->
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.name" defaultValue="~/logs/openai-service.log" />
+
     <!-- Human-readable console output -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
@@ -10,7 +13,7 @@
 
     <!-- JSON formatted file output for log aggregation -->
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>logs/openai-service.log</file>
+        <file>${LOG_PATH}</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
             <fileNamePattern>logs/openai-service-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
@@ -38,7 +41,7 @@
     </appender>
 
     <!-- Log masking for sensitive data -->
-    <conversionRule conversionWord="maskedMsg" 
+    <conversionRule conversionWord="maskedMsg"
                     converterClass="com.masaic.openai.api.config.SensitiveDataMaskingConverter" />
 
     <!-- Set default logging level -->
@@ -57,8 +60,8 @@
     <logger name="org.springframework" level="WARN" />
     <logger name="io.netty" level="WARN" />
     <logger name="reactor.netty" level="WARN" />
-    
+
     <!-- Micrometer and Observation related logging -->
     <logger name="io.micrometer.observation" level="INFO" />
     <logger name="io.micrometer.tracing" level="INFO" />
-</configuration> 
+</configuration>
