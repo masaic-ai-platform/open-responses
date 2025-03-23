@@ -7,6 +7,7 @@ import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.core.JsonValue
+import mu.KotlinLogging
 import org.springframework.stereotype.Component
 
 /**
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class MasaicParameterConverter {
+    private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper()
 
     /**
@@ -26,15 +28,23 @@ class MasaicParameterConverter {
      * @return ChatCompletionCreateParams object ready to send to OpenAI API
      */
     fun prepareCompletion(params: ResponseCreateParams): ChatCompletionCreateParams {
+        logger.debug { "Converting ResponseCreateParams to ChatCompletionCreateParams" }
         val input = params.input()
-        val completionRequest = createBaseCompletionRequest(input)
+        
+        try {
+            val completionRequest = createBaseCompletionRequest(input)
 
-        applyModelAndParameters(completionRequest, params)
-        applyToolConfiguration(completionRequest, params)
-        applyResponseFormatting(completionRequest, params)
-        applyReasoningEffort(completionRequest, params)
+            applyModelAndParameters(completionRequest, params)
+            applyToolConfiguration(completionRequest, params)
+            applyResponseFormatting(completionRequest, params)
+            applyReasoningEffort(completionRequest, params)
 
-        return completionRequest.build()
+            logger.trace { "Completion request created successfully" }
+            return completionRequest.build()
+        } catch (e: Exception) {
+            logger.error(e) { "Error creating completion request: ${e.message}" }
+            throw e
+        }
     }
 
     /**
@@ -45,9 +55,15 @@ class MasaicParameterConverter {
      */
     private fun createBaseCompletionRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
         return if (input.isText()) {
+            logger.debug { "Creating text-based request" }
             createTextBasedRequest(input)
-        } else {
+        } else if (input.isResponse()) {
+            logger.debug { "Creating message-based request" }
             createMessageBasedRequest(input)
+        } else {
+            val errorMsg = "Unsupported input type: ${input.javaClass.simpleName}"
+            logger.error { errorMsg }
+            throw IllegalArgumentException(errorMsg)
         }
     }
 
@@ -58,6 +74,7 @@ class MasaicParameterConverter {
      * @return Builder with a single user message
      */
     private fun createTextBasedRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
+        logger.trace { "Converting text input to user message" }
         return ChatCompletionCreateParams.builder().addMessage(
             ChatCompletionUserMessageParam.builder().content(input.toString()).build()
         )
@@ -71,23 +88,32 @@ class MasaicParameterConverter {
      */
     private fun createMessageBasedRequest(input: ResponseCreateParams.Input): ChatCompletionCreateParams.Builder {
         val inputItems = input.asResponse()
+        logger.debug { "Processing ${inputItems.size} input messages" }
         val completionBuilder = ChatCompletionCreateParams.builder()
 
-        inputItems.forEach { item ->
-            when {
-                item.isEasyInputMessage() || item.isMessage() || item.isResponseOutputMessage() -> {
-                    convertInputMessages(item, completionBuilder)
-                }
-                item.isFunctionCall() -> {
-                    addFunctionCallMessage(item, completionBuilder)
-                }
-                item.isFunctionCallOutput() -> {
-                    addFunctionCallOutputMessage(item, completionBuilder)
+        try {
+            inputItems.forEach { item ->
+                when {
+                    item.isEasyInputMessage() || item.isMessage() || item.isResponseOutputMessage() -> {
+                        logger.trace { "Converting message item: ${item.javaClass.simpleName}" }
+                        convertInputMessages(item, completionBuilder)
+                    }
+                    item.isFunctionCall() -> {
+                        logger.trace { "Adding function call: ${item.asFunctionCall().name()}" }
+                        addFunctionCallMessage(item, completionBuilder)
+                    }
+                    item.isFunctionCallOutput() -> {
+                        logger.trace { "Adding function call output for ID: ${item.asFunctionCallOutput().callId()}" }
+                        addFunctionCallOutputMessage(item, completionBuilder)
+                    }
                 }
             }
-        }
 
-        return completionBuilder
+            return completionBuilder
+        } catch (e: Exception) {
+            logger.error(e) { "Error creating message-based request: ${e.message}" }
+            throw e
+        }
     }
 
     /**
@@ -218,53 +244,75 @@ class MasaicParameterConverter {
      * @return List of ChatCompletionTool for the completion request
      */
     private fun convertTools(tools: List<Tool>): List<ChatCompletionTool> {
-        return tools.map { responseTool ->
+        logger.debug { "Converting ${tools.size} tools" }
+        val result = mutableListOf<ChatCompletionTool>()
+        
+        tools.forEach { responseTool ->
             when {
                 responseTool.isFunction() -> {
                     val functionTool = responseTool.asFunction()
-                    ChatCompletionTool.builder().function(
-                        objectMapper.readValue(
-                            objectMapper.writeValueAsString(functionTool),
-                            FunctionDefinition::class.java
-                        )
-                    ).build()
+                    logger.trace { "Converting function tool: ${functionTool.name()}" }
+                        
+                    result.add(
+                        ChatCompletionTool.builder()
+                            .type(JsonValue.from("function"))
+                            .function(objectMapper.readValue(
+                                objectMapper.writeValueAsString(functionTool),
+                                FunctionDefinition::class.java
+                            ))
+                            .build()
+                    )
                 }
                 responseTool.isWebSearch() -> {
                     val webSearchTool = responseTool.asWebSearch()
-                    ChatCompletionTool.builder()
-                        .type(JsonValue.from("function"))
-                        .function(
-                            FunctionDefinition.builder()
-                                .name(webSearchTool.type().asString())
-                                .build()
-                        )
-                        .build()
+                    logger.trace { "Converting web search tool" }
+                    result.add(
+                        ChatCompletionTool.builder()
+                            .type(JsonValue.from("function"))
+                            .function(
+                                FunctionDefinition.builder()
+                                    .name(webSearchTool.type().asString())
+                                    .build()
+                            )
+                            .build()
+                    )
                 }
                 responseTool.isFileSearch() -> {
                     val fileSearchTool = responseTool.asFileSearch()
-                    ChatCompletionTool.builder()
-                        .type(JsonValue.from("function"))
-                        .function(
-                            FunctionDefinition.builder()
-                                .name(fileSearchTool._type())
-                                .build()
-                        )
-                        .build()
+                    logger.trace { "Converting file search tool" }
+                    result.add(
+                        ChatCompletionTool.builder()
+                            .type(JsonValue.from("function"))
+                            .function(
+                                FunctionDefinition.builder()
+                                    .name(fileSearchTool._type())
+                                    .build()
+                            )
+                            .build()
+                    )
                 }
                 responseTool.isComputerUsePreview() -> {
                     val computerUsePreviewTool = responseTool.asComputerUsePreview()
-                    ChatCompletionTool.builder()
-                        .type(JsonValue.from("function"))
-                        .function(
-                            FunctionDefinition.builder()
-                                .name(computerUsePreviewTool._type())
-                                .build()
-                        )
-                        .build()
+                    logger.trace { "Converting computer use preview tool" }
+                    result.add(
+                        ChatCompletionTool.builder()
+                            .type(JsonValue.from("function"))
+                            .function(
+                                FunctionDefinition.builder()
+                                    .name(computerUsePreviewTool._type())
+                                    .build()
+                            )
+                            .build()
+                    )
                 }
-                else -> throw IllegalArgumentException("Unsupported tool")
+                else -> {
+                    val errorMsg = "Unsupported tool type: ${responseTool::class.java.simpleName}"
+                    logger.error { errorMsg }
+                    throw IllegalArgumentException(errorMsg)
+                }
             }
         }
+        return result
     }
 
     /**

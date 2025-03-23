@@ -11,6 +11,7 @@ import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
 import kotlinx.coroutines.flow.Flow
+import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 
@@ -29,11 +30,13 @@ class MasaicOpenAiResponseServiceImpl(
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService
 ) : ResponseService {
+    private val logger = KotlinLogging.logger {}
 
     /**
      * Not implemented: Returns a version of this service that includes raw HTTP response data.
      */
     override fun withRawResponse(): ResponseService.WithRawResponse {
+        logger.warn { "withRawResponse() method not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
 
@@ -41,6 +44,7 @@ class MasaicOpenAiResponseServiceImpl(
      * Not implemented: Returns the input items service for this response service.
      */
     override fun inputItems(): InputItemService {
+        logger.warn { "inputItems() method not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
 
@@ -48,6 +52,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseCreateParams,
         requestOptions: RequestOptions
     ): Response {
+        logger.warn { "create() method with RequestOptions not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
 
@@ -61,30 +66,43 @@ class MasaicOpenAiResponseServiceImpl(
         client: OpenAIClient,
         params: ResponseCreateParams
     ): Response {
-        // Convert params to OpenAI format and create the chat completion
-        val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
+        logger.debug { "Creating completion with model: ${params.model()}" }
+        try {
+            // Convert params to OpenAI format and create the chat completion
+            val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
+            logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
 
-        if(!chatCompletions.choices().any { it.finishReason().value().name.lowercase() == "tool_calls"}){
-            return chatCompletions.toResponse(params)
+            if(!chatCompletions.choices().any { it.finishReason().value().name.lowercase() == "tool_calls"}){
+                logger.info { "No tool calls detected, returning direct response" }
+                return chatCompletions.toResponse(params)
+            }
+            
+            // Process any tool calls in the response
+            logger.debug { "Processing tool calls from completion response" }
+            val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
+
+            // Rebuild the params with the updated input items for the follow-up request
+            val newParams = params.toBuilder()
+                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+                .build()
+
+            // Check if we need to make follow-up requests for tool calls
+            if (newParams.input().asResponse().filter { it.isFunctionCall() }.size > newParams.input().asResponse().filter { it.isFunctionCallOutput() }.size) {
+                logger.info { "Some function calls without outputs, returning current response" }
+                return chatCompletions.toResponse(newParams)
+            } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
+                val errorMsg = "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable."
+                logger.error { errorMsg }
+                throw IllegalArgumentException(errorMsg)
+            }
+
+            // Recursively make the next request with the updated params
+            logger.debug { "Making recursive completion request with updated parameters" }
+            return create(client, newParams)
+        } catch (e: Exception) {
+            logger.error(e) { "Error creating completion: ${e.message}" }
+            throw e
         }
-        
-        // Process any tool calls in the response
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
-
-        // Rebuild the params with the updated input items for the follow-up request
-        val newParams = params.toBuilder()
-            .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
-            .build()
-
-        // Check if we need to make follow-up requests for tool calls
-        if (newParams.input().asResponse().filter { it.isFunctionCall() }.size > newParams.input().asResponse().filter { it.isFunctionCallOutput() }.size) {
-            return chatCompletions.toResponse(newParams)
-        } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
-            throw IllegalArgumentException("Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.")
-        }
-
-        // Recursively make the next request with the updated params
-        return create(client,newParams)
     }
 
     /**
@@ -98,7 +116,8 @@ class MasaicOpenAiResponseServiceImpl(
         client: OpenAIClient,
         initialParams: ResponseCreateParams
     ): Flow<ServerSentEvent<String>> {
-        return streamingService.createCompletionStream(client,initialParams)
+        logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
+        return streamingService.createCompletionStream(client, initialParams)
     }
     
     /**
@@ -108,6 +127,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseCreateParams,
         requestOptions: RequestOptions
     ): StreamResponse<ResponseStreamEvent> {
+        logger.warn { "createStreaming() method with RequestOptions not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
 
@@ -118,6 +138,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions
     ): Response {
+        logger.warn { "retrieve() method not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
 
@@ -128,6 +149,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions
     ) {
+        logger.warn { "delete() method not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
     
@@ -135,7 +157,9 @@ class MasaicOpenAiResponseServiceImpl(
      * Gets the maximum allowed tool calls from environment or default.
      */
     private fun getAllowedMaxToolCalls(): Int {
-        return System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10
+        val maxToolCalls = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10
+        logger.trace { "Maximum allowed tool calls: $maxToolCalls" }
+        return maxToolCalls
     }
 }
 

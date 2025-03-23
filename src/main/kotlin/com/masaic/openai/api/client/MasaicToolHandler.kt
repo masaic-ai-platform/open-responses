@@ -4,6 +4,7 @@ import com.masaic.openai.tool.ToolService
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
+import mu.KotlinLogging
 import org.springframework.stereotype.Component
 import java.util.UUID
 
@@ -13,6 +14,7 @@ import java.util.UUID
  */
 @Component
 class MasaicToolHandler(private val toolService: ToolService) {
+    private val logger = KotlinLogging.logger {}
 
     /**
      * Processes tool calls from a chat completion and executes relevant tools.
@@ -22,6 +24,7 @@ class MasaicToolHandler(private val toolService: ToolService) {
      * @return List of ResponseInputItems with both tool calls and their outputs
      */
     fun handleMasaicToolCall(chatCompletion: ChatCompletion, params: ResponseCreateParams): List<ResponseInputItem> {
+        logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
         val responseInputItems =
             if (params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
                 ResponseInputItem.ofEasyInputMessage(
@@ -33,6 +36,7 @@ class MasaicToolHandler(private val toolService: ToolService) {
 
         // Add text content from the completion to parked items
         chatCompletion.choices().filter { it.message().content().isPresent && it.message().content().get().isNotBlank() }.forEach {
+            logger.trace { "Adding text content to parked items" }
             parked.add(ResponseInputItem.ofResponseOutputMessage(
                 ResponseOutputMessage.builder().content(
                     listOf(
@@ -48,10 +52,12 @@ class MasaicToolHandler(private val toolService: ToolService) {
         chatCompletion.choices().forEach { chatChoice ->
             if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
                 val message = chatChoice.message()
+                logger.debug { "Processing ${message.toolCalls().get().size} tool calls" }
 
                 message.toolCalls().get().forEach { tool ->
                     val function = tool.function()
                     if(toolService.getFunctionTool(function.name()) != null) {
+                        logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
                         // Add the function call to response items
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCall(
@@ -63,7 +69,8 @@ class MasaicToolHandler(private val toolService: ToolService) {
                         
                         // Execute the tool and add its output if successful
                         val toolResult = toolService.executeTool(function.name(), function.arguments())
-                        toolResult?.let {
+                        if (toolResult != null) {
+                            logger.debug { "Tool execution successful for ${function.name()}" }
                             responseInputItems.add(
                                 ResponseInputItem.ofFunctionCallOutput(
                                     ResponseInputItem.FunctionCallOutput.builder().callId(tool.id())
@@ -71,9 +78,12 @@ class MasaicToolHandler(private val toolService: ToolService) {
                                         .output(toolResult).build()
                                 )
                             )
+                        } else {
+                            logger.warn { "Tool execution returned null for ${function.name()}" }
                         }
                     }
                     else {
+                        logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
                         // For unsupported tools, park them for client handling
                         parked.add(
                             ResponseInputItem.ofFunctionCall(
@@ -88,6 +98,7 @@ class MasaicToolHandler(private val toolService: ToolService) {
         }
         
         // Add all parked items to the end
+        logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
 
         return responseInputItems
@@ -101,6 +112,7 @@ class MasaicToolHandler(private val toolService: ToolService) {
      * @return List of ResponseInputItems with both tool calls and their outputs
      */
     fun handleMasaicToolCall(params: ResponseCreateParams, response: Response): List<ResponseInputItem> {
+        logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
         val responseInputItems =
             if (params.input().isResponse()) params.input().asResponse().toMutableList() else mutableListOf(
                 ResponseInputItem.ofEasyInputMessage(
@@ -111,15 +123,21 @@ class MasaicToolHandler(private val toolService: ToolService) {
         val parked = mutableListOf<ResponseInputItem>()
 
         // Add message outputs to parked items
-        response.output().filter { it.isMessage() && it.message().get().content().isNotEmpty() }.forEach{ 
+        val messageOutputs = response.output().filter { it.isMessage() && it.message().get().content().isNotEmpty() }
+        logger.trace { "Found ${messageOutputs.size} message outputs to park" }
+        messageOutputs.forEach { 
             parked.add(ResponseInputItem.ofResponseOutputMessage(it.asMessage()))
         }
 
         // Process function calls
-        response.output().filter { it.isFunctionCall() }.forEach { tool ->
+        val functionCalls = response.output().filter { it.isFunctionCall() }
+        logger.debug { "Processing ${functionCalls.size} function calls" }
+        
+        functionCalls.forEach { tool ->
             val function = tool.asFunctionCall()
 
             if(toolService.getFunctionTool(function.name()) != null) {
+                logger.info { "Executing tool: ${function.name()} with ID: ${function.id()}" }
                 // Add the function call to response items
                 responseInputItems.add(
                     ResponseInputItem.ofFunctionCall(
@@ -131,7 +149,8 @@ class MasaicToolHandler(private val toolService: ToolService) {
 
                 // Execute the tool and add its output if successful
                 val toolResult = toolService.executeTool(function.name(), function.arguments())
-                toolResult?.let {
+                if (toolResult != null) {
+                    logger.debug { "Tool execution successful for ${function.name()}" }
                     responseInputItems.add(
                         ResponseInputItem.ofFunctionCallOutput(
                             ResponseInputItem.FunctionCallOutput.builder().callId(function.callId())
@@ -139,9 +158,12 @@ class MasaicToolHandler(private val toolService: ToolService) {
                                 .output(toolResult).build()
                         )
                     )
+                } else {
+                    logger.warn { "Tool execution returned null for ${function.name()}" }
                 }
             }
             else {
+                logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
                 // For unsupported tools, park them for client handling
                 parked.add(
                     ResponseInputItem.ofFunctionCall(
@@ -154,6 +176,7 @@ class MasaicToolHandler(private val toolService: ToolService) {
         }
 
         // Add all parked items to the end
+        logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
         
         return responseInputItems
