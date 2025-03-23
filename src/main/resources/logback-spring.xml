@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <!-- Human-readable console output -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [trace:%X{traceId:-unknown}] [span:%X{spanId:-}] %cyan(%logger{36}) - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- JSON formatted file output for log aggregation -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/openai-service.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/openai-service-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxFileSize>10MB</maxFileSize>
+            <maxHistory>10</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!-- Micrometer Tracing (B3) trace fields -->
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>parentId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <fieldNames>
+                <traceId>[brave.traceId]</traceId>
+                <spanId>[brave.spanId]</spanId>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <!-- Add an AsyncAppender to handle high-volume logs efficiently -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <appender-ref ref="FILE" />
+    </appender>
+
+    <!-- Log masking for sensitive data -->
+    <conversionRule conversionWord="maskedMsg" 
+                    converterClass="com.masaic.openai.api.config.SensitiveDataMaskingConverter" />
+
+    <!-- Set default logging level -->
+    <root level="INFO">
+        <appender-ref ref="CONSOLE" />
+        <appender-ref ref="ASYNC_FILE" />
+    </root>
+
+    <!-- Application-specific log levels -->
+    <logger name="com.masaic.openai" level="INFO" />
+    <logger name="com.masaic.openai.api.controller" level="INFO" />
+    <logger name="com.masaic.openai.tool" level="INFO" />
+    <logger name="org.springframework.web" level="INFO" />
+
+    <!-- Reduce verbosity of less important components -->
+    <logger name="org.springframework" level="WARN" />
+    <logger name="io.netty" level="WARN" />
+    <logger name="reactor.netty" level="WARN" />
+    
+    <!-- Micrometer and Observation related logging -->
+    <logger name="io.micrometer.observation" level="INFO" />
+    <logger name="io.micrometer.tracing" level="INFO" />
+</configuration> 

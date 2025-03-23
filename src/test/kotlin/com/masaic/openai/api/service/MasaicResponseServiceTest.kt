@@ -210,8 +210,11 @@ class MasaicResponseServiceTest {
         val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
 
         // When & Then
-        assertThrows(IllegalArgumentException::class.java) {
-            masaicResponseService.getResponse(responseId, headers, queryParams)
+        assertThrows(ResponseProcessingException::class.java) {
+            runBlocking {
+                masaicResponseService.getResponse(responseId, headers, queryParams)
+            }
         }
+
     }
 }
