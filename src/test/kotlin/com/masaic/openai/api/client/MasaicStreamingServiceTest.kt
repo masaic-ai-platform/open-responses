@@ -97,7 +97,20 @@ class MasaicStreamingServiceTest {
     fun `test too many tool calls throws exception`() = runTest {
         // Suppose the user input has more function calls than the allowedMaxToolCalls.
         // We'll simulate that in the input params:
-        val mockParams = mockk<ResponseCreateParams>(relaxed = true)
+        val params = mockk<ResponseCreateParams>(relaxed = true)
+        every { params.instructions() } returns Optional.empty()
+        every { params.metadata() } returns Optional.empty()
+        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.temperature() } returns Optional.of(0.7)
+        every { params._parallelToolCalls() } returns JsonField.of(false)
+        every { params._tools() } returns JsonField.of(emptyList())
+        every { params.toolChoice() } returns Optional.empty()
+        every { params.topP() } returns Optional.of(1.0)
+        every { params.maxOutputTokens() } returns Optional.of(512)
+        every { params.previousResponseId() } returns Optional.empty()
+        every { params.reasoning() } returns Optional.empty()
+        val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
+        every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
         val inputItems = (1..5).map {
             // each "function call" item
             mockk<ResponseInputItem> {
@@ -109,11 +122,15 @@ class MasaicStreamingServiceTest {
             every { isResponse() } returns true
             every { asResponse() } returns inputItems
         }
-        every { mockParams.input() } returns mockInput
+        every { params.input() } returns mockInput
 
         // When: We collect the flow, we expect an exception because we exceed the limit (3).
-        val flow = streamingService.createCompletionStream(openAIClient, mockParams)
+        val flow = streamingService.createCompletionStream(openAIClient, params)
 
+        // Then: Verify exception is thrown
+        org.junit.jupiter.api.assertThrows<IllegalStateException> {
+            flow.toList()
+        }
     }
 
     @Test
