@@ -1,6 +1,7 @@
 package com.masaic.openai.api.controller
 
 import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.masaic.openai.api.service.ResponseNotFoundException
 import com.masaic.openai.api.service.ResponseProcessingException
 import com.masaic.openai.api.service.ResponseStreamingException
@@ -41,7 +42,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Bad request",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         } else if(ex is PermissionDeniedException) {
            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
@@ -51,7 +52,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Permission denied",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         }
         else if(ex is NotFoundException){
@@ -62,7 +63,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Not found",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         }
         else if(ex is UnprocessableEntityException){
@@ -73,7 +74,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Unprocessable entity",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         }
         else if(ex is RateLimitException){
@@ -84,7 +85,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Rate limit exceeded",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         }
         else if(ex is UnexpectedStatusCodeException){
@@ -95,7 +96,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Unexpected status code",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         }
         else if(ex is UnauthorizedException){
@@ -106,7 +107,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "Unauthorized",
                 param = ex.body().toString(),
                 code = ex.statusCode().toString(),
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             ))
         }
         else {
@@ -115,7 +116,7 @@ class GlobalExceptionHandler {
                 message = ex.message ?: "An unexpected error occurred",
                 param = null,
                 code = "internal_server_error",
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             )
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
         }
@@ -130,7 +131,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Response not found",
             param = null,
             code = null,
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse)
     }
@@ -144,7 +145,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Request timed out",
             param = null,
             code = "408",
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body(errorResponse)
     }
@@ -163,7 +164,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Error processing response",
             param = null,
             code = "500",
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
     }
@@ -182,7 +183,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Error in streaming response",
             param = null,
             code = "500",
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
     }
@@ -196,7 +197,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "Invalid request",
             param = null,
             code = "400",
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
     }
@@ -211,7 +212,7 @@ class GlobalExceptionHandler {
                 message = ex.body.title ?: "Invalid request",
                 param = null,
                 code = "400",
-                timestamp = LocalDateTime.now()
+                timestamp = System.currentTimeMillis()
             )
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
         }
@@ -223,9 +224,23 @@ class GlobalExceptionHandler {
             message = ex.message,
             param = null,
             code = ex.statusCode.toString(),
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(ex.statusCode).body(errorResponse)
+    }
+
+    @ExceptionHandler(MismatchedInputException::class)
+    fun handleGenericException(ex: MismatchedInputException): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "Unhandled exception: ${ex.message}" }
+
+        val errorResponse = ErrorResponse(
+            type = "api_error",
+            message = "Invalid request. Please check your input.",
+            param = null,
+            code = "bad_request",
+            timestamp = System.currentTimeMillis()
+        )
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
     }
 
     @ExceptionHandler(Exception::class)
@@ -237,7 +252,7 @@ class GlobalExceptionHandler {
             message = ex.message ?: "An unexpected error occurred",
             param = null,
             code = "internal_server_error",
-            timestamp = LocalDateTime.now()
+            timestamp = System.currentTimeMillis()
         )
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
     }
@@ -248,5 +263,5 @@ data class ErrorResponse(
     val message: String?=null,
     val param: String?=null,
     val code: String?=null,
-    val timestamp: LocalDateTime = LocalDateTime.now()
+    val timestamp: Long?=null
 ) 

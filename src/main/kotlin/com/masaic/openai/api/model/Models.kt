@@ -6,9 +6,11 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.Metadata
 import com.openai.models.responses.Response
+import com.openai.models.responses.ResponseInputContent
 
 /**
  * Represents the reasoning information for a response.
@@ -189,6 +191,11 @@ data class CreateResponseRequest(
                 objectMapper.writeValueAsString(input),
                 object : TypeReference<List<InputMessageItem>>() {}
             )
+            if(input is List<*>){
+                for (item in input as List<InputMessageItem>) {
+                    item.parseContent(objectMapper)
+                    }
+            }
         }
     }
 }
@@ -230,7 +237,7 @@ data class ResponseItemList(
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class InputMessageItem(
     val role: String? = null,
-    val content: Any? = null,
+    var content: Any? = null,
     var type: String = "message",
     val id: String? = null,
     val arguments: String? = null,
@@ -249,4 +256,31 @@ data class InputMessageItem(
             }
         }
     }
+
+    fun parseContent(objectMapper: ObjectMapper) {
+        if (content is String?) {
+            content = listOf(InputMessageItemContent(text = content?.toString(), type = "input_text"))
+        }
+        //check if content is json array
+        else if (content is List<*>?) {
+            content = objectMapper.convertValue(content, object : TypeReference<List<InputMessageItemContent>>() {})
+        }
+        else if (content is Map<*, *>?) {
+            content = objectMapper.convertValue(content, InputMessageItemContent::class.java)
+        }
+    }
 }
+
+data class InputMessageItemContent(
+    val text: String? = null,
+    val type: String,
+    @JsonProperty("image_url")
+    val imageUrl: String? = null,
+    val detail: String? = "auto",
+    @JsonProperty("file_id")
+    val fileId: String? = null,
+    @JsonProperty("file_data")
+    val fileData: String? = null,
+    @JsonProperty("filename")
+    val fileName: String? = null
+)

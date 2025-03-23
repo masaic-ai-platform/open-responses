@@ -1,5 +1,6 @@
 package com.masaic.openai.api.config
 
+import io.netty.buffer.PooledByteBufAllocator
 import io.netty.channel.ChannelOption
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
@@ -63,6 +64,15 @@ class ThreadPoolConfig : WebFluxConfigurer {
     @Value("\${app.http-client.write-timeout:30}")
     private val writeTimeoutSeconds: Int = 30
 
+    @Value("\${app.http-client.enable-tcp-no-delay:true}")
+    private val enableTcpNoDelay = true
+
+    @Value("\${app.http-client.enable-keep-alive:true}")
+    private val enableKeepAlive = true
+
+    @Value("\${app.http-client.enable-reuse-address:true}")
+    private val enableReuseAddress = true
+
     /**
      * Creates a task executor for background tasks.
      * This ensures that background operations don't interfere with request handling.
@@ -93,7 +103,10 @@ class ThreadPoolConfig : WebFluxConfigurer {
             override fun apply(httpServer: HttpServer): HttpServer {
                 return httpServer.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutSeconds * 1000)
                     .option(ChannelOption.SO_BACKLOG, 128)
-                    // Removed TCP_NODELAY as it's also not supported by this transport connector
+                    .option(ChannelOption.TCP_NODELAY, enableTcpNoDelay)
+                    .childOption(ChannelOption.SO_KEEPALIVE, enableKeepAlive)
+                    .option(ChannelOption.SO_REUSEADDR, enableReuseAddress)
+                    .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
             }
         }
         factory.addServerCustomizers(serverCustomizer)
