@@ -107,7 +107,7 @@ class MasaicParameterConverter {
                 when {
                     item.isEasyInputMessage() || item.isMessage() || item.isResponseOutputMessage() -> {
                         logger.trace { "Converting message item: ${item.javaClass.simpleName}" }
-                        convertInputMessages(item, completionBuilder)
+                        convertInputMessages(item, completionBuilder, params)
                     }
                     item.isFunctionCall() -> {
                         logger.trace { "Adding function call: ${item.asFunctionCall().name()}" }
@@ -117,6 +117,23 @@ class MasaicParameterConverter {
                         logger.trace { "Adding function call output for ID: ${item.asFunctionCallOutput().callId()}" }
                         addFunctionCallOutputMessage(item, completionBuilder)
                     }
+                }
+            }
+
+            if(params.instructions().isPresent){
+                val systemExists = inputItems.any {
+                    if (it.isEasyInputMessage()) {
+                        it.asEasyInputMessage().role().asString().lowercase() == "system"
+                    } else if (it.isResponseOutputMessage() && it.asResponseOutputMessage()._role().asString().isPresent) {
+                        it.asResponseOutputMessage()._role().asString().get() == "system"
+                    } else {
+                        it.asMessage().role().asString().lowercase() == "system"
+                    }
+                }
+                if(!systemExists){
+                    completionBuilder.addMessage(
+                        ChatCompletionSystemMessageParam.builder().content(params.instructions().get()).build()
+                    )
                 }
             }
 
@@ -394,7 +411,8 @@ class MasaicParameterConverter {
      */
     private fun convertInputMessages(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
     ) {
         val role = when {
             item.isEasyInputMessage() -> item.asEasyInputMessage().role()
@@ -405,8 +423,8 @@ class MasaicParameterConverter {
         when (role.toString().lowercase()) {
             "user" -> handleUserMessage(item, completionBuilder)
             "assistant" -> handleAssistantMessage(item, completionBuilder)
-            "system" -> handleSystemMessage(item, completionBuilder)
-            "developer" -> handleDeveloperMessage(item, completionBuilder)
+            "system" -> handleSystemMessage(item, completionBuilder, params)
+            "developer" -> handleDeveloperMessage(item, completionBuilder, params)
             "tool" -> handleToolMessage(item, completionBuilder)
         }
     }
@@ -496,15 +514,18 @@ class MasaicParameterConverter {
      */
     private fun handleSystemMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
     ) {
         if (item.isEasyInputMessage()) {
             val easyInputMessage = item.asEasyInputMessage()
+            val instructions = if(params.instructions().isPresent) params.instructions().get() else ""
             when {
                 easyInputMessage.content().isTextInput() -> {
                     completionBuilder.addMessage(
                         ChatCompletionSystemMessageParam.builder()
                             .content(
+                                if(instructions.isNotEmpty()) "$instructions\n${easyInputMessage.content().asTextInput()}"  else
                                 easyInputMessage.content().asTextInput()
                             ).build()
                     )
@@ -513,6 +534,8 @@ class MasaicParameterConverter {
                     completionBuilder.addMessage(
                         ChatCompletionSystemMessageParam.builder()
                             .content(
+                                if(instructions.isNotEmpty()) "$instructions\n${easyInputMessage.content().asResponseInputMessageContentList()
+                                    .first().asInputText().text()}"  else
                                 easyInputMessage.content().asResponseInputMessageContentList()
                                     .first().asInputText().text()
                             ).build()
@@ -530,7 +553,8 @@ class MasaicParameterConverter {
      */
     private fun handleDeveloperMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
+        params: ResponseCreateParams
     ) {
         if (item.isEasyInputMessage()) {
             val easyInputMessage = item.asEasyInputMessage()
