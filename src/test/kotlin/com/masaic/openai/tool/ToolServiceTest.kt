@@ -34,10 +34,14 @@ class ToolServiceTest {
     private val mcpToolRegistry = mockk<MCPToolRegistry>()
     private val mcpToolExecutor = mockk<MCPToolExecutor>()
     private val resourceLoader = mockk<ResourceLoader>()
+    private val nativeToolRegistry = mockk<NativeToolRegistry>()
+
 
     @BeforeEach
     fun setUp() {
-        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader)
+        toolService = ToolService(
+            mcpToolRegistry, mcpToolExecutor, resourceLoader,nativeToolRegistry
+        )
     }
 
     /**

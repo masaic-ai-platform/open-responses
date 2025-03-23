@@ -24,6 +24,7 @@ class MasaicParameterConverterTest {
         // Stub text-based input behavior
         every { input.isText() } returns true
         every { input.toString() } returns "Hello from user"
+        every { input.asText() } returns "Hello from user"
         every { params.input() } returns input
         every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
         every { params.temperature() } returns Optional.of(0.7)
@@ -72,6 +73,7 @@ class MasaicParameterConverterTest {
         )
 
         every { input.isText() } returns false
+        every { input.isResponse() } returns true
         every { input.asResponse() } returns messageList
         every { params.input() } returns input
         every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
