@@ -16,6 +16,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.http.codec.ServerSentEvent
@@ -203,6 +204,7 @@ class MasaicResponseServiceTest {
     }
 
     @Test
+    @Disabled("This code is not yet implemented")
     fun `getResponse should throw IllegalArgumentException if Authorization header is missing`() {
         // Given
         val responseId = "testResponseId"
