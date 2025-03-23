@@ -228,3 +228,52 @@ curl -X POST https://api.openai.com/v1/responses \
   "input": "Force tool call."
 }'
 ```
+
+# Request flow:
+
+```mermaid
+flowchart TD
+    subgraph "Developer Application"
+        A[API Request]
+        Z[Final Response]
+    end
+
+    subgraph "Responses API Interface"
+        B[Request Processor]
+        C[Parameter Mapping]
+        D[Response Formatter]
+    end
+    
+    subgraph "Chat Completions Processing"
+        E[Chat Model]
+        F[Tool Calls Detection]
+        G[Output Generation]
+    end
+    
+    subgraph "Platform Tool Execution"
+        H[Tool Execution Engine]
+        I[Hosted Tools]
+        J[Tool Results Processing]
+    end
+
+    A -->|"Sends request with:\n- input\n- instructions\n- model\n- parameters"| B
+    B -->|"Maps parameters"| C
+    C -->|"Transforms to:\n- messages\n- system instructions\n- model\n- parameters"| E
+    E -->|"Processes request"| F
+    
+    F -->|"No tool calls"| G
+    F -->|"Tool calls detected"| H
+    
+    H -->|"Executes hosted tools"| I
+    I -->|"Returns tool results"| J
+    J -->|"Adds tool results to conversation"| E
+    
+    G -->|"Returns:\n- choices[].message.content\n- usage\n- tool_calls"| D
+    D -->|"Transforms to:\n- output\n- status\n- usage\n- tool_calls"| Z
+
+    style A fill:#f9f,stroke:#333,stroke-width:2px
+    style E fill:#bbf,stroke:#333,stroke-width:2px
+    style G fill:#bfb,stroke:#333,stroke-width:2px
+    style I fill:#fbb,stroke:#333,stroke-width:2px
+    style Z fill:#f9f,stroke:#333,stroke-width:2px
+```
