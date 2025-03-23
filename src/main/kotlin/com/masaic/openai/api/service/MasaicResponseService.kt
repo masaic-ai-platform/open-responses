@@ -70,7 +70,7 @@ class MasaicResponseService(
 
     /**
      * Gets the trace ID from both headers and reactor context for proper tracing.
-     * 
+     *
      * @param headers HTTP headers
      * @return The trace ID or "unknown" if not found
      */
@@ -80,13 +80,13 @@ class MasaicResponseService(
         if (contextTraceId != null && contextTraceId != "unknown") {
             return contextTraceId
         }
-        
+
         // Fall back to headers if not in context
-        return headers.getFirst("X-B3-TraceId") 
-               ?: headers.getFirst("X-Trace-ID") 
+        return headers.getFirst("X-B3-TraceId")
+               ?: headers.getFirst("X-Trace-ID")
                ?: "unknown"
     }
-    
+
     /**
      * Retrieves trace ID from Reactor context if available
      */
@@ -116,7 +116,7 @@ class MasaicResponseService(
     ): Response {
         val traceId = getTraceId(headers)
         // Use safe accessor for model property
-        val model = try { 
+        val model = try {
             request.javaClass.getDeclaredField("model").let {
                 it.isAccessible = true
                 it.get(request)?.toString() ?: "unknown"
@@ -124,9 +124,9 @@ class MasaicResponseService(
         } catch (e: Exception) {
             "unknown"
         }
-        
+
         logger.info { "Creating response with traceId: $traceId, model: $model" }
-        
+
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
@@ -176,9 +176,9 @@ class MasaicResponseService(
         queryParams: MultiValueMap<String, String>
     ): Flow<ServerSentEvent<String>> {
         val traceId = getTraceId(headers)
-        
+
         // Use safe accessor for model property
-        val model = try { 
+        val model = try {
             request.javaClass.getDeclaredField("model").let {
                 it.isAccessible = true
                 it.get(request)?.toString() ?: "unknown"
@@ -186,9 +186,9 @@ class MasaicResponseService(
         } catch (e: Exception) {
             "unknown"
         }
-        
+
         logger.info { "Creating streaming response with traceId: $traceId, model: $model" }
-        
+
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
@@ -245,7 +245,7 @@ class MasaicResponseService(
     ): Response {
         val traceId = getTraceId(headers)
         logger.info { "Retrieving response with ID: $responseId, traceId: $traceId" }
-        
+
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
         
@@ -271,7 +271,7 @@ class MasaicResponseService(
     }
 
     /**
-     * Lists input items for a response. 
+     * Lists input items for a response.
      * This is a stub that will be implemented in the future.
      */
     fun listInputItems(responseId: String, validLimit: Int, validOrder: String, after: String?, before: String?): Any {
@@ -291,7 +291,7 @@ class MasaicResponseService(
                 try {
                     // Copy MDC values to this thread
                     com.masaic.openai.api.utils.MDCContext.copyToMDC()
-                    
+
                     val event = EventUtils.convertEvent(completion)
                     if (!trySend(event).isSuccess) {
                         logger.warn { "Failed to send streaming event to client" }
@@ -306,7 +306,7 @@ class MasaicResponseService(
                 try {
                     // Copy MDC values to this thread
                     com.masaic.openai.api.utils.MDCContext.copyToMDC()
-                    
+
                     subscription.onCompleteFuture().await()
                     logger.debug { "Streaming response completed successfully" }
                 } catch (e: Exception) {
@@ -320,7 +320,7 @@ class MasaicResponseService(
                 try {
                     // Copy MDC values to this thread
                     com.masaic.openai.api.utils.MDCContext.copyToMDC()
-                    
+
                     logger.debug { "Cancelling streaming subscription" }
                     subscription.onCompleteFuture().cancel(false)
                 } catch (e: Exception) {
@@ -402,12 +402,17 @@ class MasaicResponseService(
      *
      * @return The API base URL
      */
+//    private fun getApiBaseUrl(): String = System.getenv(OPENAI_API_BASE_URL_ENV) ?: DEFAULT_OPENAI_BASE_URL
     private fun getApiBaseUrl(headers: MultiValueMap<String, String>): String {
-        return when (headers.getFirst("x-model-provider")) {
-            "claude" -> "https://api.anthropic.com/v1"
-            "openAI" -> "https://api.openai.com/v1"
-            "groq" -> "https://api.groq.com/openai/v1"
-            else -> System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
+        return if (headers.getFirst("x-model-provider")?.lowercase() == "claude") {
+            "https://api.anthropic.com/v1"
+        } else if (headers.getFirst("x-model-provider")?.lowercase() == "openai") {
+            "https://api.openai.com/v1"
+        }
+        else if (headers.getFirst("x-model-provider") == "groq") {
+            "https://api.groq.com/openai/v1"
+        } else {
+            System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
         }
     }
 }
