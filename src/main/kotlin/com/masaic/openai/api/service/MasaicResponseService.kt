@@ -14,7 +14,7 @@ import com.openai.credential.BearerTokenCredential
 import com.openai.errors.OpenAIException
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
-import com.openai.models.responses.ResponseRetrieveParams
+import com.openai.models.responses.ResponseErrorEvent
 import com.openai.models.responses.ResponseStreamEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -207,11 +207,14 @@ class MasaicResponseService(
             // Add error handling to the flow
             .catch { error ->
                 logger.error(error) { "Error in streaming response - traceId: $traceId" }
-                val errorEvent = ServerSentEvent.builder<String>()
-                    .id("error")
-                    .event("error")
-                    .data("Error in streaming response: ${error.message}")
-                    .build()
+
+                val errorEvent = EventUtils.convertEvent(
+                    ResponseStreamEvent.ofError(
+                        ResponseErrorEvent.builder().message("Error in streaming response: ${error.message}").code(
+                            "stream_error"
+                        ).param("").build()
+                    )
+                )
                 emit(errorEvent) // Emit error event to the client
                 throw ResponseStreamingException("Error in streaming response: ${error.message}", error)
             }
@@ -250,7 +253,7 @@ class MasaicResponseService(
         val queryBuilder = createQueryParamsBuilder(queryParams)
         
         return try {
-            val client = OpenAIOkHttpClient.builder().apiKey(
+            /*val client = OpenAIOkHttpClient.builder().apiKey(
                 headers.getFirst("Authorization") ?: throw IllegalArgumentException("api-key is missing.")
             ).build()
 
@@ -260,7 +263,8 @@ class MasaicResponseService(
                     .additionalHeaders(headerBuilder.build())
                     .additionalQueryParams(queryBuilder.build())
                     .build()
-            )
+            )*/
+            throw NotImplementedError("Not implemented")
         } catch (e: Exception) {
             logger.error(e) { "Error retrieving response with ID: $responseId, traceId: $traceId" }
             when (e) {
@@ -290,7 +294,7 @@ class MasaicResponseService(
             val subscription = response.subscribe { completion ->
                 try {
                     // Copy MDC values to this thread
-                    com.masaic.openai.api.utils.MDCContext.copyToMDC()
+                    MDCContext.copyToMDC()
 
                     val event = EventUtils.convertEvent(completion)
                     if (!trySend(event).isSuccess) {
@@ -305,7 +309,7 @@ class MasaicResponseService(
             launch {
                 try {
                     // Copy MDC values to this thread
-                    com.masaic.openai.api.utils.MDCContext.copyToMDC()
+                    MDCContext.copyToMDC()
 
                     subscription.onCompleteFuture().await()
                     logger.debug { "Streaming response completed successfully" }
@@ -326,7 +330,7 @@ class MasaicResponseService(
                 } catch (e: Exception) {
                     logger.warn(e) { "Error cancelling streaming subscription" }
                 } finally {
-                    com.masaic.openai.api.utils.MDCContext.clear()
+                    MDCContext.clear()
                 }
             }
         }
