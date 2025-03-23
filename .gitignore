@@ -18,7 +18,8 @@ bin/
 !**/src/test/**/bin/
 
 ### IntelliJ IDEA ###
-*.log
+# Any kind of .log file should be ignored by git even in subdirectories
+**/*.log
 .idea
 *.iws
 *.iml
