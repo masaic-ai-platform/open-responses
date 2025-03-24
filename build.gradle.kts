@@ -6,7 +6,7 @@ plugins {
     kotlin("plugin.serialization") version "1.9.25"
 }
 
-group = "com.masaic"
+group = "ai.masaic"
 version = "0.0.1-SNAPSHOT"
 
 java {
