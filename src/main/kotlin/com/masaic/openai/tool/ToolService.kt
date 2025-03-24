@@ -123,8 +123,14 @@ class ToolService(
      */
     @PostConstruct
     fun loadTools() {
+        val mcpToolsEnabled = System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
+        if (mcpToolsEnabled) {
+            log.info("MCP tools are not enabled, skipping loading of MCP tools.")
+            return
+        }
+
         var filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
-        if(!filePath.startsWith("classpath:") && !filePath.startsWith("file:") && !filePath.startsWith("http")) {
+        if (!filePath.startsWith("classpath:") && !filePath.startsWith("file:") && !filePath.startsWith("http")) {
             filePath = "file:${filePath}"
         }
         val mcpServerConfigJson = try {

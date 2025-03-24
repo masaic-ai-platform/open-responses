@@ -1,7 +1,33 @@
-version: '3.8'
+version: '3.9'
+
 services:
+  # Flavor 1: Default service (runs when no profile is specified)
   open-responses:
-    image: jasbir34/open-responses:test-version
+    image: open-responses
+    ports:
+      - "8080:8080"
+    environment:
+      - GITHUB_TOKEN=GIT_PAT_TOKEN
+      - BRAVE_API_KEY=BRAVE_API_KEY
+
+  # Services used only in the MCP flavor.
+  mcp-github:
+    image: mcp/github
+    command: ["echo", "Pulled mcp/github image"]
+    restart: "no"
+    profiles:
+      - mcp
+
+  mcp-brave-search:
+    image: mcp/brave-search
+    command: ["echo", "Pulled mcp/brave-search image"]
+    restart: "no"
+    profiles:
+      - mcp
+
+  # Flavor 2: MCP service that includes extra configuration and depends on the above.
+  open-responses-mcp:
+    image: open-responses
     ports:
       - "8080:8080"
     volumes:
@@ -9,3 +35,9 @@ services:
     environment:
       - GITHUB_TOKEN=GIT_PAT_TOKEN
       - BRAVE_API_KEY=BRAVE_API_KEY
+      - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp-servers-config.json
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
