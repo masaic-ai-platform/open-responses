@@ -292,45 +292,37 @@ class MasaicResponseService(
     private fun streamOpenAiResponse(response: AsyncStreamResponse<ResponseStreamEvent>): Flow<ServerSentEvent<String>> =
         callbackFlow {
             val subscription = response.subscribe { completion ->
-                try {
-                    // Copy MDC values to this thread
-                    MDCContext.copyToMDC()
-
-                    val event = EventUtils.convertEvent(completion)
-                    if (!trySend(event).isSuccess) {
-                        logger.warn { "Failed to send streaming event to client" }
+                MDCContext.withMDCSync {
+                    try {
+                        val event = EventUtils.convertEvent(completion)
+                        if (!trySend(event).isSuccess) {
+                            logger.warn { "Failed to send streaming event to client" }
+                        }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error processing streaming event" }
                     }
-                } catch (e: Exception) {
-                    logger.error(e) { "Error processing streaming event" }
-                    // Do not close the flow here, let it continue with other events
                 }
             }
 
             launch {
-                try {
-                    // Copy MDC values to this thread
-                    MDCContext.copyToMDC()
-
-                    subscription.onCompleteFuture().await()
-                    logger.debug { "Streaming response completed successfully" }
-                } catch (e: Exception) {
-                    logger.error(e) { "Error in streaming response completion" }
-                } finally {
-                    close()
+                MDCContext.withMDC {
+                    try {
+                        subscription.onCompleteFuture().await()
+                        logger.debug { "Streaming response completed successfully" }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error in streaming response completion" }
+                    }
                 }
             }
 
             awaitClose {
-                try {
-                    // Copy MDC values to this thread
-                    MDCContext.copyToMDC()
-
-                    logger.debug { "Cancelling streaming subscription" }
-                    subscription.onCompleteFuture().cancel(false)
-                } catch (e: Exception) {
-                    logger.warn(e) { "Error cancelling streaming subscription" }
-                } finally {
-                    MDCContext.clear()
+                MDCContext.withMDCSync {
+                    try {
+                        logger.debug { "Cancelling streaming subscription" }
+                        subscription.onCompleteFuture().cancel(false)
+                    } catch (e: Exception) {
+                        logger.warn(e) { "Error cancelling streaming subscription" }
+                    }
                 }
             }
         }

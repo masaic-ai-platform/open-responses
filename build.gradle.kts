@@ -29,6 +29,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j")
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0")
     implementation("com.openai:openai-java:0.34.1")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
