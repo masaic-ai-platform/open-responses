@@ -514,12 +514,21 @@ class MasaicParameterConverter {
             }
         } else if (item.isResponseOutputMessage()) {
             item.asResponseOutputMessage().content().forEach {
-                val outputText = it.asOutputText().text()
-                completionBuilder.addMessage(
-                    ChatCompletionAssistantMessageParam.builder().content(
-                        ChatCompletionAssistantMessageParam.Content.ofText(outputText)
-                    ).build()
-                )
+                if(it.isOutputText()) {
+                    val outputText = it.asOutputText().text()
+                    completionBuilder.addMessage(
+                        ChatCompletionAssistantMessageParam.builder().content(
+                            ChatCompletionAssistantMessageParam.Content.ofText(outputText)
+                        ).build()
+                    )
+                } else if(it.isRefusal()){
+                    val refusalText = it.asRefusal().refusal()
+                    completionBuilder.addMessage(
+                        ChatCompletionAssistantMessageParam.builder().content(
+                            ChatCompletionAssistantMessageParam.Content.ofText(refusalText)
+                        ).build()
+                    )
+                }
             }
         }
     }
