@@ -126,9 +126,10 @@ class MasaicParameterConverter {
                         it.asEasyInputMessage().role().asString().lowercase() == "system"
                     } else if (it.isResponseOutputMessage() && it.asResponseOutputMessage()._role().asString().isPresent) {
                         it.asResponseOutputMessage()._role().asString().get() == "system"
-                    } else {
+                    } else if(it.isMessage()) {
                         it.asMessage().role().asString().lowercase() == "system"
                     }
+                    else false
                 }
                 if(!systemExists){
                     completionBuilder.addMessage(
