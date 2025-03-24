@@ -41,7 +41,7 @@ class MasaicParameterConverter {
             applyReasoningEffort(completionRequest, params)
 
             logger.trace { "Completion request created successfully" }
-            return completionRequest.build()
+            return completionRequest.build().validate()
         } catch (e: Exception) {
             logger.error(e) { "Error creating completion request: ${e.message}" }
             throw e
@@ -51,7 +51,7 @@ class MasaicParameterConverter {
     /**
      * Creates the base completion request with messages.
      *
-     * @param input The input from response parameters
+     * @param params The input from response parameters
      * @return Builder for ChatCompletionCreateParams with messages set
      */
     private fun createBaseCompletionRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
@@ -76,12 +76,12 @@ class MasaicParameterConverter {
      * @return Builder with a single user message
      */
     private fun createTextBasedRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
-
         val input = params.input().asText()
         logger.trace { "Converting text input to user message" }
-        val builder =  ChatCompletionCreateParams.builder()
+        val builder = ChatCompletionCreateParams.builder()
 
-        if(params.instructions().isPresent){
+        // For text-based requests, system message must come first if present
+        if(params.instructions().isPresent) {
             builder.addMessage(
                 ChatCompletionSystemMessageParam.builder().content(params.instructions().get()).build()
             )
@@ -102,7 +102,39 @@ class MasaicParameterConverter {
         val input = params.input()
         val inputItems = input.asResponse()
         logger.debug { "Processing ${inputItems.size} input messages" }
+
         val completionBuilder = ChatCompletionCreateParams.builder()
+
+        if(params.instructions().isPresent){
+            val systemExists = inputItems.any {
+                if (it.isEasyInputMessage()) {
+                    it.asEasyInputMessage().role().asString().lowercase() == "system" || it.asEasyInputMessage().role().asString().lowercase() == "developer"
+                } else if (it.isResponseOutputMessage() && it.asResponseOutputMessage()._role().asString().isPresent) {
+                    it.asResponseOutputMessage()._role().asString().get() == "system" || it.asResponseOutputMessage()._role().asString().get() == "developer"
+                } else if(it.isMessage()) {
+                    it.asMessage().role().asString().lowercase() == "system" || it.asMessage().role().asString().lowercase() == "developer"
+                }
+                else false
+            }
+            if(!systemExists){
+                completionBuilder.addSystemMessage(params.instructions().get())
+            }
+        }
+
+        // First validate that system/developer messages are at position 0
+        inputItems.forEachIndexed { index, item ->
+            val role = when {
+                item.isEasyInputMessage() -> item.asEasyInputMessage().role().asString().lowercase()
+                item.isResponseOutputMessage() -> item.asResponseOutputMessage()._role().asString().orElse("").lowercase()
+                else -> item.asMessage().role().asString().lowercase()
+            }
+            
+            if ((role == "system" || role == "developer") && index != 0) {
+                val errorMsg = "System or developer messages must be at position 0 in the messages array"
+                logger.error { errorMsg }
+                throw IllegalArgumentException(errorMsg)
+            }
+        }
 
         try {
             inputItems.forEach { item ->
@@ -119,24 +151,6 @@ class MasaicParameterConverter {
                         logger.trace { "Adding function call output for ID: ${item.asFunctionCallOutput().callId()}" }
                         addFunctionCallOutputMessage(item, completionBuilder)
                     }
-                }
-            }
-
-            if(params.instructions().isPresent){
-                val systemExists = inputItems.any {
-                    if (it.isEasyInputMessage()) {
-                        it.asEasyInputMessage().role().asString().lowercase() == "system"
-                    } else if (it.isResponseOutputMessage() && it.asResponseOutputMessage()._role().asString().isPresent) {
-                        it.asResponseOutputMessage()._role().asString().get() == "system"
-                    } else if(it.isMessage()) {
-                        it.asMessage().role().asString().lowercase() == "system"
-                    }
-                    else false
-                }
-                if(!systemExists){
-                    completionBuilder.addMessage(
-                        ChatCompletionSystemMessageParam.builder().content(params.instructions().get()).build()
-                    )
                 }
             }
 
@@ -687,4 +701,13 @@ class MasaicParameterConverter {
                 else -> throw IllegalArgumentException("Unsupported input type")
             }
         }
-} 
+}
+
+private fun ChatCompletionCreateParams.validate(): ChatCompletionCreateParams {
+    this.messages().forEachIndexed { index, value ->
+        if(index != 0 && (value.isSystem() || value.isDeveloper())){
+            throw IllegalArgumentException("Error processing response: System or developer messages must be at position 0 in the messages array")
+        }
+    }
+    return this
+}
