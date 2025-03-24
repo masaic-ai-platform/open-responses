@@ -1,0 +1,38 @@
+{
+  "name": "openresponses-api",
+  "description": "OpenResponses API",
+  "keywords": [
+    "kotlin",
+    "spring-boot",
+    "openai",
+    "webflux"
+  ],
+  "website": "https://github.com/masaic-ai-platform",
+  "repository": "https://github.com/masaic-ai-platform",
+  "success_url": "/swagger-ui.html",
+  "stack": "container",
+  "env": {
+    "JAVA_OPTS": {
+      "description": "Java runtime options",
+      "value": "-Xmx1024m"
+    }
+  },
+  "formation": [{
+    "web": {
+      "quantity": 1,
+      "size": "standard-1x"
+    }
+  }],
+  "buildpacks": [
+    {
+      "url": "heroku/jvm"
+    }
+  ],
+  "environments": {
+    "test": {
+      "scripts": {
+        "test": "./gradlew test"
+      }
+    }
+  }
+} 
