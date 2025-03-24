@@ -44,7 +44,7 @@ This guide provides a comprehensive mapping to help you use the Chat Completions
 | `usage`                               | `usage`                                          | Token usage statistics                    |
 | `tool_calls`                          | `choices[].message.tool_calls`                   | Tool calls in the response                |
 
-## Unsupported Properties
+## Masaic Layer Managed Properties
 
 When using Chat Completions API via Responses API, the following Responses API features have limited or no direct support:
 
@@ -228,6 +228,35 @@ curl -X POST https://api.openai.com/v1/responses \
   "input": "Force tool call."
 }'
 ```
+# Streaming Events
+
+| Responses API Event                   | Chat Completions API Equivalent                               | When Published |
+|---------------------------------------|---------------------------------------------------------------|----------------|
+| `response.created`                    | Initial chunk creation                                        | On request initiation |
+| `response.in_progress`                | Streaming chunks (`choices[].delta`)                          | As response streams |
+| `response.completed`                  | Final chunk with `finish_reason: stop`                        | Completion of response |
+| `response.failed`                     | HTTP error response                                           | On error occurrence |
+| `response.incomplete`                 | Final chunk with `finish_reason: length`                      | Token limit exceeded |
+| `response.output_item.added`          | Streaming chunks (`choices[].delta`)                          | As new items begin streaming |
+| `response.output_item.done`           | Final chunk completion (`finish_reason`)                      | Item streaming completion |
+| `response.content_part.added`         | Unsupported                                                   | As content parts start |
+| `response.content_part.done`          | Unsupported                                                   | Content streaming completed |
+| `response.output_text.delta`          | Partial streaming (`choices[].delta.content`)                 | Each incremental content piece |
+| `response.output_text.done`           | Final chunk (`choices[].message.content`)                     | Text content finalized |
+| `response.refusal.delta`              | Coming Soon                                                   | Incremental refusal text |
+| `response.refusal.done`               | Coming Soon                                                   | Refusal text finalized |
+| `response.function_call_arguments.delta` | Partial function call arguments streaming (`choices[].delta`) | Partial function arguments |
+| `response.function_call_arguments.done`  | Final function arguments chunk                                | Function call arguments finalized |
+| `response.file_search_call.*`         | Managed as tool calls                                         | File search lifecycle |
+| `response.web_search_call.*`          | Managed as tool calls                                         | Web search lifecycle |
+
+### Masaic Layer Managed Properties
+
+- `incomplete_details`
+- Explicit `instructions` echoed in response
+- `metadata` echoed in response (must manage separately)
+- `reasoning.generate_summary`
+- Explicit `previous_response_id` handling (must be manually managed)
 
 # Request flow:
 
