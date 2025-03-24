@@ -6,15 +6,15 @@ FROM amazoncorretto:21
 
 WORKDIR /app
 
-# Copy the built JAR and config
+# Copy the built JAR and configuration file into the image
 COPY build/libs/openai-0.0.1-SNAPSHOT.jar /app/openai-0.0.1-SNAPSHOT.jar
 COPY src/main/resources/mcp-servers-config.json /app/mcp-servers-config.json
 
 # Copy the Docker CLI from the previous stage
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
-# (Optional) Make sure docker is executable
+# Ensure docker is executable
 RUN chmod +x /usr/local/bin/docker
 
-# Set the entry point
+# Start the Java application directly
 ENTRYPOINT ["java", "-jar", "/app/openai-0.0.1-SNAPSHOT.jar"]

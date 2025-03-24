@@ -8,6 +8,8 @@ import com.masaic.openai.api.model.CreateResponseRequest
 import com.masaic.openai.api.model.MasaicManagedTool
 import com.masaic.openai.api.service.MasaicResponseService
 import com.masaic.openai.api.service.ResponseNotFoundException
+import com.masaic.openai.api.utils.CoroutineMDCContext
+import com.masaic.openai.api.utils.MDCContext
 import com.masaic.openai.tool.ToolService
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
@@ -18,6 +20,7 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -25,6 +28,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import org.springframework.web.server.ServerWebExchange
 
 @RestController
 @RequestMapping("/v1")
@@ -49,35 +53,45 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
     suspend fun createResponse(
         @RequestBody request: CreateResponseRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
-        @RequestParam queryParams: MultiValueMap<String, String>
+        @RequestParam queryParams: MultiValueMap<String, String>,
+        exchange: ServerWebExchange
     ): ResponseEntity<*> {
-        updateMasaicManagedTools(request)
-        request.parseInput(mapper)
-        val requestBodyJson = mapper.writeValueAsString(request)
-        log.debug("Request body: $requestBodyJson")
-
-        // If streaming is requested, set the appropriate content type and return a flow
-        if (request.stream == true) {
-            return ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
-                .body(
-                    masaicResponseService.createStreamingResponse(
-                        mapper.readValue(requestBodyJson,
-                            ResponseCreateParams.Body::class.java
-                        ), headers, queryParams
+        // Extract trace ID from exchange
+        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
+        
+        // Use our custom coroutine-aware MDC context
+        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
+            // Store in our custom context for non-coroutine threads (e.g. streaming handlers)
+            MDCContext.put("traceId", traceId)
+            
+            updateMasaicManagedTools(request)
+            request.parseInput(mapper)
+            val requestBodyJson = mapper.writeValueAsString(request)
+            log.debug("Request body: $requestBodyJson")
+    
+            // If streaming is requested, set the appropriate content type and return a flow
+            if (request.stream == true) {
+                ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
+                    .body(
+                        masaicResponseService.createStreamingResponse(
+                            mapper.readValue(requestBodyJson,
+                                ResponseCreateParams.Body::class.java
+                            ), headers, queryParams
+                        )
                     )
+            } else {
+                // For non-streaming, return a regular response
+                val responseObj = masaicResponseService.createResponse(
+                    mapper.readValue(
+                        requestBodyJson,
+                        ResponseCreateParams.Body::class.java
+                    ), headers, queryParams
                 )
+    
+                log.debug("Response Body: $responseObj")
+                ResponseEntity.ok(updateMasaicManagedTools(responseObj))
+            }
         }
-
-        // For non-streaming, return a regular response
-        val responseObj = masaicResponseService.createResponse(
-            mapper.readValue(
-                requestBodyJson,
-                ResponseCreateParams.Body::class.java
-            ), headers, queryParams
-        )
-
-        log.debug("Response Body: $responseObj")
-        return ResponseEntity.ok(updateMasaicManagedTools(responseObj))
     }
 
     @GetMapping("/responses/{responseId}", produces = [MediaType.APPLICATION_JSON_VALUE])
@@ -96,16 +110,26 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
             )
         ]
     )
-    fun getResponse(
+    suspend fun getResponse(
         @Parameter(description = "The ID of the response to retrieve", required = true)
         @PathVariable responseId: String,
         @RequestHeader headers: MultiValueMap<String, String>,
-        @RequestParam queryParams: MultiValueMap<String, String>
+        @RequestParam queryParams: MultiValueMap<String, String>,
+        exchange: ServerWebExchange
     ): ResponseEntity<Response> {
-        return try {
-            ResponseEntity.ok(masaicResponseService.getResponse(responseId, headers, queryParams))
-        } catch (e: ResponseNotFoundException) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
+        // Extract trace ID from exchange
+        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
+        
+        // Use our custom coroutine-aware MDC context
+        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
+            // Store in our custom context for non-coroutine threads
+            MDCContext.put("traceId", traceId)
+            
+            try {
+                ResponseEntity.ok(masaicResponseService.getResponse(responseId, headers, queryParams))
+            } catch (e: ResponseNotFoundException) {
+                throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
+            }
         }
     }
 

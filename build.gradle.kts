@@ -24,6 +24,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("org.springframework.boot:spring-boot-starter-aop")
     implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
@@ -32,8 +33,18 @@ dependencies {
     implementation("com.openai:openai-java:0.34.1")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+    
+    implementation("io.micrometer:micrometer-tracing-bridge-brave:1.2.3")
+    implementation("io.micrometer:micrometer-registry-prometheus:1.12.4")
+    implementation("io.micrometer:micrometer-observation:1.12.4")
+    implementation("io.micrometer:micrometer-core:1.12.4")
+    implementation("io.zipkin.reporter2:zipkin-reporter-brave:2.16.4")
+    implementation("net.logstash.logback:logstash-logback-encoder:7.4")
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("com.ninja-squad:springmockk:4.0.2")
+    testImplementation("io.mockk:mockk:1.13.17")
     implementation("io.projectreactor:reactor-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 
@@ -47,4 +58,5 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    jvmArgs("--add-opens", "java.base/java.util=ALL-UNNAMED")
 }

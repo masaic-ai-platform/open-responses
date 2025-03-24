@@ -1,0 +1,67 @@
+version: '3.9'
+
+services:
+  # Flavor 1: Default service (runs when no profile is specified)
+  open-responses:
+    image: jasbir34/open-responses:test-version
+    ports:
+      - "8080:8080"
+    environment:
+      - TOOLS_MCP_ENABLED=false
+  # Services used only in the MCP flavor.
+  mcp-github:
+    image: mcp/github
+    command: ["echo", "Pulled mcp/github image"]
+    restart: "no"
+    profiles:
+      - mcp
+
+  mcp-brave-search:
+    image: mcp/brave-search
+    command: ["echo", "Pulled mcp/brave-search image"]
+    restart: "no"
+    profiles:
+      - mcp
+
+  # Flavor 2: MCP service that includes extra configuration and depends on the above.
+  open-responses-mcp:
+    image: jasbir34/open-responses:test-version
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
+
+  # Flavor 3: MCP service that includes extra configuration and custom path for mcp config json.
+  open-responses-custom-mcp:
+    image: jasbir34/open-responses:test-version
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp_server_config.json
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
+
+  # Flavor 4: Run with openai-agent SDK settings.
+  open-responses-with-openai:
+    image: jasbir34/open-responses:test-version
+    ports:
+      - "8080:8080"
+    environment:
+      - TOOLS_MCP_ENABLED=false
+      - MODEL_BASE_URL=${MODEL_BASE_URL}

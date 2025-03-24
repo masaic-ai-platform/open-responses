@@ -1,10 +1,32 @@
 {
   "mcpServers": {
-    "@modelcontextprotocol/google-maps": {
-      "url": "https://router.mcp.so/sse/3d9p0fm8ipcrxs"
+    "github": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "GITHUB_PERSONAL_ACCESS_TOKEN",
+        "mcp/github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "GITHUB_TOKEN"
+      }
     },
-    "@modelcontextprotocol/brave-search": {
-      "url": "https://router.mcp.so/sse/oxxkd3m8ip5cmy"
+    "brave-search": {
+      "command": "docker",
+      "args": [
+        "run",
+        "-i",
+        "--rm",
+        "-e",
+        "BRAVE_API_KEY",
+        "mcp/brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "BRAVE_API_KEY"
+      }
     }
   }
 }

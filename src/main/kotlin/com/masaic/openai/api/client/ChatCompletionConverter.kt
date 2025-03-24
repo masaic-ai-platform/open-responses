@@ -390,12 +390,18 @@ object ChatCompletionConverter {
      * @return A ResponseUsage object with equivalent data
      */
     private fun convertUsage(completionUsage: CompletionUsage): ResponseUsage {
-        return ResponseUsage.builder()
+        val builder =  ResponseUsage.builder()
             .inputTokens(completionUsage.promptTokens().toLong())
             .outputTokens(completionUsage.completionTokens().toLong())
             .totalTokens(completionUsage.totalTokens().toLong())
-            .outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(0).build())
-            .build()
+
+        if(completionUsage.completionTokensDetails().isPresent && completionUsage.completionTokensDetails().get().reasoningTokens().isPresent){
+            builder.outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(completionUsage.completionTokensDetails().get().reasoningTokens().get()).build())
+        }
+        else {
+            builder.outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(0).build())
+        }
+        return builder.build()
     }
 }
 

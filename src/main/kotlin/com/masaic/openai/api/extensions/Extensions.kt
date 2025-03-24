@@ -2,23 +2,38 @@ package com.masaic.openai.api.extensions
 
 import com.openai.models.responses.ResponseCreateParams
 
+/**
+ * Extension function to copy properties from a ResponseCreateParams.Body to a ResponseCreateParams.Builder.
+ * This helps simplify the process of creating request parameters from request bodies.
+ * 
+ * @param body The request body to copy properties from
+ * @return The builder with properties copied from the body
+ */
 fun ResponseCreateParams.Builder.fromBody(body: ResponseCreateParams.Body): ResponseCreateParams.Builder {
-    this.input(body.input())
-    this.model(body.model())
-    this.instructions(body.instructions())
-    this.reasoning(body.reasoning())
-    this.additionalBodyProperties(body._additionalProperties())
-    this.parallelToolCalls(body.parallelToolCalls())
-    this.maxOutputTokens(body.maxOutputTokens())
-    this.include(body.include())
-    this.metadata(body.metadata())
-    this.store(body.store())
-    this.temperature(body.temperature())
-    this.topP(body.topP())
-    this.truncation(body.truncation())
-    body.text().ifPresent { this.text(it) }
-    body.user().ifPresent { this.user(it) }
-    body.toolChoice().ifPresent { this.toolChoice(it) }
-    body.tools().ifPresent { this.tools(it) }
+    // Set required parameters
+    input(body.input())
+    model(body.model())
+    
+    // Set optional parameters
+    instructions(body.instructions())
+    reasoning(body.reasoning())
+    parallelToolCalls(body.parallelToolCalls())
+    maxOutputTokens(body.maxOutputTokens())
+    include(body.include())
+    metadata(body.metadata())
+    store(body.store())
+    temperature(body.temperature())
+    topP(body.topP())
+    truncation(body.truncation())
+    
+    // Set additional properties
+    additionalBodyProperties(body._additionalProperties())
+    
+    // Set optional parameters that use Optional
+    body.text().ifPresent { text(it) }
+    body.user().ifPresent { user(it) }
+    body.toolChoice().ifPresent { toolChoice(it) }
+    body.tools().ifPresent { tools(it) }
+    
     return this
 }
