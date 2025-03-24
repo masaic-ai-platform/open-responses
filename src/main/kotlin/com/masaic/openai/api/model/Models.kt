@@ -11,6 +11,7 @@ import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.Metadata
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputContent
+import com.openai.models.responses.ResponseOutputText
 
 /**
  * Represents the reasoning information for a response.
@@ -282,5 +283,6 @@ data class InputMessageItemContent(
     @JsonProperty("file_data")
     val fileData: String? = null,
     @JsonProperty("filename")
-    val fileName: String? = null
+    val fileName: String? = null,
+    val annotations: ResponseOutputText.Annotation?=null
 )
