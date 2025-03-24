@@ -56,3 +56,12 @@ services:
       - mcp-brave-search
     profiles:
       - mcp
+
+  # Flavor 4: Run with openai-agent SDK settings.
+  open-responses-with-openai:
+    image: jasbir34/open-responses:test-version
+    ports:
+      - "8080:8080"
+    environment:
+      - TOOLS_MCP_ENABLED=false
+      - MODEL_BASE_URL=${MODEL_BASE_URL}
