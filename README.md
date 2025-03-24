@@ -12,7 +12,7 @@
 
 ## 🌟 Overview
 
-OpenResponses API empowers developers to leverage the incredible capabilities of various LLM providers through a familiar interface - the OpenAI API structure. This compatibility layer bridges the gap between different LLM providers and applications built for OpenAI's completion API.
+OpenResponses API empowers developers to leverage the incredible capabilities of various LLM providers through a familiar interface - the OpenAI Responses API structure. This compatibility layer bridges the gap between different LLM providers and applications built for OpenAI's completion API.
 
 > **"Simplicity is the ultimate sophistication."** — Leonardo da Vinci
 
@@ -21,6 +21,20 @@ With OpenResponses API, you can:
 - 🛠️ Easily swap between models without changing your application code
 - 🚀 Leverage the full power of each provider's unique features
 - 🧩 Build with a standardized API that works across the AI ecosystem
+
+## 🤔 Why OpenResponses?
+
+### One Interface, Multiple Providers
+Stop maintaining different codebases for each LLM provider. With OpenResponses, implement once and access multiple models through a standardized interface.
+
+### Cost Optimization
+Easily switch between models to optimize for cost, performance, or features - with just a parameter change.
+
+### Risk Mitigation
+Eliminate vendor lock-in by having the flexibility to switch providers when needed without code changes.
+
+### Extended Capabilities
+Access unique features like streaming responses, function calling, and tool use with standardized implementation patterns.
 
 ## ✨ API Endpoints
 
@@ -103,6 +117,21 @@ curl --location 'http://localhost:8080/v1/responses' \
 }'
 ```
 
+## 📊 Provider Comparison
+
+| Feature          | OpenAI  | Claude | Groq | OpenResponses             |
+|------------------|---------|--------|------|---------------------------|
+| Streaming        | ✅       | ✅ | ✅ | ✅                         |
+| Function Calling | ✅       | ✅ | ✅ | ✅                         |
+| Max Context      | 128K    | 200K | 128K | Model dependent           |
+| Hosted RAG       | ✅       | ❌ | ❌ | Coming Soon               |
+| Hosted Tools     | Limited |   ❌     |   ❌   | MCP,In-built, BYOT etc    |
+| Inbuilt Tracing  | Limited |   ❌     |   ❌   | Comprehensive Coming Soon |
+
+
+
+*All features accessible through the unified OpenResponses API*
+
 ## 🛠️ Advanced Features
 
 ### Built-in Tools Support
@@ -134,6 +163,61 @@ curl --location 'http://localhost:8080/v1/responses' \
         }
     ]
 }'
+```
+
+### Detailed Tools Documentation
+
+#### Brave Web Search
+Enable real-time internet searches in your AI responses:
+
+```python
+payload = {
+    "model": "gpt-4o",
+    "tools": [{"type": "brave_web_search"}],
+    "input": [
+        {
+            "role": "user",
+            "content": "What are the latest AI conferences happening next month?"
+        }
+    ]
+}
+```
+
+#### GitHub Repository Search
+Incorporate code and repository information:
+
+```python
+payload = {
+    "model": "claude-3-opus-20240229",
+    "tools": [{"type": "github_search"}],
+    "input": [
+        {
+            "role": "user",
+            "content": "Find examples of React hooks in popular repositories"
+        }
+    ]
+}
+```
+
+## ❓ Frequently Asked Questions
+
+### Can I use my existing provider API keys?
+Yes! OpenResponses acts as a pass-through to the provider APIs using your own keys.
+
+### Is there any performance penalty?
+Our benchmarks show minimal overhead (30-50ms) compared to direct API calls.
+
+### How do I handle errors?
+OpenResponses standardizes error responses across providers:
+```json
+{
+  "error": {
+    "type": "rate_limit_exceeded",
+    "message": "Rate limit exceeded. Please try again in 30 seconds.",
+    "param": null,
+    "code": "rate_limit"
+  }
+}
 ```
 
 ## ⚙️ Configuration
