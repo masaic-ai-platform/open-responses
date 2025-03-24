@@ -1,12 +1,14 @@
 package com.masaic.openai.api.client
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.masaic.openai.api.service.ResponseProcessingException
 import com.openai.models.FunctionDefinition
 import com.openai.models.ReasoningEffort
 import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.core.JsonValue
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 
@@ -488,13 +490,28 @@ class MasaicParameterConverter {
         completionBuilder: ChatCompletionCreateParams.Builder
     ) {
         if (item.isEasyInputMessage()) {
-            completionBuilder.addMessage(
-                ChatCompletionAssistantMessageParam.builder().content(
-                    ChatCompletionAssistantMessageParam.Content.ofText(
-                        item.asEasyInputMessage().content().asTextInput()
-                    )
-                ).build()
-            )
+            if(item.asEasyInputMessage().content().isTextInput()) {
+                completionBuilder.addMessage(
+                    ChatCompletionAssistantMessageParam.builder().content(
+                        ChatCompletionAssistantMessageParam.Content.ofText(
+                            item.asEasyInputMessage().content().asTextInput()
+                        )
+                    ).build()
+                )
+            } else if(item.asEasyInputMessage().content().isResponseInputMessageContentList()){
+                val inputs = item.asEasyInputMessage().content().asResponseInputMessageContentList()
+
+                val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> = inputs.map {
+                    if(it.isInputText()){
+                                ChatCompletionRequestAssistantMessageContentPart.ofText(
+                                    ChatCompletionContentPartText.builder().text(it.asInputText().text()).build()
+                                )
+                    }
+                    else throw ResponseProcessingException("Assistant message other than text is not supported.")
+                }
+
+                completionBuilder.addMessage(ChatCompletionAssistantMessageParam.builder().contentOfArrayOfContentParts(assistantMessages).build())
+            }
         } else if (item.isResponseOutputMessage()) {
             item.asResponseOutputMessage().content().forEach {
                 val outputText = it.asOutputText().text()
