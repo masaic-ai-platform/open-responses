@@ -36,31 +36,31 @@ class ThreadPoolConfig : WebFluxConfigurer {
 
     @Value("\${server.port:8080}")
     private val serverPort: Int = 8080
-    
+
     @Value("\${app.thread-pool.core-size:10}")
     private val corePoolSize: Int = 10
-    
+
     @Value("\${app.thread-pool.max-size:50}")
     private val maxPoolSize: Int = 50
-    
+
     @Value("\${app.thread-pool.queue-capacity:100}")
     private val queueCapacity: Int = 100
-    
+
     @Value("\${app.connection-pool.max-connections:500}")
     private val maxConnections: Int = 500
-    
+
     @Value("\${app.connection-pool.max-idle-time:30}")
     private val maxIdleTimeSeconds: Long = 30
-    
+
     @Value("\${app.connection-pool.max-life-time:60}")
     private val maxLifeTimeSeconds: Long = 60
-    
+
     @Value("\${app.http-client.connect-timeout:5}")
     private val connectTimeoutSeconds: Int = 5
-    
+
     @Value("\${app.http-client.read-timeout:30}")
     private val readTimeoutSeconds: Int = 30
-    
+
     @Value("\${app.http-client.write-timeout:30}")
     private val writeTimeoutSeconds: Int = 30
 
@@ -68,7 +68,7 @@ class ThreadPoolConfig : WebFluxConfigurer {
     private val enableTcpNoDelay = true
 
     @Value("\${app.http-client.enable-keep-alive:true}")
-    private val enableKeepAlive = true
+    private val enableKeepAlive = false
 
     @Value("\${app.http-client.enable-reuse-address:true}")
     private val enableReuseAddress = true

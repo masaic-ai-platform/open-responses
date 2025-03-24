@@ -120,21 +120,6 @@ class MasaicStreamingService(
                     if (!inProgressFired) {
                         trySend(
                             EventUtils.convertEvent(
-                                ResponseStreamEvent.ofCreated(
-                                    ResponseCreatedEvent.builder()
-                                        .response(
-                                            ChatCompletionConverter.buildIntermediateResponse(
-                                                params,
-                                                ResponseStatus.IN_PROGRESS,
-                                                responseId
-                                            )
-                                        )
-                                        .build()
-                                )
-                            )
-                        )
-                        trySend(
-                            EventUtils.convertEvent(
                                 ResponseStreamEvent.ofInProgress(
                                     ResponseInProgressEvent.builder()
                                         .response(
@@ -147,7 +132,7 @@ class MasaicStreamingService(
                                         .build()
                                 )
                             )
-                        )
+                        ).isSuccess
                         inProgressFired = true
                     }
 
