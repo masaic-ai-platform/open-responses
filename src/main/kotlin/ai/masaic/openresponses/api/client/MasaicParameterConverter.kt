@@ -126,7 +126,8 @@ class MasaicParameterConverter {
             val role = when {
                 item.isEasyInputMessage() -> item.asEasyInputMessage().role().asString().lowercase()
                 item.isResponseOutputMessage() -> item.asResponseOutputMessage()._role().asString().orElse("").lowercase()
-                else -> item.asMessage().role().asString().lowercase()
+                item.isMessage() -> item.asMessage().role().asString().lowercase()
+                else -> ""
             }
             
             if ((role == "system" || role == "developer") && index != 0) {
