@@ -124,7 +124,7 @@ class ToolService(
     @PostConstruct
     fun loadTools() {
         val mcpToolsEnabled = System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
-        if (mcpToolsEnabled) {
+        if (!mcpToolsEnabled) {
             log.info("MCP tools are not enabled, skipping loading of MCP tools.")
             return
         }

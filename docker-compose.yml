@@ -7,9 +7,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - GITHUB_TOKEN=GIT_PAT_TOKEN
-      - BRAVE_API_KEY=BRAVE_API_KEY
-
+      - TOOLS_MCP_ENABLED=false
   # Services used only in the MCP flavor.
   mcp-github:
     image: mcp/github
@@ -33,9 +31,26 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
-      - GITHUB_TOKEN=GIT_PAT_TOKEN
-      - BRAVE_API_KEY=BRAVE_API_KEY
-      - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp-servers-config.json
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
+
+  # Flavor 3: MCP service that includes extra configuration and custom path for mcp config json.
+  open-responses-custom-mcp:
+    image: open-responses
+    ports:
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp_server_config.json
     depends_on:
       - mcp-github
       - mcp-brave-search
