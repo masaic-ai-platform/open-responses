@@ -10,6 +10,8 @@
   <em>"One API to rule them all, one API to find them, one API to bring them all, and in the cloud bind them."</em>
 </p>
 
+> ⚠️ **Alpha Release Disclaimer**: This project is currently in alpha stage. The API and features are subject to breaking changes as we continue to evolve and improve the platform. While we strive to maintain stability, please be aware that updates may require modifications to your integration code.
+
 ## 🌟 Overview
 
 OpenResponses API empowers developers to leverage the incredible capabilities of various LLM providers through a familiar interface - the OpenAI Responses API structure. This compatibility layer bridges the gap between different LLM providers and applications built for OpenAI's completion API.
