@@ -199,6 +199,20 @@ payload = {
 }
 ```
 
+## 🔮 Coming Soon
+
+We're continuously working to enhance OpenResponses API with powerful new features:
+
+### Curated Model Sets
+- ⚖️ Automatic load balancing across multiple models and providers
+- 💰 Intelligent routing based on cost, performance, and availability
+- 🎯 Fallback mechanisms for improved reliability
+
+### Enhanced Enterprise Features
+- 📊 Advanced analytics and usage dashboards
+- 🤖 API playground
+- 🧪 A/B testing framework for model performance comparison
+
 ## ❓ Frequently Asked Questions
 
 ### Can I use my existing provider API keys?
