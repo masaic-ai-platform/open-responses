@@ -1,14 +1,28 @@
 # Quick Start Guide
 
-Follow this guide to run the service in under 5 minutes. The setup flow is as follows:
+Follow this guide to run the service in under 5 minutes using one of the following flows:
 
-1. Quick setup without any additional tool overhead.
-2. Start Docker with built-in tools.
-3. Start Docker with a custom MCP configuration.
+1. Getting Started (Clone repo and quick setup without additional tool overhead)
+2. Starting Docker with Built-In Tools
+3. Starting Docker with a Custom MCP Configuration
+4. Starting Docker with Custom MCP Configuration
+5. Running example scripts with the openai-agent-python SDK
 
 ---
 
-## 1. Quick Setup
+## 1. Getting Started
+
+### Clone the Repository and Navigate to the Project Directory
+
+Begin by cloning the repository and entering its directory:
+
+```bash
+git clone https://github.com/masaic-ai-platform/api-draft.git
+cd api-draft
+```
+---
+
+## 2. Quick Setup
 
 ### Pre-requisites
 
@@ -87,7 +101,7 @@ curl --location 'http://localhost:8080/v1/responses' \
 
 ---
 
-## 2. Start Docker with Built-In Tools
+## 3. Start Docker with Built-In Tools
 
 ### Update Prerequisites for Built-In Tools
 
@@ -190,7 +204,7 @@ curl --location 'http://localhost:8080/v1/responses' \
 
 ---
 
-## 3. Start Docker with Custom MCP Configuration
+## 4. Start Docker with Custom MCP Configuration
 
 If you have your own MCP servers configuration, follow these steps:
 
@@ -210,12 +224,42 @@ Start the service using:
 docker-compose --profile mcp up open-responses-custom-mcp
 ```
 
+
+## 5. Running Example Scripts with the openai-agent-python SDK
+
+You can run examples provided by the openai-agent-python SDK using your locally deployed open-responses API.
+
+### Steps to Run openai-agent-python Examples
+
+1. Start the service using:
+```bash
+docker-compose up open-responses-with-openai
+```
+
+2. Clone the Forked Repository:
+
+   Start by cloning the repository from the forked version available at [this link](https://github.com/masaic-ai-platform/openai-agents-python/tree/main). Once the repository is cloned, switch to the project's directory using:
+
+```bash
+   git clone https://github.com/masaic-ai-platform/openai-agents-python.git
+   cd openai-agents-python
+```
+
+2. Configure the SDK in Your Python Script:
+
+   To set up the connection details for the SDK, follow these steps:
+
+   • Define the environment variable OPENAI_API_KEY with your OpenAI API key. You can set this in your system environment or directly in [config.py]("https://github.com/masaic-ai-platform/openai-agents-python/blob/main/examples/config.py").
+
+   • Define the environment variable OPEN_RESPONSES_URL to specify the URL for your local open-responses API. If this variable is not set, it will default to "http://localhost:8080/v1".
+
+   • Ensure that these environment variables are properly recognized by your script so that the SDK can initialize the default OpenAI client.
+
+3. Run the Examples:
+
+   Head over to the [examples directory](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples) within the repository. Select and run any example script of your choice. Please note that all examples should work as expected except for the [research_bot example](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples/research_bot)
+because agent uses OpenAI's proprietary WebSearchTool.
+
 ---
-
-This guide covers all three flows:
-
-1. Quick setup without additional tool overhead.
-2. Running with built-in MCP tools.
-3. Running with a custom MCP configuration.
 
 Happy coding!
