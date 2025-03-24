@@ -6,7 +6,7 @@ plugins {
     kotlin("plugin.serialization") version "1.9.25"
 }
 
-group = "com.masaic"
+group = "ai.masaic"
 version = "0.0.1-SNAPSHOT"
 
 java {
@@ -29,6 +29,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j")
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0")
     implementation("com.openai:openai-java:0.34.1")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
