@@ -7,6 +7,7 @@ Follow this guide to run the service in under 5 minutes using one of the followi
 3. Starting Docker with a Custom MCP Configuration
 4. Starting Docker with Custom MCP Configuration
 5. Running example scripts with the openai-agent-python SDK
+6. Running Agent Examples Built with OpenAI Agent SDK To Use Open Responses API Built In Tools
 
 ---
 
@@ -121,7 +122,7 @@ BRAVE_API_KEY=your_brave_key_value
 
 ### Run the Service with MCP Tools Enabled
 
-Start the service with the built-in MCP tools using:
+Start the service with the built-in MCP tools using: (docker-compose for mac)
 
 ```bash
 docker-compose --profile mcp up open-responses-mcp
@@ -218,7 +219,7 @@ MCP_CONFIG_FILE_PATH=path_to_mcp_config_file
 
 ### Run the Service with the Custom MCP Configuration
 
-Start the service using:
+Start the service using: (docker-compose for mac)
 
 ```bash
 docker-compose --profile mcp up open-responses-custom-mcp
@@ -261,7 +262,7 @@ docker-compose up open-responses-with-openai
 
    • Head over to the [examples directory](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples) within the repository. Select and run any example script of your choice. Please note that all examples should work as expected except for the [research_bot example](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples/research_bot) because agent uses OpenAI's proprietary WebSearchTool.
 
-## 6. Running Agent Examples with OpenAI Agent SDK
+## 6. Running Agent Examples Built with OpenAI Agent SDK To Use Open Responses API Built In Tools
 
 Before running any example, ensure you are in the openai-agents-python folder.
 
