@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test
 import java.util.Optional
 
 class MasaicParameterConverterTest {
-
     /**
      * Test for text-based input.
      */
@@ -48,7 +47,16 @@ class MasaicParameterConverterTest {
         // If messages exist, check the user message
         assertTrue(result.messages().isNotEmpty())
         assert(result.messages().first().isUser())
-        assertEquals("Hello from user", result.messages().first().asUser().content().text().get())
+        assertEquals(
+            "Hello from user",
+            result
+                .messages()
+                .first()
+                .asUser()
+                .content()
+                .text()
+                .get(),
+        )
     }
 
     /**
@@ -62,20 +70,21 @@ class MasaicParameterConverterTest {
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
 
         // Suppose we have message-based input
-        val messageList = listOf<ResponseInputItem>(
-            mockk {
-                every { isEasyInputMessage() } returns true
-                every { asEasyInputMessage().role() } returns EasyInputMessage.Role.USER
-                every { asEasyInputMessage().content().isTextInput() } returns true
-                every { asEasyInputMessage().content().asTextInput() } returns "User says hello"
-            },
-            mockk {
-                every { isEasyInputMessage() } returns true
-                every { asEasyInputMessage().role() } returns EasyInputMessage.Role.ASSISTANT
-                every { asEasyInputMessage().content().isTextInput() } returns true
-                every { asEasyInputMessage().content().asTextInput() } returns "Assistant replies"
-            }
-        )
+        val messageList =
+            listOf<ResponseInputItem>(
+                mockk {
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage().role() } returns EasyInputMessage.Role.USER
+                    every { asEasyInputMessage().content().isTextInput() } returns true
+                    every { asEasyInputMessage().content().asTextInput() } returns "User says hello"
+                },
+                mockk {
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage().role() } returns EasyInputMessage.Role.ASSISTANT
+                    every { asEasyInputMessage().content().isTextInput() } returns true
+                    every { asEasyInputMessage().content().asTextInput() } returns "Assistant replies"
+                },
+            )
 
         every { input.isText() } returns false
         every { input.isResponse() } returns true
@@ -99,8 +108,23 @@ class MasaicParameterConverterTest {
         val assistantMsg = result.messages()[1]
         assert(userMsg.isUser())
         assert(assistantMsg.isAssistant())
-        assertEquals("User says hello", userMsg.asUser().content().text().get())
-        assertEquals("Assistant replies", assistantMsg.asAssistant().content().get().text().get())
+        assertEquals(
+            "User says hello",
+            userMsg
+                .asUser()
+                .content()
+                .text()
+                .get(),
+        )
+        assertEquals(
+            "Assistant replies",
+            assistantMsg
+                .asAssistant()
+                .content()
+                .get()
+                .text()
+                .get(),
+        )
     }
 
     /**
@@ -131,10 +155,27 @@ class MasaicParameterConverterTest {
 
         // system message first
         assertTrue(result.messages().first().isSystem())
-        assertEquals("System instructions", result.messages().first().asSystem().content().text().get())
+        assertEquals(
+            "System instructions",
+            result
+                .messages()
+                .first()
+                .asSystem()
+                .content()
+                .text()
+                .get(),
+        )
         // user message second
         assertTrue(result.messages()[1].isUser())
-        assertEquals("User text here", result.messages()[1].asUser().content().text().get())
+        assertEquals(
+            "User text here",
+            result
+                .messages()[1]
+                .asUser()
+                .content()
+                .text()
+                .get(),
+        )
     }
 
     /**
@@ -148,20 +189,21 @@ class MasaicParameterConverterTest {
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
 
         // The first item is user, second is system -> should break validation
-        val messageList = listOf<ResponseInputItem>(
-            mockk {
-                every { isEasyInputMessage() } returns true
-                every { asEasyInputMessage().role() } returns EasyInputMessage.Role.USER
-                every { asEasyInputMessage().content().isTextInput() } returns true
-                every { asEasyInputMessage().content().asTextInput() } returns "Hello"
-            },
-            mockk {
-                every { isEasyInputMessage() } returns true
-                every { asEasyInputMessage().role() } returns EasyInputMessage.Role.SYSTEM
-                every { asEasyInputMessage().content().isTextInput() } returns true
-                every { asEasyInputMessage().content().asTextInput() } returns "System instructions"
-            }
-        )
+        val messageList =
+            listOf<ResponseInputItem>(
+                mockk {
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage().role() } returns EasyInputMessage.Role.USER
+                    every { asEasyInputMessage().content().isTextInput() } returns true
+                    every { asEasyInputMessage().content().asTextInput() } returns "Hello"
+                },
+                mockk {
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage().role() } returns EasyInputMessage.Role.SYSTEM
+                    every { asEasyInputMessage().content().isTextInput() } returns true
+                    every { asEasyInputMessage().content().asTextInput() } returns "System instructions"
+                },
+            )
 
         every { input.isText() } returns false
         every { input.isResponse() } returns true
@@ -207,9 +249,32 @@ class MasaicParameterConverterTest {
 
         val assistantMsg = msg.asAssistant()
         assertEquals(1, assistantMsg.toolCalls().get().size)
-        assertEquals("functionCall123", assistantMsg.toolCalls().get().first().id())
-        assertEquals("myFunction", assistantMsg.toolCalls().get().first().function().name())
-        assertEquals("{\"key\":\"value\"}", assistantMsg.toolCalls().get().first().function().arguments())
+        assertEquals(
+            "functionCall123",
+            assistantMsg
+                .toolCalls()
+                .get()
+                .first()
+                .id(),
+        )
+        assertEquals(
+            "myFunction",
+            assistantMsg
+                .toolCalls()
+                .get()
+                .first()
+                .function()
+                .name(),
+        )
+        assertEquals(
+            "{\"key\":\"value\"}",
+            assistantMsg
+                .toolCalls()
+                .get()
+                .first()
+                .function()
+                .arguments(),
+        )
     }
 
     /**
@@ -256,14 +321,15 @@ class MasaicParameterConverterTest {
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
 
         // Provide at least one message in the list, so that the converter can process it
-        val messageList = listOf(
-            mockk<ResponseInputItem>(relaxed = true).apply {
-                every { isEasyInputMessage() } returns true
-                every { asEasyInputMessage().role() } returns EasyInputMessage.Role.USER
-                every { asEasyInputMessage().content().isTextInput() } returns true
-                every { asEasyInputMessage().content().asTextInput() } returns "Hello from user"
-            }
-        )
+        val messageList =
+            listOf(
+                mockk<ResponseInputItem>(relaxed = true).apply {
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage().role() } returns EasyInputMessage.Role.USER
+                    every { asEasyInputMessage().content().isTextInput() } returns true
+                    every { asEasyInputMessage().content().asTextInput() } returns "Hello from user"
+                },
+            )
 
         every { input.isText() } returns false
         every { input.isResponse() } returns true
@@ -288,7 +354,14 @@ class MasaicParameterConverterTest {
         val firstTool = result.tools().get().first()
         assertEquals(JsonValue.from("function"), firstTool._type())
         // verify the function definition name
-        assertEquals("someFunction", firstTool.function()._name().asString().get())
+        assertEquals(
+            "someFunction",
+            firstTool
+                .function()
+                ._name()
+                .asString()
+                .get(),
+        )
     }
 
     /**
@@ -328,7 +401,14 @@ class MasaicParameterConverterTest {
         assertTrue(rf.isJsonSchema())
         val schema = rf.asJsonSchema()
         assertEquals("object", schema._type().asString().get())
-        assertEquals("MyJSONSchema", schema.jsonSchema()._name().asString().get())
+        assertEquals(
+            "MyJSONSchema",
+            schema
+                .jsonSchema()
+                ._name()
+                .asString()
+                .get(),
+        )
     }
 
     /**

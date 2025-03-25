@@ -17,7 +17,6 @@ import org.springframework.test.web.reactive.server.WebTestClient
 @WebFluxTest(PlaygroundController::class)
 @Import(TestConfiguration::class)
 class PlaygroundControllerTest {
-
     @MockkBean
     lateinit var toolService: ToolService
 
@@ -27,26 +26,29 @@ class PlaygroundControllerTest {
     @Test
     fun `should return list of available tools`() {
         // Given
-        val expectedTools: List<ToolMetadata> = listOf(
-            ToolMetadata(
-                id = "tool1",
-                name = "Test Tool 1",
-                description = "A test tool"
-            ),
-            ToolMetadata(
-                id = "tool2",
-                name = "Test Tool 2",
-                description = "Another test tool"
+        val expectedTools: List<ToolMetadata> =
+            listOf(
+                ToolMetadata(
+                    id = "tool1",
+                    name = "Test Tool 1",
+                    description = "A test tool",
+                ),
+                ToolMetadata(
+                    id = "tool2",
+                    name = "Test Tool 2",
+                    description = "Another test tool",
+                ),
             )
-        )
-        
+
         every { toolService.listAvailableTools() } returns expectedTools
 
         // When/Then
-        webTestClient.get()
+        webTestClient
+            .get()
             .uri("/v1/tools")
             .exchange()
-            .expectStatus().isOk
+            .expectStatus()
+            .isOk
             .expectBodyList(ToolMetadata::class.java)
             .hasSize(2)
 

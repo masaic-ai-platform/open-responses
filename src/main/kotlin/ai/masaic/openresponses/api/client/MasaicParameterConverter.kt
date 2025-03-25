@@ -1,15 +1,15 @@
 package ai.masaic.openresponses.api.client
 
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import ai.masaic.openresponses.api.service.ResponseProcessingException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
+import com.openai.models.FunctionParameters
 import com.openai.models.ReasoningEffort
 import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
-import com.openai.models.responses.*
-import com.openai.core.JsonValue
-import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
+import com.openai.models.responses.*
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 
@@ -82,13 +82,13 @@ class MasaicParameterConverter {
         val builder = ChatCompletionCreateParams.builder()
 
         // For text-based requests, system message must come first if present
-        if(params.instructions().isPresent) {
+        if (params.instructions().isPresent) {
             builder.addMessage(
-                ChatCompletionSystemMessageParam.builder().content(params.instructions().get()).build()
+                ChatCompletionSystemMessageParam.builder().content(params.instructions().get()).build(),
             )
         }
         builder.addMessage(
-            ChatCompletionUserMessageParam.builder().content(input.toString()).build()
+            ChatCompletionUserMessageParam.builder().content(input.toString()).build(),
         )
         return builder
     }
@@ -106,31 +106,83 @@ class MasaicParameterConverter {
 
         val completionBuilder = ChatCompletionCreateParams.builder()
 
-        if(params.instructions().isPresent){
-            val systemExists = inputItems.any {
-                if (it.isEasyInputMessage()) {
-                    it.asEasyInputMessage().role().asString().lowercase() == "system" || it.asEasyInputMessage().role().asString().lowercase() == "developer"
-                } else if (it.isResponseOutputMessage() && it.asResponseOutputMessage()._role().asString().isPresent) {
-                    it.asResponseOutputMessage()._role().asString().get() == "system" || it.asResponseOutputMessage()._role().asString().get() == "developer"
-                } else if(it.isMessage()) {
-                    it.asMessage().role().asString().lowercase() == "system" || it.asMessage().role().asString().lowercase() == "developer"
+        if (params.instructions().isPresent) {
+            val systemExists =
+                inputItems.any {
+                    if (it.isEasyInputMessage()) {
+                        it
+                            .asEasyInputMessage()
+                            .role()
+                            .asString()
+                            .lowercase() == "system" ||
+                            it
+                                .asEasyInputMessage()
+                                .role()
+                                .asString()
+                                .lowercase() == "developer"
+                    } else if (it.isResponseOutputMessage() &&
+                        it
+                            .asResponseOutputMessage()
+                            ._role()
+                            .asString()
+                            .isPresent
+                    ) {
+                        it
+                            .asResponseOutputMessage()
+                            ._role()
+                            .asString()
+                            .get() == "system" ||
+                            it
+                                .asResponseOutputMessage()
+                                ._role()
+                                .asString()
+                                .get() == "developer"
+                    } else if (it.isMessage()) {
+                        it
+                            .asMessage()
+                            .role()
+                            .asString()
+                            .lowercase() == "system" ||
+                            it
+                                .asMessage()
+                                .role()
+                                .asString()
+                                .lowercase() == "developer"
+                    } else {
+                        false
+                    }
                 }
-                else false
-            }
-            if(!systemExists){
+            if (!systemExists) {
                 completionBuilder.addSystemMessage(params.instructions().get())
             }
         }
 
         // First validate that system/developer messages are at position 0
         inputItems.forEachIndexed { index, item ->
-            val role = when {
-                item.isEasyInputMessage() -> item.asEasyInputMessage().role().asString().lowercase()
-                item.isResponseOutputMessage() -> item.asResponseOutputMessage()._role().asString().orElse("").lowercase()
-                item.isMessage() -> item.asMessage().role().asString().lowercase()
-                else -> ""
-            }
-            
+            val role =
+                when {
+                    item.isEasyInputMessage() ->
+                        item
+                            .asEasyInputMessage()
+                            .role()
+                            .asString()
+                            .lowercase()
+                    item.isResponseOutputMessage() ->
+                        item
+                            .asResponseOutputMessage()
+                            ._role()
+                            .asString()
+                            .orElse("")
+                            .lowercase()
+                    item.isMessage() ->
+                        item
+                            .asMessage()
+                            .role()
+                            .asString()
+                            .lowercase()
+                    else -> ""
+                }
+
             if ((role == "system" || role == "developer") && index != 0) {
                 val errorMsg = "System or developer messages must be at position 0 in the messages array"
                 logger.error { errorMsg }
@@ -171,23 +223,24 @@ class MasaicParameterConverter {
      */
     private fun addFunctionCallMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
     ) {
         val functionCall = item.asFunctionCall()
         completionBuilder.addMessage(
-            ChatCompletionAssistantMessageParam.builder()
+            ChatCompletionAssistantMessageParam
+                .builder()
                 .addToolCall(
-                    ChatCompletionMessageToolCall.builder()
+                    ChatCompletionMessageToolCall
+                        .builder()
                         .id(functionCall.callId())
                         .function(
-                            ChatCompletionMessageToolCall.Function.builder()
+                            ChatCompletionMessageToolCall.Function
+                                .builder()
                                 .arguments(functionCall.arguments())
                                 .name(functionCall.name())
-                                .build()
-                        )
-                        .build()
-                )
-                .build()
+                                .build(),
+                        ).build(),
+                ).build(),
         )
     }
 
@@ -199,14 +252,15 @@ class MasaicParameterConverter {
      */
     private fun addFunctionCallOutputMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
     ) {
         val output = item.asFunctionCallOutput()
         completionBuilder.addMessage(
-            ChatCompletionToolMessageParam.builder()
+            ChatCompletionToolMessageParam
+                .builder()
                 .content(output.output())
                 .toolCallId(output.callId())
-                .build()
+                .build(),
         )
     }
 
@@ -218,19 +272,24 @@ class MasaicParameterConverter {
      */
     private fun applyModelAndParameters(
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
         completionBuilder.model(params.model())
-        if(params.temperature().isPresent)
-        completionBuilder.temperature(params.temperature())
-        if(params.maxOutputTokens().isPresent)
-        completionBuilder.maxCompletionTokens(params.maxOutputTokens())
-        if(params.metadata().isPresent)
-        completionBuilder.metadata(params.metadata())
-        if(params.topP().isPresent)
-        completionBuilder.topP(params.topP())
-        if(params.store().isPresent)
-        completionBuilder.store(params.store())
+        if (params.temperature().isPresent) {
+            completionBuilder.temperature(params.temperature())
+        }
+        if (params.maxOutputTokens().isPresent) {
+            completionBuilder.maxCompletionTokens(params.maxOutputTokens())
+        }
+        if (params.metadata().isPresent) {
+            completionBuilder.metadata(params.metadata())
+        }
+        if (params.topP().isPresent) {
+            completionBuilder.topP(params.topP())
+        }
+        if (params.store().isPresent) {
+            completionBuilder.store(params.store())
+        }
     }
 
     /**
@@ -241,7 +300,7 @@ class MasaicParameterConverter {
      */
     private fun applyToolConfiguration(
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
         if (params.toolChoice().isPresent) {
             completionBuilder.toolChoice(createToolChoiceOption(params.toolChoice().get()))
@@ -258,23 +317,34 @@ class MasaicParameterConverter {
      * @param toolChoice The tool choice from response parameters
      * @return ChatCompletionToolChoiceOption for the completion request
      */
-    private fun createToolChoiceOption(toolChoice: ResponseCreateParams.ToolChoice): ChatCompletionToolChoiceOption {
-        return when {
+    private fun createToolChoiceOption(toolChoice: ResponseCreateParams.ToolChoice): ChatCompletionToolChoiceOption =
+        when {
             toolChoice.isTypes() -> {
                 ChatCompletionToolChoiceOption.ofNamedToolChoice(
-                    ChatCompletionNamedToolChoice.builder()
-                        .type(JsonValue.from(toolChoice.asTypes().type().asString().lowercase()))
-                        .build()
+                    ChatCompletionNamedToolChoice
+                        .builder()
+                        .type(
+                            JsonValue.from(
+                                toolChoice
+                                    .asTypes()
+                                    .type()
+                                    .asString()
+                                    .lowercase(),
+                            ),
+                        ).build(),
                 )
             }
             toolChoice.isFunction() -> {
                 ChatCompletionToolChoiceOption.ofNamedToolChoice(
-                    ChatCompletionNamedToolChoice.builder()
+                    ChatCompletionNamedToolChoice
+                        .builder()
                         .function(JsonValue.from(toolChoice.asFunction().name().lowercase()))
                         .function(
-                            ChatCompletionNamedToolChoice.Function.builder()
-                                .name(toolChoice.asFunction().name()).build()
-                        ).build()
+                            ChatCompletionNamedToolChoice.Function
+                                .builder()
+                                .name(toolChoice.asFunction().name())
+                                .build(),
+                        ).build(),
                 )
             }
             toolChoice.isOptions() -> {
@@ -287,7 +357,6 @@ class MasaicParameterConverter {
             }
             else -> throw IllegalArgumentException("Unsupported tool choice")
         }
-    }
 
     /**
      * Converts response tools to chat completion tools.
@@ -298,69 +367,74 @@ class MasaicParameterConverter {
     private fun convertTools(tools: List<Tool>): List<ChatCompletionTool> {
         logger.debug { "Converting ${tools.size} tools" }
         val result = mutableListOf<ChatCompletionTool>()
-        
+
         tools.forEach { responseTool ->
             when {
                 responseTool.isFunction() -> {
                     val functionTool = responseTool.asFunction()
                     logger.trace { "Converting function tool: ${functionTool.name()}" }
-                        
+
                     result.add(
-                        ChatCompletionTool.builder()
+                        ChatCompletionTool
+                            .builder()
                             .type(JsonValue.from("function"))
                             .function(
-                                FunctionDefinition.builder()
+                                FunctionDefinition
+                                    .builder()
                                     .name(functionTool.name())
                                     .description(functionTool._description())
                                     .parameters(
-                                        objectMapper.readValue(objectMapper.writeValueAsString(functionTool.parameters()),
-                                            FunctionParameters::class.java)
-                                    )
-                                    .build()
-                            )
-                            .build()
+                                        objectMapper.readValue(
+                                            objectMapper.writeValueAsString(functionTool.parameters()),
+                                            FunctionParameters::class.java,
+                                        ),
+                                    ).build(),
+                            ).build(),
                     )
                 }
                 responseTool.isWebSearch() -> {
                     val webSearchTool = responseTool.asWebSearch()
                     logger.trace { "Converting web search tool" }
                     result.add(
-                        ChatCompletionTool.builder()
+                        ChatCompletionTool
+                            .builder()
                             .type(JsonValue.from("function"))
                             .function(
-                                FunctionDefinition.builder()
+                                FunctionDefinition
+                                    .builder()
                                     .name(webSearchTool.type().asString())
-                                    .build()
-                            )
-                            .build()
+                                    .build(),
+                            ).build(),
                     )
                 }
                 responseTool.isFileSearch() -> {
                     val fileSearchTool = responseTool.asFileSearch()
                     logger.trace { "Converting file search tool" }
                     result.add(
-                        ChatCompletionTool.builder()
+                        ChatCompletionTool
+                            .builder()
                             .type(JsonValue.from("function"))
                             .function(
-                                FunctionDefinition.builder()
+                                FunctionDefinition
+                                    .builder()
                                     .name(fileSearchTool._type())
-                                    .build()
-                            )
-                            .build()
+                                    .build(),
+                            ).build(),
                     )
                 }
                 responseTool.isComputerUsePreview() -> {
                     val computerUsePreviewTool = responseTool.asComputerUsePreview()
                     logger.trace { "Converting computer use preview tool" }
                     result.add(
-                        ChatCompletionTool.builder()
+                        ChatCompletionTool
+                            .builder()
                             .type(JsonValue.from("function"))
                             .function(
-                                FunctionDefinition.builder()
+                                FunctionDefinition
+                                    .builder()
                                     .name(computerUsePreviewTool._type())
-                                    .build()
-                            )
-                            .build()
+                                    .build(),
+                            ).build(),
                     )
                 }
                 else -> {
@@ -381,10 +455,21 @@ class MasaicParameterConverter {
      */
     private fun applyResponseFormatting(
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
-        if (params.text().isPresent && params.text().get().format().isPresent) {
-            val format = params.text().get().format().get()
+        if (params.text().isPresent &&
+            params
+                .text()
+                .get()
+                .format()
+                .isPresent
+        ) {
+            val format =
+                params
+                    .text()
+                    .get()
+                    .format()
+                    .get()
             when {
                 format.isText() -> {
                     completionBuilder.responseFormat(format.asText())
@@ -394,17 +479,20 @@ class MasaicParameterConverter {
                 }
                 format.isJsonSchema() -> {
                     completionBuilder.responseFormat(
-                        ResponseFormatJsonSchema.builder()
+                        ResponseFormatJsonSchema
+                            .builder()
                             .type(format.asJsonSchema()._type())
                             .jsonSchema(
-                                    ResponseFormatJsonSchema.JsonSchema.builder().name(format.asJsonSchema()._name()).schema(
+                                ResponseFormatJsonSchema.JsonSchema
+                                    .builder()
+                                    .name(format.asJsonSchema()._name())
+                                    .schema(
                                         objectMapper.readValue(
                                             objectMapper.writeValueAsString(format.asJsonSchema().schema()),
-                                            ResponseFormatJsonSchema.JsonSchema.Schema::class.java
-                                        )
-                                    ).build()
-                            )
-                            .build()
+                                            ResponseFormatJsonSchema.JsonSchema.Schema::class.java,
+                                        ),
+                                    ).build(),
+                            ).build(),
                     )
                 }
             }
@@ -419,11 +507,24 @@ class MasaicParameterConverter {
      */
     private fun applyReasoningEffort(
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
-        if (params.reasoning().isPresent && params.reasoning().get().effort().isPresent) {
+        if (params.reasoning().isPresent &&
+            params
+                .reasoning()
+                .get()
+                .effort()
+                .isPresent
+        ) {
             completionBuilder.reasoningEffort(
-                ReasoningEffort.of(params.reasoning().get().effort().get().asString())
+                ReasoningEffort.of(
+                    params
+                        .reasoning()
+                        .get()
+                        .effort()
+                        .get()
+                        .asString(),
+                ),
             )
         }
     }
@@ -437,13 +538,14 @@ class MasaicParameterConverter {
     private fun convertInputMessages(
         item: ResponseInputItem,
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
-        val role = when {
-            item.isEasyInputMessage() -> item.asEasyInputMessage().role()
-            item.isResponseOutputMessage() -> item.asResponseOutputMessage()._role()
-            else -> item.asMessage().role()
-        }
+        val role =
+            when {
+                item.isEasyInputMessage() -> item.asEasyInputMessage().role()
+                item.isResponseOutputMessage() -> item.asResponseOutputMessage()._role()
+                else -> item.asMessage().role()
+            }
 
         when (role.toString().lowercase()) {
             "user" -> handleUserMessage(item, completionBuilder)
@@ -462,39 +564,45 @@ class MasaicParameterConverter {
      */
     private fun handleUserMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
     ) {
         if (item.isEasyInputMessage()) {
             val easyInputMessage = item.asEasyInputMessage()
             when {
                 easyInputMessage.content().isTextInput() -> {
                     completionBuilder.addMessage(
-                        ChatCompletionUserMessageParam.builder().content(
-                            ChatCompletionUserMessageParam.Content.ofText(
-                                easyInputMessage.content().asTextInput()
-                            )
-                        ).build()
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionUserMessageParam.Content.ofText(
+                                    easyInputMessage.content().asTextInput(),
+                                ),
+                            ).build(),
                     )
                 }
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     val contentList = easyInputMessage.content().asResponseInputMessageContentList()
                     completionBuilder.addMessage(
-                        ChatCompletionUserMessageParam.builder().content(
-                            ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                prepareUserContent(contentList)
-                            )
-                        ).build()
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                    prepareUserContent(contentList),
+                                ),
+                            ).build(),
                     )
                 }
                 else -> {
                     completionBuilder.addMessage(
-                        ChatCompletionUserMessageParam.builder().content(
-                            ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                prepareUserContent(
-                                    item.asMessage()
-                                )
-                            )
-                        ).build()
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                    prepareUserContent(
+                                        item.asMessage(),
+                                    ),
+                                ),
+                            ).build(),
                     )
                 }
             }
@@ -509,46 +617,56 @@ class MasaicParameterConverter {
      */
     private fun handleAssistantMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
     ) {
         if (item.isEasyInputMessage()) {
-            if(item.asEasyInputMessage().content().isTextInput()) {
+            if (item.asEasyInputMessage().content().isTextInput()) {
                 completionBuilder.addMessage(
-                    ChatCompletionAssistantMessageParam.builder().content(
-                        ChatCompletionAssistantMessageParam.Content.ofText(
-                            item.asEasyInputMessage().content().asTextInput()
-                        )
-                    ).build()
+                    ChatCompletionAssistantMessageParam
+                        .builder()
+                        .content(
+                            ChatCompletionAssistantMessageParam.Content.ofText(
+                                item.asEasyInputMessage().content().asTextInput(),
+                            ),
+                        ).build(),
                 )
-            } else if(item.asEasyInputMessage().content().isResponseInputMessageContentList()){
+            } else if (item.asEasyInputMessage().content().isResponseInputMessageContentList()) {
                 val inputs = item.asEasyInputMessage().content().asResponseInputMessageContentList()
 
-                val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> = inputs.map {
-                    if(it.isInputText()){
-                                ChatCompletionRequestAssistantMessageContentPart.ofText(
-                                    ChatCompletionContentPartText.builder().text(it.asInputText().text()).build()
-                                )
+                val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> =
+                    inputs.map {
+                        if (it.isInputText()) {
+                            ChatCompletionRequestAssistantMessageContentPart.ofText(
+                                ChatCompletionContentPartText.builder().text(it.asInputText().text()).build(),
+                            )
+                        } else {
+                            throw ResponseProcessingException("Assistant message other than text is not supported.")
+                        }
                     }
-                    else throw ResponseProcessingException("Assistant message other than text is not supported.")
-                }
 
-                completionBuilder.addMessage(ChatCompletionAssistantMessageParam.builder().contentOfArrayOfContentParts(assistantMessages).build())
+                completionBuilder.addMessage(
+                    ChatCompletionAssistantMessageParam.builder().contentOfArrayOfContentParts(assistantMessages).build(),
+                )
             }
         } else if (item.isResponseOutputMessage()) {
             item.asResponseOutputMessage().content().forEach {
-                if(it.isOutputText()) {
+                if (it.isOutputText()) {
                     val outputText = it.asOutputText().text()
                     completionBuilder.addMessage(
-                        ChatCompletionAssistantMessageParam.builder().content(
-                            ChatCompletionAssistantMessageParam.Content.ofText(outputText)
-                        ).build()
+                        ChatCompletionAssistantMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionAssistantMessageParam.Content.ofText(outputText),
+                            ).build(),
                     )
-                } else if(it.isRefusal()){
+                } else if (it.isRefusal()) {
                     val refusalText = it.asRefusal().refusal()
                     completionBuilder.addMessage(
-                        ChatCompletionAssistantMessageParam.builder().content(
-                            ChatCompletionAssistantMessageParam.Content.ofText(refusalText)
-                        ).build()
+                        ChatCompletionAssistantMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionAssistantMessageParam.Content.ofText(refusalText),
+                            ).build(),
                     )
                 }
             }
@@ -564,30 +682,42 @@ class MasaicParameterConverter {
     private fun handleSystemMessage(
         item: ResponseInputItem,
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
         if (item.isEasyInputMessage()) {
             val easyInputMessage = item.asEasyInputMessage()
-            val instructions = if(params.instructions().isPresent) params.instructions().get() else ""
+            val instructions = if (params.instructions().isPresent) params.instructions().get() else ""
             when {
                 easyInputMessage.content().isTextInput() -> {
                     completionBuilder.addMessage(
-                        ChatCompletionSystemMessageParam.builder()
+                        ChatCompletionSystemMessageParam
+                            .builder()
                             .content(
-                                if(instructions.isNotEmpty()) "$instructions\n${easyInputMessage.content().asTextInput()}"  else
-                                easyInputMessage.content().asTextInput()
-                            ).build()
+                                if (instructions.isNotEmpty()) {
+                                    "$instructions\n${easyInputMessage.content().asTextInput()}"
+                                } else {
+                                    easyInputMessage.content().asTextInput()
+                                },
+                            ).build(),
                     )
                 }
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     completionBuilder.addMessage(
-                        ChatCompletionSystemMessageParam.builder()
+                        ChatCompletionSystemMessageParam
+                            .builder()
                             .content(
-                                if(instructions.isNotEmpty()) "$instructions\n${easyInputMessage.content().asResponseInputMessageContentList()
-                                    .first().asInputText().text()}"  else
-                                easyInputMessage.content().asResponseInputMessageContentList()
-                                    .first().asInputText().text()
-                            ).build()
+                                if (instructions.isNotEmpty()) {
+                                    "$instructions\n${easyInputMessage.content().asResponseInputMessageContentList()
+                                        .first().asInputText().text()}"
+                                } else {
+                                    easyInputMessage
+                                        .content()
+                                        .asResponseInputMessageContentList()
+                                        .first()
+                                        .asInputText()
+                                        .text()
+                                },
+                            ).build(),
                     )
                 }
             }
@@ -603,26 +733,32 @@ class MasaicParameterConverter {
     private fun handleDeveloperMessage(
         item: ResponseInputItem,
         completionBuilder: ChatCompletionCreateParams.Builder,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ) {
         if (item.isEasyInputMessage()) {
             val easyInputMessage = item.asEasyInputMessage()
             when {
                 easyInputMessage.content().isTextInput() -> {
                     completionBuilder.addMessage(
-                        ChatCompletionDeveloperMessageParam.builder()
+                        ChatCompletionDeveloperMessageParam
+                            .builder()
                             .content(
-                                easyInputMessage.content().asTextInput()
-                            ).build()
+                                easyInputMessage.content().asTextInput(),
+                            ).build(),
                     )
                 }
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     completionBuilder.addMessage(
-                        ChatCompletionDeveloperMessageParam.builder()
+                        ChatCompletionDeveloperMessageParam
+                            .builder()
                             .content(
-                                easyInputMessage.content().asResponseInputMessageContentList()
-                                    .first().asInputText().text()
-                            ).build()
+                                easyInputMessage
+                                    .content()
+                                    .asResponseInputMessageContentList()
+                                    .first()
+                                    .asInputText()
+                                    .text(),
+                            ).build(),
                     )
                 }
             }
@@ -637,17 +773,17 @@ class MasaicParameterConverter {
      */
     private fun handleToolMessage(
         item: ResponseInputItem,
-        completionBuilder: ChatCompletionCreateParams.Builder
+        completionBuilder: ChatCompletionCreateParams.Builder,
     ) {
         if (item.isEasyInputMessage()) {
             val easyInputMessage = item.asEasyInputMessage()
             completionBuilder.addMessage(
-                ChatCompletionToolMessageParam.builder()
+                ChatCompletionToolMessageParam
+                    .builder()
                     .content(easyInputMessage.content().asTextInput())
                     .toolCallId(
-                        easyInputMessage._additionalProperties()["tool_call_id"].toString()
-                    )
-                    .build()
+                        easyInputMessage._additionalProperties()["tool_call_id"].toString(),
+                    ).build(),
             )
         }
     }
@@ -658,8 +794,7 @@ class MasaicParameterConverter {
      * @param message The message to extract content from
      * @return List of ChatCompletionContentPart objects
      */
-    private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> =
-        prepareUserContent(message.content())
+    private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> = prepareUserContent(message.content())
 
     /**
      * Prepares user content from a list of response input content.
@@ -674,36 +809,50 @@ class MasaicParameterConverter {
                 content.isInputText() -> {
                     val inputText = content.asInputText()
                     ChatCompletionContentPart.ofText(
-                        ChatCompletionContentPartText.builder().text(
-                            inputText.text()
-                        ).build()
+                        ChatCompletionContentPartText
+                            .builder()
+                            .text(
+                                inputText.text(),
+                            ).build(),
                     )
                 }
                 content.isInputImage() -> {
                     val inputImage = content.asInputImage()
                     ChatCompletionContentPart.ofImageUrl(
-                        ChatCompletionContentPartImage.builder().type(JsonValue.from("image_url")).imageUrl(
-                            ChatCompletionContentPartImage.ImageUrl.builder()
-                                .url(inputImage._imageUrl())
-                                .detail(
-                                    ChatCompletionContentPartImage.ImageUrl.Detail.of(
-                                        inputImage.detail().value().name.lowercase()
-                                    )
-                                )
-                                .putAllAdditionalProperties(inputImage._additionalProperties())
-                                .build()
-                        ).build()
+                        ChatCompletionContentPartImage
+                            .builder()
+                            .type(JsonValue.from("image_url"))
+                            .imageUrl(
+                                ChatCompletionContentPartImage.ImageUrl
+                                    .builder()
+                                    .url(inputImage._imageUrl())
+                                    .detail(
+                                        ChatCompletionContentPartImage.ImageUrl.Detail.of(
+                                            inputImage
+                                                .detail()
+                                                .value()
+                                                .name
+                                                .lowercase(),
+                                        ),
+                                    ).putAllAdditionalProperties(inputImage._additionalProperties())
+                                    .build(),
+                            ).build(),
                     )
                 }
                 content.isInputFile() -> {
                     val inputFile = content.asInputFile()
                     ChatCompletionContentPart.ofFile(
-                        ChatCompletionContentPart.File.builder().type(JsonValue.from("file")).file(
-                            ChatCompletionContentPart.File.FileObject.builder()
-                                .fileData(inputFile._fileData())
-                                .fileId(inputFile._fileId())
-                                .fileName(inputFile._filename()).build()
-                        ).build()
+                        ChatCompletionContentPart.File
+                            .builder()
+                            .type(JsonValue.from("file"))
+                            .file(
+                                ChatCompletionContentPart.File.FileObject
+                                    .builder()
+                                    .fileData(inputFile._fileData())
+                                    .fileId(inputFile._fileId())
+                                    .fileName(inputFile._filename())
+                                    .build(),
+                            ).build(),
                     )
                 }
                 else -> throw IllegalArgumentException("Unsupported input type")
@@ -713,8 +862,10 @@ class MasaicParameterConverter {
 
 private fun ChatCompletionCreateParams.validate(): ChatCompletionCreateParams {
     this.messages().forEachIndexed { index, value ->
-        if(index != 0 && (value.isSystem() || value.isDeveloper())){
-            throw IllegalArgumentException("Error processing response: System or developer messages must be at position 0 in the messages array")
+        if (index != 0 && (value.isSystem() || value.isDeveloper())) {
+            throw IllegalArgumentException(
+                "Error processing response: System or developer messages must be at position 0 in the messages array",
+            )
         }
     }
     return this

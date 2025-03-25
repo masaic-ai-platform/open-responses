@@ -12,21 +12,16 @@ import org.springframework.context.annotation.Configuration
  */
 @Configuration
 class MetricsConfig {
-
     /**
      * Creates an ObservationRegistry bean for use with @Observed annotations
      * and programmatic observations.
      */
     @Bean
-    fun observationRegistry(): ObservationRegistry {
-        return ObservationRegistry.create()
-    }
+    fun observationRegistry(): ObservationRegistry = ObservationRegistry.create()
 
     /**
      * Creates a MeterRegistry for collecting and publishing metrics.
      */
     @Bean
-    fun meterRegistry(): MeterRegistry {
-        return SimpleMeterRegistry()
-    }
-} 
+    fun meterRegistry(): MeterRegistry = SimpleMeterRegistry()
+}

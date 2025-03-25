@@ -15,22 +15,31 @@ import com.openai.models.responses.ResponseTextDeltaEvent
  * This allows for seamless conversion between different API formats.
  */
 object ChatCompletionChunkConverter {
-
     /**
      * Converts a ChatCompletionChunk to a list of ResponseStreamEvent objects.
      *
      * @param completion The ChatCompletionChunk to convert
      * @return A list of converted ResponseStreamEvent objects
      */
-    fun toResponseStreamEvent(completion: ChatCompletionChunk): List<ResponseStreamEvent> {
-        return completion.choices().flatMap { chunk ->
+    fun toResponseStreamEvent(completion: ChatCompletionChunk): List<ResponseStreamEvent> =
+        completion.choices().flatMap { chunk ->
             when {
                 // Handle text content
-                chunk.delta().content().isPresent && chunk.delta().content().get().isNotBlank() -> {
+                chunk.delta().content().isPresent &&
+                    chunk
+                        .delta()
+                        .content()
+                        .get()
+                        .isNotBlank() -> {
                     createTextDeltaEvent(chunk.delta().content().get(), chunk.index(), completion.id())
                 }
                 // Handle tool calls
-                chunk.delta().toolCalls().isPresent && chunk.delta().toolCalls().get().isNotEmpty() -> {
+                chunk.delta().toolCalls().isPresent &&
+                    chunk
+                        .delta()
+                        .toolCalls()
+                        .get()
+                        .isNotEmpty() -> {
                     createToolCallEvents(chunk.delta().toolCalls().get(), completion.id())
                 }
                 // Handle tool call completion
@@ -41,8 +50,7 @@ object ChatCompletionChunkConverter {
                 else -> emptyList()
             }
         }
-    }
-    
+
     /**
      * Creates a text delta event.
      *
@@ -51,19 +59,23 @@ object ChatCompletionChunkConverter {
      * @param itemId The ID of the item
      * @return A list containing the text delta event
      */
-    private fun createTextDeltaEvent(content: String, index: Long, itemId: String): List<ResponseStreamEvent> {
-        return listOf(
+    private fun createTextDeltaEvent(
+        content: String,
+        index: Long,
+        itemId: String,
+    ): List<ResponseStreamEvent> =
+        listOf(
             ResponseStreamEvent.ofOutputTextDelta(
-                ResponseTextDeltaEvent.builder()
+                ResponseTextDeltaEvent
+                    .builder()
                     .contentIndex(index)
                     .outputIndex(index)
                     .itemId(itemId)
                     .delta(content)
-                    .build()
-            )
+                    .build(),
+            ),
         )
-    }
-    
+
     /**
      * Creates events for tool calls.
      *
@@ -73,10 +85,16 @@ object ChatCompletionChunkConverter {
      */
     private fun createToolCallEvents(
         toolCalls: List<ChatCompletionChunk.Choice.Delta.ToolCall>,
-        completionId: String
-    ): List<ResponseStreamEvent> {
-        return toolCalls.map { toolCall ->
-            if (toolCall.function().isPresent && toolCall.function().get().name().isPresent) {
+        completionId: String,
+    ): List<ResponseStreamEvent> =
+        toolCalls.map { toolCall ->
+            if (toolCall.function().isPresent &&
+                toolCall
+                    .function()
+                    .get()
+                    .name()
+                    .isPresent
+            ) {
                 // Create an output item added event for a function call
                 createFunctionCallOutputItemEvent(toolCall, completionId)
             } else {
@@ -84,8 +102,7 @@ object ChatCompletionChunkConverter {
                 createFunctionCallArgumentsDeltaEvent(toolCall, completionId)
             }
         }
-    }
-    
+
     /**
      * Creates a function call output item event.
      *
@@ -95,25 +112,39 @@ object ChatCompletionChunkConverter {
      */
     private fun createFunctionCallOutputItemEvent(
         toolCall: ChatCompletionChunk.Choice.Delta.ToolCall,
-        completionId: String
-    ): ResponseStreamEvent {
-        return ResponseStreamEvent.ofOutputItemAdded(
-            ResponseOutputItemAddedEvent.builder()
+        completionId: String,
+    ): ResponseStreamEvent =
+        ResponseStreamEvent.ofOutputItemAdded(
+            ResponseOutputItemAddedEvent
+                .builder()
                 .outputIndex(toolCall.index())
-                .item(ResponseOutputItem.ofFunctionCall(
-                    ResponseFunctionToolCall.builder()
-                        .name(toolCall.function().get().name().get().toString())
-                        .arguments(toolCall.function().get().arguments().get().toString())
-                        .callId(toolCall.id().get())
-                        .putAllAdditionalProperties(toolCall._additionalProperties())
-                        .id(completionId)
-                        .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
-                        .build()
-                ))
-                .build()
+                .item(
+                    ResponseOutputItem.ofFunctionCall(
+                        ResponseFunctionToolCall
+                            .builder()
+                            .name(
+                                toolCall
+                                    .function()
+                                    .get()
+                                    .name()
+                                    .get()
+                                    .toString(),
+                            ).arguments(
+                                toolCall
+                                    .function()
+                                    .get()
+                                    .arguments()
+                                    .get()
+                                    .toString(),
+                            ).callId(toolCall.id().get())
+                            .putAllAdditionalProperties(toolCall._additionalProperties())
+                            .id(completionId)
+                            .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                            .build(),
+                    ),
+                ).build(),
         )
-    }
-    
+
     /**
      * Creates a function call arguments delta event.
      *
@@ -123,19 +154,35 @@ object ChatCompletionChunkConverter {
      */
     private fun createFunctionCallArgumentsDeltaEvent(
         toolCall: ChatCompletionChunk.Choice.Delta.ToolCall,
-        completionId: String
+        completionId: String,
     ): ResponseStreamEvent {
-        val arguments = if(toolCall.function().isPresent && toolCall.function().get().arguments().isPresent) toolCall.function().get().arguments().get() else ""
+        val arguments =
+            if (toolCall.function().isPresent &&
+                toolCall
+                    .function()
+                    .get()
+                    .arguments()
+                    .isPresent
+            ) {
+                toolCall
+                    .function()
+                    .get()
+                    .arguments()
+                    .get()
+            } else {
+                ""
+            }
         return ResponseStreamEvent.ofFunctionCallArgumentsDelta(
-            ResponseFunctionCallArgumentsDeltaEvent.builder()
+            ResponseFunctionCallArgumentsDeltaEvent
+                .builder()
                 .outputIndex(toolCall.index())
                 .delta(arguments)
                 .itemId(completionId)
                 .putAllAdditionalProperties(toolCall._additionalProperties())
-                .build()
+                .build(),
         )
     }
-    
+
     /**
      * Creates a tool call done event.
      *
@@ -147,19 +194,19 @@ object ChatCompletionChunkConverter {
     private fun createToolCallDoneEvent(
         index: Long,
         completionId: String,
-        additionalProperties: Map<String, JsonValue>
-    ): List<ResponseStreamEvent> {
-        return listOf(
+        additionalProperties: Map<String, JsonValue>,
+    ): List<ResponseStreamEvent> =
+        listOf(
             ResponseStreamEvent.ofFunctionCallArgumentsDone(
-                ResponseFunctionCallArgumentsDoneEvent.builder()
+                ResponseFunctionCallArgumentsDoneEvent
+                    .builder()
                     .outputIndex(index)
                     .arguments("")
                     .itemId(completionId)
                     .putAllAdditionalProperties(additionalProperties)
-                    .build()
-            )
+                    .build(),
+            ),
         )
-    }
 }
 
 /**
@@ -167,6 +214,4 @@ object ChatCompletionChunkConverter {
  *
  * @return A list of converted ResponseStreamEvent objects
  */
-fun ChatCompletionChunk.toResponseStreamEvent(): List<ResponseStreamEvent> {
-    return ChatCompletionChunkConverter.toResponseStreamEvent(this)
-}
+fun ChatCompletionChunk.toResponseStreamEvent(): List<ResponseStreamEvent> = ChatCompletionChunkConverter.toResponseStreamEvent(this)

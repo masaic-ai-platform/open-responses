@@ -19,10 +19,10 @@ import java.nio.charset.Charset
 
 /**
  * Service responsible for managing tool operations including loading, listing, and executing MCP tools.
- * 
+ *
  * This service handles the lifecycle of tools, from loading them at application startup,
  * providing access to available tools, and executing tool operations.
- * 
+ *
  * @property mcpToolRegistry Registry that manages tool definitions
  * @property mcpToolExecutor Executor that handles tool execution
  */
@@ -31,11 +31,11 @@ class ToolService(
     private val mcpToolRegistry: MCPToolRegistry,
     private val mcpToolExecutor: MCPToolExecutor,
     private val resourceLoader: ResourceLoader,
-    private val nativeToolRegistry: NativeToolRegistry
+    private val nativeToolRegistry: NativeToolRegistry,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(ToolService::class.java)
-    
+
     private companion object {
         const val DEFAULT_CONFIG_PATH = "classpath:mcp-servers-config.json"
         const val MCP_CONFIG_ENV_VAR = "MCP_SERVER_CONFIG_FILE_PATH"
@@ -47,21 +47,26 @@ class ToolService(
      * @return List of tool metadata representing all available tools
      */
     fun listAvailableTools(): List<ToolMetadata> {
-        val availableTools = nativeToolRegistry.findAll().map { tool ->
-            ToolMetadata(
-                id = tool.id,
-                name = tool.name,
-                description = tool.description
-            )
-        }.toMutableList()
+        val availableTools =
+            nativeToolRegistry
+                .findAll()
+                .map { tool ->
+                    ToolMetadata(
+                        id = tool.id,
+                        name = tool.name,
+                        description = tool.description,
+                    )
+                }.toMutableList()
 
-        availableTools.addAll(mcpToolRegistry.findAll().map { tool ->
-            ToolMetadata(
-                id = tool.id,
-                name = tool.name,
-                description = tool.description
-            )
-        })
+        availableTools.addAll(
+            mcpToolRegistry.findAll().map { tool ->
+                ToolMetadata(
+                    id = tool.id,
+                    name = tool.name,
+                    description = tool.description,
+                )
+            },
+        )
         return availableTools
     }
 
@@ -76,7 +81,7 @@ class ToolService(
         return ToolMetadata(
             id = tool.id,
             name = tool.name,
-            description = tool.description
+            description = tool.description,
         )
     }
 
@@ -101,7 +106,10 @@ class ToolService(
      * @param arguments JSON string containing the arguments for tool execution
      * @return Result of the tool execution as a string, or null if the tool isn't found
      */
-    fun executeTool(name: String, arguments: String): String? {
+    fun executeTool(
+        name: String,
+        arguments: String,
+    ): String? {
         try {
             val tool = findToolByName(name) ?: return null
             return executeToolByProtocol(tool, name, arguments)
@@ -109,17 +117,15 @@ class ToolService(
             return handleToolExecutionError(name, arguments, e)
         }
     }
-    
+
     /**
      * Finds a tool by its name.
      *
      * @param name The name of the tool to find
      * @return The tool definition if found, null otherwise
      */
-    private fun findToolByName(name: String): ToolDefinition? {
-        return nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name)
-    }
-    
+    private fun findToolByName(name: String): ToolDefinition? = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name)
+
     /**
      * Executes a tool based on its protocol.
      *
@@ -128,15 +134,20 @@ class ToolService(
      * @param arguments The arguments for tool execution
      * @return The result of tool execution
      */
-    private fun executeToolByProtocol(tool: ToolDefinition, name: String, arguments: String): String? {
-        val toolResult = when (tool.protocol) {
-            ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments)
-            ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
-        }
+    private fun executeToolByProtocol(
+        tool: ToolDefinition,
+        name: String,
+        arguments: String,
+    ): String? {
+        val toolResult =
+            when (tool.protocol) {
+                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments)
+                ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
+            }
         log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
         return toolResult
     }
-    
+
     /**
      * Handles errors that occur during tool execution.
      *
@@ -145,7 +156,11 @@ class ToolService(
      * @param e The exception that occurred
      * @return An error message
      */
-    private fun handleToolExecutionError(name: String, arguments: String, e: Exception): String {
+    private fun handleToolExecutionError(
+        name: String,
+        arguments: String,
+        e: Exception,
+    ): String {
         val errorMessage = "Tool $name execution with arguments $arguments failed with error message: ${e.message}"
         log.error(errorMessage, e)
         return errorMessage
@@ -153,8 +168,8 @@ class ToolService(
 
     /**
      * Initializes and loads all tools on application startup.
-     * 
-     * Reads configuration from the file specified by MCP_SERVER_CONFIG_FILE_PATH 
+     *
+     * Reads configuration from the file specified by MCP_SERVER_CONFIG_FILE_PATH
      * environment variable or uses the default path.
      */
     @PostConstruct
@@ -166,7 +181,7 @@ class ToolService(
 
         val configPath = determineConfigFilePath()
         val mcpServerConfigJson = loadConfigurationContent(configPath)
-        
+
         if (mcpServerConfigJson.isEmpty()) {
             log.warn("MCP server config file is empty. No MCP tools will be loaded.")
             return
@@ -174,44 +189,41 @@ class ToolService(
 
         loadToolRegistry(mcpServerConfigJson)
     }
-    
+
     /**
      * Checks if MCP tools are enabled via environment variable.
-     * 
+     *
      * @return true if MCP tools are enabled, false otherwise
      */
-    private fun isMcpToolsEnabled(): Boolean {
-        return System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
-    }
-    
+    private fun isMcpToolsEnabled(): Boolean = System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
+
     /**
      * Determines the configuration file path from environment variable or default.
-     * 
+     *
      * @return The resolved configuration file path
      */
     private fun determineConfigFilePath(): String {
         var filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
         if (!filePath.startsWith("classpath:") && !filePath.startsWith("file:") && !filePath.startsWith("http")) {
-            filePath = "file:${filePath}"
+            filePath = "file:$filePath"
         }
         return filePath
     }
-    
+
     /**
      * Loads the configuration content from the specified path.
-     * 
+     *
      * @param configPath The path to load the configuration from
      * @return The configuration content as a string
      */
-    private fun loadConfigurationContent(configPath: String): String {
-        return try {
+    private fun loadConfigurationContent(configPath: String): String =
+        try {
             resourceLoader.getResource(configPath).getContentAsString(Charset.defaultCharset())
         } catch (e: Exception) {
             e.printStackTrace()
             log.warn("$MCP_CONFIG_ENV_VAR environment variable not set or file not found. No MCP tools will be loaded.")
             ""
         }
-    }
 
     /**
      * Cleans up resources when the application is shutting down.
@@ -233,14 +245,17 @@ class ToolService(
             connectAndRegisterServer(serverName, serverConfig)
         }
     }
-    
+
     /**
      * Connects to an MCP server and registers its tools.
      *
      * @param serverName The name of the server
      * @param serverConfig The server configuration
      */
-    private fun connectAndRegisterServer(serverName: String, serverConfig: MCPServer) {
+    private fun connectAndRegisterServer(
+        serverName: String,
+        serverConfig: MCPServer,
+    ) {
         try {
             val mcpClient = connectToMcpServer(serverName, serverConfig)
             registerMcpServerTools(serverName, mcpClient)
@@ -249,7 +264,7 @@ class ToolService(
             handleServerConnectionError(serverName, e)
         }
     }
-    
+
     /**
      * Connects to an MCP server.
      *
@@ -257,37 +272,44 @@ class ToolService(
      * @param serverConfig The server configuration
      * @return The MCP client
      */
-    private fun connectToMcpServer(serverName: String, serverConfig: MCPServer): McpClient {
-        return mcpToolExecutor.connectServer(serverName, serverConfig)
-    }
-    
+    private fun connectToMcpServer(
+        serverName: String,
+        serverConfig: MCPServer,
+    ): McpClient = mcpToolExecutor.connectServer(serverName, serverConfig)
+
     /**
      * Registers tools from an MCP server.
      *
      * @param serverName The name of the server
      * @param mcpClient The MCP client
      */
-    private fun registerMcpServerTools(serverName: String, mcpClient: McpClient) {
+    private fun registerMcpServerTools(
+        serverName: String,
+        mcpClient: McpClient,
+    ) {
         mcpToolRegistry.registerMCPTools(serverName, mcpClient)
     }
-    
+
     /**
      * Handles errors that occur when connecting to an MCP server.
      *
      * @param serverName The name of the server
      * @param e The exception that occurred
      */
-    private fun handleServerConnectionError(serverName: String, e: Exception) {
+    private fun handleServerConnectionError(
+        serverName: String,
+        e: Exception,
+    ) {
         log.warn(
             "Failed to connect to MCP server '$serverName': ${e.message}. If this server is necessary then fix the MCP config or server and restart the application.",
-            e
+            e,
         )
         // Continue with next server instead of aborting
     }
 
     /**
      * Converts an MCP tool definition to a FunctionTool.
-     * 
+     *
      * @return FunctionTool representation of this MCP tool definition
      */
     private fun McpToolDefinition.toFunctionTool(): FunctionTool {
@@ -317,7 +339,7 @@ class ToolService(
             name = this.name,
             description = this.description,
             parameters = parametersMap,
-            strict = false
+            strict = false,
         )
     }
 
@@ -345,14 +367,17 @@ class ToolService(
 
         return result
     }
-    
+
     /**
      * Maps an object schema to a map structure.
      *
      * @param schema The object schema to map
      * @param result The result map to populate
      */
-    private fun mapObjectSchema(schema: JsonObjectSchema, result: MutableMap<String, Any>) {
+    private fun mapObjectSchema(
+        schema: JsonObjectSchema,
+        result: MutableMap<String, Any>,
+    ) {
         result["type"] = "object"
         schema.description()?.let { result["description"] = it }
 
@@ -374,19 +399,22 @@ class ToolService(
             result["additionalProperties"] = it
         }
     }
-    
+
     /**
      * Maps an array schema to a map structure.
      *
      * @param schema The array schema to map
      * @param result The result map to populate
      */
-    private fun mapArraySchema(schema: JsonArraySchema, result: MutableMap<String, Any>) {
+    private fun mapArraySchema(
+        schema: JsonArraySchema,
+        result: MutableMap<String, Any>,
+    ) {
         result["type"] = "array"
         schema.description()?.let { result["description"] = it }
         schema.items()?.let { result["items"] = mapJsonSchemaToMap(it) }
     }
-    
+
     /**
      * Maps a primitive schema to a map structure.
      *
@@ -394,7 +422,11 @@ class ToolService(
      * @param result The result map to populate
      * @param type The type of the primitive schema
      */
-    private fun mapPrimitiveSchema(schema: JsonSchemaElement, result: MutableMap<String, Any>, type: String) {
+    private fun mapPrimitiveSchema(
+        schema: JsonSchemaElement,
+        result: MutableMap<String, Any>,
+        type: String,
+    ) {
         result["type"] = type
         when (schema) {
             is JsonStringSchema -> schema.description()?.let { result["description"] = it }
@@ -414,19 +446,19 @@ class NativeToolRegistry {
         toolRepository["think"] = loadExtendedThinkTool()
     }
 
-    fun findByName(name: String): ToolDefinition? {
-        return toolRepository[name]
-    }
+    fun findByName(name: String): ToolDefinition? = toolRepository[name]
 
-    fun findAll(): List<ToolDefinition> {
-        return toolRepository.values.toList()
-    }
+    fun findAll(): List<ToolDefinition> = toolRepository.values.toList()
 
-    fun executeTool(name: String, arguments: String): String? {
+    fun executeTool(
+        name: String,
+        arguments: String,
+    ): String? {
         val tool = toolRepository[name] ?: return null
         log.debug("Executing tool $name with arguments: $arguments")
         return "Your thought has been logged."
     }
+
     /**
      * Loads the extended "think" tool definition.
      *
@@ -436,26 +468,31 @@ class NativeToolRegistry {
      * @return A `NativeToolDefinition` instance representing the "think" tool.
      */
     private fun loadExtendedThinkTool(): NativeToolDefinition {
-        val parameters = mutableMapOf(
-            "type" to "object",
-            "properties" to mapOf("thought" to mapOf("type" to "string", "description" to "A thought to think about")),
-            "required" to listOf("thought"),
-            "additionalProperties" to false
-        )
+        val parameters =
+            mutableMapOf(
+                "type" to "object",
+                "properties" to mapOf("thought" to mapOf("type" to "string", "description" to "A thought to think about")),
+                "required" to listOf("thought"),
+                "additionalProperties" to false,
+            )
 
         return NativeToolDefinition(
             name = "think",
             description = "Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log.",
-            parameters = parameters
+            parameters = parameters,
         )
     }
 }
 
 /**
  * Data class representing metadata about a tool.
- * 
+ *
  * @property id Unique identifier for the tool
  * @property name Human-readable name of the tool
  * @property description Detailed description of what the tool does
  */
-data class ToolMetadata(val id: String, val name: String, val description: String)
+data class ToolMetadata(
+    val id: String,
+    val name: String,
+    val description: String,
+)

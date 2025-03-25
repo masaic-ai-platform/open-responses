@@ -14,7 +14,6 @@ import org.junit.jupiter.api.Test
 import java.util.*
 
 class ChatCompletionConverterTest {
-
     @Test
     fun `toResponse returns COMPLETED status with single message output`() {
         // Arrange
@@ -26,7 +25,15 @@ class ChatCompletionConverterTest {
         every { chatCompletion.created() } returns 1678901234 // arbitrary epoch seconds
         every { chatCompletion.model() } returns "gpt-4"
         every { chatCompletion.choices() } returns listOf(choice)
-        every { chatCompletion.usage() } returns Optional.of(CompletionUsage.builder().completionTokens(3).totalTokens(8).promptTokens(5).build())
+        every { chatCompletion.usage() } returns
+            Optional.of(
+                CompletionUsage
+                    .builder()
+                    .completionTokens(3)
+                    .totalTokens(8)
+                    .promptTokens(5)
+                    .build(),
+            )
 
         every { choice.index() } returns 0
         every { choice.finishReason().asString() } returns "stop" // typical normal stop
@@ -71,7 +78,14 @@ class ChatCompletionConverterTest {
         assert(outputItem.isMessage())
 
         val messageVal = outputItem.asMessage()
-        assertEquals("Hello world!", messageVal.content().first().asOutputText().text())
+        assertEquals(
+            "Hello world!",
+            messageVal
+                .content()
+                .first()
+                .asOutputText()
+                .text(),
+        )
 
         assert(response.error().isEmpty)
         assert(response.incompleteDetails().isEmpty)
@@ -94,7 +108,15 @@ class ChatCompletionConverterTest {
         every { chatCompletion.created() } returns 1678901234
         every { chatCompletion.model() } returns "gpt-4"
         every { chatCompletion.choices() } returns listOf(choice)
-        every { chatCompletion.usage() } returns Optional.of(CompletionUsage.builder().completionTokens(3).totalTokens(8).promptTokens(5).build())
+        every { chatCompletion.usage() } returns
+            Optional.of(
+                CompletionUsage
+                    .builder()
+                    .completionTokens(3)
+                    .totalTokens(8)
+                    .promptTokens(5)
+                    .build(),
+            )
 
         every { choice.index() } returns 0
         every { choice.finishReason().asString() } returns "stop"
@@ -133,7 +155,14 @@ class ChatCompletionConverterTest {
         assert(firstOutput.isMessage())
         val msgVal = firstOutput.asMessage()
         // <think> portion should be removed
-        assertEquals("Hello  world!", msgVal.content().first().asOutputText().text())
+        assertEquals(
+            "Hello  world!",
+            msgVal
+                .content()
+                .first()
+                .asOutputText()
+                .text(),
+        )
 
         // Second is the reasoning item
         assert(secondOutput.isReasoning())
@@ -154,7 +183,15 @@ class ChatCompletionConverterTest {
         every { chatCompletion.created() } returns 1678901234
         every { chatCompletion.model() } returns "gpt-4"
         every { chatCompletion.choices() } returns listOf(choice1, choice2)
-        every { chatCompletion.usage() } returns Optional.of(CompletionUsage.builder().completionTokens(3).totalTokens(8).promptTokens(5).build())
+        every { chatCompletion.usage() } returns
+            Optional.of(
+                CompletionUsage
+                    .builder()
+                    .completionTokens(3)
+                    .totalTokens(8)
+                    .promptTokens(5)
+                    .build(),
+            )
 
         every { choice1.index() } returns 0
         every { choice1.finishReason().asString() } returns "stop"
@@ -191,7 +228,14 @@ class ChatCompletionConverterTest {
         // Assert
         assertEquals(ResponseStatus.INCOMPLETE, response.status().get())
         assert(response.incompleteDetails().isPresent)
-        assertEquals(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS, response.incompleteDetails().get().reason().get())
+        assertEquals(
+            Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS,
+            response
+                .incompleteDetails()
+                .get()
+                .reason()
+                .get(),
+        )
         // Both messages end up in output
         assertEquals(2, response.output().size)
     }
@@ -209,7 +253,15 @@ class ChatCompletionConverterTest {
         every { chatCompletion.created() } returns 1678901234
         every { chatCompletion.model() } returns "gpt-4"
         every { chatCompletion.choices() } returns listOf(choice1, choice2)
-        every { chatCompletion.usage() } returns Optional.of(CompletionUsage.builder().completionTokens(3).totalTokens(8).promptTokens(5).build())
+        every { chatCompletion.usage() } returns
+            Optional.of(
+                CompletionUsage
+                    .builder()
+                    .completionTokens(3)
+                    .totalTokens(8)
+                    .promptTokens(5)
+                    .build(),
+            )
 
         every { choice1.index() } returns 0
         every { choice1.finishReason().asString() } returns "stop"
@@ -246,10 +298,23 @@ class ChatCompletionConverterTest {
         // Assert
         assertEquals(ResponseStatus.FAILED, response.status().get())
         assert(response.incompleteDetails().isPresent)
-        assertEquals(Response.IncompleteDetails.Reason.CONTENT_FILTER, response.incompleteDetails().get().reason().get())
+        assertEquals(
+            Response.IncompleteDetails.Reason.CONTENT_FILTER,
+            response
+                .incompleteDetails()
+                .get()
+                .reason()
+                .get(),
+        )
         assert(response.error().isPresent)
         assertEquals(ResponseError.Code.SERVER_ERROR, response.error().get().code())
-        assertTrue(response.error().get().message().contains("violated") == true)
+        assertTrue(
+            response
+                .error()
+                .get()
+                .message()
+                .contains("violated") == true,
+        )
 
         // Both messages appear in output even if one triggered content_filter
         assertEquals(2, response.output().size)
@@ -268,7 +333,15 @@ class ChatCompletionConverterTest {
         every { chatCompletion.created() } returns 1678901234
         every { chatCompletion.model() } returns "gpt-4"
         every { chatCompletion.choices() } returns listOf(choice)
-        every { chatCompletion.usage() } returns Optional.of(CompletionUsage.builder().completionTokens(3).totalTokens(8).promptTokens(5).build())
+        every { chatCompletion.usage() } returns
+            Optional.of(
+                CompletionUsage
+                    .builder()
+                    .completionTokens(3)
+                    .totalTokens(8)
+                    .promptTokens(5)
+                    .build(),
+            )
 
         every { choice.index() } returns 0
         every { choice.finishReason().asString() } returns "stop"
@@ -328,7 +401,15 @@ class ChatCompletionConverterTest {
         every { chatCompletion.created() } returns 0
         every { chatCompletion.model() } returns "gpt-4"
         every { chatCompletion.choices() } returns emptyList()
-        every { chatCompletion.usage() } returns Optional.of(CompletionUsage.builder().completionTokens(3).totalTokens(8).promptTokens(5).build())
+        every { chatCompletion.usage() } returns
+            Optional.of(
+                CompletionUsage
+                    .builder()
+                    .completionTokens(3)
+                    .totalTokens(8)
+                    .promptTokens(5)
+                    .build(),
+            )
 
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
