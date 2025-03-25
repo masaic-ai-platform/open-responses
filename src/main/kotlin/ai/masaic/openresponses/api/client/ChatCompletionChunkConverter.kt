@@ -125,10 +125,11 @@ object ChatCompletionChunkConverter {
         toolCall: ChatCompletionChunk.Choice.Delta.ToolCall,
         completionId: String
     ): ResponseStreamEvent {
+        val arguments = if(toolCall.function().isPresent && toolCall.function().get().arguments().isPresent) toolCall.function().get().arguments().get() else ""
         return ResponseStreamEvent.ofFunctionCallArgumentsDelta(
             ResponseFunctionCallArgumentsDeltaEvent.builder()
                 .outputIndex(toolCall.index())
-                .delta(toolCall.function().get().arguments().get().toString())
+                .delta(arguments)
                 .itemId(completionId)
                 .putAllAdditionalProperties(toolCall._additionalProperties())
                 .build()

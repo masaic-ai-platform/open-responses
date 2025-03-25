@@ -335,6 +335,8 @@ class MasaicStreamingService(
                         .message(
                             "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable."
                         )
+                        .code("too_many_tool_calls")
+                        .param(null)
                         .build()
                 )
             )
@@ -352,6 +354,9 @@ class MasaicStreamingService(
                         .message(
                             "Timeout while processing. Increase the timeout limit by setting MASAIC_MAX_STREAMING_TIMEOUT environment variable."
                         )
+                        .code("timeout")
+                        .param(null)
+                        .type(JsonValue.from("response.error"))
                         .build()
                 )
             )
