@@ -24,7 +24,7 @@ With OpenResponses API, you can:
 - 🚀 Leverage the full power of each provider's unique features
 - 🧩 Build with a standardized API that works across the AI ecosystem
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy?template=https://github.com/masaic-ai-platform/api-draft)
+[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy)
 
 ## 🤔 Why OpenResponses?
 
