@@ -18,8 +18,8 @@ Follow this guide to run the service in under 5 minutes using one of the followi
 Begin by cloning the repository and entering its directory:
 
 ```bash
-git clone https://github.com/masaic-ai-platform/api-draft.git
-cd api-draft
+git clone https://github.com/masaic-ai-platform/open-responses.git
+cd open-responses
 ```
 ---
 
@@ -122,11 +122,16 @@ BRAVE_API_KEY=your_brave_key_value
 
 ### Run the Service with MCP Tools Enabled
 
-Start the service with the built-in MCP tools using: (docker-compose for mac)
+Start the service with the built-in MCP tools using:
 
+For macOS:
 ```bash
 docker-compose --profile mcp up open-responses-mcp
 ```
+For Windows:
+```bash
+docker-compose --profile mcp up open-responses-mcp-windows
+````
 
 ### Example API Calls with Built-In Tools
 
@@ -219,12 +224,16 @@ MCP_CONFIG_FILE_PATH=path_to_mcp_config_file
 
 ### Run the Service with the Custom MCP Configuration
 
-Start the service using: (docker-compose for mac)
+Start the service using:
 
+For macOS:
 ```bash
 docker-compose --profile mcp up open-responses-custom-mcp
 ```
-
+For Windows:
+```bash
+docker-compose --profile mcp up open-responses-custom-mcp-windows
+```
 
 ## 5. Running Example Scripts with the openai-agent-python SDK
 

@@ -55,8 +55,8 @@ The API implements the following OpenAI-compatible endpoints:
 
 ```bash
 # Clone the repository
-git clone https://github.com/masaic-ai-platform/api-draft.git
-cd api-draft
+git clone https://github.com/masaic-ai-platform/open-responses.git
+cd open-responses
 
 # Start the service with Docker Compose
 docker-compose up
