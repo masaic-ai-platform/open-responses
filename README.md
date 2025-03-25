@@ -14,7 +14,7 @@
 
 ## 🌟 Overview
 
-OpenResponses API empowers developers to leverage the incredible capabilities of various LLM providers through a familiar interface - the OpenAI Responses API structure. This compatibility layer bridges the gap between different LLM providers and applications built for OpenAI's completion API.
+OpenResponses API empowers developers to leverage the incredible capabilities of various LLM providers through a familiar interface - the OpenAI Responses API structure. This API layer bridges the gap between different LLM providers and applications built on OpenAI's completion API by following the [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) specifications.
 
 > **"Simplicity is the ultimate sophistication."** — Leonardo da Vinci
 
@@ -29,7 +29,7 @@ With OpenResponses API, you can:
 ## 🤔 Why OpenResponses?
 
 ### One Interface, Multiple Providers
-Stop maintaining different codebases for each LLM provider. With OpenResponses, implement once and access multiple models through a standardized interface.
+Stop maintaining different codebases for each LLM provider. OpenResponses provides a way to access to multiple models through a standardized interface.
 
 ### Cost Optimization
 Easily switch between models to optimize for cost, performance, or features - with just a parameter change.
@@ -38,7 +38,7 @@ Easily switch between models to optimize for cost, performance, or features - wi
 Eliminate vendor lock-in by having the flexibility to switch providers when needed without code changes.
 
 ### Extended Capabilities
-Access unique features like streaming responses, function calling, and tool use with standardized implementation patterns.
+Access unique features like streaming responses, built-in tools(currently supported with MCP servers - tool discovery and execution), function calling.
 
 ## ✨ API Endpoints
 
