@@ -5,9 +5,8 @@ Follow this guide to run the service in under 5 minutes using one of the followi
 1. Getting Started (Clone repo and quick setup without additional tool overhead)
 2. Starting Docker with Built-In Tools
 3. Starting Docker with a Custom MCP Configuration
-4. Starting Docker with Custom MCP Configuration
-5. Running example scripts with the openai-agent-python SDK
-6. Running Agent Examples Built with OpenAI Agent SDK To Use Open Responses API Built In Tools
+4. Running example scripts with the openai-agent-python SDK
+5. Running Agent Examples Built with OpenAI Agent SDK To Use Open Responses API Built In Tools
 
 ---
 
