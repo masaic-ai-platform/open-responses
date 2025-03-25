@@ -1,10 +1,12 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.model.FunctionTool
+import ai.masaic.openresponses.tool.mcp.MCPServer
 import ai.masaic.openresponses.tool.mcp.MCPServers
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
+import dev.langchain4j.mcp.client.McpClient
 import dev.langchain4j.model.chat.request.json.*
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
@@ -101,18 +103,52 @@ class ToolService(
      */
     fun executeTool(name: String, arguments: String): String? {
         try {
-            val tool = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
-            val toolResult = when (tool.protocol) {
-                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments)
-                ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
-            }
-            log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
-            return toolResult
+            val tool = findToolByName(name) ?: return null
+            return executeToolByProtocol(tool, name, arguments)
         } catch (e: Exception) {
-            val errorMessage = "Tool $name execution with arguments $arguments failed with error message: ${e.message}"
-            log.error(errorMessage, e)
-            return errorMessage
+            return handleToolExecutionError(name, arguments, e)
         }
+    }
+    
+    /**
+     * Finds a tool by its name.
+     *
+     * @param name The name of the tool to find
+     * @return The tool definition if found, null otherwise
+     */
+    private fun findToolByName(name: String): ToolDefinition? {
+        return nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name)
+    }
+    
+    /**
+     * Executes a tool based on its protocol.
+     *
+     * @param tool The tool definition
+     * @param name The name of the tool
+     * @param arguments The arguments for tool execution
+     * @return The result of tool execution
+     */
+    private fun executeToolByProtocol(tool: ToolDefinition, name: String, arguments: String): String? {
+        val toolResult = when (tool.protocol) {
+            ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments)
+            ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
+        }
+        log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
+        return toolResult
+    }
+    
+    /**
+     * Handles errors that occur during tool execution.
+     *
+     * @param name The name of the tool
+     * @param arguments The arguments that were provided
+     * @param e The exception that occurred
+     * @return An error message
+     */
+    private fun handleToolExecutionError(name: String, arguments: String, e: Exception): String {
+        val errorMessage = "Tool $name execution with arguments $arguments failed with error message: ${e.message}"
+        log.error(errorMessage, e)
+        return errorMessage
     }
 
     /**
@@ -123,30 +159,58 @@ class ToolService(
      */
     @PostConstruct
     fun loadTools() {
-        val mcpToolsEnabled = System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
-        if (!mcpToolsEnabled) {
+        if (!isMcpToolsEnabled()) {
             log.info("MCP tools are not enabled, skipping loading of MCP tools.")
             return
         }
 
-        var filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
-        if (!filePath.startsWith("classpath:") && !filePath.startsWith("file:") && !filePath.startsWith("http")) {
-            filePath = "file:${filePath}"
-        }
-        val mcpServerConfigJson = try {
-            resourceLoader.getResource(filePath).getContentAsString(Charset.defaultCharset())
-        } catch (e: Exception) {
-            e.printStackTrace()
-            log.warn("$MCP_CONFIG_ENV_VAR environment variable not set or file not found. No MCP tools will be loaded.")
-            return
-        }
-
+        val configPath = determineConfigFilePath()
+        val mcpServerConfigJson = loadConfigurationContent(configPath)
+        
         if (mcpServerConfigJson.isEmpty()) {
             log.warn("MCP server config file is empty. No MCP tools will be loaded.")
             return
         }
 
         loadToolRegistry(mcpServerConfigJson)
+    }
+    
+    /**
+     * Checks if MCP tools are enabled via environment variable.
+     * 
+     * @return true if MCP tools are enabled, false otherwise
+     */
+    private fun isMcpToolsEnabled(): Boolean {
+        return System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
+    }
+    
+    /**
+     * Determines the configuration file path from environment variable or default.
+     * 
+     * @return The resolved configuration file path
+     */
+    private fun determineConfigFilePath(): String {
+        var filePath = System.getenv(MCP_CONFIG_ENV_VAR) ?: DEFAULT_CONFIG_PATH
+        if (!filePath.startsWith("classpath:") && !filePath.startsWith("file:") && !filePath.startsWith("http")) {
+            filePath = "file:${filePath}"
+        }
+        return filePath
+    }
+    
+    /**
+     * Loads the configuration content from the specified path.
+     * 
+     * @param configPath The path to load the configuration from
+     * @return The configuration content as a string
+     */
+    private fun loadConfigurationContent(configPath: String): String {
+        return try {
+            resourceLoader.getResource(configPath).getContentAsString(Charset.defaultCharset())
+        } catch (e: Exception) {
+            e.printStackTrace()
+            log.warn("$MCP_CONFIG_ENV_VAR environment variable not set or file not found. No MCP tools will be loaded.")
+            ""
+        }
     }
 
     /**
@@ -164,20 +228,61 @@ class ToolService(
      * @param mcpServerConfigJson JSON configuration string for MCP servers
      */
     private fun loadToolRegistry(mcpServerConfigJson: String) {
-        val servers = json.decodeFromString(MCPServers.serializer(), mcpServerConfigJson)
-        servers.mcpServers.forEach { (name, server) ->
-            try {
-                val mcpClient = mcpToolExecutor.connectServer(name, server)
-                mcpToolRegistry.registerMCPTools(name, mcpClient)
-                log.info("Successfully loaded tools for MCP server: $name")
-            } catch (e: Exception) {
-                log.warn(
-                    "Failed to connect to MCP server '$name': ${e.message}. If this server is necessary then fix the MCP config or server and restart the application.",
-                    e
-                )
-                // Continue with next server instead of aborting
-            }
+        val servers = json.decodeFromString<MCPServers>(mcpServerConfigJson)
+        servers.mcpServers.forEach { (serverName, serverConfig) ->
+            connectAndRegisterServer(serverName, serverConfig)
         }
+    }
+    
+    /**
+     * Connects to an MCP server and registers its tools.
+     *
+     * @param serverName The name of the server
+     * @param serverConfig The server configuration
+     */
+    private fun connectAndRegisterServer(serverName: String, serverConfig: MCPServer) {
+        try {
+            val mcpClient = connectToMcpServer(serverName, serverConfig)
+            registerMcpServerTools(serverName, mcpClient)
+            log.info("Successfully loaded tools for MCP server: $serverName")
+        } catch (e: Exception) {
+            handleServerConnectionError(serverName, e)
+        }
+    }
+    
+    /**
+     * Connects to an MCP server.
+     *
+     * @param serverName The name of the server
+     * @param serverConfig The server configuration
+     * @return The MCP client
+     */
+    private fun connectToMcpServer(serverName: String, serverConfig: MCPServer): McpClient {
+        return mcpToolExecutor.connectServer(serverName, serverConfig)
+    }
+    
+    /**
+     * Registers tools from an MCP server.
+     *
+     * @param serverName The name of the server
+     * @param mcpClient The MCP client
+     */
+    private fun registerMcpServerTools(serverName: String, mcpClient: McpClient) {
+        mcpToolRegistry.registerMCPTools(serverName, mcpClient)
+    }
+    
+    /**
+     * Handles errors that occur when connecting to an MCP server.
+     *
+     * @param serverName The name of the server
+     * @param e The exception that occurred
+     */
+    private fun handleServerConnectionError(serverName: String, e: Exception) {
+        log.warn(
+            "Failed to connect to MCP server '$serverName': ${e.message}. If this server is necessary then fix the MCP config or server and restart the application.",
+            e
+        )
+        // Continue with next server instead of aborting
     }
 
     /**

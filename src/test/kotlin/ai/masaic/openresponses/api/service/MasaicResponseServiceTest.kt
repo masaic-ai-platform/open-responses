@@ -36,7 +36,7 @@ class MasaicResponseServiceTest {
     fun setup() {
         toolService = mockk()
         openAIResponseService = mockk()
-        masaicResponseService = MasaicResponseService(toolService, openAIResponseService)
+        masaicResponseService = MasaicResponseService(openAIResponseService)
     }
 
     @Test

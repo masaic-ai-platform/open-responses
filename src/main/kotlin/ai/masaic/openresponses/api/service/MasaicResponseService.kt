@@ -3,8 +3,6 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.extensions.fromBody
 import ai.masaic.openresponses.api.utils.EventUtils
-import ai.masaic.openresponses.api.utils.MDCContext
-import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.core.http.AsyncStreamResponse
@@ -43,11 +41,9 @@ private val logger = KotlinLogging.logger {}
 /**
  * Service for interacting with the OpenAI API to create and manage responses.
  *
- * @property toolService Service for managing and executing tools
  */
 @Service
 class MasaicResponseService(
-    private val toolService: ToolService,
     private val openAIResponseService: MasaicOpenAiResponseServiceImpl
 ) {
 
@@ -193,9 +189,6 @@ class MasaicResponseService(
         val queryBuilder = createQueryParamsBuilder(queryParams)
         val client = createClient(headers)
 
-        // Store trace ID in thread local for streaming handlers
-        MDCContext.put("traceId", traceId)
-
         return try {
             openAIResponseService.createCompletionStream(
                 client, createRequestParams(
@@ -219,11 +212,11 @@ class MasaicResponseService(
                 throw ResponseStreamingException("Error in streaming response: ${error.message}", error)
             }
             .onCompletion { error ->
-                if (error != null) {
-                    logger.error(error) { "Stream completed with error - traceId: $traceId" }
-                } else {
-                    logger.info { "Stream completed successfully - traceId: $traceId" }
-                }
+                    if (error != null) {
+                        logger.error(error) { "Stream completed with error - traceId: $traceId" }
+                    } else {
+                        logger.info { "Stream completed successfully - traceId: $traceId" }
+                    }
             }
         } catch (e: Exception) {
             logger.error(e) { "Failed to create streaming response - traceId: $traceId" }
@@ -292,7 +285,6 @@ class MasaicResponseService(
     private fun streamOpenAiResponse(response: AsyncStreamResponse<ResponseStreamEvent>): Flow<ServerSentEvent<String>> =
         callbackFlow {
             val subscription = response.subscribe { completion ->
-                MDCContext.withMDCSync {
                     try {
                         val event = EventUtils.convertEvent(completion)
                         if (!trySend(event).isSuccess) {
@@ -301,29 +293,24 @@ class MasaicResponseService(
                     } catch (e: Exception) {
                         logger.error(e) { "Error processing streaming event" }
                     }
-                }
             }
 
             launch {
-                MDCContext.withMDC {
                     try {
                         subscription.onCompleteFuture().await()
                         logger.debug { "Streaming response completed successfully" }
                     } catch (e: Exception) {
                         logger.error(e) { "Error in streaming response completion" }
                     }
-                }
             }
 
             awaitClose {
-                MDCContext.withMDCSync {
                     try {
                         logger.debug { "Cancelling streaming subscription" }
                         subscription.onCompleteFuture().cancel(false)
                     } catch (e: Exception) {
                         logger.warn(e) { "Error cancelling streaming subscription" }
                     }
-                }
             }
         }
 

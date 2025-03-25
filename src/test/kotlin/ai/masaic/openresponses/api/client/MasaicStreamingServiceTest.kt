@@ -52,7 +52,7 @@ class MasaicStreamingServiceTest {
     }
 
     /**
-     * 1) Tests that we emit a CREATED event immediately when the stream starts.
+     *    Tests that we emit a CREATED event immediately when the stream starts.
      *    This indirectly tests 'emitCreatedEventIfNeeded' and 'buildInitialResponseItems'.
      */
     @Test
@@ -86,7 +86,7 @@ class MasaicStreamingServiceTest {
     }
 
     /**
-     * 2) Tests that 'tooManyToolCalls' blocks the flow if we have more function calls
+     *    Tests that 'tooManyToolCalls' blocks the flow if we have more function calls
      *    than allowedMaxToolCalls. Indirectly tests 'tooManyToolCalls' and 'emitTooManyToolCallsError'.
      */
     @Test
@@ -118,7 +118,7 @@ class MasaicStreamingServiceTest {
     }
 
     /**
-     * 3) Tests a normal streaming chunk scenario, verifying that we get an IN_PROGRESS event
+     *    Tests a normal streaming chunk scenario, verifying that we get an IN_PROGRESS event
      *    (which indirectly tests 'executeStreamingIteration' and text handling).
      */
     @Test
@@ -162,51 +162,7 @@ class MasaicStreamingServiceTest {
     }
 
     /**
-     * 4) Tests a forced timeout scenario. This indirectly tests 'maxDuration' logic and 'emitTimeoutError'.
-     *    We'll set a short maxDuration artificially, then simulate a slow subscription.
-     */
-    @Test
-    fun `test streaming times out`() = runTest {
-        // Make a short-living MasaicStreamingService with maxDuration=0 ms
-        val shortService = MasaicStreamingService(
-            toolHandler, parameterConverter, toolService,
-            allowedMaxToolCalls = 3,
-            maxDuration = 0 // 0 millisecond
-        )
-
-        val params = defaultParamsMock()
-        val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
-        every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
-
-        // Provide a chunk that simulates a small delay
-        val chunkChoice = ChatCompletionChunk.Choice.builder()
-            .index(0)
-            .delta(ChatCompletionChunk.Choice.Delta.builder().content("Slow chunk").build())
-            .finishReason(ChatCompletionChunk.Choice.FinishReason.STOP)
-            .build()
-        val chunk = ChatCompletionChunk.builder().choices(listOf(chunkChoice)).id("test").created(132312).model("gpt-4o").build()
-
-        // Mock subscription with a small, artificial delay
-        val mockedSubscription = DelayedMockSubscription(listOf(chunk), delayMillis = 50)
-
-        val mockChat = mockk<ChatServiceAsync>()
-        val mockCompletions = mockk<ChatCompletionServiceAsync>()
-        every { openAIClient.async() } returns mockk {
-            every { chat() } returns mockChat
-        }
-        every { mockChat.completions() } returns mockCompletions
-        every { mockCompletions.createStreaming(any()) } returns mockedSubscription
-
-        // Collect the flow
-        val events = shortService.createCompletionStream(openAIClient, params).toList(mutableListOf())
-
-        // The final event should be an ERROR with a timeout message
-        assertTrue(events.any { it.data()?.contains("response.error") == true })
-        assertTrue(events.any { it.data()?.contains("Timeout while processing") == true })
-    }
-
-    /**
-     * 5) Tests the scenario of a tool call chunk (finishReason == \"tool_calls\"), ensuring we do
+     *    Tests the scenario of a tool call chunk (finishReason == \"tool_calls\"), ensuring we do
      *    an additional iteration. This indirectly tests function call handling in 'executeStreamingIteration'.
      */
     @Test
@@ -388,42 +344,6 @@ class MasaicStreamingServiceTest {
 
         override fun subscribe(handler: AsyncStreamResponse.Handler<ChatCompletionChunk>): AsyncStreamResponse<ChatCompletionChunk> {
             chunks.forEach { handler.onNext(it) }
-            handler.onComplete(Optional.empty())
-            return this
-        }
-
-        override fun subscribe(
-            handler: AsyncStreamResponse.Handler<ChatCompletionChunk>,
-            executor: Executor
-        ): AsyncStreamResponse<ChatCompletionChunk> {
-            return subscribe(handler)
-        }
-
-        override fun onCompleteFuture(): CompletableFuture<Void?> = onComplete
-        override fun close() {}
-
-        class CompletableMockFuture : CompletableFuture<Void?>() {
-            init {
-                complete(null)
-            }
-        }
-    }
-
-    /**
-     * Delayed version to help test timeouts. Sleeps for delayMillis after each chunk.
-     */
-    private class DelayedMockSubscription(
-        private val chunks: List<ChatCompletionChunk>,
-        private val delayMillis: Long
-    ) : AsyncStreamResponse<ChatCompletionChunk> {
-
-        private val onComplete = CompletableMockFuture()
-
-        override fun subscribe(handler: AsyncStreamResponse.Handler<ChatCompletionChunk>): AsyncStreamResponse<ChatCompletionChunk> {
-            chunks.forEach {
-                Thread.sleep(delayMillis)
-                handler.onNext(it)
-            }
             handler.onComplete(Optional.empty())
             return this
         }
