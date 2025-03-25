@@ -104,7 +104,7 @@ The conversion between `text.format` and `response_format` includes:
 
 ### Streaming Implementation (Handled by Masaic)
 
-Streaming events in the Responses API are mapped to Chat Completions API events through a sophisticated conversion process:
+Streaming events in the Responses API are mapped to Chat Completions API events through a customized conversion process:
 
 - **Event Mapping**: Each Responses API event corresponds to specific Chat Completions delta chunks:
   - Initial events (`response.created`) are generated when streaming starts
@@ -147,7 +147,7 @@ The table below shows the detailed mapping between Responses API streaming event
 
 #### Implementation Specifics
 
-The Masaic implementation includes sophisticated components for streaming:
+The Masaic implementation includes following components for streaming:
 
 1. **Event Buffer Management**:
    - Maintains partial content state across stream chunks
@@ -198,7 +198,6 @@ When using Chat Completions API via Responses API, the following Responses API f
 
 - **`reasoning.generate_summary`**:
   - Masaic extracts and generates reasoning summaries from model outputs
-  - Requires post-processing of Chat Completions responses
   - Platform performs additional processing to extract reasoning patterns
 
 ### Additional Masaic-Specific Enhancements
@@ -225,9 +224,9 @@ When using Chat Completions API via Responses API, the following Responses API f
 
 ## Modality Support (COMING SOON)
 
-Both interfaces support:
+Both interfaces will support:
 - Multimodal inputs (text, image, audio)
-- Audio outputs via the `audio` property
+- Audio outputs 
 
 ## Implementation Notes
 
@@ -277,7 +276,7 @@ The following examples demonstrate how to structure requests for the Responses A
 # This example shows a simple text input
 # Masaic processes this by:
 # 1. Converting the string input to a user message
-# 2. Creating a ChatCompletionUserMessageParam
+# 2. Creating a User message
 # 3. Setting the content directly as text
 curl -X POST https://api.openai.com/v1/responses \
 -H "Content-Type: application/json" \
@@ -379,7 +378,7 @@ curl -X POST https://api.openai.com/v1/responses \
 ```bash
 # This example shows multimodal input handling
 # Masaic processes this by:
-# 1. Converting each content item to ChatCompletionContentPart objects
+# 1. Converting each content item to content part objects
 # 2. Creating appropriate type-specific handlers for text and image
 # 3. Setting detail parameters for the image
 curl -X POST https://api.openai.com/v1/responses \
@@ -407,7 +406,7 @@ curl -X POST https://api.openai.com/v1/responses \
 ```bash
 # This example demonstrates tool usage
 # Masaic processes this by:
-# 1. Converting tool definitions to FunctionDefinition objects
+# 1. Converting tool definitions to completion tools objects
 # 2. Setting up the appropriate function structure
 # 3. Handling tool calls and responses through recursive processing
 curl -X POST https://api.openai.com/v1/responses \
@@ -463,7 +462,7 @@ curl -N -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example demonstrates metadata handling
-# Masaic preserves and passes through metadata
+# Masaic preserves and passes through metadata (Coming soon)
 # This is useful for request tracing and client-side state management 
 curl -X POST https://api.openai.com/v1/responses \
 -H "Content-Type: application/json" \
