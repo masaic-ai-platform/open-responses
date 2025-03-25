@@ -12,26 +12,28 @@ import org.springframework.test.web.reactive.server.WebTestClient
 @AutoConfigureWebTestClient
 @ActiveProfiles("test")
 class ToolIntegrationTest {
-
     @Autowired
     private lateinit var webTestClient: WebTestClient
-    
+
     @Autowired
     private lateinit var toolService: ToolService
-    
+
     @Autowired
     private lateinit var mcpToolRegistry: MCPToolRegistry
 
     @Test
     fun `tools endpoint should return available tools`() {
-        webTestClient.get()
+        webTestClient
+            .get()
             .uri("/v1/tools")
             .exchange()
-            .expectStatus().isOk
+            .expectStatus()
+            .isOk
             .expectBody()
-            .jsonPath("$").isArray()
+            .jsonPath("$")
+            .isArray()
     }
-    
+
     @Test
     fun `tool service should list registered tools`() {
         val tools = toolService.listAvailableTools()

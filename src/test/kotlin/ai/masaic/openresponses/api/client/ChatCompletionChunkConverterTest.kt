@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test
 import java.util.*
 
 internal class ChatCompletionChunkConverterTest {
-
     @Test
     fun `toResponseStreamEvent returns text delta event when content is present`() {
         // Arrange

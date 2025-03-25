@@ -5,8 +5,8 @@ import com.openai.core.JsonField
 import com.openai.core.RequestOptions
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
-import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletion.Choice.FinishReason
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.*
 import com.openai.services.blocking.ChatService
 import io.mockk.*
@@ -18,7 +18,6 @@ import org.springframework.http.codec.ServerSentEvent
 import java.util.Optional
 
 class MasaicOpenAiResponseServiceImplTest {
-
     private lateinit var parameterConverter: MasaicParameterConverter
     private lateinit var toolHandler: MasaicToolHandler
     private lateinit var streamingService: MasaicStreamingService
@@ -30,11 +29,12 @@ class MasaicOpenAiResponseServiceImplTest {
         toolHandler = mockk(relaxed = true)
         streamingService = mockk(relaxed = true)
 
-        serviceImpl = MasaicOpenAiResponseServiceImpl(
-            parameterConverter = parameterConverter,
-            toolHandler = toolHandler,
-            streamingService = streamingService
-        )
+        serviceImpl =
+            MasaicOpenAiResponseServiceImpl(
+                parameterConverter = parameterConverter,
+                toolHandler = toolHandler,
+                streamingService = streamingService,
+            )
     }
 
     /**
@@ -188,9 +188,10 @@ class MasaicOpenAiResponseServiceImplTest {
         }
 
         // 6) The toolHandler returns new input items for the 2nd iteration
-        val newInputItems = listOf(
-            mockk<ResponseInputItem>(relaxed = true)
-        )
+        val newInputItems =
+            listOf(
+                mockk<ResponseInputItem>(relaxed = true),
+            )
         every { toolHandler.handleMasaicToolCall(firstCompletion, originalParams) } returns newInputItems
 
         // 7) Stub parameter converter to return a ChatCompletionCreateParams for each iteration
@@ -230,11 +231,12 @@ class MasaicOpenAiResponseServiceImplTest {
         every { mockCompletions.create(any()) } returns completion
 
         // The toolHandler returns new input items with 11 function calls, exceeding default limit 10
-        val tooManyCalls = (1..11).map {
-            mockk<ResponseInputItem>(relaxed = true).apply {
-                every { isFunctionCall() } returns true
+        val tooManyCalls =
+            (1..11).map {
+                mockk<ResponseInputItem>(relaxed = true).apply {
+                    every { isFunctionCall() } returns true
+                }
             }
-        }
         every { toolHandler.handleMasaicToolCall(completion, params) } returns tooManyCalls
 
         // Mock builder usage
@@ -324,11 +326,12 @@ class MasaicOpenAiResponseServiceImplTest {
         every { params.previousResponseId() } returns Optional.empty()
         every { params.reasoning() } returns Optional.empty()
         // By default, create a text-based input
-        val mockInput = mockk<ResponseCreateParams.Input> {
-            every { isResponse() } returns false
-            every { isText() } returns true
-            every { asText() } returns "Hello world"
-        }
+        val mockInput =
+            mockk<ResponseCreateParams.Input> {
+                every { isResponse() } returns false
+                every { isText() } returns true
+                every { asText() } returns "Hello world"
+            }
         return params
     }
 }

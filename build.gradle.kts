@@ -4,6 +4,7 @@ plugins {
     id("org.springframework.boot") version "3.4.3"
     id("io.spring.dependency-management") version "1.1.7"
     kotlin("plugin.serialization") version "1.9.25"
+    id("org.jmailen.kotlinter") version "5.0.1"
 }
 
 group = "ai.masaic"

@@ -13,7 +13,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Disabled
@@ -27,7 +26,6 @@ import java.util.Optional
 
 @ExtendWith(SpringExtension::class)
 class MasaicResponseServiceTest {
-
     private lateinit var toolService: ToolService
     private lateinit var openAIResponseService: MasaicOpenAiResponseServiceImpl
     private lateinit var masaicResponseService: MasaicResponseService
@@ -40,136 +38,143 @@ class MasaicResponseServiceTest {
     }
 
     @Test
-    fun `createResponse should call openAIResponseService and return a Response`() = runBlocking {
-        // Given
-        val request = mockk<ResponseCreateParams.Body> {
-            every { input() } returns ResponseCreateParams.Input.ofText("Test")
-            every { model() } returns ChatModel.of("gpt-4o")
-            every { instructions() } returns Optional.empty()
-            every { reasoning() } returns Optional.empty()
-            every { parallelToolCalls() } returns Optional.of(true)
-            every { maxOutputTokens() } returns Optional.of(256)
-            every { include() } returns Optional.empty()
-            every { metadata() } returns Optional.empty()
-            every { store() } returns Optional.of(true)
-            every { temperature() } returns Optional.of(0.7)
-            every { topP() } returns Optional.of(0.9)
-            every { truncation() } returns Optional.empty()
-            every { _additionalProperties() } returns emptyMap()
+    fun `createResponse should call openAIResponseService and return a Response`() =
+        runBlocking {
+            // Given
+            val request =
+                mockk<ResponseCreateParams.Body> {
+                    every { input() } returns ResponseCreateParams.Input.ofText("Test")
+                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { instructions() } returns Optional.empty()
+                    every { reasoning() } returns Optional.empty()
+                    every { parallelToolCalls() } returns Optional.of(true)
+                    every { maxOutputTokens() } returns Optional.of(256)
+                    every { include() } returns Optional.empty()
+                    every { metadata() } returns Optional.empty()
+                    every { store() } returns Optional.of(true)
+                    every { temperature() } returns Optional.of(0.7)
+                    every { topP() } returns Optional.of(0.9)
+                    every { truncation() } returns Optional.empty()
+                    every { _additionalProperties() } returns emptyMap()
 
-            // For the optional fields that return java.util.Optional<T>:
-            every { text() } returns Optional.of(ResponseTextConfig.builder().build())
-            every { user() } returns Optional.of("someUser")
-            every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
-            every { tools() } returns Optional.of(listOf())
-        }
-        val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
-        headers.add("Authorization", "Bearer testKey")
-        val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
+                    // For the optional fields that return java.util.Optional<T>:
+                    every { text() } returns Optional.of(ResponseTextConfig.builder().build())
+                    every { user() } returns Optional.of("someUser")
+                    every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
+                    every { tools() } returns Optional.of(listOf())
+                }
+            val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
+            headers.add("Authorization", "Bearer testKey")
+            val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
 
-        val expectedResponse = mockk<Response>()
-        every {
-            openAIResponseService.create(ofType<OpenAIClient>(), any())
-        } returns expectedResponse
+            val expectedResponse = mockk<Response>()
+            every {
+                openAIResponseService.create(ofType<OpenAIClient>(), any())
+            } returns expectedResponse
 
-        // When
-        val result = masaicResponseService.createResponse(request, headers, queryParams)
+            // When
+            val result = masaicResponseService.createResponse(request, headers, queryParams)
 
-        // Then
-        assertSame(expectedResponse, result, "Should return the mocked response")
-        verify(exactly = 1) {
-            openAIResponseService.create(ofType<OpenAIClient>(),any())
-        }
-        confirmVerified(openAIResponseService)
-    }
-
-    @Test
-    fun `createResponse should throw IllegalArgumentException if Authorization header is missing`() = runBlocking {
-        // Given
-        val request = mockk<ResponseCreateParams.Body> {
-            every { input() } returns ResponseCreateParams.Input.ofText("Test")
-            every { model() } returns ChatModel.of("gpt-4o")
-            every { instructions() } returns Optional.empty()
-            every { reasoning() } returns Optional.empty()
-            every { parallelToolCalls() } returns Optional.of(true)
-            every { maxOutputTokens() } returns Optional.of(256)
-            every { include() } returns Optional.empty()
-            every { metadata() } returns Optional.empty()
-            every { store() } returns Optional.of(true)
-            every { temperature() } returns Optional.of(0.7)
-            every { topP() } returns Optional.of(0.9)
-            every { truncation() } returns Optional.empty()
-            every { _additionalProperties() } returns emptyMap()
-
-            // For the optional fields that return java.util.Optional<T>:
-            every { text() } returns Optional.of(ResponseTextConfig.builder().build())
-            every { user() } returns Optional.of("someUser")
-            every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
-            every { tools() } returns Optional.of(listOf())
-        }
-        val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
-        val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
-
-        // When & Then
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking {
-                masaicResponseService.createResponse(request, headers, queryParams)
+            // Then
+            assertSame(expectedResponse, result, "Should return the mocked response")
+            verify(exactly = 1) {
+                openAIResponseService.create(ofType<OpenAIClient>(), any())
             }
+            confirmVerified(openAIResponseService)
         }
-        Unit
-    }
 
     @Test
-    fun `createStreamingResponse should return a Flow of ServerSentEvent`() = runBlocking {
-        // Given
-        val request = mockk<ResponseCreateParams.Body> {
-            every { input() } returns ResponseCreateParams.Input.ofText("Test")
-            every { model() } returns ChatModel.of("gpt-4o")
-            every { instructions() } returns Optional.empty()
-            every { reasoning() } returns Optional.empty()
-            every { parallelToolCalls() } returns Optional.of(true)
-            every { maxOutputTokens() } returns Optional.of(256)
-            every { include() } returns Optional.empty()
-            every { metadata() } returns Optional.empty()
-            every { store() } returns Optional.of(true)
-            every { temperature() } returns Optional.of(0.7)
-            every { topP() } returns Optional.of(0.9)
-            every { truncation() } returns Optional.empty()
-            every { _additionalProperties() } returns emptyMap()
+    fun `createResponse should throw IllegalArgumentException if Authorization header is missing`() =
+        runBlocking {
+            // Given
+            val request =
+                mockk<ResponseCreateParams.Body> {
+                    every { input() } returns ResponseCreateParams.Input.ofText("Test")
+                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { instructions() } returns Optional.empty()
+                    every { reasoning() } returns Optional.empty()
+                    every { parallelToolCalls() } returns Optional.of(true)
+                    every { maxOutputTokens() } returns Optional.of(256)
+                    every { include() } returns Optional.empty()
+                    every { metadata() } returns Optional.empty()
+                    every { store() } returns Optional.of(true)
+                    every { temperature() } returns Optional.of(0.7)
+                    every { topP() } returns Optional.of(0.9)
+                    every { truncation() } returns Optional.empty()
+                    every { _additionalProperties() } returns emptyMap()
 
-            // For the optional fields that return java.util.Optional<T>:
-            every { text() } returns Optional.of(ResponseTextConfig.builder().build())
-            every { user() } returns Optional.of("someUser")
-            every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
-            every { tools() } returns Optional.of(listOf())
+                    // For the optional fields that return java.util.Optional<T>:
+                    every { text() } returns Optional.of(ResponseTextConfig.builder().build())
+                    every { user() } returns Optional.of("someUser")
+                    every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
+                    every { tools() } returns Optional.of(listOf())
+                }
+            val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
+            val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
+
+            // When & Then
+            assertThrows(IllegalArgumentException::class.java) {
+                runBlocking {
+                    masaicResponseService.createResponse(request, headers, queryParams)
+                }
+            }
+            Unit
         }
-        val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
-        headers.add("Authorization", "Bearer testKey")
-        val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
 
-        val expectedFlow: Flow<ServerSentEvent<String>> = flowOf(
-            ServerSentEvent.builder("data1").build(),
-            ServerSentEvent.builder("data2").build()
-        )
+    @Test
+    fun `createStreamingResponse should return a Flow of ServerSentEvent`() =
+        runBlocking {
+            // Given
+            val request =
+                mockk<ResponseCreateParams.Body> {
+                    every { input() } returns ResponseCreateParams.Input.ofText("Test")
+                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { instructions() } returns Optional.empty()
+                    every { reasoning() } returns Optional.empty()
+                    every { parallelToolCalls() } returns Optional.of(true)
+                    every { maxOutputTokens() } returns Optional.of(256)
+                    every { include() } returns Optional.empty()
+                    every { metadata() } returns Optional.empty()
+                    every { store() } returns Optional.of(true)
+                    every { temperature() } returns Optional.of(0.7)
+                    every { topP() } returns Optional.of(0.9)
+                    every { truncation() } returns Optional.empty()
+                    every { _additionalProperties() } returns emptyMap()
 
-        every {
-            openAIResponseService.createCompletionStream(any(), ofType())
-        } returns expectedFlow
+                    // For the optional fields that return java.util.Optional<T>:
+                    every { text() } returns Optional.of(ResponseTextConfig.builder().build())
+                    every { user() } returns Optional.of("someUser")
+                    every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
+                    every { tools() } returns Optional.of(listOf())
+                }
+            val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
+            headers.add("Authorization", "Bearer testKey")
+            val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
 
-        // When
-        val resultFlow = masaicResponseService.createStreamingResponse(request, headers, queryParams)
-        val collectedEvents = resultFlow.toList()
+            val expectedFlow: Flow<ServerSentEvent<String>> =
+                flowOf(
+                    ServerSentEvent.builder("data1").build(),
+                    ServerSentEvent.builder("data2").build(),
+                )
 
-        // Then
-        assertEquals(2, collectedEvents.size)
-        assertEquals("data1", collectedEvents[0].data())
-        assertEquals("data2", collectedEvents[1].data())
+            every {
+                openAIResponseService.createCompletionStream(any(), ofType())
+            } returns expectedFlow
 
-        verify(exactly = 1) {
-            openAIResponseService.createCompletionStream(any(), any())
+            // When
+            val resultFlow = masaicResponseService.createStreamingResponse(request, headers, queryParams)
+            val collectedEvents = resultFlow.toList()
+
+            // Then
+            assertEquals(2, collectedEvents.size)
+            assertEquals("data1", collectedEvents[0].data())
+            assertEquals("data2", collectedEvents[1].data())
+
+            verify(exactly = 1) {
+                openAIResponseService.createCompletionStream(any(), any())
+            }
+            confirmVerified(openAIResponseService)
         }
-        confirmVerified(openAIResponseService)
-    }
 
     @Test
     fun `createStreamingResponse should throw IllegalArgumentException if Authorization header is missing`() {
@@ -194,7 +199,7 @@ class MasaicResponseServiceTest {
         headers.add("Authorization", "Bearer testKey")
         val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
 
-        //TODO: Mock the OpenAI client and the response
+        // TODO: Mock the OpenAI client and the response
         val expectedResponse = mockk<Response>()
     }
 
@@ -212,6 +217,5 @@ class MasaicResponseServiceTest {
                 masaicResponseService.getResponse(responseId, headers, queryParams)
             }
         }
-
     }
 }

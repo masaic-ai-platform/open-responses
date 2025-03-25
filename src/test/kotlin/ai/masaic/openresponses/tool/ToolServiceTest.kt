@@ -24,7 +24,7 @@ import org.springframework.core.io.ResourceLoader
  *
  * These tests verify the functionality of the tool service, including listing tools,
  * retrieving specific tools, and executing tools with arguments.
- * 
+ *
  * Note: Tests are currently disabled as they require specific MCP server setup.
  */
 @Disabled("Tests temporarily disabled until MCP server configuration is available")
@@ -43,7 +43,7 @@ class ToolServiceTest {
 
     /**
      * Sets up the test environment by loading MCP tools.
-     * 
+     *
      * This method is executed once before all tests in this class.
      */
     @BeforeAll
@@ -53,7 +53,7 @@ class ToolServiceTest {
 
     /**
      * Cleans up resources after all tests have completed.
-     * 
+     *
      * This method is executed once after all tests in this class.
      */
     @AfterAll
@@ -64,27 +64,28 @@ class ToolServiceTest {
     @Test
     fun `listAvailableTools should return mapped tool metadata`() {
         // Given
-        val mockTools: List<McpToolDefinition>  = listOf(
-            McpToolDefinition(
-                id = "tool1",
-                protocol = ToolProtocol.MCP,
-                hosting = ToolHosting.MASAIC_MANAGED,
-                name = "Test Tool 1",
-                description = "A test tool",
-                parameters = JsonObjectSchema.builder().build(),
-                serverInfo = MCPServerInfo("test")
-            ),
-            McpToolDefinition(
-                id = "tool2",
-                protocol = ToolProtocol.MCP,
-                hosting = ToolHosting.MASAIC_MANAGED,
-                name = "Test Tool 2",
-                description = "A test tool",
-                parameters = JsonObjectSchema.builder().build(),
-                serverInfo = MCPServerInfo("test")
+        val mockTools: List<McpToolDefinition> =
+            listOf(
+                McpToolDefinition(
+                    id = "tool1",
+                    protocol = ToolProtocol.MCP,
+                    hosting = ToolHosting.MASAIC_MANAGED,
+                    name = "Test Tool 1",
+                    description = "A test tool",
+                    parameters = JsonObjectSchema.builder().build(),
+                    serverInfo = MCPServerInfo("test"),
+                ),
+                McpToolDefinition(
+                    id = "tool2",
+                    protocol = ToolProtocol.MCP,
+                    hosting = ToolHosting.MASAIC_MANAGED,
+                    name = "Test Tool 2",
+                    description = "A test tool",
+                    parameters = JsonObjectSchema.builder().build(),
+                    serverInfo = MCPServerInfo("test"),
+                ),
             )
-        )
-        
+
         every { mcpToolRegistry.findAll() } returns mockTools
 
         // When
@@ -98,13 +99,13 @@ class ToolServiceTest {
         assertEquals("tool2", result[1].id)
         assertEquals("Test Tool 2", result[1].name)
         assertEquals("Another test tool", result[1].description)
-        
+
         verify { mcpToolRegistry.findAll() }
     }
 
     /**
      * Tests that a specific tool can be retrieved by name.
-     * 
+     *
      * Verifies that a tool with a specific name can be found in the repository.
      */
     @Test
@@ -115,7 +116,7 @@ class ToolServiceTest {
 
     /**
      * Tests that a tool can be retrieved as a function tool.
-     * 
+     *
      * Verifies that a tool can be converted to a function tool with valid properties.
      */
     @Test
@@ -132,20 +133,22 @@ class ToolServiceTest {
 
     /**
      * Tests that a browser use tool can be executed with arguments.
-     * 
+     *
      * Verifies that the tool can be executed and returns a valid result.
      */
     @Test
     fun `execute browser use tool`() {
-        val execResult = toolService.executeTool(
-            "browser_use",
-            Json.encodeToString(serializer(),
-                mapOf(
-                    "url" to "https://preview--telco-service-portal.lovable.app/",
-                    "action" to "navigate to link and search the bill details like due date, bill amount of customer CUS10001"
-                )
+        val execResult =
+            toolService.executeTool(
+                "browser_use",
+                Json.encodeToString(
+                    serializer(),
+                    mapOf(
+                        "url" to "https://preview--telco-service-portal.lovable.app/",
+                        "action" to "navigate to link and search the bill details like due date, bill amount of customer CUS10001",
+                    ),
+                ),
             )
-        )
 
         // Assert result is not null and not empty
         assert(execResult != null) { "Tool execution result should not be null" }

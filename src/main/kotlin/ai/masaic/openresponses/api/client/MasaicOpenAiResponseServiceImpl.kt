@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service
 class MasaicOpenAiResponseServiceImpl(
     private val parameterConverter: MasaicParameterConverter,
     private val toolHandler: MasaicToolHandler,
-    private val streamingService: MasaicStreamingService
+    private val streamingService: MasaicStreamingService,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
 
@@ -50,7 +50,7 @@ class MasaicOpenAiResponseServiceImpl(
 
     override fun create(
         params: ResponseCreateParams,
-        requestOptions: RequestOptions
+        requestOptions: RequestOptions,
     ): Response {
         logger.warn { "create() method with RequestOptions not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
@@ -64,7 +64,7 @@ class MasaicOpenAiResponseServiceImpl(
      */
     fun create(
         client: OpenAIClient,
-        params: ResponseCreateParams
+        params: ResponseCreateParams,
     ): Response {
         logger.debug { "Creating completion with model: ${params.model()}" }
         try {
@@ -72,22 +72,41 @@ class MasaicOpenAiResponseServiceImpl(
             val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
             logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
 
-            if(!chatCompletions.choices().any { it.finishReason().value().name.lowercase() == "tool_calls"}){
+            if (!chatCompletions.choices().any {
+                    it
+                        .finishReason()
+                        .value()
+                        .name
+                        .lowercase() == "tool_calls"
+                }
+            ) {
                 logger.info { "No tool calls detected, returning direct response" }
                 return chatCompletions.toResponse(params)
             }
-            
+
             // Process any tool calls in the response
             logger.debug { "Processing tool calls from completion response" }
             val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
 
             // Rebuild the params with the updated input items for the follow-up request
-            val newParams = params.toBuilder()
-                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
-                .build()
+            val newParams =
+                params
+                    .toBuilder()
+                    .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+                    .build()
 
             // Check if we need to make follow-up requests for tool calls
-            if (newParams.input().asResponse().filter { it.isFunctionCall() }.size > newParams.input().asResponse().filter { it.isFunctionCallOutput() }.size) {
+            if (newParams
+                    .input()
+                    .asResponse()
+                    .filter { it.isFunctionCall() }
+                    .size >
+                newParams
+                    .input()
+                    .asResponse()
+                    .filter { it.isFunctionCallOutput() }
+                    .size
+            ) {
                 logger.info { "Some function calls without outputs, returning current response" }
                 return chatCompletions.toResponse(newParams)
             } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
@@ -114,18 +133,18 @@ class MasaicOpenAiResponseServiceImpl(
      */
     fun createCompletionStream(
         client: OpenAIClient,
-        initialParams: ResponseCreateParams
+        initialParams: ResponseCreateParams,
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
         return streamingService.createCompletionStream(client, initialParams)
     }
-    
+
     /**
      * Not implemented: Creates a streaming response.
      */
     override fun createStreaming(
         params: ResponseCreateParams,
-        requestOptions: RequestOptions
+        requestOptions: RequestOptions,
     ): StreamResponse<ResponseStreamEvent> {
         logger.warn { "createStreaming() method with RequestOptions not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
@@ -136,7 +155,7 @@ class MasaicOpenAiResponseServiceImpl(
      */
     override fun retrieve(
         params: ResponseRetrieveParams,
-        requestOptions: RequestOptions
+        requestOptions: RequestOptions,
     ): Response {
         logger.warn { "retrieve() method not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
@@ -147,12 +166,12 @@ class MasaicOpenAiResponseServiceImpl(
      */
     override fun delete(
         params: ResponseDeleteParams,
-        requestOptions: RequestOptions
+        requestOptions: RequestOptions,
     ) {
         logger.warn { "delete() method not implemented" }
         throw UnsupportedOperationException("Not yet implemented")
     }
-    
+
     /**
      * Gets the maximum allowed tool calls from environment or default.
      */
@@ -169,8 +188,7 @@ class MasaicOpenAiResponseServiceImpl(
  * @param message The message to extract content from
  * @return List of ChatCompletionContentPart objects
  */
-private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> =
-    prepareUserContent(message.content())
+private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> = prepareUserContent(message.content())
 
 /**
  * Prepares user content from a list of response input content.
@@ -185,38 +203,52 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
             content.isInputText() -> {
                 val inputText = content.asInputText()
                 ChatCompletionContentPart.ofText(
-                    ChatCompletionContentPartText.builder().text(
-                        inputText.text()
-                    ).build()
+                    ChatCompletionContentPartText
+                        .builder()
+                        .text(
+                            inputText.text(),
+                        ).build(),
                 )
             }
 
             content.isInputImage() -> {
                 val inputImage = content.asInputImage()
                 ChatCompletionContentPart.ofImageUrl(
-                    ChatCompletionContentPartImage.builder().type(JsonValue.from("image_url")).imageUrl(
-                        ChatCompletionContentPartImage.ImageUrl.builder()
-                            .url(inputImage._imageUrl())
-                            .detail(
-                                ChatCompletionContentPartImage.ImageUrl.Detail.of(
-                                    inputImage.detail().value().name.lowercase()
-                                )
-                            )
-                            .putAllAdditionalProperties(inputImage._additionalProperties())
-                            .build()
-                    ).build()
+                    ChatCompletionContentPartImage
+                        .builder()
+                        .type(JsonValue.from("image_url"))
+                        .imageUrl(
+                            ChatCompletionContentPartImage.ImageUrl
+                                .builder()
+                                .url(inputImage._imageUrl())
+                                .detail(
+                                    ChatCompletionContentPartImage.ImageUrl.Detail.of(
+                                        inputImage
+                                            .detail()
+                                            .value()
+                                            .name
+                                            .lowercase(),
+                                    ),
+                                ).putAllAdditionalProperties(inputImage._additionalProperties())
+                                .build(),
+                        ).build(),
                 )
             }
 
             content.isInputFile() -> {
                 val inputFile = content.asInputFile()
                 ChatCompletionContentPart.ofFile(
-                    ChatCompletionContentPart.File.builder().type(JsonValue.from("file")).file(
-                        ChatCompletionContentPart.File.FileObject.builder()
-                            .fileData(inputFile._fileData())
-                            .fileId(inputFile._fileId())
-                            .fileName(inputFile._filename()).build()
-                    ).build()
+                    ChatCompletionContentPart.File
+                        .builder()
+                        .type(JsonValue.from("file"))
+                        .file(
+                            ChatCompletionContentPart.File.FileObject
+                                .builder()
+                                .fileData(inputFile._fileData())
+                                .fileId(inputFile._fileId())
+                                .fileName(inputFile._filename())
+                                .build(),
+                        ).build(),
                 )
             }
 

@@ -13,32 +13,37 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
 class MasaicToolHandlerTest {
-
     private val toolService: ToolService = mockk()
     private val handler = MasaicToolHandler(toolService)
 
     @Test
     fun `handleMasaicToolCall(chatCompletion, params) - with no tool calls should return text items only`() {
         // Given: A ChatCompletion with one choice that has content but no tool calls
-        val chatMessage = ChatCompletionMessage.builder()
-            .content("Hello from the assistant")
-            .toolCalls(listOf())
-            .refusal(null)
-            .build()
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .content("Hello from the assistant")
+                .toolCalls(listOf())
+                .refusal(null)
+                .build()
 
-        val choice = ChatCompletion.Choice.builder()
-            .message(chatMessage)
-            .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
-            .index(0)
-            .logprobs(null)
-            .build()
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
 
-        val chatCompletion = ChatCompletion.builder()
-            .choices(listOf(choice))
-            .id("completion-id")
-            .created(1234567890)
-            .model("gpt-3.5-turbo")
-            .build()
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
 
         // Mock ResponseCreateParams (you may need to replace with your real usage)
         val params = mockk<ResponseCreateParams>()
@@ -62,35 +67,43 @@ class MasaicToolHandlerTest {
     @Test
     fun `handleMasaicToolCall(chatCompletion, params) - with a valid tool call should add functionCall and functionCallOutput`() {
         // Given: A ChatCompletion with a tool call
-        val toolCall = ChatCompletionMessageToolCall.builder()
-            .id("tool-call-id-123")
-            .function(
-                ChatCompletionMessageToolCall.Function.builder()
-                    .name("myToolFunction")
-                    .arguments("{\"key\":\"value\"}")
-                    .build()
-            )
-            .build()
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("tool-call-id-123")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("myToolFunction")
+                        .arguments("{\"key\":\"value\"}")
+                        .build(),
+                ).build()
 
-        val chatMessage = ChatCompletionMessage.builder()
-            .toolCalls(listOf(toolCall))
-            .content(null)
-            .refusal(null)
-            .build()
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content(null)
+                .refusal(null)
+                .build()
 
-        val choice = ChatCompletion.Choice.builder()
-            .message(chatMessage)
-            .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
-            .index(0)
-            .logprobs(null)
-            .build()
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
 
-        val chatCompletion = ChatCompletion.builder()
-            .choices(listOf(choice))
-            .id("completion-id")
-            .created(1234567890)
-            .model("gpt-3.5-turbo")
-            .build()
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
 
         // Mocking
         val params = mockk<ResponseCreateParams>()
@@ -119,33 +132,45 @@ class MasaicToolHandlerTest {
     @Test
     fun `handleMasaicToolCall(params, response) - with no function calls should only add user message and parked messages`() {
         // Given a Response with one output message but no function calls
-        val messageOutput = ResponseOutputMessage.builder()
-            .id("response-msg-id")
-            .status(ResponseOutputMessage.Status.COMPLETED)
-            .content(listOf(ResponseOutputMessage.Content.ofOutputText(
-                ResponseOutputText.builder().text("Assistant response").annotations(listOf()).build()
-            )))
-            .role(JsonValue.from("assistant"))
-            .build()
+        val messageOutput =
+            ResponseOutputMessage
+                .builder()
+                .id("response-msg-id")
+                .status(ResponseOutputMessage.Status.COMPLETED)
+                .content(
+                    listOf(
+                        ResponseOutputMessage.Content.ofOutputText(
+                            ResponseOutputText
+                                .builder()
+                                .text("Assistant response")
+                                .annotations(listOf())
+                                .build(),
+                        ),
+                    ),
+                ).role(JsonValue.from("assistant"))
+                .build()
 
-        val response = Response.builder()
-            .output(listOf(
-                ResponseOutputItem.ofMessage(messageOutput)
-            ))
-            .id("response-id")
-            .id("response-id")
-            .createdAt(1234567890.0)
-            .error(null)
-            .incompleteDetails(null)
-            .instructions(null)
-            .metadata(null)
-            .model(ChatModel.of("gpt-3.5-turbo"))
-            .toolChoice(ToolChoiceOptions.NONE)
-            .temperature(null)
-            .parallelToolCalls(false)
-            .tools(listOf())
-            .topP(null)
-            .build()
+        val response =
+            Response
+                .builder()
+                .output(
+                    listOf(
+                        ResponseOutputItem.ofMessage(messageOutput),
+                    ),
+                ).id("response-id")
+                .id("response-id")
+                .createdAt(1234567890.0)
+                .error(null)
+                .incompleteDetails(null)
+                .instructions(null)
+                .metadata(null)
+                .model(ChatModel.of("gpt-3.5-turbo"))
+                .toolChoice(ToolChoiceOptions.NONE)
+                .temperature(null)
+                .parallelToolCalls(false)
+                .tools(listOf())
+                .topP(null)
+                .build()
 
         // Mocking
         val params = mockk<ResponseCreateParams>()
@@ -166,32 +191,35 @@ class MasaicToolHandlerTest {
     @Test
     fun `handleMasaicToolCall(params, response) - with a recognized function call should add functionCall and functionCallOutput`() {
         // Given a Response that includes a function call
-        val functionCall = ResponseFunctionToolCall.builder()
-            .callId("function-call-id")
-            .id("function-call-id")
-            .name("myToolFunction")
-            .arguments("{\"foo\":\"bar\"}")
-            .build()
+        val functionCall =
+            ResponseFunctionToolCall
+                .builder()
+                .callId("function-call-id")
+                .id("function-call-id")
+                .name("myToolFunction")
+                .arguments("{\"foo\":\"bar\"}")
+                .build()
 
-        val response = Response.builder()
-            .output(
-                listOf(
-                    ResponseOutputItem.ofFunctionCall(functionCall)
-                )
-            )
-            .id("response-id")
-            .createdAt(1234567890.0)
-            .error(null)
-            .incompleteDetails(null)
-            .instructions(null)
-            .metadata(null)
-            .model(ChatModel.of("gpt-3.5-turbo"))
-            .toolChoice(ToolChoiceOptions.NONE)
-            .temperature(null)
-            .parallelToolCalls(false)
-            .tools(listOf())
-            .topP(null)
-            .build()
+        val response =
+            Response
+                .builder()
+                .output(
+                    listOf(
+                        ResponseOutputItem.ofFunctionCall(functionCall),
+                    ),
+                ).id("response-id")
+                .createdAt(1234567890.0)
+                .error(null)
+                .incompleteDetails(null)
+                .instructions(null)
+                .metadata(null)
+                .model(ChatModel.of("gpt-3.5-turbo"))
+                .toolChoice(ToolChoiceOptions.NONE)
+                .temperature(null)
+                .parallelToolCalls(false)
+                .tools(listOf())
+                .topP(null)
+                .build()
 
         // Mocking
         val params = mockk<ResponseCreateParams>()

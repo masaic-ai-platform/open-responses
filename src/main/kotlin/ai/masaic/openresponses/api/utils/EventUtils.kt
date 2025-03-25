@@ -8,7 +8,6 @@ import org.springframework.http.codec.ServerSentEvent
  * Utility class for converting OpenAI API response events to ServerSentEvents.
  */
 class EventUtils {
-
     companion object {
         private val objectMapper = ObjectMapper()
         private const val SPACE = " "
@@ -23,12 +22,13 @@ class EventUtils {
         fun convertEvent(event: ResponseStreamEvent): ServerSentEvent<String> {
             val eventType = getEventType(event)
             val eventData = SPACE + objectMapper.writeValueAsString(event)
-            
-            return ServerSentEvent.builder<String>(eventData)
+
+            return ServerSentEvent
+                .builder<String>(eventData)
                 .event(SPACE + eventType)
                 .build()
         }
-        
+
         /**
          * Gets the event type from a ResponseStreamEvent.
          *
@@ -36,8 +36,8 @@ class EventUtils {
          * @return The event type as a string
          * @throws IllegalArgumentException if the event type is unknown
          */
-        private fun getEventType(event: ResponseStreamEvent): String {
-            return when {
+        private fun getEventType(event: ResponseStreamEvent): String =
+            when {
                 event.isAudioDelta() -> event.asAudioDelta()._type().asStringOrThrow()
                 event.isAudioDone() -> event.asAudioDone()._type().asStringOrThrow()
                 event.isAudioTranscriptDelta() -> event.asAudioTranscriptDelta()._type().asStringOrThrow()
@@ -72,6 +72,5 @@ class EventUtils {
                 event.isWebSearchCallSearching() -> event.asWebSearchCallSearching()._type().asStringOrThrow()
                 else -> throw IllegalArgumentException("Unknown event type")
             }
-        }
     }
 }

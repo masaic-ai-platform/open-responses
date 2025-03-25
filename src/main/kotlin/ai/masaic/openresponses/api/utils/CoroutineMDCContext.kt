@@ -17,32 +17,35 @@ import kotlin.coroutines.CoroutineContext
  * ```
  */
 class CoroutineMDCContext(
-    private val contextMap: Map<String, String>
-) : ThreadContextElement<Map<String, String>>, AbstractCoroutineContextElement(Key) {
-    
+    private val contextMap: Map<String, String>,
+) : AbstractCoroutineContextElement(Key),
+    ThreadContextElement<Map<String, String>> {
     companion object Key : CoroutineContext.Key<CoroutineMDCContext>
-    
+
     /**
      * Store the current MDC state before switching context
      */
     override fun updateThreadContext(context: CoroutineContext): Map<String, String> {
         val oldState = MDC.getCopyOfContextMap() ?: emptyMap()
-        
+
         // Update MDC with our values
-        contextMap.forEach { (key, value) -> 
+        contextMap.forEach { (key, value) ->
             MDC.put(key, value)
         }
-        
+
         return oldState
     }
-    
+
     /**
      * Restore the previous MDC state after switching context
      */
-    override fun restoreThreadContext(context: CoroutineContext, oldState: Map<String, String>) {
+    override fun restoreThreadContext(
+        context: CoroutineContext,
+        oldState: Map<String, String>,
+    ) {
         // Clear all values first
         MDC.clear()
-        
+
         // Restore previous values
         oldState.forEach { (key, value) ->
             MDC.put(key, value)

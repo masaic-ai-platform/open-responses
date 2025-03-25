@@ -6,12 +6,10 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.Metadata
 import com.openai.models.responses.Response
-import com.openai.models.responses.ResponseInputContent
 import com.openai.models.responses.ResponseOutputText
+import com.openai.models.responses.ResponseTextConfig
 
 /**
  * Represents the reasoning information for a response.
@@ -21,7 +19,7 @@ import com.openai.models.responses.ResponseOutputText
  */
 data class Reasoning(
     val effort: String? = null,
-    val summary: String? = null
+    val summary: String? = null,
 )
 
 /**
@@ -39,9 +37,9 @@ data class FileSearchTool(
     @JsonProperty("max_num_results")
     val maxNumResults: Int = 20,
     @JsonProperty("ranking_options")
-    val rankingOptions: RankingOptions ?= null,
+    val rankingOptions: RankingOptions? = null,
     @JsonProperty("vector_store_ids")
-    val vectorStoreIds: List<String>? = null
+    val vectorStoreIds: List<String>? = null,
 ) : Tool
 
 /**
@@ -53,12 +51,12 @@ data class FileSearchTool(
 data class RankingOptions(
     val ranker: String = "auto",
     @JsonProperty("score_threshold")
-    val scoreThreshold: Double = 0.0
+    val scoreThreshold: Double = 0.0,
 )
 
 /**
  * Interface representing a tool that can be used in API requests.
- * 
+ *
  * All tool implementations must specify their type.
  */
 @JsonTypeInfo(
@@ -66,12 +64,12 @@ data class RankingOptions(
     include = JsonTypeInfo.As.EXISTING_PROPERTY,
     property = "type",
     visible = true,
-    defaultImpl = MasaicManagedTool::class
+    defaultImpl = MasaicManagedTool::class,
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = WebSearchTool::class, name = "web_search_preview"),
     JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search"),
-    JsonSubTypes.Type(value = FunctionTool::class, name = "function")
+    JsonSubTypes.Type(value = FunctionTool::class, name = "function"),
 )
 interface Tool {
     val type: String
@@ -91,7 +89,7 @@ data class FunctionTool(
     val description: String? = null,
     val name: String? = null,
     val parameters: MutableMap<String, Any> = mutableMapOf(),
-    val strict: Boolean = true
+    val strict: Boolean = true,
 ) : Tool {
     init {
         parameters["additionalProperties"] = false
@@ -121,7 +119,7 @@ data class UserLocation(
     val city: String? = null,
     val country: String,
     val region: String? = null,
-    val timezone: String? = null
+    val timezone: String? = null,
 )
 
 /**
@@ -138,7 +136,7 @@ data class WebSearchTool(
     @JsonProperty("search_context_size")
     val searchContextSize: String = "medium",
     @JsonProperty("user_location")
-    val userLocation: UserLocation? = null
+    val userLocation: UserLocation? = null,
 ) : Tool
 
 /**
@@ -174,7 +172,7 @@ data class CreateResponseRequest(
     val topP: Double? = null,
     @JsonProperty("tool_choice")
     val toolChoice: String? = null,
-    val store: Boolean?= null,
+    val store: Boolean? = null,
     val stream: Boolean = false,
     val reasoning: Reasoning? = null,
     val metadata: Metadata? = null,
@@ -188,14 +186,15 @@ data class CreateResponseRequest(
      */
     fun parseInput(objectMapper: ObjectMapper) {
         if (!(input is String)) {
-            input = objectMapper.readValue(
-                objectMapper.writeValueAsString(input),
-                object : TypeReference<List<InputMessageItem>>() {}
-            )
-            if(input is List<*>){
+            input =
+                objectMapper.readValue(
+                    objectMapper.writeValueAsString(input),
+                    object : TypeReference<List<InputMessageItem>>() {},
+                )
+            if (input is List<*>) {
                 for (item in input as List<InputMessageItem>) {
                     item.parseContent(objectMapper)
-                    }
+                }
             }
         }
     }
@@ -218,7 +217,7 @@ data class ResponseItemList(
     @JsonProperty("last_id")
     val lastId: String?,
     @JsonProperty("has_more")
-    val hasMore: Boolean
+    val hasMore: Boolean,
 )
 
 /**
@@ -246,7 +245,7 @@ data class InputMessageItem(
     val tool_call_id: String? = null,
     val call_id: String? = null,
     val output: String? = null,
-    val status: String? = null
+    val status: String? = null,
 ) {
     init {
         if (call_id != null) {
@@ -261,12 +260,9 @@ data class InputMessageItem(
     fun parseContent(objectMapper: ObjectMapper) {
         if (content is String?) {
             content = listOf(InputMessageItemContent(text = content?.toString(), type = "input_text"))
-        }
-        //check if content is json array
-        else if (content is List<*>?) {
+        } else if (content is List<*>?) { // check if content is json array
             content = objectMapper.convertValue(content, object : TypeReference<List<InputMessageItemContent>>() {})
-        }
-        else if (content is Map<*, *>?) {
+        } else if (content is Map<*, *>?) {
             content = objectMapper.convertValue(content, InputMessageItemContent::class.java)
         }
     }
@@ -284,5 +280,5 @@ data class InputMessageItemContent(
     val fileData: String? = null,
     @JsonProperty("filename")
     val fileName: String? = null,
-    val annotations: ResponseOutputText.Annotation?=null
+    val annotations: ResponseOutputText.Annotation? = null,
 )

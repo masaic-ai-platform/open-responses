@@ -1,9 +1,5 @@
 package ai.masaic.openresponses.api.controller
 
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.node.ArrayNode
-import com.fasterxml.jackson.databind.node.ObjectNode
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.model.MasaicManagedTool
 import ai.masaic.openresponses.api.model.Tool
@@ -11,6 +7,10 @@ import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.utils.CoroutineMDCContext
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ArrayNode
+import com.fasterxml.jackson.databind.node.ObjectNode
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -34,7 +34,10 @@ import org.springframework.web.server.ServerWebExchange
 @RequestMapping("/v1")
 @CrossOrigin("*")
 @Tag(name = "Responses", description = "OpenAI Response API")
-class ResponseController(private val masaicResponseService: MasaicResponseService, private val toolService: ToolService) {
+class ResponseController(
+    private val masaicResponseService: MasaicResponseService,
+    private val toolService: ToolService,
+) {
     private val log = LoggerFactory.getLogger(ResponseController::class.java)
     val mapper = jacksonObjectMapper()
 
@@ -46,46 +49,53 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = Response::class))]
-            )
-        ]
+                content = [Content(schema = Schema(implementation = Response::class))],
+            ),
+        ],
     )
     suspend fun createResponse(
         @RequestBody request: CreateResponseRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-        exchange: ServerWebExchange
+        exchange: ServerWebExchange,
     ): ResponseEntity<*> {
         // Extract trace ID from exchange
         val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-        
+
         // Use our custom coroutine-aware MDC context
         return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-
             updateMasaicManagedTools(request)
             request.parseInput(mapper)
             val requestBodyJson = mapper.writeValueAsString(request)
             log.debug("Request body: $requestBodyJson")
-    
+
             // If streaming is requested, set the appropriate content type and return a flow
             if (request.stream == true) {
-                ResponseEntity.ok().contentType(MediaType.TEXT_EVENT_STREAM)
+                ResponseEntity
+                    .ok()
+                    .contentType(MediaType.TEXT_EVENT_STREAM)
                     .body(
                         masaicResponseService.createStreamingResponse(
-                            mapper.readValue(requestBodyJson,
-                                ResponseCreateParams.Body::class.java
-                            ), headers, queryParams
-                        )
+                            mapper.readValue(
+                                requestBodyJson,
+                                ResponseCreateParams.Body::class.java,
+                            ),
+                            headers,
+                            queryParams,
+                        ),
                     )
             } else {
                 // For non-streaming, return a regular response
-                val responseObj = masaicResponseService.createResponse(
-                    mapper.readValue(
-                        requestBodyJson,
-                        ResponseCreateParams.Body::class.java
-                    ), headers, queryParams
-                )
-    
+                val responseObj =
+                    masaicResponseService.createResponse(
+                        mapper.readValue(
+                            requestBodyJson,
+                            ResponseCreateParams.Body::class.java,
+                        ),
+                        headers,
+                        queryParams,
+                    )
+
                 log.debug("Response Body: $responseObj")
                 ResponseEntity.ok(updateMasaicManagedTools(responseObj))
             }
@@ -100,27 +110,26 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = Response::class))]
+                content = [Content(schema = Schema(implementation = Response::class))],
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "Response not found"
-            )
-        ]
+                description = "Response not found",
+            ),
+        ],
     )
     suspend fun getResponse(
         @Parameter(description = "The ID of the response to retrieve", required = true)
         @PathVariable responseId: String,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-        exchange: ServerWebExchange
+        exchange: ServerWebExchange,
     ): ResponseEntity<Response> {
         // Extract trace ID from exchange
         val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-        
+
         // Use our custom coroutine-aware MDC context
         return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-
             try {
                 ResponseEntity.ok(masaicResponseService.getResponse(responseId, headers, queryParams))
             } catch (e: ResponseNotFoundException) {
@@ -136,25 +145,24 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         responses = [
             ApiResponse(
                 responseCode = "200",
-                description = "OK"
+                description = "OK",
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "Response not found"
-            )
-        ]
+                description = "Response not found",
+            ),
+        ],
     )
     fun deleteResponse(
         @Parameter(description = "The ID of the response to delete", required = true)
-        @PathVariable responseId: String
-    ): ResponseEntity<Void> {
-        return try {
-            //responseService.deleteResponse(responseId)
+        @PathVariable responseId: String,
+    ): ResponseEntity<Void> =
+        try {
+            // responseService.deleteResponse(responseId)
             ResponseEntity.ok().build()
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }
-    }
 
     @GetMapping("/responses/{responseId}/input_items")
     @Operation(
@@ -164,31 +172,31 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = ResponseInputItem::class))]
+                content = [Content(schema = Schema(implementation = ResponseInputItem::class))],
             ),
             ApiResponse(
                 responseCode = "404",
-                description = "Response not found"
-            )
-        ]
+                description = "Response not found",
+            ),
+        ],
     )
     fun listInputItems(
         @Parameter(description = "The ID of the response to retrieve input items for", required = true)
         @PathVariable responseId: String,
-
-        @Parameter(description = "A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20.")
+        @Parameter(
+            description = "A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20.",
+        )
         @RequestParam(defaultValue = "20") limit: Int,
-
-        @Parameter(description = "Sort order by the created_at timestamp of the object. asc for ascending and desc for descending. Defaults to desc.")
+        @Parameter(
+            description = "Sort order by the created_at timestamp of the object. asc for ascending and desc for descending. Defaults to desc.",
+        )
         @RequestParam(defaultValue = "desc") order: String,
-
         @Parameter(description = "An item ID to list items after, used in pagination.")
         @RequestParam(required = false) after: String?,
-
         @Parameter(description = "An item ID to list items before, used in pagination.")
-        @RequestParam(required = false) before: String?
-    ): ResponseEntity<Any> {
-        return try {
+        @RequestParam(required = false) before: String?,
+    ): ResponseEntity<Any> =
+        try {
             val validLimit = limit.coerceIn(1, 100)
             val validOrder = if (order in listOf("asc", "desc")) order else "desc"
 
@@ -197,7 +205,6 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }
-    }
 
     private fun updateMasaicManagedTools(request: CreateResponseRequest) {
         request.tools = updateToolsInRequest(request.tools)
@@ -205,26 +212,26 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
 
     /**
      * Updates the tools in the request with proper tool definitions from the tool service.
-     * 
+     *
      * @param tools The original list of tools in the request
      * @return The updated list of tools
      */
-    private fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? {
-        return tools?.map { tool ->
-            if (tool is MasaicManagedTool) {
-                toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Define tool ${tool.type} properly"
-                )
-            } else {
-                tool
-            }
-        }?.toMutableList()
-    }
+    private fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? =
+        tools
+            ?.map { tool ->
+                if (tool is MasaicManagedTool) {
+                    toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Define tool ${tool.type} properly",
+                    )
+                } else {
+                    tool
+                }
+            }?.toMutableList()
 
     /**
      * Updates the tools in the response to replace function tools with Masaic managed tools.
-     * 
+     *
      * @param response The response to update
      * @return Updated JSON representation of the response
      */
@@ -237,7 +244,7 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
 
     /**
      * Updates the tools array in the response JSON.
-     * 
+     *
      * @param rootNode The root JSON node of the response
      */
     private fun updateToolsInResponseJson(rootNode: ObjectNode) {
@@ -257,24 +264,27 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
 
     /**
      * Checks if the given tool node is a function tool.
-     * 
+     *
      * @param toolNode The tool node to check
      * @return true if it's a function tool, false otherwise
      */
-    private fun isToolNodeAFunction(toolNode: ObjectNode): Boolean {
-        return toolNode.has("type") && 
-               toolNode.get("type").asText() == "function" && 
-               toolNode.has("name")
-    }
+    private fun isToolNodeAFunction(toolNode: ObjectNode): Boolean =
+        toolNode.has("type") &&
+            toolNode.get("type").asText() == "function" &&
+            toolNode.has("name")
 
     /**
      * Replaces a function tool with a Masaic managed tool if it's registered.
-     * 
+     *
      * @param toolsNode The array of tools
      * @param toolNode The current tool node
      * @param index The index of the current tool in the array
      */
-    private fun replaceFunctionToolWithMasaicTool(toolsNode: ArrayNode, toolNode: ObjectNode, index: Int) {
+    private fun replaceFunctionToolWithMasaicTool(
+        toolsNode: ArrayNode,
+        toolNode: ObjectNode,
+        index: Int,
+    ) {
         val functionName = toolNode.get("name").asText()
         // Use your toolService to check if this function should be modified
         val toolMetadata = toolService.getAvailableTool(functionName)

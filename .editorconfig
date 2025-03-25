@@ -1,0 +1,14 @@
+root = true
+
+[*]
+insert_final_newline = true
+
+[{*.kt,*.kts}]
+ij_kotlin_code_style_defaults = KOTLIN_OFFICIAL
+ktlint_standard_no-wildcard-imports = disabled
+ktlint_standard_no-trailing-spaces = disabled
+ktlint_standard_max-line-length = disabled
+
+
+
+

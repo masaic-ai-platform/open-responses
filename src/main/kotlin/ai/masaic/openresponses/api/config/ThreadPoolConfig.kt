@@ -17,8 +17,8 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor
 import org.springframework.web.reactive.config.WebFluxConfigurer
 import org.springframework.web.reactive.function.client.WebClient
 import reactor.netty.http.client.HttpClient
-import reactor.netty.resources.ConnectionProvider
 import reactor.netty.http.server.HttpServer
+import reactor.netty.resources.ConnectionProvider
 import java.time.Duration
 import java.util.concurrent.RejectedExecutionHandler
 import java.util.concurrent.ThreadPoolExecutor
@@ -33,7 +33,6 @@ private val logger = KotlinLogging.logger {}
 @Configuration
 @EnableScheduling
 class ThreadPoolConfig : WebFluxConfigurer {
-
     @Value("\${server.port:8080}")
     private val serverPort: Int = 8080
 
@@ -84,10 +83,12 @@ class ThreadPoolConfig : WebFluxConfigurer {
         executor.maxPoolSize = maxPoolSize
         executor.queueCapacity = queueCapacity
         executor.setThreadNamePrefix("app-task-")
-        executor.setRejectedExecutionHandler(RejectedExecutionHandler { r: Runnable, e: ThreadPoolExecutor ->
-            logger.warn { "Task rejected from executor: ${e.javaClass.simpleName}" }
-            throw IllegalStateException("Server too busy, please try again later")
-        })
+        executor.setRejectedExecutionHandler(
+            RejectedExecutionHandler { r: Runnable, e: ThreadPoolExecutor ->
+                logger.warn { "Task rejected from executor: ${e.javaClass.simpleName}" }
+                throw IllegalStateException("Server too busy, please try again later")
+            },
+        )
         return executor
     }
 
@@ -99,26 +100,28 @@ class ThreadPoolConfig : WebFluxConfigurer {
     fun reactiveWebServerFactory(): ReactiveWebServerFactory {
         val factory = NettyReactiveWebServerFactory(serverPort)
         // Create an inline implementation of the NettyServerCustomizer interface
-        val serverCustomizer = object : NettyServerCustomizer {
-            override fun apply(httpServer: HttpServer): HttpServer {
-                return httpServer.option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutSeconds * 1000)
-                    .option(ChannelOption.SO_BACKLOG, 128)
-                    .option(ChannelOption.TCP_NODELAY, enableTcpNoDelay)
-                    .childOption(ChannelOption.SO_KEEPALIVE, enableKeepAlive)
-                    .option(ChannelOption.SO_REUSEADDR, enableReuseAddress)
-                    .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+        val serverCustomizer =
+            object : NettyServerCustomizer {
+                override fun apply(httpServer: HttpServer): HttpServer =
+                    httpServer
+                        .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutSeconds * 1000)
+                        .option(ChannelOption.SO_BACKLOG, 128)
+                        .option(ChannelOption.TCP_NODELAY, enableTcpNoDelay)
+                        .childOption(ChannelOption.SO_KEEPALIVE, enableKeepAlive)
+                        .option(ChannelOption.SO_REUSEADDR, enableReuseAddress)
+                        .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
             }
-        }
         factory.addServerCustomizers(serverCustomizer)
         return factory
     }
-    
+
     /**
      * Creates a connection provider for WebClient with configured connection pool limits.
      */
     @Bean
-    fun connectionProvider(): ConnectionProvider {
-        return ConnectionProvider.builder("http-client-pool")
+    fun connectionProvider(): ConnectionProvider =
+        ConnectionProvider
+            .builder("http-client-pool")
             .maxConnections(maxConnections)
             .maxIdleTime(Duration.ofSeconds(maxIdleTimeSeconds))
             .maxLifeTime(Duration.ofSeconds(maxLifeTimeSeconds))
@@ -126,26 +129,27 @@ class ThreadPoolConfig : WebFluxConfigurer {
             .evictInBackground(Duration.ofSeconds(30))
             .metrics(true)
             .build()
-    }
-    
+
     /**
      * Creates a WebClient with configured timeouts and connection pool.
      */
     @Bean
     fun webClient(connectionProvider: ConnectionProvider): WebClient {
-        val httpClient = HttpClient.create(connectionProvider)
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutSeconds * 1000)
-            .doOnConnected { conn ->
-                conn.addHandlerLast(ReadTimeoutHandler(readTimeoutSeconds.toLong(), TimeUnit.SECONDS))
-                    .addHandlerLast(WriteTimeoutHandler(writeTimeoutSeconds.toLong(), TimeUnit.SECONDS))
-            }
-            .responseTimeout(Duration.ofSeconds(readTimeoutSeconds.toLong()))
-        
-        return WebClient.builder()
+        val httpClient =
+            HttpClient
+                .create(connectionProvider)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, connectTimeoutSeconds * 1000)
+                .doOnConnected { conn ->
+                    conn
+                        .addHandlerLast(ReadTimeoutHandler(readTimeoutSeconds.toLong(), TimeUnit.SECONDS))
+                        .addHandlerLast(WriteTimeoutHandler(writeTimeoutSeconds.toLong(), TimeUnit.SECONDS))
+                }.responseTimeout(Duration.ofSeconds(readTimeoutSeconds.toLong()))
+
+        return WebClient
+            .builder()
             .clientConnector(ReactorClientHttpConnector(httpClient))
             .codecs { configurer ->
                 configurer.defaultCodecs().maxInMemorySize(2 * 1024 * 1024) // 2MB buffer size
-            }
-            .build()
+            }.build()
     }
-} 
+}
