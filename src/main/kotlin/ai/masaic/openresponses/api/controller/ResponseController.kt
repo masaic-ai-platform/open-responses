@@ -6,10 +6,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.model.MasaicManagedTool
+import ai.masaic.openresponses.api.model.Tool
 import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.utils.CoroutineMDCContext
-import ai.masaic.openresponses.api.utils.MDCContext
 import ai.masaic.openresponses.tool.ToolService
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
@@ -61,9 +61,7 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         
         // Use our custom coroutine-aware MDC context
         return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-            // Store in our custom context for non-coroutine threads (e.g. streaming handlers)
-            MDCContext.put("traceId", traceId)
-            
+
             updateMasaicManagedTools(request)
             request.parseInput(mapper)
             val requestBodyJson = mapper.writeValueAsString(request)
@@ -122,9 +120,7 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         
         // Use our custom coroutine-aware MDC context
         return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-            // Store in our custom context for non-coroutine threads
-            MDCContext.put("traceId", traceId)
-            
+
             try {
                 ResponseEntity.ok(masaicResponseService.getResponse(responseId, headers, queryParams))
             } catch (e: ResponseNotFoundException) {
@@ -204,7 +200,17 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
     }
 
     private fun updateMasaicManagedTools(request: CreateResponseRequest) {
-        request.tools = request.tools?.map { tool ->
+        request.tools = updateToolsInRequest(request.tools)
+    }
+
+    /**
+     * Updates the tools in the request with proper tool definitions from the tool service.
+     * 
+     * @param tools The original list of tools in the request
+     * @return The updated list of tools
+     */
+    private fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? {
+        return tools?.map { tool ->
             if (tool is MasaicManagedTool) {
                 toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -216,34 +222,69 @@ class ResponseController(private val masaicResponseService: MasaicResponseServic
         }?.toMutableList()
     }
 
+    /**
+     * Updates the tools in the response to replace function tools with Masaic managed tools.
+     * 
+     * @param response The response to update
+     * @return Updated JSON representation of the response
+     */
     private fun updateMasaicManagedTools(response: Response): JsonNode {
         // Convert the Response object to a mutable JSON tree
         val rootNode = mapper.valueToTree<JsonNode>(response) as ObjectNode
+        updateToolsInResponseJson(rootNode)
+        return rootNode
+    }
 
+    /**
+     * Updates the tools array in the response JSON.
+     * 
+     * @param rootNode The root JSON node of the response
+     */
+    private fun updateToolsInResponseJson(rootNode: ObjectNode) {
         // Get the "tools" array node (if present)
-        val toolsNode = rootNode.get("tools") as? ArrayNode
-        if (toolsNode != null) {
-            // Iterate over each tool node in the array
-            for (i in 0 until toolsNode.size()) {
-                val toolNode = toolsNode.get(i) as? ObjectNode ?: continue
+        val toolsNode = rootNode.get("tools") as? ArrayNode ?: return
 
-                // Check if this tool is a function tool by looking at its "type" field.
-                // Here we assume function tools have "type" == "function" and a "name" field.
-                if (toolNode.has("type") && toolNode.get("type").asText() == "function" && toolNode.has("name")) {
-                    val functionName = toolNode.get("name").asText()
-                    // Use your toolService to check if this function should be modified
-                    val toolMetadata = toolService.getAvailableTool(functionName)
-                    if (toolMetadata != null) {
-                        // Create a new ObjectNode with only the "type" field set to the function name.
-                        // This satisfies your requirement to include only the type parameter.
-                        val newToolNode = mapper.createObjectNode()
-                        newToolNode.put("type", functionName)
-                        // Replace the current tool node with the new one.
-                        toolsNode.set(i, newToolNode)
-                    }
-                }
+        // Iterate over each tool node in the array
+        for (i in 0 until toolsNode.size()) {
+            val toolNode = toolsNode.get(i) as? ObjectNode ?: continue
+
+            // Check if this tool is a function tool by looking at its "type" field.
+            if (isToolNodeAFunction(toolNode)) {
+                replaceFunctionToolWithMasaicTool(toolsNode, toolNode, i)
             }
         }
-        return rootNode
+    }
+
+    /**
+     * Checks if the given tool node is a function tool.
+     * 
+     * @param toolNode The tool node to check
+     * @return true if it's a function tool, false otherwise
+     */
+    private fun isToolNodeAFunction(toolNode: ObjectNode): Boolean {
+        return toolNode.has("type") && 
+               toolNode.get("type").asText() == "function" && 
+               toolNode.has("name")
+    }
+
+    /**
+     * Replaces a function tool with a Masaic managed tool if it's registered.
+     * 
+     * @param toolsNode The array of tools
+     * @param toolNode The current tool node
+     * @param index The index of the current tool in the array
+     */
+    private fun replaceFunctionToolWithMasaicTool(toolsNode: ArrayNode, toolNode: ObjectNode, index: Int) {
+        val functionName = toolNode.get("name").asText()
+        // Use your toolService to check if this function should be modified
+        val toolMetadata = toolService.getAvailableTool(functionName)
+        if (toolMetadata != null) {
+            // Create a new ObjectNode with only the "type" field set to the function name.
+            // This satisfies your requirement to include only the type parameter.
+            val newToolNode = mapper.createObjectNode()
+            newToolNode.put("type", functionName)
+            // Replace the current tool node with the new one.
+            toolsNode.set(index, newToolNode)
+        }
     }
 }

@@ -94,17 +94,17 @@ object ChatCompletionConverter {
     fun toResponse(chatCompletion: ChatCompletion, params: ResponseCreateParams): Response {
         // Process all choices and flatten the resulting output items
         val outputItems = processChoices(chatCompletion)
-        
+
         // Convert created timestamp from epoch seconds to double
         val createdAtDouble = chatCompletion.created().toDouble()
 
         // Build and return the complete response
         return buildResponse(chatCompletion, params, outputItems, createdAtDouble)
     }
-    
+
     /**
      * Processes each choice from the ChatCompletion and converts them to ResponseOutputItems.
-     * 
+     *
      * @param completion The ChatCompletion to process
      * @return A flattened list of ResponseOutputItems
      */
@@ -112,44 +112,44 @@ object ChatCompletionConverter {
         return completion.choices().map { choice ->
             val messageContent = choice.message().content()
             val responseOutputTextBuilder = buildOutputTextWithAnnotations(choice)
-            
+
             // Extract reasoning if present within <think> tags
             val reasoning = extractReasoning(messageContent)
             val messageWithoutReasoning = removeReasoningTags(messageContent, reasoning)
-            
+
             // Build the list of output items for this choice
             val outputs = mutableListOf<ResponseOutputItem>()
-            
+
             // Add the main message output
-            if(messageWithoutReasoning.isNotBlank())
-            outputs.add(createMessageOutput(choice, responseOutputTextBuilder, messageWithoutReasoning))
-            
+            if (messageWithoutReasoning.isNotBlank())
+                outputs.add(createMessageOutput(choice, responseOutputTextBuilder, messageWithoutReasoning))
+
             // Add reasoning output if present
             if (reasoning.isNotBlank()) {
                 outputs.add(createReasoningOutput(choice, reasoning))
             }
-            
+
             // Add tool calls if present
             addToolCallOutputs(choice, outputs, completion = completion)
-            
+
             // Handle audio content if present
             if (choice.message().audio().isPresent) {
                 // TODO: Add audio to response when implementation is ready
             }
-            
+
             outputs
         }.flatten()
     }
-    
+
     /**
      * Builds a ResponseOutputText.Builder with annotations if present.
-     * 
+     *
      * @param choice The ChatCompletion choice to extract annotations from
      * @return A configured ResponseOutputText.Builder
      */
     private fun buildOutputTextWithAnnotations(choice: ChatCompletion.Choice): ResponseOutputText.Builder {
         val builder = ResponseOutputText.builder()
-        
+
         if (choice.message().annotations().isPresent) {
             builder.annotations(choice.message().annotations().map { annotationList ->
                 annotationList.map { annotation ->
@@ -165,13 +165,13 @@ object ChatCompletionConverter {
                 }
             }.get())
         }
-        
+
         return builder
     }
-    
+
     /**
      * Extracts reasoning content from message if enclosed in <think> tags.
-     * 
+     *
      * @param messageContent The Optional<String> content from the message
      * @return The extracted reasoning text or empty string if none
      */
@@ -184,10 +184,10 @@ object ChatCompletionConverter {
         }
         return reasoning
     }
-    
+
     /**
      * Removes reasoning tags from the message content.
-     * 
+     *
      * @param messageContent The Optional<String> content from the message
      * @param reasoning The reasoning text to remove with its tags
      * @return The message without reasoning tags
@@ -199,32 +199,32 @@ object ChatCompletionConverter {
         }
         return messageWithoutReasoning
     }
-    
+
     /**
      * Creates a message output item from the choice.
-     * 
+     *
      * @param choice The ChatCompletion choice
      * @param builder The ResponseOutputText.Builder to use
      * @param messageText The text content for the message
      * @return A ResponseOutputItem containing the message
      */
     private fun createMessageOutput(
-        choice: ChatCompletion.Choice, 
-        builder: ResponseOutputText.Builder, 
+        choice: ChatCompletion.Choice,
+        builder: ResponseOutputText.Builder,
         messageText: String
     ): ResponseOutputItem {
         return ResponseOutputItem.ofMessage(
             ResponseOutputMessage.builder().addContent(
                 builder.text(messageText).annotations(listOf()).build()
             ).id(choice.index().toString())
-             .status(ResponseOutputMessage.Status.COMPLETED)
-             .build()
+                .status(ResponseOutputMessage.Status.COMPLETED)
+                .build()
         )
     }
-    
+
     /**
      * Creates a reasoning output item from the choice.
-     * 
+     *
      * @param choice The ChatCompletion choice
      * @param reasoning The reasoning text
      * @return A ResponseOutputItem containing the reasoning
@@ -237,14 +237,18 @@ object ChatCompletionConverter {
                 .build()
         )
     }
-    
+
     /**
      * Adds tool call outputs to the outputs list if present in the choice.
-     * 
+     *
      * @param choice The ChatCompletion choice
      * @param outputs The mutable list of outputs to add to
      */
-    private fun addToolCallOutputs(choice: ChatCompletion.Choice, outputs: MutableList<ResponseOutputItem>, completion: ChatCompletion) {
+    private fun addToolCallOutputs(
+        choice: ChatCompletion.Choice,
+        outputs: MutableList<ResponseOutputItem>,
+        completion: ChatCompletion
+    ) {
         if (choice.message().toolCalls().isPresent && choice.message().toolCalls().get().isNotEmpty()) {
             val toolCalls = choice.message().toolCalls().get()
             toolCalls.forEach { toolCall ->
@@ -263,10 +267,10 @@ object ChatCompletionConverter {
             }
         }
     }
-    
+
     /**
      * Builds the complete Response object from all components.
-     * 
+     *
      * @param chatCompletion The original ChatCompletion
      * @param params The ResponseCreateParams
      * @param outputItems The processed output items
@@ -280,12 +284,15 @@ object ChatCompletionConverter {
         createdAtDouble: Double
     ): Response {
 
-        if(chatCompletion.choices().any { it.finishReason().asString() == "length" }) {
-            return Response.builder()
+        if (chatCompletion.choices().any { it.finishReason().asString() == "length" }) {
+            val builder = Response.builder()
                 .id(chatCompletion.id())
                 .createdAt(createdAtDouble)
                 .error(null) // Required field, null since we assume no error
-                .incompleteDetails(Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS).build()) // Required field, null since we assume complete response
+                .incompleteDetails(
+                    Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS)
+                        .build()
+                ) // Required field, null since we assume complete response
                 .instructions(params.instructions())
                 .metadata(params.metadata())
                 .model(convertModel(chatCompletion.model()))
@@ -301,14 +308,24 @@ object ChatCompletionConverter {
                 .reasoning(params.reasoning())
                 .status(ResponseStatus.INCOMPLETE)
                 .usage(chatCompletion.usage().map(this::convertUsage).orElse(null))
-                .build()
-        }
-        else if(chatCompletion.choices().any { it.finishReason().asString() == "content_filter" }) {
-            return Response.builder()
+
+            if (chatCompletion.usage().isPresent) {
+                builder.usage(convertUsage(chatCompletion.usage().get()))
+            }
+
+            return builder.build()
+        } else if (chatCompletion.choices().any { it.finishReason().asString() == "content_filter" }) {
+            val builder = Response.builder()
                 .id(chatCompletion.id())
                 .createdAt(createdAtDouble)
-                .error(ResponseError.builder().message("The message violated our content policy").code(ResponseError.Code.SERVER_ERROR).build()) // Required field, null since we assume no error
-                .incompleteDetails(Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.CONTENT_FILTER).build()) // Required field, null since we assume complete response
+                .error(
+                    ResponseError.builder().message("The message violated our content policy")
+                        .code(ResponseError.Code.SERVER_ERROR).build()
+                ) // Required field, null since we assume no error
+                .incompleteDetails(
+                    Response.IncompleteDetails.builder().reason(Response.IncompleteDetails.Reason.CONTENT_FILTER)
+                        .build()
+                ) // Required field, null since we assume complete response
                 .instructions(params.instructions())
                 .metadata(params.metadata())
                 .model(convertModel(chatCompletion.model()))
@@ -323,11 +340,14 @@ object ChatCompletionConverter {
                 .previousResponseId(params.previousResponseId())
                 .reasoning(params.reasoning())
                 .status(ResponseStatus.FAILED)
-                .usage(chatCompletion.usage().map(this::convertUsage).orElse(null))
-                .build()
+            if (chatCompletion.usage().isPresent) {
+                builder.usage(convertUsage(chatCompletion.usage().get()))
+            }
+
+            return builder.build()
         }
 
-        return Response.builder()
+        val builder = Response.builder()
             .id(chatCompletion.id())
             .createdAt(createdAtDouble)
             .error(null) // Required field, null since we assume no error
@@ -346,13 +366,17 @@ object ChatCompletionConverter {
             .previousResponseId(params.previousResponseId())
             .reasoning(params.reasoning())
             .status(ResponseStatus.COMPLETED)
-            .usage(chatCompletion.usage().map(this::convertUsage).orElse(null))
-            .build()
+
+        if (chatCompletion.usage().isPresent) {
+            builder.usage(convertUsage(chatCompletion.usage().get()))
+        }
+
+        return builder.build()
     }
 
     /**
      * Converts a ResponseCreateParams.ToolChoice to a Response.ToolChoice.
-     * 
+     *
      * @param toolChoice The optional tool choice from the parameters
      * @return The converted Response.ToolChoice
      */
@@ -360,10 +384,10 @@ object ChatCompletionConverter {
         if (toolChoice.isEmpty) {
             return Response.ToolChoice.ofOptions(ToolChoiceOptions.NONE)
         }
-        
+
         val responseToolChoice = Response.ToolChoice
         val toolChoiceValue = toolChoice.get()
-        
+
         return when {
             toolChoiceValue.isOptions() -> responseToolChoice.ofOptions(toolChoiceValue.asOptions())
             toolChoiceValue.isFunction() -> responseToolChoice.ofFunction(toolChoiceValue.asFunction())
@@ -374,7 +398,7 @@ object ChatCompletionConverter {
 
     /**
      * Converts a string model name to ChatModel enum.
-     * 
+     *
      * @param modelString The model name as a string
      * @return The corresponding ChatModel enum value
      */
@@ -385,20 +409,24 @@ object ChatCompletionConverter {
     /**
      * Converts OpenAI's CompletionUsage to Masaic's ResponseUsage.
      * Maps token counts and adds default reasoning tokens.
-     * 
+     *
      * @param completionUsage The CompletionUsage from OpenAI
      * @return A ResponseUsage object with equivalent data
      */
     private fun convertUsage(completionUsage: CompletionUsage): ResponseUsage {
-        val builder =  ResponseUsage.builder()
+        val builder = ResponseUsage.builder()
             .inputTokens(completionUsage.promptTokens().toLong())
             .outputTokens(completionUsage.completionTokens().toLong())
             .totalTokens(completionUsage.totalTokens().toLong())
 
-        if(completionUsage.completionTokensDetails().isPresent && completionUsage.completionTokensDetails().get().reasoningTokens().isPresent){
-            builder.outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(completionUsage.completionTokensDetails().get().reasoningTokens().get()).build())
-        }
-        else {
+        if (completionUsage.completionTokensDetails().isPresent && completionUsage.completionTokensDetails().get()
+                .reasoningTokens().isPresent
+        ) {
+            builder.outputTokensDetails(
+                ResponseUsage.OutputTokensDetails.builder()
+                    .reasoningTokens(completionUsage.completionTokensDetails().get().reasoningTokens().get()).build()
+            )
+        } else {
             builder.outputTokensDetails(ResponseUsage.OutputTokensDetails.builder().reasoningTokens(0).build())
         }
         return builder.build()
@@ -408,7 +436,7 @@ object ChatCompletionConverter {
 /**
  * Extension function for cleaner conversion syntax.
  * Allows calling toResponse directly on a ChatCompletion object.
- * 
+ *
  * @param params The ResponseCreateParams containing configuration for the response
  * @return A fully populated Response object
  */
