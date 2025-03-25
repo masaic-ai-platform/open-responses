@@ -176,7 +176,7 @@ curl --location 'http://localhost:8080/v1/responses' \
 }'
 ```
 
-#### Groq Example with Claude Think Tool (Get your [Anthropic key](https://console.anthropic.com/dashboard))
+#### Claude Example with Claude Think Tool (Get your [Anthropic key](https://console.anthropic.com/dashboard))
 
 ```bash
 curl --location 'http://localhost:8080/v1/responses' \
@@ -257,8 +257,64 @@ docker-compose up open-responses-with-openai
 
 3. Run the Examples:
 
-   Head over to the [examples directory](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples) within the repository. Select and run any example script of your choice. Please note that all examples should work as expected except for the [research_bot example](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples/research_bot)
-because agent uses OpenAI's proprietary WebSearchTool.
+   • Follow [Get started](https://github.com/masaic-ai-platform/openai-agents-python/tree/main?tab=readme-ov-file#get-started) instructions to install the SDK.
+
+   • Head over to the [examples directory](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples) within the repository. Select and run any example script of your choice. Please note that all examples should work as expected except for the [research_bot example](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples/research_bot) because agent uses OpenAI's proprietary WebSearchTool.
+
+## 6. Running Agent Examples with OpenAI Agent SDK
+
+Before running any example, ensure you are in the openai-agents-python folder.
+
+This section demonstrates how to run examples that create Agents using the OpenAI Agent SDK. These examples showcase a variety of model flavors and custom tools powered by the Open Responses API.
+
+1. Run the Service  
+   Start the service with the MCP profile by executing:
+   ```bash
+   docker-compose --profile mcp up open-responses-mcp
+   ```  
+   For more details, please refer to the [Start Docker with Built-In Tools](#3-start-docker-with-built-in-tools) section.
+
+   Note:  
+   • If you require SDK traces, ensure that you set the environment variable OPENAI_API_KEY.  
+   • Otherwise, you may see a warning "OPENAI_API_KEY is not set, skipping trace export". To disable tracing explicitly, add the statement:
+   ```python
+   set_tracing_disabled(disabled=False)
+   ```
+
+2. Setup the SDK  
+   Follow the steps outlined in [Clone the Forked Repository](#5-running-example-scripts-with-the-openai-agent-python-sdk) to set up your environment.  
+   • Ensure that you have defined the environment variables:
+   - GROK_API_KEY
+   - OPEN_RESPONSES_URL  
+     These can be set in your environment or configured within a file.
+
+   You can review example scripts under the [open_responses examples](https://github.com/masaic-ai-platform/openai-agents-python/tree/main/examples/open_responses) repository.
+
+3. Run the agent_hands_off.py Example  
+   From within the openai-agents-python folder, execute the following command:
+   ```bash
+   python -m examples.open_responses.agent_hands_off
+   ```
+
+4. Run the brave_search_agent_with_groq.py Example  
+   From within the openai-agents-python folder, execute:
+   ```bash
+   python -m examples.open_responses.brave_search_agent_with_groq
+   ```
+
+5. Run the brave_search_agent_with_groq_stream Example  
+   From within the openai-agents-python folder, execute:
+   ```bash
+   python -m examples.open_responses.brave_search_agent_with_groq_stream
+   ```
+   Note: This example requires the CLAUDE_API_KEY along with the OPEN_RESPONSES_URL to be set appropriately. (Refer to step [6](#6-running-agent-examples-with-openai-agent-sdk) for additional details if needed.)
+
+6. Run the think_tool_agent_with_claude.py Example  
+   From within the openai-agents-python folder, execute:
+   ```bash
+   python -m examples.open_responses.think_tool_agent_with_claude
+   ```
+   Note: This example requires the CLAUDE_API_KEY along with the OPEN_RESPONSES_URL to be set appropriately.
 
 ---
 
