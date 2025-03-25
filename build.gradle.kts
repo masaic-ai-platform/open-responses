@@ -60,4 +60,14 @@ kotlin {
 tasks.withType<Test> {
     useJUnitPlatform()
     jvmArgs("--add-opens", "java.base/java.util=ALL-UNNAMED")
+    testLogging {
+        // Show these events in the console
+        events("PASSED", "SKIPPED", "FAILED")
+
+        // Print the full stacktrace for any failures
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+
+        // Show any System.out/System.err from your tests
+        showStandardStreams = true
+    }
 }

@@ -167,11 +167,11 @@ class MasaicStreamingServiceTest {
      */
     @Test
     fun `test streaming times out`() = runTest {
-        // Make a short-living MasaicStreamingService with maxDuration=1 ms
+        // Make a short-living MasaicStreamingService with maxDuration=0 ms
         val shortService = MasaicStreamingService(
             toolHandler, parameterConverter, toolService,
             allowedMaxToolCalls = 3,
-            maxDuration = 1 // 1 millisecond
+            maxDuration = 0 // 0 millisecond
         )
 
         val params = defaultParamsMock()

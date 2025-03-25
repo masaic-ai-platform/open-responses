@@ -39,11 +39,6 @@ class MasaicResponseServiceTest {
         masaicResponseService = MasaicResponseService(toolService, openAIResponseService)
     }
 
-    @AfterEach
-    fun clearMocks() {
-        clearAllMocks()
-    }
-
     @Test
     fun `createResponse should call openAIResponseService and return a Response`() = runBlocking {
         // Given
