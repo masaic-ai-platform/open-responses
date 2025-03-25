@@ -8,6 +8,7 @@ import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.core.JsonValue
+import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
@@ -307,10 +308,16 @@ class MasaicParameterConverter {
                     result.add(
                         ChatCompletionTool.builder()
                             .type(JsonValue.from("function"))
-                            .function(objectMapper.readValue(
-                                objectMapper.writeValueAsString(functionTool),
-                                FunctionDefinition::class.java
-                            ))
+                            .function(
+                                FunctionDefinition.builder()
+                                    .name(functionTool.name())
+                                    .description(functionTool._description())
+                                    .parameters(
+                                        objectMapper.readValue(objectMapper.writeValueAsString(functionTool.parameters()),
+                                            FunctionParameters::class.java)
+                                    )
+                                    .build()
+                            )
                             .build()
                     )
                 }
