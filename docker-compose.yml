@@ -1,7 +1,7 @@
 version: '3.9'
 
 x-open-responses: &open_responses
-  image: jasbir34/open-responses:0.0.1-alpha
+  image: jasbir34/open-responses:test-version-2
 
 services:
   # Flavor 1: Default service (runs when no profile is specified)
