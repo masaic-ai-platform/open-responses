@@ -120,8 +120,9 @@ BRAVE_API_KEY=your_brave_key_value
 ```
 
 ### Run the Service with MCP Tools Enabled
-
 Start the service with the built-in MCP tools using:
+
+<sub>NOTE: Stop previously running docker-compose (if any) before running this command.</sub>
 
 For macOS:
 ```bash
@@ -225,6 +226,8 @@ MCP_CONFIG_FILE_PATH=path_to_mcp_config_file
 
 Start the service using:
 
+<sub>NOTE: Stop previously running docker-compose (if any) before running this command.</sub>
+
 For macOS:
 ```bash
 docker-compose --profile mcp up open-responses-custom-mcp
@@ -241,6 +244,8 @@ You can run examples provided by the openai-agent-python SDK using your locally 
 ### Steps to Run openai-agent-python Examples
 
 1. Start the service using:
+
+<sub>NOTE: Stop previously running docker-compose (if any) before running this command.</sub>
 ```bash
 docker-compose up open-responses-with-openai
 ```
@@ -278,6 +283,8 @@ This section demonstrates how to run examples that create Agents using the OpenA
 
 1. Run the Service  
    Start the service with the MCP profile by executing:
+
+   <sub>NOTE: Stop previously running docker-compose (if any) before running this command.</sub>
    1. For macOS:
       ```bash
       docker-compose --profile mcp up open-responses-mcp
