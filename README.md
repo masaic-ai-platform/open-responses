@@ -194,6 +194,73 @@ For more detailed information about using OpenResponses API via Completion API, 
 
 - [OpenAI Compatibility Guide](docs/OpenAICompatibility.md)
 
+## 💻 Local Development
+
+Follow these instructions to set up the project locally for development:
+
+### Prerequisites
+
+- Java JDK 21+
+- [Gradle](https://gradle.org/) (optional, as project includes Gradle Wrapper)
+- [Docker](https://www.docker.com/) (optional, for containerized setup)
+
+### Steps
+
+1. **Clone the repository**
+
+```bash
+git clone https://github.com/masaic-ai-platform/open-responses.git
+cd open-responses
+```
+
+2. **Build the project**
+
+Use the Gradle Wrapper included in the project:
+
+```bash
+./gradlew build
+```
+
+3. **Configure Environment Variables**
+
+Create or update the `application.properties` file with necessary configuration under `src/main/resources`:
+
+```properties
+server.port: 8080
+```
+
+Set any additional configuration required by your project.
+
+4. **Run the server**
+
+To start the server in development mode:
+
+```bash
+./gradlew bootRun
+```
+
+### Docker Setup (Optional)
+
+Build and run the application using Docker:
+
+```bash
+docker build -t openresponses .
+docker run -p 8080:8080 -d openresponses
+```
+
+### Testing
+
+Run the tests with:
+
+```bash
+./gradlew test
+```
+
+### Contribution Guidelines
+
+Refer to the [Contributing section](#🤝-contributing) for guidelines on how to contribute.
+
+
 ## ⚠️ Production Use
 
 >  **Alpha Release Disclaimer**: This project is currently in alpha stage. The API and features are subject to breaking changes as we continue to evolve and improve the platform. While we strive to maintain stability, please be aware that updates may require modifications to your integration code.
