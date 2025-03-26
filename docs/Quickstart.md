@@ -34,7 +34,7 @@ cd open-responses
 Start the service using Docker Compose with the default configuration:
 
 ```bash
-docker-compose up
+docker-compose up open-responses
 ```
 
 ### Example API Calls
