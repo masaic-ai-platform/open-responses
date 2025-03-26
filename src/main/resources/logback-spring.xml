@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <!-- Load log file location from application properties -->
-    <springProperty scope="context" name="LOG_PATH" source="logging.file.name" defaultValue="~/logs/openai-responses.log" />
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.name" defaultValue="~/logs/open-responses.log" />
 
     <!-- Human-readable console output -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
@@ -15,7 +15,7 @@
     <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
         <file>${LOG_PATH}</file>
         <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-            <fileNamePattern>logs/openai-service-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <fileNamePattern>logs/open-responses-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
             <maxFileSize>10MB</maxFileSize>
             <maxHistory>10</maxHistory>
             <totalSizeCap>100MB</totalSizeCap>
@@ -44,7 +44,7 @@
 
     <!-- Log masking for sensitive data -->
     <conversionRule conversionWord="maskedMsg"
-                    converterClass="com.masaic.openai.api.config.SensitiveDataMaskingConverter" />
+                    converterClass="ai.masaic.openresponses.api.config.SensitiveDataMaskingConverter" />
 
     <!-- Set default logging level -->
     <root level="INFO">
@@ -53,9 +53,6 @@
     </root>
 
     <!-- Application-specific log levels -->
-    <logger name="com.masaic.openai" level="INFO" />
-    <logger name="com.masaic.openai.api.controller" level="INFO" />
-    <logger name="com.masaic.openai.tool" level="INFO" />
     <logger name="org.springframework.web" level="INFO" />
 
     <!-- Reduce verbosity of less important components -->
