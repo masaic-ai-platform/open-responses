@@ -8,8 +8,6 @@
   <em>"One API to rule them all, one API to find them, one API to bring them all, and in the cloud bind them."</em>
 </p>
 
-> ⚠️ **Alpha Release Disclaimer**: This project is currently in alpha stage. The API and features are subject to breaking changes as we continue to evolve and improve the platform. While we strive to maintain stability, please be aware that updates may require modifications to your integration code.
-
 ## 🌟 Overview
 
 OpenResponses API empowers developers to leverage the incredible capabilities of various LLM providers through a familiar interface - the OpenAI Responses API structure. This API layer bridges the gap between different LLM providers and applications built on OpenAI's completion API by following the [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) specifications.
@@ -22,7 +20,15 @@ With OpenResponses API, you can:
 - 🚀 Leverage the full power of each provider's unique features
 - 🧩 Build with a standardized API that works across the AI ecosystem
 
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://www.heroku.com/deploy)
+## 🛠️ Advanced Features
+
+### Built-in Tools Support
+
+OpenResponses API comes with support for various tools including:
+
+- 🔍 **Brave Web Search**: Integrate real-time search capabilities
+- 📂 **GitHub Repositories Search**: Access GitHub data directly
+- 🧠 **Claude Think Tool**: Enable more thoughtful responses
 
 ## 🤔 Why OpenResponses?
 
@@ -51,16 +57,7 @@ The API implements the following OpenAI-compatible endpoints:
 
 ## 🚀 Quick Start
 
-### Using Docker
-
-```bash
-# Clone the repository
-git clone https://github.com/masaic-ai-platform/open-responses.git
-cd open-responses
-
-# Start the service with Docker Compose
-docker-compose up
-```
+- Please follow our step-by-step guide here : [Quick Start Guide](docs/Quickstart.md)
 
 ### Example API Calls
 
@@ -119,30 +116,18 @@ curl --location 'http://localhost:8080/v1/responses' \
 }'
 ```
 
-## 📊 Provider Comparison
+## 📊 API Comparison
 
-| Feature          | OpenAI  | Claude | Groq | OpenResponses             |
-|------------------|---------|--------|------|---------------------------|
-| Streaming        | ✅       | ✅ | ✅ | ✅                         |
-| Function Calling | ✅       | ✅ | ✅ | ✅                         |
-| Max Context      | 128K    | 200K | 128K | Model dependent           |
-| Hosted RAG       | ✅       | ❌ | ❌ | Coming Soon               |
-| Hosted Tools     | Limited |   ❌     |   ❌   | MCP,In-built, BYOT etc    |
-| Inbuilt Tracing  | Limited |   ❌     |   ❌   | Comprehensive Coming Soon |
-
-
-
-*All features accessible through the unified OpenResponses API*
-
-## 🛠️ Advanced Features
-
-### Built-in Tools Support
-
-OpenResponses API comes with support for various tools including:
-
-- 🔍 **Brave Web Search**: Integrate real-time search capabilities
-- 📂 **GitHub Repositories Search**: Access GitHub data directly
-- 🧠 **Claude Think Tool**: Enable more thoughtful responses
+| Feature                     | OpenAI Responses API      | OpenResponses API                       | 
+|-----------------------------|---------------------------|-----------------------------------------|
+| Streaming                   | ✅                         | ✅                                       |
+| Function Calling            | ✅                         | ✅                                       |
+| Max Context                 | 128K                      | Model dependent                         |
+| Models supported            | Only OpenAI models        | Any Model compliant with completion API | 
+| Hosted Tools                | Limited                   | MCP, BYOT, In-built etc.                | 
+| Inbuilt Tracing             | Limited                   | Comprehensive coming soon               |
+| Data privacy                | ❌                         | ✅                                       |
+| OpenAI Agent SDK Compliance | ✅ with only OpenAI models | ✅ with multiple Model providers         |
 
 ### Using Tools in API Calls
 
@@ -167,53 +152,9 @@ curl --location 'http://localhost:8080/v1/responses' \
 }'
 ```
 
-### Detailed Tools Documentation
-
-#### Brave Web Search
-Enable real-time internet searches in your AI responses:
-
-```python
-payload = {
-    "model": "gpt-4o",
-    "tools": [{"type": "brave_web_search"}],
-    "input": [
-        {
-            "role": "user",
-            "content": "What are the latest AI conferences happening next month?"
-        }
-    ]
-}
-```
-
-#### GitHub Repository Search
-Incorporate code and repository information:
-
-```python
-payload = {
-    "model": "claude-3-opus-20240229",
-    "tools": [{"type": "github_search"}],
-    "input": [
-        {
-            "role": "user",
-            "content": "Find examples of React hooks in popular repositories"
-        }
-    ]
-}
-```
-
 ## 🔮 Coming Soon
 
-We're continuously working to enhance OpenResponses API with powerful new features:
-
-### Curated Model Sets
-- ⚖️ Automatic load balancing across multiple models and providers
-- 💰 Intelligent routing based on cost, performance, and availability
-- 🎯 Fallback mechanisms for improved reliability
-
-### Enhanced Enterprise Features
-- 📊 Advanced analytics and usage dashboards
-- 🤖 API playground
-- 🧪 A/B testing framework for model performance comparison
+We're continuously working to enhance OpenResponses API with powerful new features.
 
 ## ❓ Frequently Asked Questions
 
@@ -245,15 +186,17 @@ The application supports the following environment variables:
 | `MCP_SERVER_CONFIG_FILE_PATH` | Path to MCP server configuration | - |
 | `MASAIC_MAX_TOOL_CALLS` | Maximum number of allowed tool calls | 10 |
 | `MASAIC_MAX_STREAMING_TIMEOUT` | Maximum streaming timeout in ms | 60000 |
-| `GITHUB_TOKEN` | GitHub Personal Access Token | - |
-| `BRAVE_API_KEY` | Brave Search API Key | - |
+
 
 ## 📚 Documentation
 
-For more detailed information about using OpenResponses API, check out our documentation:
+For more detailed information about using OpenResponses API via Completion API, check out our documentation:
 
 - [OpenAI Compatibility Guide](docs/OpenAICompatibility.md)
-- [Quick Start Guide](docs/Quickstart.md)
+
+## ⚠️ Production Use
+
+>  **Alpha Release Disclaimer**: This project is currently in alpha stage. The API and features are subject to breaking changes as we continue to evolve and improve the platform. While we strive to maintain stability, please be aware that updates may require modifications to your integration code.
 
 ## 🤝 Contributing
 
