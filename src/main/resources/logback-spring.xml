@@ -40,6 +40,8 @@
         <appender-ref ref="FILE" />
     </appender>
 
+    <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
+
     <!-- Log masking for sensitive data -->
     <conversionRule conversionWord="maskedMsg"
                     converterClass="com.masaic.openai.api.config.SensitiveDataMaskingConverter" />
