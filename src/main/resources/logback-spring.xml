@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
     <!-- Load log file location from application properties -->
-    <springProperty scope="context" name="LOG_PATH" source="logging.file.name" defaultValue="~/logs/openai-service.log" />
+    <springProperty scope="context" name="LOG_PATH" source="logging.file.name" defaultValue="~/logs/openai-responses.log" />
 
     <!-- Human-readable console output -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
