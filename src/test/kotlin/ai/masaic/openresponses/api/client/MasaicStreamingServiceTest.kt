@@ -39,6 +39,7 @@ class MasaicStreamingServiceTest {
     private lateinit var streamingService: MasaicStreamingService
     private lateinit var payloadFormatter: PayloadFormatter
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var responseStore: ResponseStore
 
     @BeforeEach
     fun setUp() {
@@ -46,6 +47,7 @@ class MasaicStreamingServiceTest {
         parameterConverter = mockk()
         toolService = mockk()
         openAIClient = mockk()
+        responseStore = mockk()
         objectMapper = ObjectMapper()
         payloadFormatter =
             mockk {
@@ -61,8 +63,9 @@ class MasaicStreamingServiceTest {
                 toolService = toolService,
                 allowedMaxToolCalls = 3, // test limit
                 maxDuration = 10_000, // test duration,
-                payloadFormatter,
-                objectMapper,
+                responseStore = responseStore,
+                payloadFormatter = payloadFormatter,
+                objectMapper = objectMapper,
             )
     }
 
@@ -178,6 +181,7 @@ class MasaicStreamingServiceTest {
                 mockk {
                     every { chat() } returns mockChat
                 }
+            every { responseStore.storeResponse(any(), any()) } just runs
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
@@ -311,6 +315,8 @@ class MasaicStreamingServiceTest {
             val mockCompletions = mockk<ChatCompletionServiceAsync>(relaxed = false)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
 
+            every { responseStore.storeResponse(any(), any()) } just runs
+
             // The parameterConverter returns a prepared completion for any iteration:
             every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
@@ -375,6 +381,7 @@ class MasaicStreamingServiceTest {
         val mockInput =
             mockk<ResponseCreateParams.Input> {
                 every { isResponse() } returns false
+                every { asResponse() } returns listOf()
                 every { isText() } returns true
                 every { asText() } returns "Hello world"
             }

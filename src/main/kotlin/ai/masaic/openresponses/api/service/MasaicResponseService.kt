@@ -15,6 +15,7 @@ import com.openai.errors.OpenAIException
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseErrorEvent
+import com.openai.models.responses.ResponseRetrieveParams
 import com.openai.models.responses.ResponseStreamEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -250,22 +251,16 @@ class MasaicResponseService(
         val traceId = getTraceId(headers)
         logger.info { "Retrieving response with ID: $responseId, traceId: $traceId" }
 
-        val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
 
         return try {
-            /*val client = OpenAIOkHttpClient.builder().apiKey(
-                headers.getFirst("Authorization") ?: throw IllegalArgumentException("api-key is missing.")
-            ).build()
-
-            client.responses().retrieve(
-                ResponseRetrieveParams.builder()
+            openAIResponseService.retrieve(
+                ResponseRetrieveParams
+                    .builder()
                     .responseId(responseId)
-                    .additionalHeaders(headerBuilder.build())
                     .additionalQueryParams(queryBuilder.build())
-                    .build()
-            )*/
-            throw NotImplementedError("Not implemented")
+                    .build(),
+            )
         } catch (e: Exception) {
             logger.error(e) { "Error retrieving response with ID: $responseId, traceId: $traceId" }
             when (e) {

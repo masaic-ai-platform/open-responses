@@ -15,12 +15,14 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.http.codec.ServerSentEvent
+import java.util.NoSuchElementException
 import java.util.Optional
 
 class MasaicOpenAiResponseServiceImplTest {
     private lateinit var parameterConverter: MasaicParameterConverter
     private lateinit var toolHandler: MasaicToolHandler
     private lateinit var streamingService: MasaicStreamingService
+    private lateinit var responseStore: ResponseStore
     private lateinit var serviceImpl: MasaicOpenAiResponseServiceImpl
 
     @BeforeEach
@@ -28,12 +30,14 @@ class MasaicOpenAiResponseServiceImplTest {
         parameterConverter = mockk(relaxed = true)
         toolHandler = mockk(relaxed = true)
         streamingService = mockk(relaxed = true)
+        responseStore = mockk(relaxed = true)
 
         serviceImpl =
             MasaicOpenAiResponseServiceImpl(
                 parameterConverter = parameterConverter,
                 toolHandler = toolHandler,
                 streamingService = streamingService,
+                responseStore = responseStore,
             )
     }
 
@@ -161,7 +165,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Then build() returns the newParams
         every { mockBuilder.build() } returns newParams
 
-        // 4) Mock the OpenAI client’s chat/completion calls.
+        // 4) Mock the OpenAI client's chat/completion calls.
         val client = mockk<OpenAIClient>(relaxed = true)
         val mockChat = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
         val mockCompletions = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
@@ -286,27 +290,69 @@ class MasaicOpenAiResponseServiceImplTest {
     }
 
     /**
-     * retrieve(params, requestOptions) -> throws UnsupportedOperationException
+     * Test retrieve method successfully returns a response from the store.
      */
     @Test
-    fun `test retrieve throws`() {
-        val retrieveParams = mockk<ResponseRetrieveParams>(relaxed = true)
+    fun `test retrieve returns response from store`() {
+        // Setup
+        val responseId = "resp_123456"
+        val params = mockk<ResponseRetrieveParams>(relaxed = true)
+        every { params.responseId() } returns responseId
+        
+        val mockResponse = mockk<Response>(relaxed = true)
+        every { responseStore.getResponse(responseId) } returns mockResponse
+        
         val options = mockk<RequestOptions>(relaxed = true)
-        assertThrows(UnsupportedOperationException::class.java) {
-            serviceImpl.retrieve(retrieveParams, options)
-        }
+        
+        // Act
+        val result = serviceImpl.retrieve(params, options)
+        
+        // Assert
+        assertNotNull(result)
+        assertEquals(mockResponse, result)
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
     }
 
     /**
-     * delete(params, requestOptions) -> throws UnsupportedOperationException
+     * Test retrieve method throws when response not found.
      */
     @Test
-    fun `test delete throws`() {
-        val deleteParams = mockk<ResponseDeleteParams>(relaxed = true)
+    fun `test retrieve throws when response not found`() {
+        // Setup
+        val responseId = "nonexistent_resp"
+        val params = mockk<ResponseRetrieveParams>(relaxed = true)
+        every { params.responseId() } returns responseId
+        
+        every { responseStore.getResponse(responseId) } returns null
+        
         val options = mockk<RequestOptions>(relaxed = true)
-        assertThrows(UnsupportedOperationException::class.java) {
-            serviceImpl.delete(deleteParams, options)
+        
+        // Act & Assert
+        assertThrows(NoSuchElementException::class.java) {
+            serviceImpl.retrieve(params, options)
         }
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
+    }
+
+    /**
+     * Test delete method calls responseStore.deleteResponse.
+     */
+    @Test
+    fun `test delete calls responseStore deleteResponse`() {
+        // Setup
+        val responseId = "resp_123456"
+        val params = mockk<ResponseDeleteParams>(relaxed = true)
+        every { params.responseId() } returns responseId
+        
+        every { responseStore.deleteResponse(responseId) } returns true
+        
+        val options = mockk<RequestOptions>(relaxed = true)
+        
+        // Act
+        serviceImpl.delete(params, options)
+        
+        // Assert
+        verify(exactly = 1) { responseStore.deleteResponse(responseId) }
     }
 
     /**
