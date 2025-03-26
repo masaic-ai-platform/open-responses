@@ -32,7 +32,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "/var/run/docker.sock:/var/run/docker.sock"
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
@@ -42,13 +42,31 @@ services:
     profiles:
       - mcp
 
+  # Flavor 2: replicated for Windows with named pipe
+  open-responses-mcp-windows:
+    image: jasbir34/open-responses:test-version-1
+    ports:
+      - "8080:8080"
+    volumes:
+      # Use the Docker named pipe on Windows
+      - "//./pipe/docker_engine://./pipe/docker_engine"
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
+
+
   # Flavor 3: MCP service that includes extra configuration and custom path for mcp config json.
   open-responses-custom-mcp:
     <<: *open_responses
     ports:
       - "8080:8080"
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "/var/run/docker.sock:/var/run/docker.sock"
       - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
     environment:
       - GITHUB_TOKEN=${GITHUB_TOKEN}
@@ -59,6 +77,27 @@ services:
       - mcp-brave-search
     profiles:
       - mcp
+
+  #Flavour 3: replicated for Windows with named pipe
+  open-responses-custom-mcp-windows:
+    image: jasbir34/open-responses:test-version-1
+    ports:
+      - "8080:8080"
+    volumes:
+      # Use the Docker named pipe on Windows
+      - "//./pipe/docker_engine://./pipe/docker_engine"
+      # Mount the MCP config file: if MCP_CONFIG_FILE_PATH is not defined, use the default path in the container
+      - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp_server_config.json
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
+
 
   # Flavor 4: Run with openai-agent SDK settings.
   open-responses-with-openai:

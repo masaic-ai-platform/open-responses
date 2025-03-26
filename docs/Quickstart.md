@@ -278,9 +278,14 @@ This section demonstrates how to run examples that create Agents using the OpenA
 
 1. Run the Service  
    Start the service with the MCP profile by executing:
-   ```bash
-   docker-compose --profile mcp up open-responses-mcp
-   ```  
+   1. For macOS:
+      ```bash
+      docker-compose --profile mcp up open-responses-mcp
+      ```  
+   2. For Windows:
+        ```bash
+        docker-compose --profile mcp up open-responses-mcp-windows
+        ```
    For more details, please refer to the [Start Docker with Built-In Tools](#3-start-docker-with-built-in-tools) section.
 
    Note:  
