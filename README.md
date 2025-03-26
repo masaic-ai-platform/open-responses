@@ -168,12 +168,10 @@ Our benchmarks show minimal overhead (30-50ms) compared to direct API calls.
 OpenResponses standardizes error responses across providers:
 ```json
 {
-  "error": {
-    "type": "rate_limit_exceeded",
-    "message": "Rate limit exceeded. Please try again in 30 seconds.",
-    "param": null,
-    "code": "rate_limit"
-  }
+  "type": "rate_limit_exceeded",
+  "message": "Rate limit exceeded. Please try again in 30 seconds.",
+  "param": null,
+  "code": "rate_limit"
 }
 ```
 
@@ -244,6 +242,7 @@ To start the server in development mode:
 Build and run the application using Docker:
 
 ```bash
+./gradlew build
 docker build -t openresponses .
 docker run -p 8080:8080 -d openresponses
 ```
@@ -255,11 +254,6 @@ Run the tests with:
 ```bash
 ./gradlew test
 ```
-
-### Contribution Guidelines
-
-Refer to the [Contributing section](#🤝-contributing) for guidelines on how to contribute.
-
 
 ## ⚠️ Production Use
 
