@@ -48,12 +48,12 @@ Access unique features like streaming responses, built-in tools(currently suppor
 
 The API implements the following OpenAI-compatible endpoints:
 
-| Endpoint | Description | Status |
-|----------|-------------|-------------|
-| `POST /v1/responses` | Create a new model response | Live |
-| `GET /v1/responses/{responseId}` | Retrieve a specific response | Coming Soon |
-| `DELETE /v1/responses/{responseId}` | Delete a response | Coming Soon | 
-| `GET /v1/responses/{responseId}/input_items` | List input items for a response | Coming Soon |
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/responses` | Create a new model response | 
+| `GET /v1/responses/{responseId}` | Retrieve a specific response | 
+| `DELETE /v1/responses/{responseId}` | Delete a response | 
+| `GET /v1/responses/{responseId}/input_items` | List input items for a response | 
 
 ## 🚀 Quick Start
 

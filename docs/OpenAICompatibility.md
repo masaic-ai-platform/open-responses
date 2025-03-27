@@ -173,7 +173,7 @@ The Masaic implementation includes following components for streaming:
 
 When using Chat Completions API via Responses API, the following Responses API features have limited or no direct support in the standard Chat Completions API and require special handling by the Masaic platform:
 
-### Conversation Management (Masaic-Managed) (COMING SOON)
+### Conversation Management (Masaic-Managed) 
 
 - **`previous_response_id`**: Conversation history tracking and chaining
   - Masaic maintains conversation state between requests
