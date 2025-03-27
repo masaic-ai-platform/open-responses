@@ -29,7 +29,7 @@ class PlaygroundController(
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = Response::class))],
+                content = [Content(schema = Schema(type = "array", implementation = ToolMetadata::class))],
             ),
         ],
     )
@@ -46,7 +46,7 @@ class PlaygroundController(
             ApiResponse(
                 responseCode = "200",
                 description = "OK",
-                content = [Content(schema = Schema(implementation = Response::class))],
+                content = [Content(schema = Schema(implementation = AIModelsMetadata::class))],
             ),
         ],
     )
