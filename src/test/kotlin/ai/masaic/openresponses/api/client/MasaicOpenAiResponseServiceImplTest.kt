@@ -117,6 +117,53 @@ class MasaicOpenAiResponseServiceImplTest {
         verify(exactly = 1) { mockCompletions.create(preparedParams) }
         // confirm we never called toolHandler
         verify { toolHandler wasNot Called }
+        verify { responseStore wasNot Called }
+    }
+
+    /**
+     * create(client, params) tests:
+     * 1) No tool calls -> return direct response
+     * 2) Has tool calls -> calls handleMasaicToolCall and recurses
+     * 3) Too many tool calls -> throws IllegalArgumentException
+     */
+    @Test
+    fun `test create with no tool calls returns direct response with store`() {
+        // Setup
+        val client = mockk<OpenAIClient>(relaxed = true)
+        val params = defaultParamsMock(true)
+        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.instructions() } returns Optional.empty()
+
+        // Mock the completion response from OpenAI
+        val completion = mockk<ChatCompletion>(relaxed = true)
+        every { completion.id() } returns "chatcmpl-1"
+        val choice = mockk<ChatCompletion.Choice>(relaxed = true)
+        // No tool calls => finish reason is something else
+        every { choice.finishReason() } returns FinishReason.STOP
+        every { completion.choices() } returns listOf(choice)
+        every { completion.usage() } returns Optional.empty()
+
+        // Mock client.chat().completions().create(...) => returns 'completion'
+        val mockChat = mockk<ChatService>(relaxed = true)
+        val mockCompletions = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
+        every { client.chat() } returns mockChat
+        every { mockChat.completions() } returns mockCompletions
+        every { mockCompletions.create(any()) } returns completion
+
+        // Mock parameterConverter
+        val preparedParams = mockk<ChatCompletionCreateParams>(relaxed = true)
+        every { parameterConverter.prepareCompletion(params) } returns preparedParams
+
+        // Act
+        val result = serviceImpl.create(client, params)
+
+        // Assert
+        // Should return directly, no recursion
+        assertNotNull(result)
+        verify(exactly = 1) { mockCompletions.create(preparedParams) }
+        // confirm we never called toolHandler
+        verify { toolHandler wasNot Called }
+        verify { responseStore.storeResponse(any(), any()) }
     }
 
     @Test
@@ -358,7 +405,7 @@ class MasaicOpenAiResponseServiceImplTest {
     /**
      * Utility method that returns a partially mocked ResponseCreateParams with minimal needed fields.
      */
-    private fun defaultParamsMock(): ResponseCreateParams {
+    private fun defaultParamsMock(store: Boolean = false): ResponseCreateParams {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
@@ -371,6 +418,7 @@ class MasaicOpenAiResponseServiceImplTest {
         every { params.maxOutputTokens() } returns Optional.of(512)
         every { params.previousResponseId() } returns Optional.empty()
         every { params.reasoning() } returns Optional.empty()
+        every { params.store() } returns Optional.of(store)
         // By default, create a text-based input
         val mockInput =
             mockk<ResponseCreateParams.Input> {
