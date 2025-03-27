@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
 import mu.KotlinLogging
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
 import java.util.concurrent.ConcurrentHashMap
 
@@ -13,6 +14,7 @@ import java.util.concurrent.ConcurrentHashMap
  * Stores responses and their input items in memory using concurrent hash maps.
  */
 @Component
+@ConditionalOnProperty(name = ["app.response-store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryResponseStore(
     private val objectMapper: ObjectMapper,
 ) : ResponseStore {
