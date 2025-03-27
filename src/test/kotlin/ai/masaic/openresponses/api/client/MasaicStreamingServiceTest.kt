@@ -1,7 +1,11 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.FunctionTool
+import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonField
 import com.openai.core.JsonValue
@@ -33,6 +37,8 @@ class MasaicStreamingServiceTest {
     private lateinit var toolService: ToolService
     private lateinit var openAIClient: OpenAIClient
     private lateinit var streamingService: MasaicStreamingService
+    private lateinit var payloadFormatter: PayloadFormatter
+    private lateinit var objectMapper: ObjectMapper
 
     @BeforeEach
     fun setUp() {
@@ -40,6 +46,13 @@ class MasaicStreamingServiceTest {
         parameterConverter = mockk()
         toolService = mockk()
         openAIClient = mockk()
+        objectMapper = ObjectMapper()
+        payloadFormatter =
+            mockk {
+                every { formatResponseStreamEvent(any()) } answers {
+                    objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
+                }
+            }
 
         streamingService =
             MasaicStreamingService(
@@ -47,7 +60,9 @@ class MasaicStreamingServiceTest {
                 parameterConverter = parameterConverter,
                 toolService = toolService,
                 allowedMaxToolCalls = 3, // test limit
-                maxDuration = 10_000, // test duration
+                maxDuration = 10_000, // test duration,
+                payloadFormatter,
+                objectMapper,
             )
     }
 

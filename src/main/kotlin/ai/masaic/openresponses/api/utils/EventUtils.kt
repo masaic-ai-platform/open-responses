@@ -9,7 +9,6 @@ import org.springframework.http.codec.ServerSentEvent
  */
 class EventUtils {
     companion object {
-        private val objectMapper = ObjectMapper()
         private const val SPACE = " "
 
         /**
@@ -19,9 +18,13 @@ class EventUtils {
          * @return A ServerSentEvent containing the event data
          * @throws IllegalArgumentException if the event type is unknown
          */
-        fun convertEvent(event: ResponseStreamEvent): ServerSentEvent<String> {
+        fun convertEvent(
+            event: ResponseStreamEvent,
+            payloadFormatter: PayloadFormatter,
+            objectMapper: ObjectMapper,
+        ): ServerSentEvent<String> {
             val eventType = getEventType(event)
-            val eventData = SPACE + objectMapper.writeValueAsString(event)
+            val eventData = SPACE + objectMapper.writeValueAsString(payloadFormatter.formatResponseStreamEvent(event))
 
             return ServerSentEvent
                 .builder<String>(eventData)

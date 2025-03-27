@@ -2,10 +2,14 @@ package ai.masaic.openresponses.api.controller
 
 import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.service.MasaicResponseService
-import ai.masaic.openresponses.tool.ToolService
+import ai.masaic.openresponses.api.utils.PayloadFormatter
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.openai.models.responses.Response
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Test
@@ -19,11 +23,21 @@ import org.springframework.test.web.reactive.server.WebTestClient
 @Import(TestConfiguration::class)
 class ResponseControllerTest {
     private val responseService = mockk<MasaicResponseService>()
-    private val toolService = mockk<ToolService>()
     private var webTestClient: WebTestClient
+    private lateinit var payloadFormatter: PayloadFormatter
 
     init {
-        val controller = ResponseController(responseService, toolService)
+        val objectMapper = ObjectMapper()
+        payloadFormatter =
+            mockk {
+                every { formatResponse(any()) } answers {
+                    objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
+                }
+                every { formatResponseRequest(any()) } answers {
+                    objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
+                }
+            }
+        val controller = ResponseController(responseService, payloadFormatter)
         webTestClient = WebTestClient.bindToController(controller).build()
     }
 

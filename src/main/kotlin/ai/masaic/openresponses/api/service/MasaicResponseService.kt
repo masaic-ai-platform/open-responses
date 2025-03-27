@@ -3,6 +3,8 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.extensions.fromBody
 import ai.masaic.openresponses.api.utils.EventUtils
+import ai.masaic.openresponses.api.utils.PayloadFormatter
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.core.http.AsyncStreamResponse
@@ -42,6 +44,8 @@ private val logger = KotlinLogging.logger {}
 @Service
 class MasaicResponseService(
     private val openAIResponseService: MasaicOpenAiResponseServiceImpl,
+    private val payloadFormatter: PayloadFormatter,
+    private val objectMapper: ObjectMapper,
 ) {
     companion object {
         const val MODEL_BASE_URL = "MODEL_BASE_URL"
@@ -210,6 +214,8 @@ class MasaicResponseService(
                                     ).param("")
                                     .build(),
                             ),
+                            payloadFormatter,
+                            objectMapper,
                         )
                     emit(errorEvent) // Emit error event to the client
                     throw ResponseStreamingException("Error in streaming response: ${error.message}", error)
@@ -295,7 +301,7 @@ class MasaicResponseService(
             val subscription =
                 response.subscribe { completion ->
                     try {
-                        val event = EventUtils.convertEvent(completion)
+                        val event = EventUtils.convertEvent(completion, payloadFormatter, objectMapper)
                         if (!trySend(event).isSuccess) {
                             logger.warn { "Failed to send streaming event to client" }
                         }

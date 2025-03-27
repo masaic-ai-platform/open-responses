@@ -1,7 +1,11 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
+import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.node.ObjectNode
 import com.openai.client.OpenAIClient
 import com.openai.models.ChatModel
 import com.openai.models.responses.Response
@@ -29,12 +33,21 @@ class MasaicResponseServiceTest {
     private lateinit var toolService: ToolService
     private lateinit var openAIResponseService: MasaicOpenAiResponseServiceImpl
     private lateinit var masaicResponseService: MasaicResponseService
+    private lateinit var payloadFormatter: PayloadFormatter
+    private lateinit var objectMapper: ObjectMapper
 
     @BeforeEach
     fun setup() {
+        objectMapper = ObjectMapper()
+        payloadFormatter =
+            mockk {
+                every { formatResponse(any()) } answers {
+                    objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
+                }
+            }
         toolService = mockk()
         openAIResponseService = mockk()
-        masaicResponseService = MasaicResponseService(openAIResponseService)
+        masaicResponseService = MasaicResponseService(openAIResponseService, payloadFormatter, objectMapper)
     }
 
     @Test

@@ -1,7 +1,9 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.utils.EventUtils
+import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletionChunk
@@ -26,6 +28,8 @@ class MasaicStreamingService(
     // Make these constructor params for easy mocking:
     private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10,
     private val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L, // 60 seconds
+    private val payloadFormatter: PayloadFormatter,
+    private val objectMapper: ObjectMapper,
 ) {
     /**
      * Creates a streaming completion that emits ServerSentEvents.
@@ -134,6 +138,8 @@ class MasaicStreamingService(
                                             ),
                                         ).build(),
                                 ),
+                                payloadFormatter,
+                                objectMapper,
                             ),
                         ).isSuccess
                         inProgressFired = true
@@ -174,6 +180,8 @@ class MasaicStreamingService(
                                                 .response(finalResponse)
                                                 .build(),
                                         ),
+                                        payloadFormatter,
+                                        objectMapper,
                                     ),
                                 )
                             }
@@ -206,6 +214,8 @@ class MasaicStreamingService(
                                                 .response(finalResponse)
                                                 .build(),
                                         ),
+                                        payloadFormatter,
+                                        objectMapper,
                                     ),
                                 )
                             }
@@ -249,6 +259,8 @@ class MasaicStreamingService(
                                                 .response(finalResponse)
                                                 .build(),
                                         ),
+                                        payloadFormatter,
+                                        objectMapper,
                                     ),
                                 )
                             } else {
@@ -335,6 +347,8 @@ class MasaicStreamingService(
                             ),
                         ).build(),
                 ),
+                payloadFormatter,
+                objectMapper,
             ),
         )
     }
@@ -359,6 +373,8 @@ class MasaicStreamingService(
                         .param(null)
                         .build(),
                 ),
+                payloadFormatter,
+                objectMapper,
             ),
         )
     }
@@ -379,6 +395,8 @@ class MasaicStreamingService(
                         .type(JsonValue.from("response.error"))
                         .build(),
                 ),
+                payloadFormatter,
+                objectMapper,
             ),
         )
     }
@@ -406,6 +424,8 @@ class MasaicStreamingService(
                                 .itemId(events.first().asOutputTextDelta().itemId())
                                 .build(),
                         ),
+                        payloadFormatter,
+                        objectMapper,
                     ),
                 )
             }
@@ -476,10 +496,10 @@ class MasaicStreamingService(
                 event.isOutputItemDone() -> {
                     // Add final item
                     responseOutputItemAccumulator.add(event.asOutputItemDone().item())
-                    trySend(EventUtils.convertEvent(event))
+                    trySend(EventUtils.convertEvent(event, payloadFormatter, objectMapper))
                 }
                 else -> {
-                    trySend(EventUtils.convertEvent(event))
+                    trySend(EventUtils.convertEvent(event, payloadFormatter, objectMapper))
                 }
             }
         }
@@ -496,7 +516,7 @@ class MasaicStreamingService(
 
         // If not an internal tool, forward event
         if (!internalToolItemIds.contains(completion.id())) {
-            trySend(EventUtils.convertEvent(event))
+            trySend(EventUtils.convertEvent(event, payloadFormatter, objectMapper))
         }
     }
 
@@ -534,7 +554,7 @@ class MasaicStreamingService(
                 ),
             )
         }
-        trySend(EventUtils.convertEvent(event))
+        trySend(EventUtils.convertEvent(event, payloadFormatter, objectMapper))
     }
 
     private fun ProducerScope<ServerSentEvent<String>>.handleOutputTextDelta(
@@ -543,7 +563,7 @@ class MasaicStreamingService(
     ) {
         val idx = event.asOutputTextDelta().outputIndex()
         textAccumulator.getOrPut(idx) { mutableListOf() }.add(event)
-        trySend(EventUtils.convertEvent(event))
+        trySend(EventUtils.convertEvent(event, payloadFormatter, objectMapper))
     }
 
     private fun ProducerScope<ServerSentEvent<String>>.handleFunctionCallDone(
@@ -569,6 +589,8 @@ class MasaicStreamingService(
                                 .putAllAdditionalProperties(events.first().asFunctionCallArgumentsDelta()._additionalProperties())
                                 .build(),
                         ),
+                        payloadFormatter,
+                        objectMapper,
                     ),
                 )
             }
