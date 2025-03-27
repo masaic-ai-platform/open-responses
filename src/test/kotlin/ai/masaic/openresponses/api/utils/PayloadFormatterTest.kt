@@ -14,7 +14,11 @@ import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.completions.CompletionUsage
 import com.openai.models.responses.Response
+import com.openai.models.responses.ResponseCompletedEvent
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseCreatedEvent
+import com.openai.models.responses.ResponseFailedEvent
+import com.openai.models.responses.ResponseInProgressEvent
 import com.openai.models.responses.ResponseStreamEvent
 import io.mockk.every
 import io.mockk.mockk
@@ -215,18 +219,18 @@ class PayloadFormatterTest {
             val created = System.currentTimeMillis()
             val response: Response = getMockResponse(created)
             val event: ResponseStreamEvent =
-                mockk {
-                    every { isCompleted() } returns true
-                    every { asCompleted() } returns
-                        mockk {
-                            every { response() } returns response
-                        }
-                }
+                ResponseStreamEvent.ofCompleted(
+                    ResponseCompletedEvent
+                        .builder()
+                        .response(
+                            response,
+                        ).build(),
+                )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
 
             // Check created_at is converted
-            val createdAt = node["created_at"]
+            val createdAt = node["response"]["created_at"]
             Assertions.assertNotNull(createdAt)
             Assertions.assertTrue(createdAt.isBigDecimal)
             Assertions.assertEquals(
@@ -240,18 +244,17 @@ class PayloadFormatterTest {
             val created = System.currentTimeMillis()
             val response: Response = getMockResponse(created)
             val event: ResponseStreamEvent =
-                mockk {
-                    every { isCompleted() } returns false
-                    every { isCreated() } returns true
-                    every { asCreated() } returns
-                        mockk {
-                            every { response() } returns response
-                        }
-                }
+                ResponseStreamEvent.ofCreated(
+                    ResponseCreatedEvent
+                        .builder()
+                        .response(
+                            response,
+                        ).build(),
+                )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
 
-            val createdAt = node["created_at"]
+            val createdAt = node["response"]["created_at"]
             Assertions.assertTrue(createdAt.isBigDecimal)
             Assertions.assertEquals(
                 0,
@@ -266,27 +269,25 @@ class PayloadFormatterTest {
             every { toolService.getAvailableTool("myTool") } returns mockk(relaxed = true)
 
             val event: ResponseStreamEvent =
-                mockk {
-                    every { isCompleted() } returns false
-                    every { isCreated() } returns false
-                    every { isInProgress() } returns true
-                    every { asInProgress() } returns
-                        mockk {
-                            every { response() } returns response
-                        }
-                }
+                ResponseStreamEvent.ofInProgress(
+                    ResponseInProgressEvent
+                        .builder()
+                        .response(
+                            response,
+                        ).build(),
+                )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
 
             // Tools array should have had the "function" replaced with { "type": "myTool" }
-            val toolType = node["tools"][0].get("type").asText()
+            val toolType = node["response"]["tools"][0].get("type").asText()
             Assertions.assertEquals("myTool", toolType)
 
             // created_at is BigDecimal
-            Assertions.assertTrue(node["created_at"].isBigDecimal)
+            Assertions.assertTrue(node["response"]["created_at"].isBigDecimal)
             Assertions.assertEquals(
                 0,
-                BigDecimal.valueOf(created).compareTo(node["created_at"].decimalValue()),
+                BigDecimal.valueOf(created).compareTo(node["response"]["created_at"].decimalValue()),
             )
         }
 
@@ -295,19 +296,16 @@ class PayloadFormatterTest {
             val created = System.currentTimeMillis()
             val response: Response = getMockResponse(created)
             val event: ResponseStreamEvent =
-                mockk {
-                    every { isFailed() } returns true
-                    every { isCompleted() } returns false
-                    every { isCreated() } returns false
-                    every { isInProgress() } returns false
-                    every { asFailed() } returns
-                        mockk {
-                            every { response() } returns response
-                        }
-                }
+                ResponseStreamEvent.ofFailed(
+                    ResponseFailedEvent
+                        .builder()
+                        .response(
+                            response,
+                        ).build(),
+                )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
-            val createdAt = node["created_at"]
+            val createdAt = node["response"]["created_at"]
             Assertions.assertTrue(createdAt.isBigDecimal)
             Assertions.assertEquals(
                 0,

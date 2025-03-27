@@ -64,17 +64,28 @@ class PayloadFormatter(
 
     internal fun formatResponseStreamEvent(event: ResponseStreamEvent): JsonNode {
         if (event.isCompleted()) {
-            val rootNode = mapper.valueToTree<JsonNode>(event.asCompleted().response()) as ObjectNode
-            return formatResponseNode(rootNode)
+            val responseNode = mapper.valueToTree<JsonNode>(event.asCompleted().response()) as ObjectNode
+            formatResponseNode(responseNode)
+            val rootNode = mapper.valueToTree<JsonNode>(event) as ObjectNode
+            rootNode.replace("response", responseNode)
+            return rootNode
         } else if (event.isCreated()) {
-            val rootNode = mapper.valueToTree<JsonNode>(event.asCreated().response()) as ObjectNode
-            return formatResponseNode(rootNode)
+            val responseNode = formatResponseNode(mapper.valueToTree<JsonNode>(event.asCreated().response()) as ObjectNode)
+            val rootNode = mapper.valueToTree<JsonNode>(event) as ObjectNode
+            rootNode.replace("response", responseNode)
+            return rootNode
         } else if (event.isInProgress()) {
-            val rootNode = mapper.valueToTree<JsonNode>(event.asInProgress().response()) as ObjectNode
-            return formatResponseNode(rootNode)
+            val responseNode = mapper.valueToTree<JsonNode>(event.asInProgress().response()) as ObjectNode
+            formatResponseNode(responseNode)
+            val rootNode = mapper.valueToTree<JsonNode>(event) as ObjectNode
+            rootNode.replace("response", responseNode)
+            return rootNode
         } else if (event.isFailed()) {
-            val rootNode = mapper.valueToTree<JsonNode>(event.asFailed().response()) as ObjectNode
-            return formatResponseNode(rootNode)
+            val responseNode = mapper.valueToTree<JsonNode>(event.asFailed().response()) as ObjectNode
+            formatResponseNode(responseNode)
+            val rootNode = mapper.valueToTree<JsonNode>(event) as ObjectNode
+            rootNode.replace("response", responseNode)
+            return rootNode
         }
 
         val rootNode = mapper.valueToTree<JsonNode>(event) as ObjectNode
