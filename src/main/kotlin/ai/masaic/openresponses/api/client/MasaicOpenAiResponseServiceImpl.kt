@@ -138,7 +138,7 @@ class MasaicOpenAiResponseServiceImpl(
         response: Response,
         params: ResponseCreateParams,
     ) {
-        if(params.store().isPresent &&params.store().get()) {
+        if (params.store().isPresent && params.store().get()) {
             val inputItems =
                 if (params.input().isResponse()) {
                     params.input().asResponse()

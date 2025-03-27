@@ -6,29 +6,29 @@ This guide provides a comprehensive mapping to help you use the Chat Completions
 
 ### Request Parameters
 
-| Responses API Property                | Chat Completions API Equivalent                    | Notes                                   |
-|---------------------------------------|---------------------------------------------------|-----------------------------------------|
-| `input`                               | `messages`                                        | Structure your input as messages array  |
-| `input.content`                       | `messages.content`                                | Content structure for messages          |
-| `input.content.text`                  | `messages.content.text`                           | Text content in message                 |
-| `input.content.image_url`             | `messages.content.image_url`                      | Image URL for multimodal inputs         |
-| `input.content.file_id`               | `messages.content.file_id`                        | File reference                          |
-| `input.role`                          | `messages.role`                                   | User, assistant, or system role         |
-| `model`                               | `model`                                           | Model identifier                        |
-| `instructions`                        | `messages` (role: `system` or `developer`)        | Add as system/developer messages        |
-| `max_output_tokens`                   | `max_completion_tokens`                           | Maximum tokens in response              |
-| `parallel_tool_calls`                 | `parallel_tool_calls`                             | Enable parallel tool calls              |
-| `temperature`                         | `temperature`                                     | Controls randomness                     |
-| `top_p`                               | `top_p`                                           | Controls diversity via nucleus sampling |
-| `tools`                               | `tools`                                           | Available tools for the model           |
-| `tool_choice`                         | `tool_choice`                                     | Specifies which tool to use             |
-| `metadata`                            | `metadata`                                        | Custom metadata for the request         |
-| `stream`                              | `stream`                                          | Enable streaming response               |
-| `store`                               | `store`                                           | Persist conversation history            |
-| `reasoning.effort`                    | `reasoning_effort`                                | Controls reasoning depth                |
-| `text.format`                         | `response_format.type`                            | Specifies response format               |
-| `text.format.type`                    | `response_format.type`                            | Type of response format                 |
-| `text.format.json_schema`             | `response_format.json_schema`                     | JSON schema for structured responses    |
+| Responses API Property                | Chat Completions API Equivalent                    | Notes                                                                                                                            |
+|---------------------------------------|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `input`                               | `messages`                                        | Structure your input as messages array                                                                                           |
+| `input.content`                       | `messages.content`                                | Content structure for messages                                                                                                   |
+| `input.content.text`                  | `messages.content.text`                           | Text content in message                                                                                                          |
+| `input.content.image_url`             | `messages.content.image_url`                      | Image URL for multimodal inputs                                                                                                  |
+| `input.content.file_id`               | `messages.content.file_id`                        | File reference                                                                                                                   |
+| `input.role`                          | `messages.role`                                   | User, assistant, or system role                                                                                                  |
+| `model`                               | `model`                                           | Model identifier                                                                                                                 |
+| `instructions`                        | `messages` (role: `system` or `developer`)        | Add as system/developer messages                                                                                                 |
+| `max_output_tokens`                   | `max_completion_tokens`                           | Maximum tokens in response                                                                                                       |
+| `parallel_tool_calls`                 | `parallel_tool_calls`                             | Enable parallel tool calls                                                                                                       |
+| `temperature`                         | `temperature`                                     | Controls randomness                                                                                                              |
+| `top_p`                               | `top_p`                                           | Controls diversity via nucleus sampling                                                                                          |
+| `tools`                               | `tools`                                           | Available tools for the model                                                                                                    |
+| `tool_choice`                         | `tool_choice`                                     | Specifies which tool to use                                                                                                      |
+| `metadata`                            | `metadata`                                        | Custom metadata for the request. This feature is managed and not forward to model provider.                                      |
+| `stream`                              | `stream`                                          | Enable streaming response                                                                                                        |
+| `store`                               | `store`                                           | Persist conversation history. This feature is managed and not forward to model provider. Default value is null in open-responses |
+| `reasoning.effort`                    | `reasoning_effort`                                | Controls reasoning depth                                                                                                         |
+| `text.format`                         | `response_format.type`                            | Specifies response format                                                                                                        |
+| `text.format.type`                    | `response_format.type`                            | Type of response format                                                                                                          |
+| `text.format.json_schema`             | `response_format.json_schema`                     | JSON schema for structured responses                                                                                             |
 
 ## Implementation Details
 

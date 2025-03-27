@@ -34,6 +34,7 @@ class MasaicStreamingService(
     private val objectMapper: ObjectMapper,
 ) {
     private val logger = KotlinLogging.logger {}
+
     /**
      * Creates a streaming completion that emits ServerSentEvents.
      * This allows for real-time response processing.
@@ -638,7 +639,7 @@ class MasaicStreamingService(
         response: Response,
         params: ResponseCreateParams,
     ) {
-        if(params.store().isPresent &&params.store().get()) {
+        if (params.store().isPresent && params.store().get()) {
             val inputItems =
                 if (params.input().isResponse()) {
                     params.input().asResponse()

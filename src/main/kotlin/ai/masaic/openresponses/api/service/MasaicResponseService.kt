@@ -17,7 +17,6 @@ import com.openai.errors.OpenAIException
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseErrorEvent
-import com.openai.models.responses.ResponseRetrieveParams
 import com.openai.models.responses.ResponseStreamEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.awaitClose
@@ -245,9 +244,9 @@ class MasaicResponseService(
      * @throws ResponseProcessingException If there is an error processing the response
      */
     suspend fun getResponse(
-        responseId: String
-    ): Response {
-        return try {
+        responseId: String,
+    ): Response =
+        try {
             responseStore.getResponse(responseId) ?: throw ResponseNotFoundException("Response not found with ID: $responseId")
         } catch (e: Exception) {
             when (e) {
@@ -255,7 +254,6 @@ class MasaicResponseService(
                 else -> throw ResponseProcessingException("Error retrieving response: ${e.message}")
             }
         }
-    }
 
     /**
      * Lists input items for a response with pagination.
