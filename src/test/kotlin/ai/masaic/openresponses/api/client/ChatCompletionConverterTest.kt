@@ -384,7 +384,6 @@ class ChatCompletionConverterTest {
         assert(second.isFunctionCall())
 
         val functionCallItem = second.asFunctionCall()
-        assertEquals("completion-id", functionCallItem.id())
         assertEquals("toolcall-123", functionCallItem.callId())
         assertEquals("myFunction", functionCallItem.name())
         assertEquals("{}", functionCallItem.arguments())

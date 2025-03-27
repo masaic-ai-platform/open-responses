@@ -138,22 +138,24 @@ class MasaicOpenAiResponseServiceImpl(
         response: Response,
         params: ResponseCreateParams,
     ) {
-        val inputItems =
-            if (params.input().isResponse()) {
-                params.input().asResponse()
-            } else {
-                listOf(
-                    ResponseInputItem.ofEasyInputMessage(
-                        EasyInputMessage
-                            .builder()
-                            .content(params.input().asText())
-                            .role(EasyInputMessage.Role.USER)
-                            .build(),
-                    ),
-                )
-            }
-        responseStore.storeResponse(response, inputItems)
-        logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
+        if(params.store().isPresent &&params.store().get()) {
+            val inputItems =
+                if (params.input().isResponse()) {
+                    params.input().asResponse()
+                } else {
+                    listOf(
+                        ResponseInputItem.ofEasyInputMessage(
+                            EasyInputMessage
+                                .builder()
+                                .content(params.input().asText())
+                                .role(EasyInputMessage.Role.USER)
+                                .build(),
+                        ),
+                    )
+                }
+            responseStore.storeResponse(response, inputItems)
+            logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
+        }
     }
 
     /**

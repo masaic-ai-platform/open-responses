@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
+import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
@@ -32,6 +33,7 @@ class MasaicStreamingService(
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
 ) {
+    private val logger = KotlinLogging.logger {}
     /**
      * Creates a streaming completion that emits ServerSentEvents.
      * This allows for real-time response processing.
@@ -636,20 +638,23 @@ class MasaicStreamingService(
         response: Response,
         params: ResponseCreateParams,
     ) {
-        val inputItems =
-            if (params.input().isResponse()) {
-                params.input().asResponse()
-            } else {
-                listOf(
-                    ResponseInputItem.ofEasyInputMessage(
-                        EasyInputMessage
-                            .builder()
-                            .content(params.input().asText())
-                            .role(EasyInputMessage.Role.USER)
-                            .build(),
-                    ),
-                )
-            }
-        responseStore.storeResponse(response, inputItems)
+        if(params.store().isPresent &&params.store().get()) {
+            val inputItems =
+                if (params.input().isResponse()) {
+                    params.input().asResponse()
+                } else {
+                    listOf(
+                        ResponseInputItem.ofEasyInputMessage(
+                            EasyInputMessage
+                                .builder()
+                                .content(params.input().asText())
+                                .role(EasyInputMessage.Role.USER)
+                                .build(),
+                        ),
+                    )
+                }
+            responseStore.storeResponse(response, inputItems)
+            logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
+        }
     }
 }

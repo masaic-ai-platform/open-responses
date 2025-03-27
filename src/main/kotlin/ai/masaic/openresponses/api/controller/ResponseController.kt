@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.api.controller
 
+import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.model.CreateResponseRequest
+import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.utils.CoroutineMDCContext
@@ -32,6 +34,7 @@ import org.springframework.web.server.ServerWebExchange
 class ResponseController(
     private val masaicResponseService: MasaicResponseService,
     private val payloadFormatter: PayloadFormatter,
+    private val responseStore: ResponseStore,
 ) {
     private val log = LoggerFactory.getLogger(ResponseController::class.java)
     val mapper = jacksonObjectMapper()
@@ -126,7 +129,7 @@ class ResponseController(
         // Use our custom coroutine-aware MDC context
         return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
             try {
-                ResponseEntity.ok(payloadFormatter.formatResponse(masaicResponseService.getResponse(responseId, headers, queryParams)))
+                ResponseEntity.ok(payloadFormatter.formatResponse(masaicResponseService.getResponse(responseId)))
             } catch (e: ResponseNotFoundException) {
                 throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
             }
@@ -151,13 +154,16 @@ class ResponseController(
     fun deleteResponse(
         @Parameter(description = "The ID of the response to delete", required = true)
         @PathVariable responseId: String,
-    ): ResponseEntity<Void> =
-        try {
-            // responseService.deleteResponse(responseId)
-            ResponseEntity.ok().build()
-        } catch (e: ResponseNotFoundException) {
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
-        }
+    ): ResponseEntity<Map<String, Any>> {
+        val deleted = responseStore.deleteResponse(responseId)
+        return ResponseEntity.ok(
+            mapOf(
+                "id" to responseId,
+                "deleted" to deleted,
+                "object" to "response",
+            ),
+        )
+    }
 
     @GetMapping("/responses/{responseId}/input_items")
     @Operation(
@@ -190,13 +196,9 @@ class ResponseController(
         @RequestParam(required = false) after: String?,
         @Parameter(description = "An item ID to list items before, used in pagination.")
         @RequestParam(required = false) before: String?,
-    ): ResponseEntity<Any> =
+    ): ResponseEntity<ResponseInputItemList> =
         try {
-            val validLimit = limit.coerceIn(1, 100)
-            val validOrder = if (order in listOf("asc", "desc")) order else "desc"
-
-            val inputItems = masaicResponseService.listInputItems(responseId, validLimit, validOrder, after, before)
-            ResponseEntity.ok(inputItems)
+            ResponseEntity.ok(masaicResponseService.listInputItems(responseId, limit, order, after, before))
         } catch (e: ResponseNotFoundException) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }

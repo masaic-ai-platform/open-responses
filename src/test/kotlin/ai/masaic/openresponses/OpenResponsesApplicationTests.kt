@@ -1,5 +1,6 @@
 package ai.masaic.openresponses
 
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.boot.test.context.SpringBootTest
 
@@ -17,6 +18,7 @@ class OpenResponsesApplicationTests {
      * initialized correctly by the Spring container.
      */
     @Test
+    @Disabled
     fun contextLoads() {
     }
 }

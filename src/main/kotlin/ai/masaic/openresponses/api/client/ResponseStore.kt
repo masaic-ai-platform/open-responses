@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.InputMessageItem
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
 
@@ -33,7 +34,7 @@ interface ResponseStore {
      * @param responseId The ID of the response whose input items to retrieve
      * @return List of input items if the response exists, empty list otherwise
      */
-    fun getInputItems(responseId: String): List<ResponseInputItem>
+    fun getInputItems(responseId: String): List<InputMessageItem>
 
     /**
      * Removes a response and its input items.

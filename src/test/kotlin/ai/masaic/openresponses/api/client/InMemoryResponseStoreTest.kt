@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.InputMessageItem
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
 import io.mockk.every
@@ -10,10 +12,13 @@ import org.junit.jupiter.api.Test
 
 class InMemoryResponseStoreTest {
     private lateinit var responseStore: InMemoryResponseStore
+    private lateinit var objectMapper: ObjectMapper
 
     @BeforeEach
     fun setup() {
-        responseStore = InMemoryResponseStore()
+        objectMapper = mockk()
+        every { objectMapper.convertValue(ofType<ResponseInputItem>(), InputMessageItem::class.java) } returns InputMessageItem()
+        responseStore = InMemoryResponseStore(objectMapper)
     }
 
     @Test
@@ -22,13 +27,13 @@ class InMemoryResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
-        
+
         val inputItems = listOf(mockk<ResponseInputItem>())
-        
+
         // Act
         responseStore.storeResponse(mockResponse, inputItems)
         val retrievedResponse = responseStore.getResponse(responseId)
-        
+
         // Assert
         assertNotNull(retrievedResponse)
         assertEquals(mockResponse, retrievedResponse)
@@ -38,7 +43,7 @@ class InMemoryResponseStoreTest {
     fun `test getResponse returns null for nonexistent response`() {
         // Act
         val retrievedResponse = responseStore.getResponse("nonexistent_resp")
-        
+
         // Assert
         assertNull(retrievedResponse)
     }
@@ -49,27 +54,26 @@ class InMemoryResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
-        
+
         val inputItems =
             listOf(
                 mockk<ResponseInputItem>(),
                 mockk<ResponseInputItem>(),
             )
-        
+
         // Act
         responseStore.storeResponse(mockResponse, inputItems)
         val retrievedItems = responseStore.getInputItems(responseId)
-        
+
         // Assert
         assertEquals(2, retrievedItems.size)
-        assertEquals(inputItems, retrievedItems)
     }
 
     @Test
     fun `test getInputItems returns empty list for nonexistent response`() {
         // Act
         val retrievedItems = responseStore.getInputItems("nonexistent_resp")
-        
+
         // Assert
         assertTrue(retrievedItems.isEmpty())
     }
@@ -80,14 +84,14 @@ class InMemoryResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
-        
+
         val inputItems = listOf(mockk<ResponseInputItem>())
-        
+
         responseStore.storeResponse(mockResponse, inputItems)
-        
+
         // Act
         val deleted = responseStore.deleteResponse(responseId)
-        
+
         // Assert
         assertTrue(deleted)
         assertNull(responseStore.getResponse(responseId))
@@ -98,8 +102,8 @@ class InMemoryResponseStoreTest {
     fun `test deleteResponse returns false for nonexistent response`() {
         // Act
         val deleted = responseStore.deleteResponse("nonexistent_resp")
-        
+
         // Assert
         assertFalse(deleted)
     }
-} 
+}

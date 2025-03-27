@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.InputMessageItem
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
 import mu.KotlinLogging
@@ -11,12 +13,14 @@ import java.util.concurrent.ConcurrentHashMap
  * Stores responses and their input items in memory using concurrent hash maps.
  */
 @Component
-class InMemoryResponseStore : ResponseStore {
+class InMemoryResponseStore(
+    private val objectMapper: ObjectMapper,
+) : ResponseStore {
     private val logger = KotlinLogging.logger {}
-    
+
     // Thread-safe maps to store responses and their related input items
     private val responses = ConcurrentHashMap<String, Response>()
-    private val inputItemsMap = ConcurrentHashMap<String, List<ResponseInputItem>>()
+    private val inputItemsMap = ConcurrentHashMap<String, List<InputMessageItem>>()
 
     override fun storeResponse(
         response: Response,
@@ -24,8 +28,15 @@ class InMemoryResponseStore : ResponseStore {
     ) {
         val responseId = response.id()
         logger.debug { "Storing response with ID: $responseId" }
+
+        val inputMessageItems: List<InputMessageItem> =
+            inputItems.map {
+                // Add mapping logic from ResponseInputItem to InputMessageItem if needed
+                objectMapper.convertValue(it, InputMessageItem::class.java)
+            }
+
         responses[responseId] = response
-        inputItemsMap[responseId] = inputItems
+        inputItemsMap[responseId] = inputMessageItems
     }
 
     override fun getResponse(responseId: String): Response? {
@@ -33,7 +44,7 @@ class InMemoryResponseStore : ResponseStore {
         return responses[responseId]
     }
 
-    override fun getInputItems(responseId: String): List<ResponseInputItem> {
+    override fun getInputItems(responseId: String): List<InputMessageItem> {
         logger.debug { "Retrieving input items for response with ID: $responseId" }
         return inputItemsMap[responseId] ?: emptyList()
     }
@@ -44,4 +55,4 @@ class InMemoryResponseStore : ResponseStore {
         inputItemsMap.remove(responseId)
         return responseRemoved
     }
-} 
+}
