@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.controller
 
+import ai.masaic.openresponses.tool.AIModelInfo
+import ai.masaic.openresponses.tool.AIModelsMetadata
 import ai.masaic.openresponses.tool.ToolMetadata
 import ai.masaic.openresponses.tool.ToolService
 import com.openai.models.responses.Response
@@ -35,4 +37,53 @@ class PlaygroundController(
         toolService.listAvailableTools().let {
             ResponseEntity.ok(it)
         }
+
+    @GetMapping("/models", produces = [MediaType.APPLICATION_JSON_VALUE])
+    @Operation(
+        summary = "Retrieves available models",
+        description = "Retrieves a available models for a model provider.",
+        responses = [
+            ApiResponse(
+                responseCode = "200",
+                description = "OK",
+                content = [Content(schema = Schema(implementation = Response::class))],
+            ),
+        ],
+    )
+    fun getModels(): ResponseEntity<AIModelsMetadata> {
+        //List is not infinite Hard coding for now....
+        val modelList = listOf(
+            AIModelInfo(
+                id = "1",
+                name = "llama-3.2-3b-preview",
+                description = "",
+                provider = "groq",
+            ),
+            AIModelInfo(
+                id = "2",
+                name = "gpt-4o",
+                description = "",
+                provider = "openai",
+            ),
+            AIModelInfo(
+                id = "3",
+                name = "claude-3-5-sonnet-20241022",
+                description = "",
+                provider = "claude",
+            ),
+            AIModelInfo(
+                id = "4",
+                name = "qwen-2.5-32b",
+                description = "",
+                provider = "groq",
+            ),
+            AIModelInfo(
+                id = "5",
+                name = "claude-3-7-sonnet-20250219",
+                description = "",
+                provider = "claude",
+            )
+        )
+        return ResponseEntity.ok(AIModelsMetadata(models = modelList))
+    }
 }

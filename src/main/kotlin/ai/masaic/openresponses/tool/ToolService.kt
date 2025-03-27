@@ -496,3 +496,27 @@ data class ToolMetadata(
     val name: String,
     val description: String,
 )
+
+/**
+ * Data class representing metadata about AI models.
+ *
+ * @property models List of AI model information
+ */
+data class AIModelsMetadata(
+    val models: List<AIModelInfo>,
+)
+
+/**
+ * Data class representing metadata about an AI model.
+ *
+ * @property id Unique identifier for the model
+ * @property name Human-readable name of the model
+ * @property description Detailed description of what the model does
+ * @property provider Name of the provider of the model
+ */
+data class AIModelInfo(
+    val id: String,
+    val name: String,
+    val description: String,
+    val provider: String,
+)
