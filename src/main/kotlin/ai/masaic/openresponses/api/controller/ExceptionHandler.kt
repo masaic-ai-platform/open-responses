@@ -4,7 +4,9 @@ import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.service.ResponseProcessingException
 import ai.masaic.openresponses.api.service.ResponseStreamingException
 import ai.masaic.openresponses.api.service.ResponseTimeoutException
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.openai.errors.BadRequestException
 import com.openai.errors.NotFoundException
@@ -25,99 +27,205 @@ import org.springframework.web.server.ServerWebInputException
 private val logger = KotlinLogging.logger {}
 
 @RestControllerAdvice
-class GlobalExceptionHandler {
-    val objectMapper =
-        com.fasterxml.jackson.databind
-            .ObjectMapper()
-
+class GlobalExceptionHandler(
+    val objectMapper: ObjectMapper,
+) {
     @ExceptionHandler(OpenAIException::class)
     fun handleOpenAIException(ex: OpenAIException): ResponseEntity<ErrorResponse> {
         logger.error(ex) { "OpenAI API error: ${ex.message}" }
 
         if (ex is BadRequestException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Bad request",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Bad request",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Bad request",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else if (ex is PermissionDeniedException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Permission denied",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Permission denied",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Permission denied",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else if (ex is NotFoundException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Not found",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Not found",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Not found",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else if (ex is UnprocessableEntityException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Unprocessable entity",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Unprocessable entity",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Unprocessable entity",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else if (ex is RateLimitException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Rate limit exceeded",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Rate limit exceeded",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Rate limit exceeded",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else if (ex is UnexpectedStatusCodeException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Unexpected status code",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Unexpected status code",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Unexpected status code",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
+        } else if (ex is RateLimitException) {
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Rate limit exceeded",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Rate limit exceeded",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else if (ex is UnauthorizedException) {
-            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-            val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-            return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                errorResponse["error"] ?: ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "Unauthorized",
-                    param = ex.body().toString(),
-                    code = ex.statusCode().toString(),
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            try {
+                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                    errorResponse["error"] ?: ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Unauthorized",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            } catch (e: Exception) {
+                val errorResponse =
+                    ErrorResponse(
+                        type = "api_error",
+                        message = ex.message ?: "Unauthorized",
+                        param = ex.body().toString(),
+                        code = ex.statusCode().toString(),
+                        timestamp = System.currentTimeMillis(),
+                    )
+                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+            }
         } else {
             val errorResponse =
                 ErrorResponse(
@@ -274,6 +382,7 @@ class GlobalExceptionHandler {
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class ErrorResponse(
     val type: String? = null,
     val message: String? = null,
