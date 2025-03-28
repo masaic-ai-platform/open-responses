@@ -122,7 +122,7 @@ curl --location 'http://localhost:8080/v1/responses' \
 |-----------------------------|---------------------------|-----------------------------------------|
 | Streaming                   | ✅                         | ✅                                       |
 | Function Calling            | ✅                         | ✅                                       |
-| Max Context                 | 128K                      | Model dependent                         |
+| Max Context                 | 200k                      | Model dependent                         |
 | Models supported            | Only OpenAI models        | Any Model compliant with completion API | 
 | Hosted Tools                | Limited                   | MCP, BYOT, In-built etc.                | 
 | Inbuilt Tracing             | Limited                   | Comprehensive coming soon               |

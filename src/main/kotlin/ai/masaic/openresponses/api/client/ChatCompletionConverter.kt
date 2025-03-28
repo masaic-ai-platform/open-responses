@@ -118,7 +118,7 @@ object ChatCompletionConverter {
 
                 // Extract reasoning if present within <think> tags
                 val reasoning = extractReasoning(messageContent)
-                val messageWithoutReasoning = removeReasoningTags(messageContent, reasoning)
+                val messageWithoutReasoning = removeReasoning(messageContent, reasoning)
 
                 // Build the list of output items for this choice
                 val outputs = mutableListOf<ResponseOutputItem>()
@@ -201,14 +201,18 @@ object ChatCompletionConverter {
      * @param reasoning The reasoning text to remove with its tags
      * @return The message without reasoning tags
      */
-    private fun removeReasoningTags(
+    private fun removeReasoning(
         messageContent: Optional<String>,
         reasoning: String,
     ): String {
         var messageWithoutReasoning = ""
         messageContent.ifPresent {
-            messageWithoutReasoning = it.replace("<think>$reasoning</think>", "").trim()
+            messageWithoutReasoning = it.replace(reasoning, "").trim()
         }
+        if (messageWithoutReasoning.contains("<think>") && messageWithoutReasoning.contains("</think>")) {
+            messageWithoutReasoning = messageWithoutReasoning.replace("<think>", "").replace("</think>", "").trim()
+        }
+
         return messageWithoutReasoning
     }
 
