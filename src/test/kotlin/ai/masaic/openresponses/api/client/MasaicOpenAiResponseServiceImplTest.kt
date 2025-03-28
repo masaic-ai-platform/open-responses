@@ -29,6 +29,7 @@ class MasaicOpenAiResponseServiceImplTest {
     private lateinit var tracer: Tracer
     private lateinit var spanBuilder: SpanBuilder
     private lateinit var span: Span
+    private lateinit var observationRegistry: io.micrometer.observation.ObservationRegistry
     private lateinit var serviceImpl: MasaicOpenAiResponseServiceImpl
 
     @BeforeEach
@@ -42,6 +43,7 @@ class MasaicOpenAiResponseServiceImplTest {
         spanBuilder = mockk(relaxed = true)
         tracer = mockk(relaxed = true)
         openTelemetry = mockk(relaxed = true)
+        observationRegistry = mockk(relaxed = true)
         
         // Set up the chain of mocks
         every { openTelemetry.getTracer(any()) } returns tracer
@@ -60,6 +62,7 @@ class MasaicOpenAiResponseServiceImplTest {
                 toolHandler = toolHandler,
                 streamingService = streamingService,
                 openTelemetry = openTelemetry,
+                observationRegistry = observationRegistry,
             )
     }
 

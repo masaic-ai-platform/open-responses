@@ -12,6 +12,8 @@ import com.openai.models.chat.completions.ChatCompletionContentPartText
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import io.micrometer.observation.Observation
+import io.micrometer.observation.ObservationRegistry
 import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.api.common.Attributes
@@ -40,6 +42,7 @@ class MasaicOpenAiResponseServiceImpl(
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService,
     private val openTelemetry: OpenTelemetry,
+    private val observationRegistry: ObservationRegistry,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
     private val tracer: Tracer = openTelemetry.getTracer("ai.masaic.openresponses.api.client")
@@ -99,25 +102,28 @@ class MasaicOpenAiResponseServiceImpl(
         metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
     ): Response {
         // 1. Start a CLIENT span, call the block, end the span in a finally
-        val responseOrCompletions = withClientSpan { span ->
-            logger.debug { "Creating completion with model: ${params.model()}" }
-            val chatCompletions = client.chat().completions().create(
-                parameterConverter.prepareCompletion(params),
-            )
-            logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
+        val responseOrCompletions =
+            withClientObservation { observation ->
+                logger.debug { "Creating completion with model: ${params.model()}" }
+                val chatCompletions =
+                    client.chat().completions().create(
+                        parameterConverter.prepareCompletion(params),
+                    )
+                logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
 
-            // Set any relevant span attributes
-            setAllSpanAttributes(span, chatCompletions, params, metadata)
+                // Set any relevant span attributes
+                setAllObservationAttributes(observation, chatCompletions, params, metadata)
+//            setAllSpanAttributes(span, chatCompletions, params, metadata)
 
-            // If no tool calls => return direct response
-            if (!hasToolCalls(chatCompletions)) {
-                logger.info { "No tool calls detected, returning direct response" }
-                return@withClientSpan chatCompletions.toResponse(params)
+                // If no tool calls => return direct response
+                if (!hasToolCalls(chatCompletions)) {
+                    logger.info { "No tool calls detected, returning direct response" }
+                    return@withClientObservation chatCompletions.toResponse(params)
+                }
+
+                // Otherwise, return the raw ChatCompletion so we can handle tools afterward
+                chatCompletions
             }
-
-            // Otherwise, return the raw ChatCompletion so we can handle tools afterward
-            chatCompletions
-        }
 
         // 2. If we got a direct Response, just return it
         if (responseOrCompletions is Response) {
@@ -148,6 +154,66 @@ class MasaicOpenAiResponseServiceImpl(
 
         // 4. Recurse with updated params, opening a new span
         return create(client, updatedParams, metadata)
+    }
+
+    // New helper function to set observation attributes
+    private fun setAllObservationAttributes(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+        params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        observation.lowCardinalityKeyValue("gen_ai.operation.name", "chat")
+        observation.lowCardinalityKeyValue("gen_ai.system", metadata.modelProvider ?: "not_available")
+        observation.lowCardinalityKeyValue("gen_ai.output.type", "text")
+        observation.lowCardinalityKeyValue("gen_ai.request.model", params.model().toString())
+        observation.lowCardinalityKeyValue("gen_ai.response.model", chatCompletion.model())
+        observation.highCardinalityKeyValue("gen_ai.response.id", chatCompletion.id())
+
+        params.temperature().ifPresent { observation.highCardinalityKeyValue("gen_ai.request.temperature", it.toString()) }
+        params.maxOutputTokens().ifPresent { observation.highCardinalityKeyValue("gen_ai.request.max_tokens", it.toString()) }
+        params.topP().ifPresent { observation.highCardinalityKeyValue("gen_ai.request.top_p", it.toString()) }
+
+        chatCompletion.usage().ifPresent { usage ->
+            observation.highCardinalityKeyValue("gen_ai.usage.input_tokens", usage.promptTokens().toString())
+            observation.highCardinalityKeyValue("gen_ai.usage.output_tokens", usage.completionTokens().toString())
+        }
+
+        setFinishReasons(observation, chatCompletion)
+    }
+
+    // Updated finish reasons function using observation instead of span
+    private fun setFinishReasons(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+    ) {
+        val finishReasons =
+            chatCompletion
+                .choices()
+                .mapNotNull {
+                    it
+                        .finishReason()
+                        .value()
+                        ?.name
+                        ?.lowercase()
+                }.distinct()
+        if (finishReasons.isNotEmpty()) {
+            observation.lowCardinalityKeyValue("gen_ai.response.finish_reasons", finishReasons.joinToString(","))
+        }
+    }
+
+    // New helper function using Micrometer Observation
+    private fun <T> withClientObservation(block: (Observation) -> T): T {
+        val observation = Observation.createNotStarted("open.responses.create", observationRegistry)
+        observation.start()
+        return try {
+            block(observation)
+        } catch (e: Exception) {
+            observation.error(e)
+            throw e
+        } finally {
+            observation.stop()
+        }
     }
 
     /**
@@ -214,7 +280,10 @@ class MasaicOpenAiResponseServiceImpl(
 //        return create(client, updatedParams, metadata)
     }
 
-    data class CreateResponseResult(val response: Response?=null, val chatCompletions: ChatCompletion?=null)
+    data class CreateResponseResult(
+        val response: Response? = null,
+        val chatCompletions: ChatCompletion? = null,
+    )
 
     /**
      * Sets all applicable attributes on the span based on request parameters and chat completion response.

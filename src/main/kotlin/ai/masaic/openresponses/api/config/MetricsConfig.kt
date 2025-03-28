@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.config
 
 import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.observation.DefaultMeterObservationHandler
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.observation.ObservationRegistry
 import org.springframework.context.annotation.Bean
@@ -17,7 +18,11 @@ class MetricsConfig {
      * and programmatic observations.
      */
     @Bean
-    fun observationRegistry(): ObservationRegistry = ObservationRegistry.create()
+    fun observationRegistry(): ObservationRegistry {
+        val registry = ObservationRegistry.create()
+        registry.observationConfig().observationHandler((DefaultMeterObservationHandler(meterRegistry())))
+        return registry
+    }
 
     /**
      * Creates a MeterRegistry for collecting and publishing metrics.
