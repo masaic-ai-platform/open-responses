@@ -46,16 +46,28 @@ class MongoResponseStore(
         // Serialize Response to JSON string for MongoDB storage
         val responseJson = objectMapper.writeValueAsString(response)
 
-        // Create document for MongoDB
-        val document =
-            ResponseDocument(
-                id = responseId,
-                responseJson = responseJson,
-                inputItems = inputMessageItems,
-            )
+        val existingDoc = mongoTemplate.findById(responseId, ResponseDocument::class.java)
 
-        // Save to MongoDB
-        mongoTemplate.save(document, "responses")
+        if (existingDoc != null) {
+            logger.debug { "Response with ID: $responseId already exists in MongoDB. Updating existing document" }
+            mongoTemplate.save(existingDoc.copy(
+                responseJson = responseJson,
+                inputItems = existingDoc.inputItems.plus(inputMessageItems),
+            ), "responses")
+
+        }else {
+            logger.debug { "Response with ID: $responseId does not exist in MongoDB. Creating new document" }
+
+            // Create document for MongoDB
+            val document =
+                ResponseDocument(
+                    id = responseId,
+                    responseJson = responseJson,
+                    inputItems = inputMessageItems,
+                )
+            // Save to MongoDB
+            mongoTemplate.save(document, "responses")
+        }
     }
 
     override fun getResponse(responseId: String): Response? {

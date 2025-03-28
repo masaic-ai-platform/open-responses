@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
@@ -38,7 +39,9 @@ class InMemoryResponseStore(
             }
 
         responses[responseId] = response
-        inputItemsMap[responseId] = inputMessageItems
+        if(inputItemsMap.containsKey(responseId)) {
+            inputItemsMap[responseId] = inputItemsMap.getValue(responseId).plus(inputMessageItems)
+        } else inputItemsMap[responseId] = inputMessageItems
     }
 
     override fun getResponse(responseId: String): Response? {
