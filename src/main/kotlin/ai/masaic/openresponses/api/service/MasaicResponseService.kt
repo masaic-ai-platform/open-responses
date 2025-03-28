@@ -276,7 +276,7 @@ class MasaicResponseService(
         logger.info { "Listing input items for response ID: $responseId" }
 
         val validLimit = limit.coerceIn(1, 100)
-        val validOrder = if (order in listOf("asc", "desc")) order else "desc"
+        val validOrder = if (order in listOf("asc", "desc")) order else "asc"
 
         // First check if response exists
         responseStore.getResponse(responseId) ?: throw ResponseNotFoundException("Response not found with ID: $responseId")

@@ -27,6 +27,7 @@ class InMemoryResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
+        every { mockResponse.output() } returns listOf()
 
         val inputItems = listOf(mockk<ResponseInputItem>())
 
@@ -54,6 +55,7 @@ class InMemoryResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
+        every { mockResponse.output() } returns listOf()
 
         val inputItems =
             listOf(
@@ -84,6 +86,7 @@ class InMemoryResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
+        every { mockResponse.output() } returns listOf()
 
         val inputItems = listOf(mockk<ResponseInputItem>())
 

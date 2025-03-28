@@ -43,4 +43,12 @@ interface ResponseStore {
      * @return true if the response was deleted, false if it didn't exist
      */
     fun deleteResponse(responseId: String): Boolean
+
+    /**
+     * Retrieves output items for a response by its ID.
+     *
+     * @param responseId The ID of the response whose output items to retrieve
+     * @return List of output items if the response exists, empty list otherwise
+     */
+    fun getOutputItems(responseId: String): List<InputMessageItem>
 } 

@@ -20,32 +20,17 @@ fun ResponseCreateParams.Builder.fromBody(
 ): ResponseCreateParams.Builder {
     // Set required parameters
     if (body.previousResponseId().isPresent) {
-        val previousResponse = responseStore.getResponse(body.previousResponseId().get()) ?: throw ResponseNotFoundException("Previous response not found")
+        responseStore.getResponse(body.previousResponseId().get()) ?: throw ResponseNotFoundException("Previous response not found")
         val previousInputItems =
             responseStore
                 .getInputItems(body.previousResponseId().get())
                 .map {
                     objectMapper.convertValue(it, ResponseInputItem::class.java)
                 }.toMutableList()
-        val previousResponseOutput = previousResponse.output()
+        val previousResponseOutputItems = responseStore.getOutputItems(body.previousResponseId().get())
         val currentInputItems = body.input().asResponse().toMutableList()
 
-        previousResponseOutput.forEach {
-            if (it.message().isPresent) {
-                previousInputItems.add(ResponseInputItem.ofResponseOutputMessage(it.message().get()))
-            } else if (it.isFunctionCall()) {
-                previousInputItems.add(ResponseInputItem.ofFunctionCall(it.asFunctionCall()))
-            } else if (it.isReasoning()) {
-                previousInputItems.add(ResponseInputItem.ofReasoning(it.asReasoning()))
-            } else if (it.isComputerCall()) {
-                previousInputItems.add(ResponseInputItem.ofComputerCall(it.asComputerCall()))
-            } else if (it.isWebSearchCall()) {
-                previousInputItems.add(ResponseInputItem.ofWebSearchCall(it.asWebSearchCall()))
-            } else if (it.isFileSearchCall()) {
-                previousInputItems.add(ResponseInputItem.ofFileSearchCall(it.asFileSearchCall()))
-            }
-        }
-
+        previousInputItems.addAll(previousResponseOutputItems.map { objectMapper.convertValue(it, ResponseInputItem::class.java) })
         previousInputItems.addAll(currentInputItems)
         input(ResponseCreateParams.Input.ofResponse(previousInputItems))
     } else {

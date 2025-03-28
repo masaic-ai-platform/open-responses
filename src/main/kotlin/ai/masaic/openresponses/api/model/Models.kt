@@ -260,7 +260,7 @@ data class InputMessageItem(
     @JsonProperty("status")
     val status: String? = null,
     @JsonProperty("created_at")
-    val createdAt: BigDecimal? = BigDecimal.valueOf(System.currentTimeMillis()),
+    val createdAt: BigDecimal? = BigDecimal.valueOf(System.nanoTime()),
 ) {
     init {
         if (call_id != null) {

@@ -38,9 +38,13 @@ class MongoResponseStoreTest {
         val responseId = "resp_123456"
         val mockResponse = mockk<Response>()
         every { mockResponse.id() } returns responseId
+        every { mockResponse.output() } returns listOf()
 
         val inputItems = listOf(mockk<ResponseInputItem>())
 
+        every {
+            mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
+        } returns null
         // Mock MongoDB save operation
         every { 
             mongoTemplate.save(any<MongoResponseStore.ResponseDocument>(), "responses")
@@ -49,6 +53,7 @@ class MongoResponseStoreTest {
                 id = responseId,
                 responseJson = """{"id":"resp_123456"}""",
                 inputItems = listOf(InputMessageItem()),
+                outputInputItems = listOf(),
             )
 
         // Act
@@ -67,6 +72,7 @@ class MongoResponseStoreTest {
                 id = responseId,
                 responseJson = """{"id":"resp_123456"}""",
                 inputItems = listOf(InputMessageItem()),
+                outputInputItems = listOf(),
             )
 
         // Mock MongoDB findById operation
@@ -110,6 +116,7 @@ class MongoResponseStoreTest {
                 id = responseId,
                 responseJson = """{"id":"resp_123456"}""",
                 inputItems = inputItems,
+                outputInputItems = listOf(),
             )
 
         // Mock MongoDB findById operation

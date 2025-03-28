@@ -29,6 +29,7 @@ class MongoResponseStore(
         @Id val id: String,
         val responseJson: String,
         val inputItems: List<InputMessageItem>,
+        val outputInputItems: List<InputMessageItem>,
     )
 
     override fun storeResponse(
@@ -43,6 +44,15 @@ class MongoResponseStore(
                 objectMapper.convertValue(it, InputMessageItem::class.java)
             }
 
+        val outputMessageItems: List<InputMessageItem> =
+            response
+                .output()
+                .mapNotNull {
+                    it.message().orElse(null)
+                }.map {
+                    objectMapper.convertValue(it, InputMessageItem::class.java)
+                }
+
         // Serialize Response to JSON string for MongoDB storage
         val responseJson = objectMapper.writeValueAsString(response)
 
@@ -50,12 +60,15 @@ class MongoResponseStore(
 
         if (existingDoc != null) {
             logger.debug { "Response with ID: $responseId already exists in MongoDB. Updating existing document" }
-            mongoTemplate.save(existingDoc.copy(
-                responseJson = responseJson,
-                inputItems = existingDoc.inputItems.plus(inputMessageItems),
-            ), "responses")
-
-        }else {
+            mongoTemplate.save(
+                existingDoc.copy(
+                    responseJson = responseJson,
+                    inputItems = existingDoc.inputItems.plus(inputMessageItems),
+                    outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems),
+                ),
+                "responses",
+            )
+        } else {
             logger.debug { "Response with ID: $responseId does not exist in MongoDB. Creating new document" }
 
             // Create document for MongoDB
@@ -64,6 +77,7 @@ class MongoResponseStore(
                     id = responseId,
                     responseJson = responseJson,
                     inputItems = inputMessageItems,
+                    outputInputItems = outputMessageItems,
                 )
             // Save to MongoDB
             mongoTemplate.save(document, "responses")
@@ -93,5 +107,10 @@ class MongoResponseStore(
         val result = mongoTemplate.remove(query, ResponseDocument::class.java)
         
         return result.deletedCount > 0
+    }
+
+    override fun getOutputItems(responseId: String): List<InputMessageItem> {
+        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java)
+        return document?.outputInputItems ?: emptyList()
     }
 }

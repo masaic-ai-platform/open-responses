@@ -1,7 +1,6 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
-import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
@@ -24,6 +23,7 @@ class InMemoryResponseStore(
     // Thread-safe maps to store responses and their related input items
     private val responses = ConcurrentHashMap<String, Response>()
     private val inputItemsMap = ConcurrentHashMap<String, List<InputMessageItem>>()
+    private val outputInputItemsMap = ConcurrentHashMap<String, List<InputMessageItem>>()
 
     override fun storeResponse(
         response: Response,
@@ -38,10 +38,27 @@ class InMemoryResponseStore(
                 objectMapper.convertValue(it, InputMessageItem::class.java)
             }
 
+        val outputMessageItems: List<InputMessageItem> =
+            response
+                .output()
+                .mapNotNull {
+                    it.message().orElse(null)
+                }.map {
+                    objectMapper.convertValue(it, InputMessageItem::class.java)
+                }
+
         responses[responseId] = response
-        if(inputItemsMap.containsKey(responseId)) {
+        if (inputItemsMap.containsKey(responseId)) {
             inputItemsMap[responseId] = inputItemsMap.getValue(responseId).plus(inputMessageItems)
-        } else inputItemsMap[responseId] = inputMessageItems
+        } else {
+            inputItemsMap[responseId] = inputMessageItems
+        }
+
+        if (outputInputItemsMap.containsKey(responseId)) {
+            outputInputItemsMap[responseId] = outputInputItemsMap.getValue(responseId).plus(outputMessageItems)
+        } else {
+            outputInputItemsMap[responseId] = outputMessageItems
+        }
     }
 
     override fun getResponse(responseId: String): Response? {
@@ -60,4 +77,6 @@ class InMemoryResponseStore(
         inputItemsMap.remove(responseId)
         return responseRemoved
     }
+
+    override fun getOutputItems(responseId: String): List<InputMessageItem> = outputInputItemsMap[responseId] ?: emptyList()
 }
