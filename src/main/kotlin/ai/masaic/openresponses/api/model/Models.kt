@@ -11,6 +11,7 @@ import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseOutputText
 import com.openai.models.responses.ResponseTextConfig
 import java.math.BigDecimal
+import java.time.Instant
 import java.util.UUID
 
 /**
@@ -260,7 +261,7 @@ data class InputMessageItem(
     @JsonProperty("status")
     val status: String? = null,
     @JsonProperty("created_at")
-    val createdAt: BigDecimal? = BigDecimal.valueOf(System.nanoTime()),
+    val createdAt: BigDecimal? = BigDecimal.valueOf(Instant.now().toEpochMilli()),
 ) {
     init {
         if (call_id != null) {
