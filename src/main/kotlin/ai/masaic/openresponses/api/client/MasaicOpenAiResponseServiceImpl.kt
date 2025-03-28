@@ -97,18 +97,66 @@ class MasaicOpenAiResponseServiceImpl(
         client: OpenAIClient,
         params: ResponseCreateParams,
         metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
-    ): Response =
-        withClientSpan { span ->
-            createWithSpan(client, params, metadata, span)
+    ): Response {
+        // 1. Start a CLIENT span, call the block, end the span in a finally
+        val responseOrCompletions = withClientSpan { span ->
+            logger.debug { "Creating completion with model: ${params.model()}" }
+            val chatCompletions = client.chat().completions().create(
+                parameterConverter.prepareCompletion(params),
+            )
+            logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
+
+            // Set any relevant span attributes
+            setAllSpanAttributes(span, chatCompletions, params, metadata)
+
+            // If no tool calls => return direct response
+            if (!hasToolCalls(chatCompletions)) {
+                logger.info { "No tool calls detected, returning direct response" }
+                return@withClientSpan chatCompletions.toResponse(params)
+            }
+
+            // Otherwise, return the raw ChatCompletion so we can handle tools afterward
+            chatCompletions
         }
+
+        // 2. If we got a direct Response, just return it
+        if (responseOrCompletions is Response) {
+            return responseOrCompletions
+        }
+
+        // 3. Otherwise, we have a ChatCompletion => handle tool calls and possibly recurse
+        val chatCompletions = responseOrCompletions as ChatCompletion
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
+        val updatedParams =
+            params
+                .toBuilder()
+                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+                .build()
+
+        // If we have function calls but no outputs => return partial response
+        if (hasUnresolvedFunctionCalls(updatedParams)) {
+            logger.info { "Some function calls without outputs, returning current response" }
+            return chatCompletions.toResponse(updatedParams)
+        }
+
+        // Ensure we haven’t exceeded the maximum number of calls
+        if (exceedsMaxToolCalls(responseInputItems)) {
+            val errorMsg = "Too many tool calls. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
+            logger.error { errorMsg }
+            throw IllegalArgumentException(errorMsg)
+        }
+
+        // 4. Recurse with updated params, opening a new span
+        return create(client, updatedParams, metadata)
+    }
 
     /**
      * Wraps the given [block] execution in a CLIENT span named [spanName].
      * Ensures the span is ended and errors are recorded if an exception occurs.
      */
     private fun withClientSpan(
-        block: (Span) -> Response,
-    ): Response {
+        block: (Span) -> Any,
+    ): Any {
         val spanName = "open_responses_create"
         val span =
             tracer
@@ -125,6 +173,7 @@ class MasaicOpenAiResponseServiceImpl(
             logger.error(e) { "Error in span '$spanName': ${e.message}" }
             throw e
         } finally {
+            span.setStatus(StatusCode.OK)
             span.end()
         }
     }
@@ -138,7 +187,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseCreateParams,
         metadata: CreateResponseMetadataInput,
         span: Span,
-    ): Response {
+    ): CreateResponseResult {
         logger.debug { "Creating completion with model: ${params.model()}" }
 
         // Call the OpenAI client
@@ -154,38 +203,18 @@ class MasaicOpenAiResponseServiceImpl(
         // Check for tool calls
         if (!hasToolCalls(chatCompletions)) {
             logger.info { "No tool calls detected, returning direct response" }
-            return chatCompletions.toResponse(params)
-        }
-
-        // end span before tool handling
-        span.setStatus(StatusCode.OK)
-        span.end()
-
-        // If tool calls are present, handle them and decide whether to recurse
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
-        val updatedParams =
-            params
-                .toBuilder()
-                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
-                .build()
-
-        if (hasUnresolvedFunctionCalls(updatedParams)) {
-            logger.info { "Some function calls without outputs, returning current response" }
-            return chatCompletions.toResponse(updatedParams)
-        }
-
-        if (exceedsMaxToolCalls(responseInputItems)) {
-            val errorMsg = "Too many tool calls. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
-            logger.error { errorMsg }
-            throw IllegalArgumentException(errorMsg)
+            return CreateResponseResult(chatCompletions.toResponse(params), chatCompletions = chatCompletions)
         }
 
         logger.debug { "Making recursive completion request with updated parameters" }
 
         // Make a new call to create(...) so we get a fresh sibling span
         // (i.e. each recursion is recorded in its own span)
-        return create(client, updatedParams, metadata)
+        return CreateResponseResult(chatCompletions = chatCompletions)
+//        return create(client, updatedParams, metadata)
     }
+
+    data class CreateResponseResult(val response: Response?=null, val chatCompletions: ChatCompletion?=null)
 
     /**
      * Sets all applicable attributes on the span based on request parameters and chat completion response.
