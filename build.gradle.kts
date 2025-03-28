@@ -49,6 +49,7 @@ dependencies {
     // Micrometer for metrics
     implementation("io.micrometer:micrometer-core")
     implementation("io.micrometer:micrometer-observation")
+    implementation("io.micrometer:micrometer-registry-otlp")
 
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
