@@ -10,6 +10,10 @@ import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.*
 import com.openai.services.blocking.ChatService
 import io.mockk.*
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.trace.Span
+import io.opentelemetry.api.trace.SpanBuilder
+import io.opentelemetry.api.trace.Tracer
 import kotlinx.coroutines.flow.Flow
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
@@ -21,6 +25,10 @@ class MasaicOpenAiResponseServiceImplTest {
     private lateinit var parameterConverter: MasaicParameterConverter
     private lateinit var toolHandler: MasaicToolHandler
     private lateinit var streamingService: MasaicStreamingService
+    private lateinit var openTelemetry: OpenTelemetry
+    private lateinit var tracer: Tracer
+    private lateinit var spanBuilder: SpanBuilder
+    private lateinit var span: Span
     private lateinit var serviceImpl: MasaicOpenAiResponseServiceImpl
 
     @BeforeEach
@@ -28,12 +36,30 @@ class MasaicOpenAiResponseServiceImplTest {
         parameterConverter = mockk(relaxed = true)
         toolHandler = mockk(relaxed = true)
         streamingService = mockk(relaxed = true)
+        
+        // Mock OpenTelemetry components
+        span = mockk(relaxed = true)
+        spanBuilder = mockk(relaxed = true)
+        tracer = mockk(relaxed = true)
+        openTelemetry = mockk(relaxed = true)
+        
+        // Set up the chain of mocks
+        every { openTelemetry.getTracer(any()) } returns tracer
+        every { tracer.spanBuilder(any()) } returns spanBuilder
+        every { spanBuilder.setSpanKind(any()) } returns spanBuilder
+        every { spanBuilder.setParent(any()) } returns spanBuilder
+        every { spanBuilder.setAttribute(any(), any<String>()) } returns spanBuilder
+        every { spanBuilder.setAttribute(any(), any<Boolean>()) } returns spanBuilder
+        every { spanBuilder.setAttribute(any(), any<Long>()) } returns spanBuilder
+        every { spanBuilder.setAttribute(any(), any<Double>()) } returns spanBuilder
+        every { spanBuilder.startSpan() } returns span
 
         serviceImpl =
             MasaicOpenAiResponseServiceImpl(
                 parameterConverter = parameterConverter,
                 toolHandler = toolHandler,
                 streamingService = streamingService,
+                openTelemetry = openTelemetry,
             )
     }
 
@@ -161,7 +187,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Then build() returns the newParams
         every { mockBuilder.build() } returns newParams
 
-        // 4) Mock the OpenAI client’s chat/completion calls.
+        // 4) Mock the OpenAI client's chat/completion calls.
         val client = mockk<OpenAIClient>(relaxed = true)
         val mockChat = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
         val mockCompletions = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)

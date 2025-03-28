@@ -282,3 +282,7 @@ data class InputMessageItemContent(
     val fileName: String? = null,
     val annotations: ResponseOutputText.Annotation? = null,
 )
+
+data class CreateResponseMetadataInput(
+    val modelProvider: String? = null,
+)

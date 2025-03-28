@@ -1,15 +1,25 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
+import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionContentPart
 import com.openai.models.chat.completions.ChatCompletionContentPartImage
 import com.openai.models.chat.completions.ChatCompletionContentPartText
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.common.AttributeKey
+import io.opentelemetry.api.common.Attributes
+import io.opentelemetry.api.trace.Span
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.api.trace.StatusCode
+import io.opentelemetry.api.trace.Tracer
+import io.opentelemetry.context.Context
 import kotlinx.coroutines.flow.Flow
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
@@ -29,8 +39,27 @@ class MasaicOpenAiResponseServiceImpl(
     private val parameterConverter: MasaicParameterConverter,
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService,
+    private val openTelemetry: OpenTelemetry,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
+    private val tracer: Tracer = openTelemetry.getTracer("ai.masaic.openresponses.api.client")
+
+    // Constants for GenAI span attributes
+    private object GenAiAttributes {
+        val OPERATION_NAME = AttributeKey.stringKey("gen_ai.operation.name")
+        val SYSTEM = AttributeKey.stringKey("gen_ai.system")
+        val REQUEST_MODEL = AttributeKey.stringKey("gen_ai.request.model")
+        val REQUEST_TEMPERATURE = AttributeKey.doubleKey("gen_ai.request.temperature")
+        val REQUEST_MAX_TOKENS = AttributeKey.longKey("gen_ai.request.max_tokens")
+        val REQUEST_TOP_P = AttributeKey.doubleKey("gen_ai.request.top_p")
+        val RESPONSE_ID = AttributeKey.stringKey("gen_ai.response.id")
+        val RESPONSE_MODEL = AttributeKey.stringKey("gen_ai.response.model")
+        val RESPONSE_FINISH_REASONS = AttributeKey.stringArrayKey("gen_ai.response.finish_reasons")
+        val USAGE_INPUT_TOKENS = AttributeKey.longKey("gen_ai.usage.input_tokens")
+        val USAGE_OUTPUT_TOKENS = AttributeKey.longKey("gen_ai.usage.output_tokens")
+        val OUTPUT_TYPE = AttributeKey.stringKey("gen_ai.output.type")
+        val ERROR_TYPE = AttributeKey.stringKey("error.type")
+    }
 
     /**
      * Not implemented: Returns a version of this service that includes raw HTTP response data.
@@ -58,71 +87,211 @@ class MasaicOpenAiResponseServiceImpl(
 
     /**
      * Creates a new completion response based on provided parameters.
+     * Enhanced with OpenTelemetry GenAI span semantics.
      *
+     * @param client OpenAI client to use for the request
      * @param params Parameters for creating the response
      * @return Response object containing completion data
      */
     fun create(
         client: OpenAIClient,
         params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
+    ): Response =
+        withClientSpan { span ->
+            createWithSpan(client, params, metadata, span)
+        }
+
+    /**
+     * Wraps the given [block] execution in a CLIENT span named [spanName].
+     * Ensures the span is ended and errors are recorded if an exception occurs.
+     */
+    private fun withClientSpan(
+        block: (Span) -> Response,
+    ): Response {
+        val spanName = "open_responses_create"
+        val span =
+            tracer
+                .spanBuilder(spanName)
+                .setParent(Context.current()) // same parent context as your request
+                .setSpanKind(SpanKind.CLIENT)
+                .startSpan()
+
+        return try {
+            block(span)
+        } catch (e: Exception) {
+            span.setStatus(StatusCode.ERROR)
+            span.setAttribute(GenAiAttributes.ERROR_TYPE, "${e.javaClass.simpleName}; ${e.message}")
+            logger.error(e) { "Error in span '$spanName': ${e.message}" }
+            throw e
+        } finally {
+            span.end()
+        }
+    }
+
+    /**
+     * Creates a completion using an existing span context.
+     * This is where the main logic resides (including recursion).
+     */
+    private fun createWithSpan(
+        client: OpenAIClient,
+        params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
+        span: Span,
     ): Response {
         logger.debug { "Creating completion with model: ${params.model()}" }
-        try {
-            // Convert params to OpenAI format and create the chat completion
-            val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
-            logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
 
-            if (!chatCompletions.choices().any {
+        // Call the OpenAI client
+        val chatCompletions =
+            client.chat().completions().create(
+                parameterConverter.prepareCompletion(params),
+            )
+        logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
+
+        // Set all span attributes based on request params and response
+        setAllSpanAttributes(span, chatCompletions, params, metadata)
+
+        // Check for tool calls
+        if (!hasToolCalls(chatCompletions)) {
+            logger.info { "No tool calls detected, returning direct response" }
+            return chatCompletions.toResponse(params)
+        }
+
+        // end span before tool handling
+        span.setStatus(StatusCode.OK)
+        span.end()
+
+        // If tool calls are present, handle them and decide whether to recurse
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
+        val updatedParams =
+            params
+                .toBuilder()
+                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+                .build()
+
+        if (hasUnresolvedFunctionCalls(updatedParams)) {
+            logger.info { "Some function calls without outputs, returning current response" }
+            return chatCompletions.toResponse(updatedParams)
+        }
+
+        if (exceedsMaxToolCalls(responseInputItems)) {
+            val errorMsg = "Too many tool calls. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
+            logger.error { errorMsg }
+            throw IllegalArgumentException(errorMsg)
+        }
+
+        logger.debug { "Making recursive completion request with updated parameters" }
+
+        // Make a new call to create(...) so we get a fresh sibling span
+        // (i.e. each recursion is recorded in its own span)
+        return create(client, updatedParams, metadata)
+    }
+
+    /**
+     * Sets all applicable attributes on the span based on request parameters and chat completion response.
+     * Consolidates all attribute setting in one place for better maintainability.
+     */
+    private fun setAllSpanAttributes(
+        span: Span,
+        chatCompletion: ChatCompletion,
+        params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        // Basic information
+        span.setAttribute(GenAiAttributes.OPERATION_NAME, "chat")
+        span.setAttribute(GenAiAttributes.SYSTEM, metadata.modelProvider ?: "not_available")
+        span.setAttribute(GenAiAttributes.OUTPUT_TYPE, "text")
+
+        // Model information
+        span.setAttribute(GenAiAttributes.REQUEST_MODEL, params.model().toString())
+        span.setAttribute(GenAiAttributes.RESPONSE_MODEL, chatCompletion.model())
+        span.setAttribute(GenAiAttributes.RESPONSE_ID, chatCompletion.id())
+
+        // Request parameters - handle all optionals correctly
+        // Temperature - optional
+        params.temperature().let {
+            if (it.isPresent) span.setAttribute(GenAiAttributes.REQUEST_TEMPERATURE, it.get())
+        }
+
+        params.maxOutputTokens().let {
+            if (it.isPresent) span.setAttribute(GenAiAttributes.REQUEST_MAX_TOKENS, it.get())
+        }
+
+        params.topP().let {
+            if (it.isPresent) span.setAttribute(GenAiAttributes.REQUEST_TOP_P, it.get())
+        }
+
+        // Usage tokens
+        chatCompletion.usage().ifPresent { usage ->
+            span.setAttribute(GenAiAttributes.USAGE_INPUT_TOKENS, usage.promptTokens().toLong())
+            span.setAttribute(GenAiAttributes.USAGE_OUTPUT_TOKENS, usage.completionTokens().toLong())
+        }
+
+        // Set finish reasons
+        setFinishReasons(span, chatCompletion)
+    }
+
+    /**
+     * Extracts finish reasons from the chat completions and sets them on the [span].
+     */
+    private fun setFinishReasons(
+        span: Span,
+        chatCompletion: ChatCompletion,
+    ) {
+        val finishReasons =
+            chatCompletion
+                .choices()
+                .mapNotNull {
                     it
                         .finishReason()
                         .value()
-                        .name
-                        .lowercase() == "tool_calls"
-                }
-            ) {
-                logger.info { "No tool calls detected, returning direct response" }
-                return chatCompletions.toResponse(params)
+                        ?.name
+                        ?.lowercase()
+                }.distinct()
+
+        if (finishReasons.isEmpty()) return
+
+        val attributes =
+            Attributes
+                .builder()
+                .put(GenAiAttributes.RESPONSE_FINISH_REASONS, *finishReasons.toTypedArray())
+                .build()
+
+        // Because the attribute key is typed, we set it with a small type-safety workaround
+        attributes.asMap().forEach { (key, value) ->
+            if (key == GenAiAttributes.RESPONSE_FINISH_REASONS) {
+                @Suppress("UNCHECKED_CAST")
+                span.setAttribute(key as AttributeKey<Any>, value)
             }
-
-            // Process any tool calls in the response
-            logger.debug { "Processing tool calls from completion response" }
-            val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
-
-            // Rebuild the params with the updated input items for the follow-up request
-            val newParams =
-                params
-                    .toBuilder()
-                    .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
-                    .build()
-
-            // Check if we need to make follow-up requests for tool calls
-            if (newParams
-                    .input()
-                    .asResponse()
-                    .filter { it.isFunctionCall() }
-                    .size >
-                newParams
-                    .input()
-                    .asResponse()
-                    .filter { it.isFunctionCallOutput() }
-                    .size
-            ) {
-                logger.info { "Some function calls without outputs, returning current response" }
-                return chatCompletions.toResponse(newParams)
-            } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
-                val errorMsg = "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable."
-                logger.error { errorMsg }
-                throw IllegalArgumentException(errorMsg)
-            }
-
-            // Recursively make the next request with the updated params
-            logger.debug { "Making recursive completion request with updated parameters" }
-            return create(client, newParams)
-        } catch (e: Exception) {
-            logger.error(e) { "Error creating completion: ${e.message}" }
-            throw e
         }
     }
+
+    /**
+     * Returns true if the [chatCompletions] contain any tool_calls finish reason.
+     */
+    private fun hasToolCalls(chatCompletion: ChatCompletion): Boolean =
+        chatCompletion.choices().any {
+            it
+                .finishReason()
+                .value()
+                .name
+                .lowercase() == "tool_calls"
+        }
+
+    /**
+     * Returns true if the new parameters have more function calls than function outputs,
+     * indicating unresolved calls that need to be returned.
+     */
+    private fun hasUnresolvedFunctionCalls(params: ResponseCreateParams): Boolean {
+        val numFunctionCalls = params.input().asResponse().count { it.isFunctionCall() }
+        val numFunctionOutputs = params.input().asResponse().count { it.isFunctionCallOutput() }
+        return numFunctionCalls > numFunctionOutputs
+    }
+
+    /**
+     * Returns true if the [items] exceed the max allowed function calls set in the environment.
+     */
+    private fun exceedsMaxToolCalls(items: List<ResponseInputItem>): Boolean = items.count { it.isFunctionCall() } > getAllowedMaxToolCalls()
 
     /**
      * Creates a streaming completion that emits ServerSentEvents.

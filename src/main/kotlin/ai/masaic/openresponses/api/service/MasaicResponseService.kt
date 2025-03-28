@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.extensions.fromBody
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -137,6 +138,7 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
+                    CreateResponseMetadataInput(modelProvider(headers)),
                 )
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -398,6 +400,8 @@ class MasaicResponseService(
             .baseUrl(getApiBaseUrl(headers))
             .build()
     }
+
+    private fun modelProvider(headers: MultiValueMap<String, String>): String = headers.getFirst("x-model-provider") ?: "groq"
 
     /**
      * Gets the API base URL to use for requests.

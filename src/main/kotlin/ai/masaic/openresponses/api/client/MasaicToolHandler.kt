@@ -4,6 +4,12 @@ import ai.masaic.openresponses.tool.ToolService
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
+import io.opentelemetry.api.OpenTelemetry
+import io.opentelemetry.api.common.AttributeKey
+import io.opentelemetry.api.trace.SpanKind
+import io.opentelemetry.api.trace.StatusCode
+import io.opentelemetry.api.trace.Tracer
+import io.opentelemetry.context.Context
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -15,11 +21,22 @@ import java.util.UUID
 @Component
 class MasaicToolHandler(
     private val toolService: ToolService,
+    private val openTelemetry: OpenTelemetry,
 ) {
     private val logger = KotlinLogging.logger {}
+    private val tracer: Tracer = openTelemetry.getTracer("ai.masaic.openresponses.api.client")
+
+    // Constants for GenAI tool span attributes
+    private object GenAiAttributes {
+        val OPERATION_NAME = AttributeKey.stringKey("gen_ai.operation.name")
+        val TOOL_NAME = AttributeKey.stringKey("gen_ai.tool.name")
+        val TOOL_CALL_ID = AttributeKey.stringKey("gen_ai.tool.call.id")
+        val ERROR_TYPE = AttributeKey.stringKey("error.type")
+    }
 
     /**
      * Processes tool calls from a chat completion and executes relevant tools.
+     * Each tool execution is recorded as a span following GenAI semantics.
      *
      * @param chatCompletion The ChatCompletion containing potential tool calls
      * @param params The original request parameters
@@ -90,6 +107,7 @@ class MasaicToolHandler(
                     val function = tool.function()
                     if (toolService.getFunctionTool(function.name()) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
+                        
                         // Add the function call to response items
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCall(
@@ -103,22 +121,23 @@ class MasaicToolHandler(
                             ),
                         )
 
-                        // Execute the tool and add its output if successful
-                        val toolResult = toolService.executeTool(function.name(), function.arguments())
-                        if (toolResult != null) {
-                            logger.debug { "Tool execution successful for ${function.name()}" }
-                            responseInputItems.add(
-                                ResponseInputItem.ofFunctionCallOutput(
-                                    ResponseInputItem.FunctionCallOutput
-                                        .builder()
-                                        .callId(tool.id())
-                                        .id(tool.id())
-                                        .output(toolResult)
-                                        .build(),
-                                ),
-                            )
-                        } else {
-                            logger.warn { "Tool execution returned null for ${function.name()}" }
+                        // Execute the tool with span tracking
+                        executeToolWithSpan(function.name(), function.arguments(), tool.id()) { toolResult ->
+                            if (toolResult != null) {
+                                logger.debug { "Tool execution successful for ${function.name()}" }
+                                responseInputItems.add(
+                                    ResponseInputItem.ofFunctionCallOutput(
+                                        ResponseInputItem.FunctionCallOutput
+                                            .builder()
+                                            .callId(tool.id())
+                                            .id(tool.id())
+                                            .output(toolResult)
+                                            .build(),
+                                    ),
+                                )
+                            } else {
+                                logger.warn { "Tool execution returned null for ${function.name()}" }
+                            }
                         }
                     } else {
                         logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
@@ -144,6 +163,57 @@ class MasaicToolHandler(
         responseInputItems.addAll(parked)
 
         return responseInputItems
+    }
+
+    /**
+     * Executes a tool within a span context and handles the result with the provided callback.
+     * 
+     * @param toolName The name of the tool to execute
+     * @param arguments The arguments to pass to the tool
+     * @param toolId The ID of the tool call
+     * @param resultHandler A function that processes the tool execution result
+     */
+    private fun executeToolWithSpan(
+        toolName: String,
+        arguments: String,
+        toolId: String,
+        resultHandler: (String?) -> Unit,
+    ) {
+        // Create a span for tool execution following GenAI semantics
+        val span =
+            tracer
+                .spanBuilder("builtin_execute_tool")
+                .setParent(Context.current())
+                .setSpanKind(SpanKind.INTERNAL)
+                .startSpan()
+        
+        try {
+            // Set required span attributes according to GenAI span semantics
+            span.setAttribute(GenAiAttributes.OPERATION_NAME, "execute_tool")
+            span.setAttribute(GenAiAttributes.TOOL_NAME, toolName)
+            span.setAttribute(GenAiAttributes.TOOL_CALL_ID, toolId)
+            
+            // Execute the tool
+            val toolResult = toolService.executeTool(toolName, arguments)
+            
+            // Set span status based on result
+            if (toolResult != null) {
+                span.setStatus(StatusCode.OK)
+            } else {
+                span.setStatus(StatusCode.ERROR)
+                span.setAttribute(GenAiAttributes.ERROR_TYPE, "tool_execution_null_result")
+            }
+            
+            // Process the result with the provided handler
+            resultHandler(toolResult)
+        } catch (e: Exception) {
+            span.setStatus(StatusCode.ERROR)
+            span.setAttribute(GenAiAttributes.ERROR_TYPE, "${e.javaClass.simpleName}; ${e.message}")
+            logger.error(e) { "Error executing tool $toolName: ${e.message}" }
+            throw e
+        } finally {
+            span.end()
+        }
     }
 
     /**
@@ -212,22 +282,23 @@ class MasaicToolHandler(
                     ),
                 )
 
-                // Execute the tool and add its output if successful
-                val toolResult = toolService.executeTool(function.name(), function.arguments())
-                if (toolResult != null) {
-                    logger.debug { "Tool execution successful for ${function.name()}" }
-                    responseInputItems.add(
-                        ResponseInputItem.ofFunctionCallOutput(
-                            ResponseInputItem.FunctionCallOutput
-                                .builder()
-                                .callId(function.callId())
-                                .id(function.id())
-                                .output(toolResult)
-                                .build(),
-                        ),
-                    )
-                } else {
-                    logger.warn { "Tool execution returned null for ${function.name()}" }
+                // Execute the tool with span tracking
+                executeToolWithSpan(function.name(), function.arguments(), function.id()) { toolResult ->
+                    if (toolResult != null) {
+                        logger.debug { "Tool execution successful for ${function.name()}" }
+                        responseInputItems.add(
+                            ResponseInputItem.ofFunctionCallOutput(
+                                ResponseInputItem.FunctionCallOutput
+                                    .builder()
+                                    .callId(function.callId())
+                                    .id(function.id())
+                                    .output(toolResult)
+                                    .build(),
+                            ),
+                        )
+                    } else {
+                        logger.warn { "Tool execution returned null for ${function.name()}" }
+                    }
                 }
             } else {
                 logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }

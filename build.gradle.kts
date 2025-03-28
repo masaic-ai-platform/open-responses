@@ -42,6 +42,10 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     implementation("io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter")
+    
+    // Micrometer for metrics
+    implementation("io.micrometer:micrometer-core")
+    implementation("io.micrometer:micrometer-observation")
 
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")

@@ -82,7 +82,7 @@ class MasaicResponseServiceTest {
 
             val expectedResponse = mockk<Response>()
             every {
-                openAIResponseService.create(ofType<OpenAIClient>(), any())
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
             } returns expectedResponse
 
             // When
@@ -91,7 +91,7 @@ class MasaicResponseServiceTest {
             // Then
             assertSame(expectedResponse, result, "Should return the mocked response")
             verify(exactly = 1) {
-                openAIResponseService.create(ofType<OpenAIClient>(), any())
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
             }
             confirmVerified(openAIResponseService)
         }
