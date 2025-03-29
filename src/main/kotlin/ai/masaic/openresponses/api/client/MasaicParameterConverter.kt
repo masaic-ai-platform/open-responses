@@ -646,20 +646,35 @@ class MasaicParameterConverter {
             } else if (item.asEasyInputMessage().content().isResponseInputMessageContentList()) {
                 val inputs = item.asEasyInputMessage().content().asResponseInputMessageContentList()
 
-                val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> =
-                    inputs.map {
-                        if (it.isInputText()) {
-                            ChatCompletionRequestAssistantMessageContentPart.ofText(
-                                ChatCompletionContentPartText.builder().text(it.asInputText().text()).build(),
-                            )
-                        } else {
-                            throw ResponseProcessingException("Assistant message other than text is not supported.")
+                if (inputs.size == 1 && inputs.first().isInputText()) { // Single text input
+                    completionBuilder.addMessage(
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionUserMessageParam.Content.ofText(
+                                    inputs.first().asInputText().text(),
+                                ),
+                            ).build(),
+                    )
+                } else {
+                    val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> =
+                        inputs.map {
+                            if (it.isInputText()) {
+                                ChatCompletionRequestAssistantMessageContentPart.ofText(
+                                    ChatCompletionContentPartText.builder().text(it.asInputText().text()).build(),
+                                )
+                            } else {
+                                throw ResponseProcessingException("Assistant message other than text is not supported.")
+                            }
                         }
-                    }
 
-                completionBuilder.addMessage(
-                    ChatCompletionAssistantMessageParam.builder().contentOfArrayOfContentParts(assistantMessages).build(),
-                )
+                    completionBuilder.addMessage(
+                        ChatCompletionAssistantMessageParam
+                            .builder()
+                            .contentOfArrayOfContentParts(assistantMessages)
+                            .build(),
+                    )
+                }
             }
         } else if (item.isResponseOutputMessage()) {
             item.asResponseOutputMessage().content().forEach {
