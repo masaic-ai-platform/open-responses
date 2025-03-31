@@ -24,19 +24,21 @@ class VectorStoreServiceTest {
 
     @BeforeEach
     fun setup() {
-        vectorStoreRepository = mockk {
-            coEvery { saveVectorStore(any()) } answers { firstArg() }
-            coEvery { saveVectorStoreFile(any()) } answers { firstArg() }
-            coEvery { deleteVectorStore(any()) } returns true
-            coEvery { findVectorStoreById(any()) } returns VectorStore(
-                id = "vs_cc4223ea-c516-491f-8a41-96c90f5804e6",
-                name = "Test Vector Store",
-                metadata = mapOf("key" to "value"),
-                fileCounts = FileCounts(total = 1, completed = 1, failed = 0),
-            )
+        vectorStoreRepository =
+            mockk {
+                coEvery { saveVectorStore(any()) } answers { firstArg() }
+                coEvery { saveVectorStoreFile(any()) } answers { firstArg() }
+                coEvery { deleteVectorStore(any()) } returns true
+                coEvery { findVectorStoreById(any()) } returns
+                    VectorStore(
+                        id = "vs_cc4223ea-c516-491f-8a41-96c90f5804e6",
+                        name = "Test Vector Store",
+                        metadata = mapOf("key" to "value"),
+                        fileCounts = FileCounts(total = 1, completed = 1, failed = 0),
+                    )
 
-            coEvery { listVectorStoreFiles(any(),any(),any(),any(),any(),any()) } returns
-                listOf(
+                coEvery { listVectorStoreFiles(any(), any(), any(), any(), any(), any()) } returns
+                    listOf(
                         VectorStoreFile(
                             id = "file-123",
                             vectorStoreId = "vs_cc4223ea-c516-491f-8a41-96c90f5804e6",
@@ -44,8 +46,8 @@ class VectorStoreServiceTest {
                         ),
                     )
 
-            coEvery { listVectorStores(any()) } returns
-                listOf(
+                coEvery { listVectorStores(any()) } returns
+                    listOf(
                         VectorStore(
                             id = "vs_123",
                             name = "Vector Store 1",
@@ -59,7 +61,7 @@ class VectorStoreServiceTest {
                             fileCounts = FileCounts(total = 1, completed = 1, failed = 0),
                         ),
                     )
-        }
+            }
         fileService = mockk()
         fileStorageService = mockk()
         vectorSearchProvider = mockk()

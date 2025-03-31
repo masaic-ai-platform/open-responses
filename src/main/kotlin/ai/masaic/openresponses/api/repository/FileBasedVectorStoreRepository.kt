@@ -8,6 +8,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Repository
 import java.io.File
 import java.nio.file.Files
@@ -18,8 +20,12 @@ import java.nio.file.Paths
  *
  * This implementation stores vector store metadata and vector store file metadata as JSON files on the filesystem.
  * It does not handle the actual file content, which is managed by FileStorageService.
+ * 
+ * This is the default implementation when MongoDB is not explicitly enabled.
  */
 @Repository
+@Primary
+@ConditionalOnProperty(name = ["app.vector-store.repository.type"], havingValue = "file", matchIfMissing = true)
 class FileBasedVectorStoreRepository(
     @Value("\${app.file-storage.local.root-dir}") private val rootDir: String,
     private val objectMapper: ObjectMapper,

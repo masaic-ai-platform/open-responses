@@ -2,16 +2,21 @@ package ai.masaic.openresponses.api.model
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
+import org.springframework.data.annotation.Id
+import org.springframework.data.mongodb.core.index.Indexed
+import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
 
 /**
  * Vector store object representing a collection of processed files.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Document(collection = "vector_stores")
 data class VectorStore(
     /**
      * The identifier, which can be referenced in API endpoints.
      */
+    @Id
     val id: String,
     /**
      * The object type, which is always vector_store.
@@ -21,6 +26,7 @@ data class VectorStore(
      * The Unix timestamp (in seconds) for when the vector store was created.
      */
     @JsonProperty("created_at")
+    @Indexed
     val createdAt: Long = Instant.now().epochSecond,
     /**
      * The name of the vector store.
@@ -90,10 +96,12 @@ data class VectorStoreDeleteResponse(
  * Vector store file object representing a file in a vector store.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Document(collection = "vector_store_files")
 data class VectorStoreFile(
     /**
      * The identifier, which can be referenced in API endpoints.
      */
+    @Id
     val id: String,
     /**
      * The object type, which is always vector_store.file.
@@ -103,6 +111,7 @@ data class VectorStoreFile(
      * The Unix timestamp (in seconds) for when the vector store file was created.
      */
     @JsonProperty("created_at")
+    @Indexed
     val createdAt: Long = Instant.now().epochSecond,
     /**
      * The total vector store usage in bytes.
@@ -113,10 +122,12 @@ data class VectorStoreFile(
      * The ID of the vector store that the file is attached to.
      */
     @JsonProperty("vector_store_id")
+    @Indexed
     val vectorStoreId: String,
     /**
      * The status of the vector store file.
      */
+    @Indexed
     val status: String = "completed",
     /**
      * The last error associated with this vector store file.
