@@ -42,7 +42,6 @@ class MasaicOpenAiResponseServiceImplTest {
         span = mockk(relaxed = true)
         spanBuilder = mockk(relaxed = true)
         tracer = mockk(relaxed = true)
-        openTelemetry = mockk(relaxed = true)
         observationRegistry = mockk(relaxed = true)
         
         // Set up the chain of mocks
@@ -61,7 +60,6 @@ class MasaicOpenAiResponseServiceImplTest {
                 parameterConverter = parameterConverter,
                 toolHandler = toolHandler,
                 streamingService = streamingService,
-                openTelemetry = openTelemetry,
                 observationRegistry = observationRegistry,
             )
     }
@@ -362,5 +360,102 @@ class MasaicOpenAiResponseServiceImplTest {
                 every { asText() } returns "Hello world"
             }
         return params
+    }
+
+    private fun recordGenAiMetrics(
+        params: ResponseCreateParams,
+        completion: ChatCompletion,
+        durationSeconds: Double,
+        error: Exception? = null
+    ) {
+        // Record duration metric
+        observationRegistry.observe("gen_ai.client.operation.duration") {
+            it.lowCardinalityKeyValue("gen_ai.operation.name", "chat")
+            it.lowCardinalityKeyValue("gen_ai.system", "openai")
+            it.lowCardinalityKeyValue("gen_ai.request.model", params.model().toString())
+            if (completion.model().isPresent) {
+                it.lowCardinalityKeyValue("gen_ai.response.model", completion.model().get())
+            }
+            if (error != null) {
+                it.lowCardinalityKeyValue("error.type", error.javaClass.simpleName)
+            }
+            it.observe(durationSeconds)
+        }
+        
+        // Record token usage metrics if available
+        if (completion.usage().isPresent) {
+            val usage = completion.usage().get()
+            
+            // Input tokens
+            observationRegistry.observe("gen_ai.client.token.usage") {
+                it.lowCardinalityKeyValue("gen_ai.operation.name", "chat")
+                it.lowCardinalityKeyValue("gen_ai.system", "openai")
+                it.lowCardinalityKeyValue("gen_ai.token.type", "input")
+                it.lowCardinalityKeyValue("gen_ai.request.model", params.model().toString())
+                if (completion.model().isPresent) {
+                    it.lowCardinalityKeyValue("gen_ai.response.model", completion.model().get())
+                }
+                it.observe(usage.promptTokens().toDouble())
+            }
+            
+            // Output tokens
+            observationRegistry.observe("gen_ai.client.token.usage") {
+                it.lowCardinalityKeyValue("gen_ai.operation.name", "chat")
+                it.lowCardinalityKeyValue("gen_ai.system", "openai")
+                it.lowCardinalityKeyValue("gen_ai.token.type", "output")
+                it.lowCardinalityKeyValue("gen_ai.request.model", params.model().toString())
+                if (completion.model().isPresent) {
+                    it.lowCardinalityKeyValue("gen_ai.response.model", completion.model().get())
+                }
+                it.observe(usage.completionTokens().toDouble())
+            }
+        }
+    }
+
+    override fun create(client: OpenAIClient, params: ResponseCreateParams): ChatCompletion {
+        val preparedParams = parameterConverter.prepareCompletion(params)
+        
+        // Use the existing withClientObservation method
+        return withClientObservation("open.responses.create") {
+            val startTime = System.nanoTime()
+            
+            try {
+                val completion = client.chat().completions().create(preparedParams)
+                val duration = (System.nanoTime() - startTime) / 1_000_000_000.0 // convert to seconds
+                
+                // Record the GenAI semantic metrics separately
+                recordGenAiMetrics(params, completion, duration)
+                
+                // Handle tool calls logic
+                val choice = completion.choices().firstOrNull()
+                if (choice != null && choice.finishReason() == FinishReason.TOOL_CALLS) {
+                    // Process tool calls
+                    val newInputItems = toolHandler.handleMasaicToolCall(completion, params)
+                    
+                    // Check if too many tool calls
+                    if (newInputItems.count { it.isFunctionCall() } > MAX_TOOL_CALLS) {
+                        throw IllegalArgumentException("Too many tool calls: ${newInputItems.size}")
+                    }
+                    
+                    // Create new params with processed tool calls
+                    val newInput = ResponseCreateParams.Input.response(newInputItems)
+                    val newParams = params.toBuilder()
+                        .input(newInput)
+                        .build()
+                    
+                    // Recursive call to continue the conversation
+                    return@withClientObservation create(client, newParams)
+                }
+                
+                completion
+            } catch (e: Exception) {
+                // Record error metrics before re-throwing
+                val duration = (System.nanoTime() - startTime) / 1_000_000_000.0
+                recordGenAiMetrics(params, ChatCompletion.Builder().build(), duration, e)
+                
+                // Re-throw the exception
+                throw e
+            }
+        }
     }
 }

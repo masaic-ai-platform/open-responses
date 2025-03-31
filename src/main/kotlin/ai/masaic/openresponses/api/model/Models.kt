@@ -285,4 +285,5 @@ data class InputMessageItemContent(
 
 data class CreateResponseMetadataInput(
     val modelProvider: String? = null,
+    val modelProviderAddress: String? = null,
 )

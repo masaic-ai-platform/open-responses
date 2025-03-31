@@ -12,16 +12,12 @@ import com.openai.models.chat.completions.ChatCompletionContentPartText
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import io.micrometer.core.instrument.DistributionSummary
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
-import io.opentelemetry.api.OpenTelemetry
 import io.opentelemetry.api.common.AttributeKey
-import io.opentelemetry.api.common.Attributes
-import io.opentelemetry.api.trace.Span
-import io.opentelemetry.api.trace.SpanKind
-import io.opentelemetry.api.trace.StatusCode
-import io.opentelemetry.api.trace.Tracer
-import io.opentelemetry.context.Context
 import kotlinx.coroutines.flow.Flow
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
@@ -41,11 +37,10 @@ class MasaicOpenAiResponseServiceImpl(
     private val parameterConverter: MasaicParameterConverter,
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService,
-    private val openTelemetry: OpenTelemetry,
     private val observationRegistry: ObservationRegistry,
+    private val meterRegistry: MeterRegistry,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
-    private val tracer: Tracer = openTelemetry.getTracer("ai.masaic.openresponses.api.client")
 
     // Constants for GenAI span attributes
     private object GenAiAttributes {
@@ -105,15 +100,16 @@ class MasaicOpenAiResponseServiceImpl(
         val responseOrCompletions =
             withClientObservation { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
-                val chatCompletions =
+                val chatCompletions = withTimer("open.responses.create", metadata, params) {
                     client.chat().completions().create(
                         parameterConverter.prepareCompletion(params),
                     )
+                }
+
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
 
                 // Set any relevant span attributes
                 setAllObservationAttributes(observation, chatCompletions, params, metadata)
-//            setAllSpanAttributes(span, chatCompletions, params, metadata)
 
                 // If no tool calls => return direct response
                 if (!hasToolCalls(chatCompletions)) {
@@ -121,6 +117,8 @@ class MasaicOpenAiResponseServiceImpl(
                     return@withClientObservation chatCompletions.toResponse(params)
                 }
 
+                recordTokenUsage(metadata, chatCompletions, params, "input", chatCompletions.usage().get().promptTokens())
+                recordTokenUsage(metadata, chatCompletions, params, "output", chatCompletions.usage().get().completionTokens())
                 // Otherwise, return the raw ChatCompletion so we can handle tools afterward
                 chatCompletions
             }
@@ -210,6 +208,7 @@ class MasaicOpenAiResponseServiceImpl(
             block(observation)
         } catch (e: Exception) {
             observation.error(e)
+            observation.lowCardinalityKeyValue("error.type", "${e.javaClass}")
             throw e
         } finally {
             observation.stop()
@@ -242,6 +241,70 @@ class MasaicOpenAiResponseServiceImpl(
      * Returns true if the [items] exceed the max allowed function calls set in the environment.
      */
     private fun exceedsMaxToolCalls(items: List<ResponseInputItem>): Boolean = items.count { it.isFunctionCall() } > getAllowedMaxToolCalls()
+
+    fun recordTokenUsage(
+        metadata: CreateResponseMetadataInput,
+        chatCompletion: ChatCompletion,
+        params: ResponseCreateParams,
+        tokenType: String,
+        tokenCount: Long
+    ) {
+        // Build a DistributionSummary with semantic tags
+        val summaryBuilder = DistributionSummary.builder("gen_ai.client.token.usage")
+            .description("Measures number of input and output tokens used")
+            .baseUnit("token")
+            .tags(
+                "gen_ai.operation.name",
+                "chat",
+                "gen_ai.system",
+                metadata.modelProvider,
+                "gen_ai.token.type",
+                tokenType
+            )
+
+        // Add optional tags if provided
+        params.model().let { summaryBuilder.tag("gen_ai.request.model", it.value().name) }
+        chatCompletion.model().let { summaryBuilder.tag("gen_ai.response.model", it) }
+        summaryBuilder.tag("server.address", metadata.modelProviderAddress ?: "not_available")
+
+        // Register the summary
+        val summary = summaryBuilder.register(meterRegistry)
+        // Record the token usage count
+        summary.record(tokenCount.toDouble())
+    }
+
+    fun <T> withTimer(
+        genAiSystem: String,
+        metadata: CreateResponseMetadataInput,
+        params: ResponseCreateParams,
+        block: () -> T
+    ): T {
+        // Build a Timer with semantic tags
+        val timerBuilder = Timer.builder("gen_ai.client.operation.duration")
+            .description("GenAI operation duration")
+            .tags("gen_ai.operation.name", "chat", "gen_ai.system", metadata.modelProvider)
+
+        // Add optional tags if provided
+        params.model().let { timerBuilder.tag("gen_ai.request.model", it.value().name) }
+        params.model().let { timerBuilder.tag("gen_ai.response.model", it.value().name) } //for now assuming request and response model to be same.
+        timerBuilder.tag("server.address", metadata.modelProviderAddress ?: "not_available")
+
+        // Register the timer
+        val timer = timerBuilder.register(meterRegistry)
+//
+//        // Start the timer sample
+        val sample = Timer.start(meterRegistry)
+        try {
+            return block()
+        } catch (ex: Exception) {
+            // Optionally, you could record error details via additional tags or error metrics
+            timerBuilder.tag("error.type", "${ex.javaClass}")
+            throw ex
+        } finally {
+            sample.stop(timer)
+        }
+    }
+
 
     /**
      * Creates a streaming completion that emits ServerSentEvents.
