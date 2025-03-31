@@ -36,6 +36,9 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     
+    // AWS S3 SDK for file storage
+    implementation("software.amazon.awssdk:s3:2.25.11")
+    
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.2.3")
     implementation("io.micrometer:micrometer-registry-prometheus:1.12.4")
     implementation("io.micrometer:micrometer-observation:1.12.4")
