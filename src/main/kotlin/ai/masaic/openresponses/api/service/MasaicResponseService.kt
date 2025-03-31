@@ -32,6 +32,7 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap
+import java.net.URI
 import java.time.Duration
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.coroutineContext
@@ -138,7 +139,7 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
-                    CreateResponseMetadataInput(modelProvider(headers)),
+                    responseMetadataInput(headers),
                 )
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -397,26 +398,26 @@ class MasaicResponseService(
         return OpenAIOkHttpClient
             .builder()
             .credential(credential)
-            .baseUrl(getApiBaseUrl(headers))
+            .baseUrl(getApiBaseUri(headers).toURL().toString())
             .build()
     }
 
-    private fun modelProvider(headers: MultiValueMap<String, String>): String = headers.getFirst("x-model-provider") ?: "groq"
+    private fun responseMetadataInput(headers: MultiValueMap<String, String>): CreateResponseMetadataInput = CreateResponseMetadataInput(headers.getFirst("x-model-provider") ?: "groq", getApiBaseUri(headers).host)
 
     /**
      * Gets the API base URL to use for requests.
      *
      * @return The API base URL
      */
-    private fun getApiBaseUrl(headers: MultiValueMap<String, String>): String =
+    private fun getApiBaseUri(headers: MultiValueMap<String, String>): URI =
         if (headers.getFirst("x-model-provider")?.lowercase() == "claude") {
-            "https://api.anthropic.com/v1"
+            URI("https://api.anthropic.com/v1")
         } else if (headers.getFirst("x-model-provider")?.lowercase() == "openai") {
-            "https://api.openai.com/v1"
+            URI("https://api.openai.com/v1")
         } else if (headers.getFirst("x-model-provider") == "groq") {
-            "https://api.groq.com/openai/v1"
+            URI("https://api.groq.com/openai/v1")
         } else {
-            System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL
+            URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
         }
 }
 
