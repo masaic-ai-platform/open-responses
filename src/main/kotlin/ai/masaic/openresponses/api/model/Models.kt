@@ -284,6 +284,6 @@ data class InputMessageItemContent(
 )
 
 data class CreateResponseMetadataInput(
-    val modelProvider: String? = null,
+    val genAISystem: String? = null,
     val modelProviderAddress: String? = null,
 )

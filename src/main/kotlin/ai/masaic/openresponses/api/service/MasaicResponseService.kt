@@ -402,7 +402,7 @@ class MasaicResponseService(
             .build()
     }
 
-    private fun responseMetadataInput(headers: MultiValueMap<String, String>): CreateResponseMetadataInput = CreateResponseMetadataInput(headers.getFirst("x-model-provider") ?: "groq", getApiBaseUri(headers).host)
+    private fun responseMetadataInput(headers: MultiValueMap<String, String>): CreateResponseMetadataInput = CreateResponseMetadataInput("openai", getApiBaseUri(headers).host)
 
     /**
      * Gets the API base URL to use for requests.

@@ -5,10 +5,8 @@ import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
-import com.openai.models.chat.completions.ChatCompletion
-import com.openai.models.chat.completions.ChatCompletionContentPart
-import com.openai.models.chat.completions.ChatCompletionContentPartImage
-import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.core.jsonMapper
+import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
@@ -100,15 +98,15 @@ class MasaicOpenAiResponseServiceImpl(
         val responseOrCompletions =
             withClientObservation { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
+                val completionCreateParams = parameterConverter.prepareCompletion(params)
+                emitModelInputEvents(observation, completionCreateParams, metadata)
                 val chatCompletions =
                     withTimer("open.responses.create", metadata, params) {
-                        client.chat().completions().create(
-                            parameterConverter.prepareCompletion(params),
-                        )
+                        client.chat().completions().create(completionCreateParams)
                     }
 
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
-
+                emitModelOutputEvents(observation, chatCompletions, metadata)
                 // Set any relevant span attributes
                 setAllObservationAttributes(observation, chatCompletions, params, metadata)
 
@@ -155,6 +153,119 @@ class MasaicOpenAiResponseServiceImpl(
         return create(client, updatedParams, metadata)
     }
 
+
+    private fun emitModelInputEvents(observation: Observation, inputParams: ChatCompletionCreateParams, metadata: CreateResponseMetadataInput) {
+        inputParams.messages().forEach { message ->
+            if (message.isUser()) {
+                val eventData = mapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "role" to "user",
+                    "content" to message.user().get().content()
+                )
+                observation.event(
+                    Observation.Event.of(
+                        "gen_ai.user.message",
+                        jsonMapper().writeValueAsString(eventData)
+                    )
+                )
+            }
+
+            if ((message.isSystem() && message.system().isPresent) ||  (message.isDeveloper() && message.developer().isPresent)) {
+                val eventData = mapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "role" to "system",
+                    "content" to message.system().get().content()
+                )
+                observation.event(
+                    Observation.Event.of(
+                        "gen_ai.system.message",
+                        jsonMapper().writeValueAsString(eventData)
+                    )
+                )
+            }
+
+            if (message.isAssistant() && message.assistant().get().content().isPresent) {
+                val eventData = mapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "role" to "assistant",
+                    "content" to message.assistant().get().content()
+                )
+                observation.event(
+                    Observation.Event.of(
+                        "gen_ai.assistant.system",
+                        jsonMapper().writeValueAsString(eventData)
+                    )
+                )
+            }
+        }
+    }
+
+    private fun emitModelOutputEvents(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        chatCompletion.choices().forEach { choice ->
+            if(choice.message().content().isPresent) {
+                val message = mapOf(
+                    "role" to "assistant",
+                    "content" to choice.message().content().get()
+                )
+
+                val eventData = mapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "role" to "assistant",
+                    "content" to choice.message().content().get()
+                )
+                observation.event(
+                    Observation.Event.of(
+                        "gen_ai.assistant.system",
+                        jsonMapper().writeValueAsString(eventData)
+                    )
+                )
+            }
+
+            val toolCalls = mutableListOf<Any>()
+            if(choice.finishReason().asString() == "tool_calls") {
+                choice.message().toolCalls().get().forEach { tool ->
+                    val functionMap = mapOf(
+                        "id" to tool.id(),
+                        "type" to "function",
+                        "function" to jsonMapper().writeValueAsString(mapOf("name" to tool.function().name() to "arguments" to tool.function().arguments()))
+                    )
+                    toolCalls.add(functionMap)
+                }
+                val eventData = mapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "finish_reason" to choice.finishReason().asString(),
+                    "index" to choice.index(),
+                    "tool_calls" to jsonMapper().writeValueAsString(toolCalls)
+                )
+                observation.event(
+                    Observation.Event.of(
+                        "gen_ai.assistant.system",
+                        jsonMapper().writeValueAsString(eventData)
+                    )
+                )
+            }
+        }
+
+    }
+
+    /**
+     * Gets message content based on content capturing settings.
+     */
+    private fun getMessageContent(message: ResponseInputItem.Message): String {
+        // Convert the content parts to a string representation
+        return message.content().joinToString(" ") { content ->
+            when {
+                content.isInputText() -> content.asInputText().text()
+                // Handle other content types as needed
+                else -> "[non-text content]"
+            }
+        }
+    }
+
     // New helper function to set observation attributes
     private fun setAllObservationAttributes(
         observation: Observation,
@@ -162,20 +273,20 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseCreateParams,
         metadata: CreateResponseMetadataInput,
     ) {
-        observation.lowCardinalityKeyValue("gen_ai.operation.name", "chat")
-        observation.lowCardinalityKeyValue("gen_ai.system", metadata.modelProvider ?: "not_available")
-        observation.lowCardinalityKeyValue("gen_ai.output.type", "text")
-        observation.lowCardinalityKeyValue("gen_ai.request.model", params.model().toString())
-        observation.lowCardinalityKeyValue("gen_ai.response.model", chatCompletion.model())
-        observation.highCardinalityKeyValue("gen_ai.response.id", chatCompletion.id())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "chat")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SYSTEM, metadata.genAISystem ?: "not_available")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OUTPUT_TYPE, "text")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.REQUEST_MODEL, params.model().toString())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_MODEL, chatCompletion.model())
+        observation.highCardinalityKeyValue(GenAIObsAttributes.RESPONSE_ID, chatCompletion.id())
 
-        params.temperature().ifPresent { observation.highCardinalityKeyValue("gen_ai.request.temperature", it.toString()) }
-        params.maxOutputTokens().ifPresent { observation.highCardinalityKeyValue("gen_ai.request.max_tokens", it.toString()) }
-        params.topP().ifPresent { observation.highCardinalityKeyValue("gen_ai.request.top_p", it.toString()) }
+        params.temperature().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TEMPERATURE, it.toString()) }
+        params.maxOutputTokens().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_MAX_TOKENS, it.toString()) }
+        params.topP().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TOP_P, it.toString()) }
 
         chatCompletion.usage().ifPresent { usage ->
-            observation.highCardinalityKeyValue("gen_ai.usage.input_tokens", usage.promptTokens().toString())
-            observation.highCardinalityKeyValue("gen_ai.usage.output_tokens", usage.completionTokens().toString())
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_INPUT_TOKENS, usage.promptTokens().toString())
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_OUTPUT_TOKENS, usage.completionTokens().toString())
         }
 
         setFinishReasons(observation, chatCompletion)
@@ -197,7 +308,7 @@ class MasaicOpenAiResponseServiceImpl(
                         ?.lowercase()
                 }.distinct()
         if (finishReasons.isNotEmpty()) {
-            observation.lowCardinalityKeyValue("gen_ai.response.finish_reasons", finishReasons.joinToString(","))
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_FINISH_REASONS, finishReasons.joinToString(","))
         }
     }
 
@@ -257,18 +368,18 @@ class MasaicOpenAiResponseServiceImpl(
                 .description("Measures number of input and output tokens used")
                 .baseUnit("token")
                 .tags(
-                    "gen_ai.operation.name",
+                    GenAIObsAttributes.OPERATION_NAME,
                     "chat",
-                    "gen_ai.system",
-                    metadata.modelProvider,
+                    GenAIObsAttributes.SYSTEM,
+                    metadata.genAISystem,
                     "gen_ai.token.type",
                     tokenType,
                 )
 
         // Add optional tags if provided
-        params.model().let { summaryBuilder.tag("gen_ai.request.model", it.value().name) }
-        chatCompletion.model().let { summaryBuilder.tag("gen_ai.response.model", it) }
-        summaryBuilder.tag("server.address", metadata.modelProviderAddress ?: "not_available")
+        params.model().let { summaryBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, it.value().name) }
+        chatCompletion.model().let { summaryBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, it) }
+        summaryBuilder.tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
 
         // Register the summary
         val summary = summaryBuilder.register(meterRegistry)
@@ -285,14 +396,14 @@ class MasaicOpenAiResponseServiceImpl(
         // Build a Timer with semantic tags
         val timerBuilder =
             Timer
-                .builder("gen_ai.client.operation.duration")
+                .builder(GenAIObsAttributes.OPERATION_DURATION)
                 .description("GenAI operation duration")
-                .tags("gen_ai.operation.name", "chat", "gen_ai.system", metadata.modelProvider)
+                .tags(GenAIObsAttributes.OPERATION_NAME, "chat", GenAIObsAttributes.SYSTEM, metadata.genAISystem)
 
         // Add optional tags if provided
-        params.model().let { timerBuilder.tag("gen_ai.request.model", it.value().name) }
-        params.model().let { timerBuilder.tag("gen_ai.response.model", it.value().name) } // for now assuming request and response model to be same.
-        timerBuilder.tag("server.address", metadata.modelProviderAddress ?: "not_available")
+        params.model().let { timerBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, it.value().name) }
+        params.model().let { timerBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, it.value().name) } // for now assuming request and response model to be same.
+        timerBuilder.tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
 
         // Register the timer
         val timer = timerBuilder.register(meterRegistry)
@@ -303,7 +414,7 @@ class MasaicOpenAiResponseServiceImpl(
             return block()
         } catch (ex: Exception) {
             // Optionally, you could record error details via additional tags or error metrics
-            timerBuilder.tag("error.type", "${ex.javaClass}")
+            timerBuilder.tag(GenAIObsAttributes.ERROR_TYPE, "${ex.javaClass}")
             throw ex
         } finally {
             sample.stop(timer)

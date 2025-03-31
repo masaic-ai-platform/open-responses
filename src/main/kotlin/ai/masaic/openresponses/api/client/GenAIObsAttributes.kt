@@ -3,7 +3,7 @@ package ai.masaic.openresponses.api.client
 /**
  * Constants for GenAI observation attributes used in metrics and monitoring.
  */
-object GernAIObsAttributes {
+object GenAIObsAttributes {
     const val OPERATION_NAME = "gen_ai.operation.name"
     const val SYSTEM = "gen_ai.system"
     const val REQUEST_MODEL = "gen_ai.request.model"
@@ -17,4 +17,6 @@ object GernAIObsAttributes {
     const val USAGE_OUTPUT_TOKENS = "gen_ai.usage.output_tokens"
     const val OUTPUT_TYPE = "gen_ai.output.type"
     const val ERROR_TYPE = "error.type"
+    const val SERVER_ADDRESS = "server.address"
+    const val OPERATION_DURATION = "gen_ai.client.operation.duration"
 } 

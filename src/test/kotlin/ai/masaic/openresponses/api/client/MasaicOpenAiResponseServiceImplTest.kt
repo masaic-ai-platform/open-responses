@@ -87,7 +87,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Setup
         val metadata =
             CreateResponseMetadataInput(
-                modelProvider = "openai",
+                genAISystem = "openai",
                 modelProviderAddress = "api.openai.com",
             )
         val completion =

@@ -3,7 +3,7 @@ version: '3'
 services:
   # OpenTelemetry Collector
   otel-collector:
-    image: otel/opentelemetry-collector:latest
+    image: otel/opentelemetry-collector-contrib:latest
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     volumes:
@@ -15,6 +15,20 @@ services:
       - "8888:8888"   # Metrics endpoint
     depends_on:
       - zipkin
+      - jaeger
+
+  # Jaeger
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # Receive from otel-collector (gRPC)
+      - "14268:14268"  # Accept traces directly from apps
+      - "6831:6831/udp"  # Accept jaeger.thrift in compact Thrift protocol over UDP
+      - "6832:6832/udp"  # Accept jaeger.thrift in binary Thrift protocol over UDP
+    environment:
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
 
   # Zipkin
   zipkin:

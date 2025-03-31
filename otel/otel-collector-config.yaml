@@ -21,6 +21,10 @@ processors:
 exporters:
   zipkin:
     endpoint: "http://zipkin:9411/api/v2/spans"
+  otlp:
+    endpoint: "jaeger:4317"
+    tls:
+      insecure: true
   debug:
     verbosity: detailed
   prometheus:
@@ -49,7 +53,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [zipkin, debug]
+      exporters: [zipkin, otlp, debug]
     metrics:
       receivers: [otlp]
       processors: [batch]
