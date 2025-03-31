@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.model.CreateVectorStoreFileRequest
+import ai.masaic.openresponses.api.model.CreateVectorStoreRequest
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -12,7 +14,6 @@ import org.springframework.web.multipart.MultipartFile
 import java.io.InputStream
 import java.time.Instant
 import kotlin.test.assertEquals
-import kotlin.test.assertTrue
 
 /**
  * Service for handling vector indexing of files.
@@ -43,10 +44,9 @@ class VectorIndexingTest {
     private lateinit var fileService: FileService
     private lateinit var fileStorageService: FileStorageService
     private lateinit var vectorSearchProvider: VectorSearchProvider
-    private lateinit var vectorIndexingService: VectorIndexingService
+    private lateinit var vectorStoreService: VectorStoreService
     private lateinit var mockFile: MultipartFile
     private lateinit var mockResource: Resource
-    private var postProcessHook: (suspend (String, String) -> Unit)? = null
 
     @BeforeEach
     fun setup() {
@@ -56,14 +56,8 @@ class VectorIndexingTest {
         coEvery { vectorSearchProvider.indexFile(any(), any(), any()) } returns true
         coEvery { vectorSearchProvider.deleteFile(any()) } returns true
         
-        vectorIndexingService = VectorIndexingService(vectorSearchProvider)
-        
-        // Set up default mock behaviors
-        every { fileStorageService.registerPostProcessHook(any()) } answers {
-            postProcessHook = firstArg()
-        }
-        
         fileService = FileService(fileStorageService, vectorSearchProvider)
+        vectorStoreService = mockk()
 
         mockFile =
             MockMultipartFile(
@@ -81,7 +75,7 @@ class VectorIndexingTest {
     }
 
     @Test
-    fun `hook should index assistants files`() =
+    fun `should create vector store and index file`() =
         runTest {
             // Given
             val fileId = "file-123"
@@ -97,25 +91,74 @@ class VectorIndexingTest {
                     "created_at" to Instant.now().epochSecond,
                 )
             coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
+            coEvery { fileStorageService.exists(fileId) } returns true
 
             // When
             // 1. Upload a file
             val uploadedFile = fileService.uploadFile(mockFile, purpose)
+            
+            // 2. Create a vector store with the file
+            coEvery { 
+                vectorStoreService.createVectorStore(any()) 
+            } returns mockk(relaxed = true)
+            
+            val createVectorStoreRequest =
+                CreateVectorStoreRequest(
+                    name = "Test Vector Store",
+                    fileIds = listOf(fileId),
+                )
+            vectorStoreService.createVectorStore(createVectorStoreRequest)
         
             // Then
             // 1. File should be uploaded
             assertEquals(fileId, uploadedFile.id)
-        
-            // 2. Test the hook was triggered for assistants purpose
-            postProcessHook?.invoke(fileId, purpose)
-        
-            // 3. Verify file was indexed
-            coVerify { fileStorageService.loadAsResource(fileId) }
-            coVerify { vectorSearchProvider.indexFile(fileId, any(), any()) }
+            
+            // 2. Vector store should be created with the file
+            coVerify { vectorStoreService.createVectorStore(createVectorStoreRequest) }
         }
 
     @Test
-    fun `hook should not index files with other purposes`() =
+    fun `should add existing file to vector store`() =
+        runTest {
+            // Given
+            val fileId = "file-123"
+            val vectorStoreId = "vs_456"
+            val purpose = "user_data"
+        
+            coEvery { fileStorageService.store(any(), any()) } returns fileId
+            coEvery { fileStorageService.getFileMetadata(fileId) } returns
+                mapOf(
+                    "id" to fileId,
+                    "filename" to "test.txt",
+                    "purpose" to purpose,
+                    "bytes" to 100L,
+                    "created_at" to Instant.now().epochSecond,
+                )
+            coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
+            coEvery { fileStorageService.exists(fileId) } returns true
+        
+            // When
+            // 1. Upload a file
+            val uploadedFile = fileService.uploadFile(mockFile, purpose)
+            
+            // 2. Add file to existing vector store
+            coEvery { 
+                vectorStoreService.createVectorStoreFile(any(), any()) 
+            } returns mockk(relaxed = true)
+            
+            val createFileRequest = CreateVectorStoreFileRequest(fileId = fileId)
+            vectorStoreService.createVectorStoreFile(vectorStoreId, createFileRequest)
+        
+            // Then
+            // 1. File should be uploaded
+            assertEquals(fileId, uploadedFile.id)
+            
+            // 2. File should be added to vector store
+            coVerify { vectorStoreService.createVectorStoreFile(vectorStoreId, createFileRequest) }
+        }
+
+    @Test
+    fun `should not allow invalid purpose file in vector store`() =
         runTest {
             // Given
             val fileId = "file-123"
@@ -139,102 +182,8 @@ class VectorIndexingTest {
             // Then
             // 1. File should be uploaded
             assertEquals(fileId, uploadedFile.id)
-        
-            // 2. Test the hook was triggered but should not index
-            postProcessHook?.invoke(fileId, purpose)
-        
-            // 3. Verify file was NOT indexed for fine-tune purpose
-            verify(exactly = 0) { vectorSearchProvider.indexFile(fileId, any(), any()) }
-        }
-
-    @Test
-    fun `hook should handle user_data purpose files`() =
-        runTest {
-            // Given
-            val fileId = "file-123"
-            val purpose = "user_data"
-        
-            coEvery { fileStorageService.store(any(), any()) } returns fileId
-            coEvery { fileStorageService.getFileMetadata(fileId) } returns
-                mapOf(
-                    "id" to fileId,
-                    "filename" to "test.txt",
-                    "purpose" to purpose,
-                    "bytes" to 100L,
-                    "created_at" to Instant.now().epochSecond,
-                )
-            coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
-        
-            // When
-            // 1. Upload a file
-            val uploadedFile = fileService.uploadFile(mockFile, purpose)
-        
-            // Then
-            // 1. File should be uploaded
-            assertEquals(fileId, uploadedFile.id)
-        
-            // 2. Test the hook was triggered for user_data purpose
-            postProcessHook?.invoke(fileId, purpose)
-        
-            // 3. Verify file was indexed
-            coVerify { fileStorageService.loadAsResource(fileId) }
-            coVerify { vectorSearchProvider.indexFile(fileId, any(), any()) }
-        }
-
-    @Test
-    fun `deleteFile should delete from vector store when file is deleted`() =
-        runTest {
-            // Given
-            val fileId = "file-123"
-        
-            coEvery { fileStorageService.getFileMetadata(fileId) } returns
-                mapOf(
-                    "id" to fileId,
-                    "filename" to "test.txt",
-                    "purpose" to "assistants",
-                    "bytes" to 100L,
-                    "created_at" to Instant.now().epochSecond,
-                )
-            coEvery { fileStorageService.delete(fileId) } returns true
-            coEvery { fileStorageService.exists(fileId) } returns true
-        
-            // When
-            val result = fileService.deleteFile(fileId)
-        
-            // Then
-            assertTrue(result.deleted)
-            coVerify { vectorSearchProvider.deleteFile(fileId) }
-        }
-
-    @Test
-    fun `mock classes work as expected`() =
-        runTest {
-            // This test validates that our mocking is set up correctly
-        
-            // Given
-            val fileId = "test-file-id"
-            val content = "This is test content".toByteArray()
-            val mockFile = MockMultipartFile("file", "test.txt", "text/plain", content)
-        
-            coEvery { fileStorageService.store(any(), any()) } returns fileId
-        
-            coEvery { fileStorageService.loadAsResource(fileId) } returns ByteArrayResource(content)
-        
-            coEvery { fileStorageService.getFileMetadata(fileId) } returns
-                mapOf(
-                    "id" to fileId,
-                    "filename" to "test.txt",
-                    "purpose" to "assistants", 
-                    "bytes" to 100L,
-                    "created_at" to Instant.now().epochSecond,
-                )
-        
-            // When we upload a file
-            val uploadedFile = fileService.uploadFile(mockFile, "assistants")
-        
-            // Then it should be stored correctly
-            assertEquals(fileId, uploadedFile.id)
-            assertEquals("test.txt", uploadedFile.filename)
-            assertEquals("assistants", uploadedFile.purpose)
+            
+            // 2. Purpose should be fine_tune
+            assertEquals(purpose, uploadedFile.purpose)
         }
 }

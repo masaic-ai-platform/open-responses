@@ -29,10 +29,6 @@ class FileService(
 ) {
     private val log = LoggerFactory.getLogger(FileService::class.java)
 
-    init {
-        registerVectorIndexingHook()
-    }
-
     /**
      * Uploads a file.
      *
@@ -79,45 +75,46 @@ class FileService(
         after: String? = null,
     ): FileListResponse =
         withContext(Dispatchers.IO) {
-            // Get files from storage as a flow
-            val fileFlow =
+            // Get all files
+            val allFiles =
                 if (purpose != null) {
-                    fileStorageService.loadByPurpose(purpose)
+                    fileStorageService.loadByPurpose(purpose).map { pathToFile(it) }.toList()
                 } else {
-                    fileStorageService.loadAll()
+                    fileStorageService.loadAll().map { pathToFile(it) }.toList()
                 }
         
-            // Convert paths to file objects and collect as list
-            val fileObjects =
-                fileFlow
-                    .map { path -> pathToFile(path) }
-                    .toList()
-                    .sortedBy { it.createdAt }
-                    .let { if (order.lowercase() == "desc") it.reversed() else it }
-        
-            // Handle pagination
-            val startIndex =
-                if (after != null) {
-                    val afterIndex = fileObjects.indexOfFirst { it.id == after }
-                    if (afterIndex >= 0) afterIndex + 1 else 0
+            // Sort by creation time
+            val sortedFiles =
+                if (order.equals("asc", ignoreCase = true)) {
+                    allFiles.sortedBy { it.createdAt }
                 } else {
-                    0
+                    allFiles.sortedByDescending { it.createdAt }
+                }
+        
+            // Apply pagination
+            val filteredFiles =
+                if (after != null) {
+                    val afterIndex = sortedFiles.indexOfFirst { it.id == after }
+                    if (afterIndex >= 0 && afterIndex < sortedFiles.size - 1) {
+                        sortedFiles.subList(afterIndex + 1, sortedFiles.size)
+                    } else {
+                        emptyList()
+                    }
+                } else {
+                    sortedFiles
                 }
         
             // Apply limit
-            val paginatedFiles =
-                fileObjects
-                    .drop(startIndex)
-                    .take(limit.coerceIn(1, 10000))
-            
-            FileListResponse(data = paginatedFiles)
+            val limitedFiles = filteredFiles.take(limit)
+        
+            FileListResponse(data = limitedFiles)
         }
 
     /**
-     * Retrieves a file by ID.
+     * Retrieves a file.
      *
      * @param fileId The ID of the file to retrieve
-     * @return The file object
+     * @return The file
      */
     suspend fun getFile(fileId: String): File =
         withContext(Dispatchers.IO) {
@@ -173,27 +170,6 @@ class FileService(
 
             FileDeleteResponse(id = fileId, deleted = deleted)
         }
-
-    /**
-     * Registers a hook for indexing files into a vector store.
-     * This is called during service initialization.
-     */
-    fun registerVectorIndexingHook() {
-        // Register a hook to index files in the vector store if a provider is configured
-        vectorSearchProvider?.let { provider ->
-            fileStorageService.registerPostProcessHook { fileId, purpose ->
-                try {
-                    if (purpose in listOf("assistants", "user_data")) {
-                        log.info("Indexing file $fileId for purpose $purpose in vector store")
-                        val resource = fileStorageService.loadAsResource(fileId)
-                        provider.indexFile(fileId, resource.inputStream, resource.filename ?: fileId)
-                    }
-                } catch (e: Exception) {
-                    log.error("Error indexing file $fileId in vector store", e)
-                }
-            }
-        }
-    }
 
     /**
      * Converts a Path to a File object.
