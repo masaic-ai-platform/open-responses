@@ -100,11 +100,12 @@ class MasaicOpenAiResponseServiceImpl(
         val responseOrCompletions =
             withClientObservation { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
-                val chatCompletions = withTimer("open.responses.create", metadata, params) {
-                    client.chat().completions().create(
-                        parameterConverter.prepareCompletion(params),
-                    )
-                }
+                val chatCompletions =
+                    withTimer("open.responses.create", metadata, params) {
+                        client.chat().completions().create(
+                            parameterConverter.prepareCompletion(params),
+                        )
+                    }
 
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
 
@@ -247,20 +248,22 @@ class MasaicOpenAiResponseServiceImpl(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
         tokenType: String,
-        tokenCount: Long
+        tokenCount: Long,
     ) {
         // Build a DistributionSummary with semantic tags
-        val summaryBuilder = DistributionSummary.builder("gen_ai.client.token.usage")
-            .description("Measures number of input and output tokens used")
-            .baseUnit("token")
-            .tags(
-                "gen_ai.operation.name",
-                "chat",
-                "gen_ai.system",
-                metadata.modelProvider,
-                "gen_ai.token.type",
-                tokenType
-            )
+        val summaryBuilder =
+            DistributionSummary
+                .builder("gen_ai.client.token.usage")
+                .description("Measures number of input and output tokens used")
+                .baseUnit("token")
+                .tags(
+                    "gen_ai.operation.name",
+                    "chat",
+                    "gen_ai.system",
+                    metadata.modelProvider,
+                    "gen_ai.token.type",
+                    tokenType,
+                )
 
         // Add optional tags if provided
         params.model().let { summaryBuilder.tag("gen_ai.request.model", it.value().name) }
@@ -277,16 +280,18 @@ class MasaicOpenAiResponseServiceImpl(
         genAiSystem: String,
         metadata: CreateResponseMetadataInput,
         params: ResponseCreateParams,
-        block: () -> T
+        block: () -> T,
     ): T {
         // Build a Timer with semantic tags
-        val timerBuilder = Timer.builder("gen_ai.client.operation.duration")
-            .description("GenAI operation duration")
-            .tags("gen_ai.operation.name", "chat", "gen_ai.system", metadata.modelProvider)
+        val timerBuilder =
+            Timer
+                .builder("gen_ai.client.operation.duration")
+                .description("GenAI operation duration")
+                .tags("gen_ai.operation.name", "chat", "gen_ai.system", metadata.modelProvider)
 
         // Add optional tags if provided
         params.model().let { timerBuilder.tag("gen_ai.request.model", it.value().name) }
-        params.model().let { timerBuilder.tag("gen_ai.response.model", it.value().name) } //for now assuming request and response model to be same.
+        params.model().let { timerBuilder.tag("gen_ai.response.model", it.value().name) } // for now assuming request and response model to be same.
         timerBuilder.tag("server.address", metadata.modelProviderAddress ?: "not_available")
 
         // Register the timer
@@ -304,7 +309,6 @@ class MasaicOpenAiResponseServiceImpl(
             sample.stop(timer)
         }
     }
-
 
     /**
      * Creates a streaming completion that emits ServerSentEvents.
