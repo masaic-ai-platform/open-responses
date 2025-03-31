@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 @ConditionalOnProperty(name = ["app.vector-store.provider"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryVectorSearchProvider(
     private val embeddingService: EmbeddingService,
-    private val vectorSearchProperties: VectorSearchProperties
+    private val vectorSearchProperties: VectorSearchProperties,
 ) : VectorSearchProvider {
     // Map of fileId to file content chunks and their embeddings
     private val fileChunks = ConcurrentHashMap<String, List<ChunkWithEmbedding>>()

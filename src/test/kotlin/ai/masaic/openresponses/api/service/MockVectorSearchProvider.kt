@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import org.springframework.context.annotation.Primary
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import java.io.InputStream
@@ -11,6 +12,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Component
 @Profile("test")
+@Primary
 class MockVectorSearchProvider : VectorSearchProvider {
     private val indexedFiles = ConcurrentHashMap<String, IndexedFile>()
 
