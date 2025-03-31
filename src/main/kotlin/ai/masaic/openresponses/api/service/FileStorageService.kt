@@ -1,9 +1,9 @@
 package ai.masaic.openresponses.api.service
 
+import kotlinx.coroutines.flow.Flow
 import org.springframework.core.io.Resource
 import org.springframework.web.multipart.MultipartFile
 import java.nio.file.Path
-import java.util.stream.Stream
 
 /**
  * Service interface for handling file storage operations.
@@ -11,18 +11,13 @@ import java.util.stream.Stream
  */
 interface FileStorageService {
     /**
-     * Initializes the storage system.
-     */
-    fun init()
-
-    /**
      * Stores a file with the given purpose.
      *
      * @param file The file to store
      * @param purpose The file's purpose
      * @return The stored file's ID
      */
-    fun store(
+    suspend fun store(
         file: MultipartFile,
         purpose: String,
     ): String
@@ -30,17 +25,17 @@ interface FileStorageService {
     /**
      * Loads all files from storage.
      *
-     * @return A stream of all file paths
+     * @return A flow of all file paths
      */
-    fun loadAll(): Stream<Path>
+    fun loadAll(): Flow<Path>
 
     /**
      * Loads files with the specified purpose.
      *
      * @param purpose The purpose to filter by
-     * @return A stream of file paths matching the purpose
+     * @return A flow of file paths matching the purpose
      */
-    fun loadByPurpose(purpose: String): Stream<Path>
+    fun loadByPurpose(purpose: String): Flow<Path>
 
     /**
      * Loads a file by its ID.
@@ -48,7 +43,7 @@ interface FileStorageService {
      * @param fileId The ID of the file to load
      * @return The file path
      */
-    fun load(fileId: String): Path
+    suspend fun load(fileId: String): Path
 
     /**
      * Loads a file as a resource for downloading.
@@ -56,7 +51,7 @@ interface FileStorageService {
      * @param fileId The ID of the file to load
      * @return The file as a Resource
      */
-    fun loadAsResource(fileId: String): Resource
+    suspend fun loadAsResource(fileId: String): Resource
 
     /**
      * Deletes a file by its ID.
@@ -64,7 +59,7 @@ interface FileStorageService {
      * @param fileId The ID of the file to delete
      * @return True if the file was deleted, false otherwise
      */
-    fun delete(fileId: String): Boolean
+    suspend fun delete(fileId: String): Boolean
 
     /**
      * Gets metadata about a specific file.
@@ -72,7 +67,7 @@ interface FileStorageService {
      * @param fileId The ID of the file
      * @return Map of metadata key-value pairs
      */
-    fun getFileMetadata(fileId: String): Map<String, Any>
+    suspend fun getFileMetadata(fileId: String): Map<String, Any>
 
     /**
      * Checks if a file exists.
@@ -80,7 +75,7 @@ interface FileStorageService {
      * @param fileId The ID of the file to check
      * @return True if the file exists, false otherwise
      */
-    fun exists(fileId: String): Boolean
+    suspend fun exists(fileId: String): Boolean
 
     /**
      * Registers a hook for post-processing the file.
@@ -88,5 +83,5 @@ interface FileStorageService {
      *
      * @param hook The hook function to register
      */
-    fun registerPostProcessHook(hook: (String, String) -> Unit)
+    fun registerPostProcessHook(hook: suspend (String, String) -> Unit)
 } 

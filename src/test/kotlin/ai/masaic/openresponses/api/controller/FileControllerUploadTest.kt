@@ -3,8 +3,9 @@ package ai.masaic.openresponses.api.controller
 import ai.masaic.openresponses.api.model.File
 import ai.masaic.openresponses.api.service.FileService
 import com.ninjasquad.springmockk.MockkBean
-import io.mockk.every
-import io.mockk.verify
+import io.mockk.coEvery
+import io.mockk.coVerify
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -30,91 +31,93 @@ class FileControllerUploadTest {
 
     @Test
     @Disabled // TODO: Fix this test
-    fun `uploadFile should return uploaded file on success`() {
-        // Given
-        val fileName = "test.txt"
-        val purpose = "assistants"
-        val fileId = "file-123456"
-        val createdAt = Instant.now().epochSecond
-        val fileContent = "Test content".toByteArray()
+    fun `uploadFile should return uploaded file on success`() =
+        runTest {
+            // Given
+            val fileName = "test.txt"
+            val purpose = "assistants"
+            val fileId = "file-123456"
+            val createdAt = Instant.now().epochSecond
+            val fileContent = "Test content".toByteArray()
         
-        val file =
-            File(
-                id = fileId,
-                filename = fileName,
-                purpose = purpose,
-                bytes = 100,
-                createdAt = createdAt,
-            )
+            val file =
+                File(
+                    id = fileId,
+                    filename = fileName,
+                    purpose = purpose,
+                    bytes = 100,
+                    createdAt = createdAt,
+                )
         
-        every { 
-            fileService.uploadFile(any(), eq(purpose)) 
-        } returns file
+            coEvery { 
+                fileService.uploadFile(any(), eq(purpose)) 
+            } returns file
         
-        val bodyBuilder = MultipartBodyBuilder()
-        bodyBuilder
-            .part("file", fileContent)
-            .filename(fileName)
-            .contentType(MediaType.TEXT_PLAIN)
+            val bodyBuilder = MultipartBodyBuilder()
+            bodyBuilder
+                .part("file", fileContent)
+                .filename(fileName)
+                .contentType(MediaType.TEXT_PLAIN)
         
-        webTestClient
-            .post()
-            .uri { uriBuilder ->
-                uriBuilder
-                    .path("/v1/files")
-                    .queryParam("purpose", purpose)
-                    .build()
-            }.contentType(MediaType.MULTIPART_FORM_DATA)
-            .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
-            .exchange()
-            .expectStatus()
-            .isOk
-            .expectBody()
-            .jsonPath("$.id")
-            .isEqualTo(fileId)
-            .jsonPath("$.filename")
-            .isEqualTo(fileName)
-            .jsonPath("$.purpose")
-            .isEqualTo(purpose)
-            .jsonPath("$.bytes")
-            .isEqualTo(100)
-            .jsonPath("$.created_at")
-            .isEqualTo(createdAt)
+            webTestClient
+                .post()
+                .uri { uriBuilder ->
+                    uriBuilder
+                        .path("/v1/files")
+                        .queryParam("purpose", purpose)
+                        .build()
+                }.contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .exchange()
+                .expectStatus()
+                .isOk
+                .expectBody()
+                .jsonPath("$.id")
+                .isEqualTo(fileId)
+                .jsonPath("$.filename")
+                .isEqualTo(fileName)
+                .jsonPath("$.purpose")
+                .isEqualTo(purpose)
+                .jsonPath("$.bytes")
+                .isEqualTo(100)
+                .jsonPath("$.created_at")
+                .isEqualTo(createdAt)
         
-        verify { fileService.uploadFile(any(), eq(purpose)) }
-    }
+            coVerify { fileService.uploadFile(any(), eq(purpose)) }
+        }
 
     @Test
     @Disabled // TODO: Fix this test
-    fun `uploadFile should return 400 when purpose is invalid`() {
-        // Given
-        val fileName = "test.txt"
-        val purpose = "invalid"
-        val fileContent = "Test content".toByteArray()
+    fun `uploadFile should return 400 when purpose is invalid`() =
+        runTest {
+            // Given
+            val fileName = "test.txt"
+            val purpose = "invalid"
+            val fileContent = "Test content".toByteArray()
         
-        every { 
-            fileService.uploadFile(any(), eq(purpose)) 
-        } throws IllegalArgumentException("Invalid purpose: $purpose")
+            coEvery { 
+                fileService.uploadFile(any(), eq(purpose)) 
+            } throws IllegalArgumentException("Invalid purpose: $purpose")
         
-        val bodyBuilder = MultipartBodyBuilder()
-        bodyBuilder
-            .part("file", fileContent)
-            .filename(fileName)
-            .contentType(MediaType.TEXT_PLAIN)
+            val bodyBuilder = MultipartBodyBuilder()
+            bodyBuilder
+                .part("file", fileContent)
+                .filename(fileName)
+                .contentType(MediaType.TEXT_PLAIN)
         
-        webTestClient
-            .post()
-            .uri { builder ->
-                builder
-                    .path("/v1/files")
-                    .queryParam("purpose", purpose)
-                    .build()
-            }.contentType(MediaType.MULTIPART_FORM_DATA)
-            .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
-            .exchange()
-            .expectStatus()
-            .isBadRequest
+            webTestClient
+                .post()
+                .uri { builder ->
+                    builder
+                        .path("/v1/files")
+                        .queryParam("purpose", purpose)
+                        .build()
+                }.contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(bodyBuilder.build()))
+                .exchange()
+                .expectStatus()
+                .isBadRequest
         
-        verify { fileService.uploadFile(any(), eq(purpose)) }
-    }
+            coVerify { fileService.uploadFile(any(), eq(purpose)) }
+        }
 } 

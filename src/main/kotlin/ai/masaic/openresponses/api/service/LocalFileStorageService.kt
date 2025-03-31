@@ -1,6 +1,10 @@
 package ai.masaic.openresponses.api.service
 
-import jakarta.annotation.PostConstruct
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.Resource
@@ -17,7 +21,7 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.stream.Stream
+import kotlin.streams.asSequence
 
 /**
  * Implementation of FileStorageService that stores files in the local filesystem.
@@ -29,16 +33,15 @@ class LocalFileStorageService(
     private val log = LoggerFactory.getLogger(LocalFileStorageService::class.java)
     private val rootLocation: Path = Paths.get(rootDir)
     private val metadataCache = ConcurrentHashMap<String, MutableMap<String, Any>>()
-    private val postProcessHooks = mutableListOf<(String, String) -> Unit>()
+    private val postProcessHooks = mutableListOf<suspend (String, String) -> Unit>()
 
-    @PostConstruct
-    override fun init() {
+    init {
         try {
             if (!Files.exists(rootLocation)) {
                 Files.createDirectories(rootLocation)
                 log.info("Created file storage directory at {}", rootLocation.toAbsolutePath())
             }
-            
+
             // Create subdirectories for each purpose
             for (purpose in listOf("assistants", "batch", "fine-tune", "vision", "user_data", "evals")) {
                 val purposeDir = rootLocation.resolve(purpose)
@@ -51,151 +54,168 @@ class LocalFileStorageService(
         }
     }
 
-    override fun store(
+    override suspend fun store(
         file: MultipartFile,
         purpose: String,
-    ): String {
-        try {
-            if (file.isEmpty) {
-                throw FileStorageException("Failed to store empty file")
+    ): String =
+        withContext(Dispatchers.IO) {
+            try {
+                if (file.isEmpty) {
+                    throw FileStorageException("Failed to store empty file")
+                }
+            
+                val fileId = "file-" + UUID.randomUUID().toString()
+                val purposeDir = rootLocation.resolve(purpose)
+            
+                if (!Files.exists(purposeDir)) {
+                    Files.createDirectories(purposeDir)
+                }
+            
+                val filePath = purposeDir.resolve(fileId)
+            
+                Files.copy(file.inputStream, filePath, StandardCopyOption.REPLACE_EXISTING)
+            
+                val metadata =
+                    mutableMapOf<String, Any>(
+                        "id" to fileId,
+                        "filename" to (file.originalFilename ?: "unknown"),
+                        "purpose" to purpose,
+                        "bytes" to file.size,
+                        "created_at" to Instant.now().epochSecond,
+                    )
+                metadataCache[fileId] = metadata
+            
+                // Run post-process hooks
+                postProcessHooks.forEach { hook ->
+                    try {
+                        hook(fileId, purpose)
+                    } catch (e: Exception) {
+                        log.error("Error executing post-process hook for file $fileId", e)
+                    }
+                }
+            
+                fileId
+            } catch (e: IOException) {
+                throw FileStorageException("Failed to store file", e)
             }
-            
-            val fileId = "file-" + UUID.randomUUID().toString()
-            val purposeDir = rootLocation.resolve(purpose)
-            
-            if (!Files.exists(purposeDir)) {
-                Files.createDirectories(purposeDir)
+        }
+
+    override fun loadAll(): Flow<Path> =
+        flow {
+            try {
+                Files
+                    .walk(rootLocation, 2)
+                    .filter { path -> Files.isRegularFile(path) }
+                    .asSequence()
+                    .forEach { 
+                        emit(it) 
+                    }
+            } catch (e: IOException) {
+                throw FileStorageException("Failed to read stored files", e)
             }
-            
-            val filePath = purposeDir.resolve(fileId)
-            
-            Files.copy(file.inputStream, filePath, StandardCopyOption.REPLACE_EXISTING)
-            
-            val metadata =
-                mutableMapOf<String, Any>(
-                    "id" to fileId,
-                    "filename" to (file.originalFilename ?: "unknown"),
-                    "purpose" to purpose,
-                    "bytes" to file.size,
-                    "created_at" to Instant.now().epochSecond,
-                )
-            metadataCache[fileId] = metadata
-            
-            // Run post-process hooks
-            postProcessHooks.forEach { hook ->
-                try {
-                    hook(fileId, purpose)
-                } catch (e: Exception) {
-                    log.error("Error executing post-process hook for file $fileId", e)
+        }.flowOn(Dispatchers.IO)
+
+    override fun loadByPurpose(purpose: String): Flow<Path> =
+        flow {
+            try {
+                val purposeDir = rootLocation.resolve(purpose)
+                if (Files.exists(purposeDir)) {
+                    Files
+                        .walk(purposeDir, 1)
+                        .filter { path -> Files.isRegularFile(path) }
+                        .asSequence()
+                        .forEach { 
+                            emit(it) 
+                        }
+                }
+            } catch (e: IOException) {
+                throw FileStorageException("Failed to read stored files for purpose: $purpose", e)
+            }
+        }.flowOn(Dispatchers.IO)
+
+    override suspend fun load(fileId: String): Path =
+        withContext(Dispatchers.IO) {
+            // First, look for the file in all purpose directories
+            for (purpose in listOf("assistants", "batch", "fine-tune", "vision", "user_data", "evals")) {
+                val filePath = rootLocation.resolve(purpose).resolve(fileId)
+                if (Files.exists(filePath)) {
+                    return@withContext filePath
                 }
             }
-            
-            return fileId
-        } catch (e: IOException) {
-            throw FileStorageException("Failed to store file", e)
-        }
-    }
-
-    override fun loadAll(): Stream<Path> =
-        try {
-            Files
-                .walk(rootLocation, 2)
-                .filter { path -> Files.isRegularFile(path) }
-        } catch (e: IOException) {
-            throw FileStorageException("Failed to read stored files", e)
+            throw FileNotFoundException("File not found: $fileId")
         }
 
-    override fun loadByPurpose(purpose: String): Stream<Path> =
-        try {
-            val purposeDir = rootLocation.resolve(purpose)
-            if (Files.exists(purposeDir)) {
-                Files
-                    .walk(purposeDir, 1)
-                    .filter { path -> Files.isRegularFile(path) }
-            } else {
-                Stream.empty()
-            }
-        } catch (e: IOException) {
-            throw FileStorageException("Failed to read stored files for purpose: $purpose", e)
-        }
-
-    override fun load(fileId: String): Path {
-        // First, look for the file in all purpose directories
-        for (purpose in listOf("assistants", "batch", "fine-tune", "vision", "user_data", "evals")) {
-            val filePath = rootLocation.resolve(purpose).resolve(fileId)
-            if (Files.exists(filePath)) {
-                return filePath
+    override suspend fun loadAsResource(fileId: String): Resource =
+        withContext(Dispatchers.IO) {
+            try {
+                val file = load(fileId)
+                val resource = UrlResource(file.toUri())
+                if (resource.exists() || resource.isReadable) {
+                    resource
+                } else {
+                    throw FileNotFoundException("Could not read file: $fileId")
+                }
+            } catch (e: MalformedURLException) {
+                throw FileNotFoundException("Could not read file: $fileId", e)
             }
         }
-        throw FileNotFoundException("File not found: $fileId")
-    }
 
-    override fun loadAsResource(fileId: String): Resource {
-        try {
-            val file = load(fileId)
-            val resource = UrlResource(file.toUri())
-            if (resource.exists() || resource.isReadable) {
-                return resource
-            } else {
-                throw FileNotFoundException("Could not read file: $fileId")
+    override suspend fun delete(fileId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val filePath = load(fileId)
+                metadataCache.remove(fileId)
+                Files.deleteIfExists(filePath)
+            } catch (e: IOException) {
+                log.error("Error deleting file $fileId", e)
+                false
+            } catch (e: FileNotFoundException) {
+                false
             }
-        } catch (e: MalformedURLException) {
-            throw FileNotFoundException("Could not read file: $fileId", e)
         }
-    }
 
-    override fun delete(fileId: String): Boolean {
-        try {
-            val filePath = load(fileId)
-            metadataCache.remove(fileId)
-            return Files.deleteIfExists(filePath)
-        } catch (e: IOException) {
-            log.error("Error deleting file $fileId", e)
-            return false
-        } catch (e: FileNotFoundException) {
-            return false
-        }
-    }
-
-    override fun getFileMetadata(fileId: String): Map<String, Any> {
-        // Return cached metadata if available
-        if (metadataCache.containsKey(fileId)) {
-            return metadataCache[fileId]!!
-        }
+    override suspend fun getFileMetadata(fileId: String): Map<String, Any> =
+        withContext(Dispatchers.IO) {
+            // Return cached metadata if available
+            if (metadataCache.containsKey(fileId)) {
+                return@withContext metadataCache[fileId]!!
+            }
         
-        // Otherwise, load from the file system
-        try {
-            val filePath = load(fileId)
-            val attrs = Files.readAttributes(filePath, BasicFileAttributes::class.java)
-            val fileName = filePath.fileName.toString()
-            val purpose = filePath.parent.fileName.toString()
+            // Otherwise, load from the file system
+            try {
+                val filePath = load(fileId)
+                val attrs = Files.readAttributes(filePath, BasicFileAttributes::class.java)
+                val fileName = filePath.fileName.toString()
+                val purpose = filePath.parent.fileName.toString()
             
-            val metadata =
-                mutableMapOf<String, Any>(
-                    "id" to fileId,
-                    "filename" to fileName,
-                    "purpose" to purpose,
-                    "bytes" to attrs.size(),
-                    "created_at" to attrs.creationTime().toInstant().epochSecond,
-                )
+                val metadata =
+                    mutableMapOf<String, Any>(
+                        "id" to fileId,
+                        "filename" to fileName,
+                        "purpose" to purpose,
+                        "bytes" to attrs.size(),
+                        "created_at" to attrs.creationTime().toInstant().epochSecond,
+                    )
             
-            // Cache for future use
-            metadataCache[fileId] = metadata
-            return metadata
-        } catch (e: IOException) {
-            throw FileNotFoundException("Could not read file metadata: $fileId", e)
-        }
-    }
-
-    override fun exists(fileId: String): Boolean =
-        try {
-            val path = load(fileId)
-            Files.exists(path)
-        } catch (e: Exception) {
-            false
+                // Cache for future use
+                metadataCache[fileId] = metadata
+                metadata
+            } catch (e: IOException) {
+                throw FileNotFoundException("Could not read file metadata: $fileId", e)
+            }
         }
 
-    override fun registerPostProcessHook(hook: (String, String) -> Unit) {
+    override suspend fun exists(fileId: String): Boolean =
+        withContext(Dispatchers.IO) {
+            try {
+                val path = load(fileId)
+                Files.exists(path)
+            } catch (e: Exception) {
+                false
+            }
+        }
+
+    override fun registerPostProcessHook(hook: suspend (String, String) -> Unit) {
         postProcessHooks.add(hook)
     }
 }

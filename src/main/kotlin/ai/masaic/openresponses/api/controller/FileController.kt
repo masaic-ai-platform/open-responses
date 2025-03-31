@@ -51,7 +51,7 @@ class FileController(
             ),
         ],
     )
-    fun uploadFile(
+    suspend fun uploadFile(
         @Parameter(description = "The File object (not file name) to be uploaded", required = true)
         @RequestParam("file") file: MultipartFile,
         @Parameter(
@@ -87,7 +87,7 @@ class FileController(
             ),
         ],
     )
-    fun listFiles(
+    suspend fun listFiles(
         @Parameter(description = "A cursor for use in pagination")
         @RequestParam(required = false) after: String?,
         @Parameter(description = "A limit on the number of objects to be returned (1-10000)")
@@ -121,7 +121,7 @@ class FileController(
             ),
         ],
     )
-    fun getFile(
+    suspend fun getFile(
         @Parameter(description = "The ID of the file to use for this request", required = true)
         @PathVariable("file_id") fileId: String,
     ): ResponseEntity<File> {
@@ -151,7 +151,7 @@ class FileController(
             ),
         ],
     )
-    fun deleteFile(
+    suspend fun deleteFile(
         @Parameter(description = "The ID of the file to use for this request", required = true)
         @PathVariable("file_id") fileId: String,
     ): ResponseEntity<FileDeleteResponse> {
@@ -180,7 +180,7 @@ class FileController(
             ),
         ],
     )
-    fun getFileContent(
+    suspend fun getFileContent(
         @Parameter(description = "The ID of the file to use for this request", required = true)
         @PathVariable("file_id") fileId: String,
     ): ResponseEntity<Resource> {

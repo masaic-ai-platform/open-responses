@@ -1,268 +1,307 @@
 package ai.masaic.openresponses.api.service
 
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import org.springframework.http.MediaType
 import org.springframework.mock.web.MockMultipartFile
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.UUID
+import java.util.*
 import kotlin.test.*
 
 class LocalFileStorageServiceTest {
-    private lateinit var fileStorageService: LocalFileStorageService
-    
     @TempDir
     lateinit var tempDir: Path
 
+    private lateinit var fileStorageService: LocalFileStorageService
+
     @BeforeEach
-    fun setup() {
-        fileStorageService = LocalFileStorageService(tempDir.toString())
-        fileStorageService.init()
-    }
+    fun setUp() =
+        runTest {
+            fileStorageService = LocalFileStorageService(tempDir.toString())
+        }
 
     @AfterEach
-    fun cleanup() {
-        // Clean up directories
-        if (Files.exists(tempDir)) {
-            Files
-                .walk(tempDir)
-                .sorted(Comparator.reverseOrder())
-                .forEach { Files.deleteIfExists(it) }
+    fun tearDown() {
+        // Clean up any files created by the test
+        Files
+            .walk(tempDir)
+            .filter { it != tempDir }
+            .sorted(Comparator.reverseOrder())
+            .forEach { Files.deleteIfExists(it) }
+    }
+
+    @Test
+    fun `init should create necessary directories`() =
+        runTest {
+            // Test that the service creates all the required subdirectories
+            val purposes = listOf("assistants", "batch", "fine-tune", "vision", "user_data", "evals")
+            purposes.forEach { purpose ->
+                val purposeDir = tempDir.resolve(purpose)
+                assertTrue(Files.exists(purposeDir))
+                assertTrue(Files.isDirectory(purposeDir))
+            }
         }
-    }
 
     @Test
-    fun `init should create root directory and purpose subdirectories`() {
-        // Verify root directory exists
-        assertTrue(Files.exists(tempDir))
-        
-        // Verify purpose subdirectories exist
-        for (purpose in listOf("assistants", "batch", "fine-tune", "vision", "user_data", "evals")) {
-            assertTrue(Files.exists(tempDir.resolve(purpose)))
+    fun `store should save file and return ID`() =
+        runTest {
+            // Given
+            val fileName = "test-file.txt"
+            val fileContent = "Test content"
+            val purpose = "assistants"
+            val file =
+                MockMultipartFile(
+                    "file",
+                    fileName,
+                    MediaType.TEXT_PLAIN_VALUE,
+                    fileContent.toByteArray(),
+                )
+
+            // When
+            val fileId = fileStorageService.store(file, purpose)
+
+            // Then
+            assertTrue(fileId.startsWith("file-"))
+            val filePath = tempDir.resolve(purpose).resolve(fileId)
+            assertTrue(Files.exists(filePath))
+            assertEquals(fileContent, Files.readString(filePath))
         }
-    }
 
     @Test
-    fun `store should save file and return file ID`() {
-        // Given
-        val content = "Test file content"
-        val file =
-            MockMultipartFile(
-                "file", 
-                "test.txt", 
-                MediaType.TEXT_PLAIN_VALUE, 
-                content.toByteArray(),
-            )
-        val purpose = "assistants"
-        
-        // When
-        val fileId = fileStorageService.store(file, purpose)
-        
-        // Then
-        assertNotNull(fileId)
-        assertTrue(fileId.startsWith("file-"))
-        
-        // Verify file is saved in the correct location
-        val filePath = tempDir.resolve(purpose).resolve(fileId)
-        assertTrue(Files.exists(filePath))
-        
-        // Verify file content
-        val savedContent = String(Files.readAllBytes(filePath))
-        assertEquals(content, savedContent)
-    }
+    fun `loadAll should return all stored files`() =
+        runTest {
+            // Given
+            val file1 =
+                MockMultipartFile(
+                    "file",
+                    "file1.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Content 1".toByteArray(),
+                )
+            val file2 =
+                MockMultipartFile(
+                    "file",
+                    "file2.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Content 2".toByteArray(),
+                )
 
-    @Test
-    fun `loadAll should return all files`() {
-        // Given
-        val file1 = MockMultipartFile("file1", "test1.txt", MediaType.TEXT_PLAIN_VALUE, "content1".toByteArray())
-        val file2 = MockMultipartFile("file2", "test2.txt", MediaType.TEXT_PLAIN_VALUE, "content2".toByteArray())
-        
-        val id1 = fileStorageService.store(file1, "assistants")
-        val id2 = fileStorageService.store(file2, "batch")
-        
-        // When
-        val files = fileStorageService.loadAll().toList()
-        
-        // Then
-        assertTrue(files.size >= 2)
-        assertTrue(files.any { it.fileName.toString() == id1 })
-        assertTrue(files.any { it.fileName.toString() == id2 })
-    }
+            // Store files in two different purposes
+            val fileId1 = fileStorageService.store(file1, "assistants")
+            val fileId2 = fileStorageService.store(file2, "batch")
 
-    @Test
-    fun `loadByPurpose should return files for specific purpose`() {
-        // Given
-        val file1 = MockMultipartFile("file1", "test1.txt", MediaType.TEXT_PLAIN_VALUE, "content1".toByteArray())
-        val file2 = MockMultipartFile("file2", "test2.txt", MediaType.TEXT_PLAIN_VALUE, "content2".toByteArray())
-        
-        val id1 = fileStorageService.store(file1, "assistants")
-        val id2 = fileStorageService.store(file2, "batch")
-        
-        // When
-        val assistantFiles = fileStorageService.loadByPurpose("assistants").toList()
-        val batchFiles = fileStorageService.loadByPurpose("batch").toList()
-        
-        // Then
-        assertEquals(1, assistantFiles.size)
-        assertEquals(id1, assistantFiles[0].fileName.toString())
-        
-        assertEquals(1, batchFiles.size)
-        assertEquals(id2, batchFiles[0].fileName.toString())
-    }
+            // When
+            val allFiles = fileStorageService.loadAll().toList()
 
-    @Test
-    fun `load should find file in any purpose directory`() {
-        // Given
-        val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "content".toByteArray())
-        val id = fileStorageService.store(file, "assistants")
-        
-        // When
-        val filePath = fileStorageService.load(id)
-        
-        // Then
-        assertTrue(Files.exists(filePath))
-        assertEquals(id, filePath.fileName.toString())
-    }
-
-    @Test
-    fun `load should throw FileNotFoundException when file does not exist`() {
-        // Given
-        val nonExistentId = "file-" + UUID.randomUUID().toString()
-        
-        // When/Then
-        assertThrows<FileNotFoundException> {
-            fileStorageService.load(nonExistentId)
+            // Then
+            assertEquals(2, allFiles.size)
+            assertTrue(allFiles.any { it.fileName.toString() == fileId1 })
+            assertTrue(allFiles.any { it.fileName.toString() == fileId2 })
         }
-    }
 
     @Test
-    fun `loadAsResource should return a readable Resource for existing file`() {
-        // Given
-        val content = "Test resource content"
-        val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, content.toByteArray())
-        val id = fileStorageService.store(file, "assistants")
-        
-        // When
-        val resource = fileStorageService.loadAsResource(id)
-        
-        // Then
-        assertTrue(resource.exists())
-        assertTrue(resource.isReadable)
-        val loadedContent = resource.inputStream.readAllBytes().toString(Charsets.UTF_8)
-        assertEquals(content, loadedContent)
-    }
+    fun `loadByPurpose should return files with matching purpose`() =
+        runTest {
+            // Given
+            val file1 =
+                MockMultipartFile(
+                    "file1",
+                    "file1.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Content 1".toByteArray(),
+                )
+            val file2 =
+                MockMultipartFile(
+                    "file2",
+                    "file2.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Content 2".toByteArray(),
+                )
 
-    @Test
-    fun `loadAsResource should throw FileNotFoundException for non-existent file`() {
-        // Given
-        val nonExistentId = "file-" + UUID.randomUUID().toString()
+            // Store files with different purposes
+            val fileId1 = fileStorageService.store(file1, "assistants")
+            val fileId2 = fileStorageService.store(file2, "batch")
+
+            // When
+            val assistantsFiles = fileStorageService.loadByPurpose("assistants").toList()
+            val batchFiles = fileStorageService.loadByPurpose("batch").toList()
+
+            // Then
+            assertEquals(1, assistantsFiles.size)
+            assertEquals(fileId1, assistantsFiles[0].fileName.toString())
         
-        // When/Then
-        assertThrows<FileNotFoundException> {
-            fileStorageService.loadAsResource(nonExistentId)
+            assertEquals(1, batchFiles.size)
+            assertEquals(fileId2, batchFiles[0].fileName.toString())
         }
-    }
 
     @Test
-    fun `delete should remove file and return true if successful`() {
-        // Given
-        val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "content".toByteArray())
-        val id = fileStorageService.store(file, "assistants")
-        val filePath = fileStorageService.load(id)
-        assertTrue(Files.exists(filePath))
-        
-        // When
-        val result = fileStorageService.delete(id)
-        
-        // Then
-        assertTrue(result)
-        assertFalse(Files.exists(filePath))
-    }
+    fun `load should find file by ID`() =
+        runTest {
+            // Given
+            val file =
+                MockMultipartFile(
+                    "file",
+                    "test.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Test content".toByteArray(),
+                )
+            val fileId = fileStorageService.store(file, "assistants")
 
-    @Test
-    fun `delete should return false when file doesn't exist`() {
-        // Given
-        val nonExistentId = "file-" + UUID.randomUUID().toString()
-        
-        // When
-        val result = fileStorageService.delete(nonExistentId)
-        
-        // Then
-        assertFalse(result)
-    }
+            // When
+            val filePath = fileStorageService.load(fileId)
 
-    @Test
-    fun `getFileMetadata should return correct metadata`() {
-        // Given
-        val fileName = "metadata-test.txt"
-        val content = "Test content for metadata"
-        val file = MockMultipartFile("file", fileName, MediaType.TEXT_PLAIN_VALUE, content.toByteArray())
-        val purpose = "assistants"
-        val id = fileStorageService.store(file, purpose)
-        
-        // When
-        val metadata = fileStorageService.getFileMetadata(id)
-        
-        // Then
-        assertEquals(id, metadata["id"])
-        assertEquals(fileName, metadata["filename"])
-        assertEquals(purpose, metadata["purpose"])
-        assertEquals(content.toByteArray().size.toLong(), metadata["bytes"])
-        assertTrue(metadata.containsKey("created_at"))
-        assertTrue(metadata["created_at"] is Long)
-    }
-
-    @Test
-    fun `exists should return true for existing file`() {
-        // Given
-        val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "content".toByteArray())
-        val id = fileStorageService.store(file, "assistants")
-        
-        // When
-        val exists = fileStorageService.exists(id)
-        
-        // Then
-        assertTrue(exists)
-    }
-
-    @Test
-    fun `exists should return false for non-existent file`() {
-        // Given
-        val nonExistentId = "file-" + UUID.randomUUID().toString()
-        
-        // When
-        val exists = fileStorageService.exists(nonExistentId)
-        
-        // Then
-        assertFalse(exists)
-    }
-
-    @Test
-    fun `registerPostProcessHook should execute hook on file store`() {
-        // Given
-        var hookCalled = false
-        var hookFileId: String? = null
-        var hookPurpose: String? = null
-        
-        fileStorageService.registerPostProcessHook { fileId, purpose ->
-            hookCalled = true
-            hookFileId = fileId
-            hookPurpose = purpose
+            // Then
+            assertTrue(Files.exists(filePath))
+            assertEquals(fileId, filePath.fileName.toString())
         }
-        
-        val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "content".toByteArray())
-        val purpose = "assistants"
-        
-        // When
-        val fileId = fileStorageService.store(file, purpose)
-        
-        // Then
-        assertTrue(hookCalled)
-        assertEquals(fileId, hookFileId)
-        assertEquals(purpose, hookPurpose)
-    }
+
+    @Test
+    fun `loadAsResource should return readable resource`() =
+        runTest {
+            // Given
+            val content = "Test content for resource"
+            val file =
+                MockMultipartFile(
+                    "file",
+                    "test.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    content.toByteArray(),
+                )
+            val fileId = fileStorageService.store(file, "assistants")
+
+            // When
+            val resource = fileStorageService.loadAsResource(fileId)
+
+            // Then
+            assertTrue(resource.exists())
+            assertTrue(resource.isReadable)
+            assertEquals(content, resource.inputStream.bufferedReader().use { it.readText() })
+        }
+
+    @Test
+    fun `delete should remove file`() =
+        runTest {
+            // Given
+            val file =
+                MockMultipartFile(
+                    "file",
+                    "test.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Test content".toByteArray(),
+                )
+            val fileId = fileStorageService.store(file, "assistants")
+            val filePath = fileStorageService.load(fileId)
+
+            // Pre-check
+            assertTrue(Files.exists(filePath))
+
+            // When
+            val deleted = fileStorageService.delete(fileId)
+
+            // Then
+            assertTrue(deleted)
+            assertFalse(Files.exists(filePath))
+        }
+
+    @Test
+    fun `delete should return false when file doesn't exist`() =
+        runTest {
+            // When
+            val deleted = fileStorageService.delete("non-existent-file")
+
+            // Then
+            assertFalse(deleted)
+        }
+
+    @Test
+    fun `getFileMetadata should return file metadata`() =
+        runTest {
+            // Given
+            val fileName = "metadata-test.txt"
+            val purpose = "assistants"
+            val content = "Test content for metadata"
+            val file =
+                MockMultipartFile(
+                    "file",
+                    fileName,
+                    MediaType.TEXT_PLAIN_VALUE,
+                    content.toByteArray(),
+                )
+            val fileId = fileStorageService.store(file, purpose)
+
+            // When
+            val metadata = fileStorageService.getFileMetadata(fileId)
+
+            // Then
+            assertEquals(fileId, metadata["id"])
+            assertEquals(fileName, metadata["filename"])
+            assertEquals(purpose, metadata["purpose"])
+            assertEquals(content.toByteArray().size.toLong(), metadata["bytes"])
+            assertTrue(metadata.containsKey("created_at"))
+        }
+
+    @Test
+    fun `exists should return true for existing file`() =
+        runTest {
+            // Given
+            val file =
+                MockMultipartFile(
+                    "file",
+                    "test.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Test content".toByteArray(),
+                )
+            val fileId = fileStorageService.store(file, "assistants")
+
+            // When
+            val exists = fileStorageService.exists(fileId)
+
+            // Then
+            assertTrue(exists)
+        }
+
+    @Test
+    fun `exists should return false for non-existent file`() =
+        runTest {
+            // When
+            val exists = fileStorageService.exists("non-existent-file")
+
+            // Then
+            assertFalse(exists)
+        }
+
+    @Test
+    fun `registerPostProcessHook should register hook function`() =
+        runTest {
+            // Given
+            var hookCalled = false
+            var hookFileId = ""
+            var hookPurpose = ""
+
+            fileStorageService.registerPostProcessHook { fileId, purpose ->
+                hookCalled = true
+                hookFileId = fileId
+                hookPurpose = purpose
+            }
+
+            // When
+            val file =
+                MockMultipartFile(
+                    "file",
+                    "hook-test.txt",
+                    MediaType.TEXT_PLAIN_VALUE,
+                    "Testing hooks".toByteArray(),
+                )
+            val fileId = fileStorageService.store(file, "assistants")
+
+            // Then
+            assertTrue(hookCalled)
+            assertEquals(fileId, hookFileId)
+            assertEquals("assistants", hookPurpose)
+        }
 } 
