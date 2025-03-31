@@ -1,6 +1,7 @@
 package ai.masaic.openresponses
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
 
 /**
@@ -8,8 +9,10 @@ import org.springframework.boot.runApplication
  *
  * This class serves as the entry point for the application and is annotated with
  * [SpringBootApplication] to enable Spring Boot's auto-configuration.
+ * It also scans for configuration properties classes using [ConfigurationPropertiesScan].
  */
 @SpringBootApplication
+@ConfigurationPropertiesScan
 class OpenResponsesApplication
 
 /**

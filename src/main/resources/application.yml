@@ -1,0 +1,24 @@
+app:
+  # Embedding model configuration
+  embeddings:
+    model-type: all-minilm-l6-v2 #onnx or all-minilm-l6-v2 supported
+    # For custom ONNX models
+    # onnx-model-path: /path/to/model_quantized.onnx
+    # tokenizer-path: /path/to/tokenizer.json
+    # pooling-mode: mean
+  
+  # Vector store configuration
+  vector-store:
+    # Provider to use: in-memory or qdrant
+    provider: in-memory
+    # Text chunking configuration
+    chunk-size: 1000
+    chunk-overlap: 200
+    
+    # Qdrant configuration (used when provider is 'qdrant')
+    qdrant:
+      host: localhost
+      port: 6334
+      use-tls: false
+      collection-name: masaic-documents
+      min-score: 0.7 
