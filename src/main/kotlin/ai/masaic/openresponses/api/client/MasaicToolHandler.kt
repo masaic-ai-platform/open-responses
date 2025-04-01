@@ -1,18 +1,14 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolService
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
-import io.opentelemetry.api.OpenTelemetry
-import io.opentelemetry.api.common.AttributeKey
-import io.opentelemetry.api.trace.SpanKind
-import io.opentelemetry.api.trace.StatusCode
-import io.opentelemetry.api.trace.Tracer
-import io.opentelemetry.context.Context
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
-import java.util.UUID
+import java.util.*
 
 /**
  * Handles tool-related operations for the Masaic OpenAI API integration.
@@ -21,22 +17,13 @@ import java.util.UUID
 @Component
 class MasaicToolHandler(
     private val toolService: ToolService,
-    private val openTelemetry: OpenTelemetry,
+    private val telemetryService: TelemetryService,
 ) {
     private val logger = KotlinLogging.logger {}
-    private val tracer: Tracer = openTelemetry.getTracer("ai.masaic.openresponses.api.client")
-
-    // Constants for GenAI tool span attributes
-    private object GenAiAttributes {
-        val OPERATION_NAME = AttributeKey.stringKey("gen_ai.operation.name")
-        val TOOL_NAME = AttributeKey.stringKey("gen_ai.tool.name")
-        val TOOL_CALL_ID = AttributeKey.stringKey("gen_ai.tool.call.id")
-        val ERROR_TYPE = AttributeKey.stringKey("error.type")
-    }
 
     /**
      * Processes tool calls from a chat completion and executes relevant tools.
-     * Each tool execution is recorded as a span following GenAI semantics.
+     * Each tool execution is recorded using the telemetry observation API.
      *
      * @param chatCompletion The ChatCompletion containing potential tool calls
      * @param params The original request parameters
@@ -85,7 +72,7 @@ class MasaicToolHandler(
                                         ResponseOutputText
                                             .builder()
                                             .text(it.message().content().get())
-                                            .annotations(listOf())
+                                            .annotations(emptyList())
                                             .build(),
                                     ),
                                 ),
@@ -97,17 +84,18 @@ class MasaicToolHandler(
                 )
             }
 
-        // Process tool calls
+        // Process tool calls from the ChatCompletion
         chatCompletion.choices().forEach { chatChoice ->
             if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
                 val message = chatChoice.message()
-                logger.debug { "Processing ${message.toolCalls().get().size} tool calls" }
+                val toolCalls = message.toolCalls().get()
+                logger.debug { "Processing ${toolCalls.size} tool calls" }
 
-                message.toolCalls().get().forEach { tool ->
+                toolCalls.forEach { tool ->
                     val function = tool.function()
                     if (toolService.getFunctionTool(function.name()) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
-                        
+
                         // Add the function call to response items
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCall(
@@ -121,8 +109,8 @@ class MasaicToolHandler(
                             ),
                         )
 
-                        // Execute the tool with span tracking
-                        executeToolWithSpan(function.name(), function.arguments(), tool.id()) { toolResult ->
+                        // Execute the tool using the observation API
+                        executeToolWithObservation(function.name(), function.arguments(), tool.id()) { toolResult ->
                             if (toolResult != null) {
                                 logger.debug { "Tool execution successful for ${function.name()}" }
                                 responseInputItems.add(
@@ -141,7 +129,6 @@ class MasaicToolHandler(
                         }
                     } else {
                         logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
-                        // For unsupported tools, park them for client handling
                         parked.add(
                             ResponseInputItem.ofFunctionCall(
                                 ResponseFunctionToolCall
@@ -158,66 +145,42 @@ class MasaicToolHandler(
             }
         }
 
-        // Add all parked items to the end
         logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
-
         return responseInputItems
     }
 
     /**
-     * Executes a tool within a span context and handles the result with the provided callback.
-     * 
+     * Executes a tool using the telemetry observation API and processes the result with the provided callback.
+     *
      * @param toolName The name of the tool to execute
      * @param arguments The arguments to pass to the tool
      * @param toolId The ID of the tool call
      * @param resultHandler A function that processes the tool execution result
      */
-    private fun executeToolWithSpan(
+    private fun executeToolWithObservation(
         toolName: String,
         arguments: String,
         toolId: String,
         resultHandler: (String?) -> Unit,
     ) {
-        // Create a span for tool execution following GenAI semantics
-        val span =
-            tracer
-                .spanBuilder("builtin_execute_tool")
-                .setParent(Context.current())
-                .setSpanKind(SpanKind.INTERNAL)
-                .startSpan()
-        
-        try {
-            // Set required span attributes according to GenAI span semantics
-            span.setAttribute(GenAiAttributes.OPERATION_NAME, "execute_tool")
-            span.setAttribute(GenAiAttributes.TOOL_NAME, toolName)
-            span.setAttribute(GenAiAttributes.TOOL_CALL_ID, toolId)
-            
-            // Execute the tool
-            val toolResult = toolService.executeTool(toolName, arguments)
-            
-            // Set span status based on result
-            if (toolResult != null) {
-                span.setStatus(StatusCode.OK)
-            } else {
-                span.setStatus(StatusCode.ERROR)
-                span.setAttribute(GenAiAttributes.ERROR_TYPE, "tool_execution_null_result")
+        telemetryService.withClientObservation("builtin_tool_execute") { observation ->
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
+            try {
+                val toolResult = toolService.executeTool(toolName, arguments)
+                resultHandler(toolResult)
+            } catch (e: Exception) {
+                observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
+                logger.error(e) { "Error executing tool $toolName: ${e.message}" }
+                throw e
             }
-            
-            // Process the result with the provided handler
-            resultHandler(toolResult)
-        } catch (e: Exception) {
-            span.setStatus(StatusCode.ERROR)
-            span.setAttribute(GenAiAttributes.ERROR_TYPE, "${e.javaClass.simpleName}; ${e.message}")
-            logger.error(e) { "Error executing tool $toolName: ${e.message}" }
-            throw e
-        } finally {
-            span.end()
         }
     }
 
     /**
-     * Processes tool calls from a response and executes relevant tools.
+     * Processes tool calls from a Response and executes relevant tools.
      *
      * @param params The original request parameters
      * @param response The Response object containing potential tool calls
@@ -242,7 +205,6 @@ class MasaicToolHandler(
                     ),
                 )
             }
-
         val parked = mutableListOf<ResponseInputItem>()
 
         // Add message outputs to parked items
@@ -260,16 +222,14 @@ class MasaicToolHandler(
             parked.add(ResponseInputItem.ofResponseOutputMessage(it.asMessage()))
         }
 
-        // Process function calls
+        // Process function calls from the response
         val functionCalls = response.output().filter { it.isFunctionCall() }
         logger.debug { "Processing ${functionCalls.size} function calls" }
 
         functionCalls.forEach { tool ->
             val function = tool.asFunctionCall()
-
             if (toolService.getFunctionTool(function.name()) != null) {
                 logger.info { "Executing tool: ${function.name()} with ID: ${function.id()}" }
-                // Add the function call to response items
                 responseInputItems.add(
                     ResponseInputItem.ofFunctionCall(
                         ResponseFunctionToolCall
@@ -281,9 +241,7 @@ class MasaicToolHandler(
                             .build(),
                     ),
                 )
-
-                // Execute the tool with span tracking
-                executeToolWithSpan(function.name(), function.arguments(), function.id()) { toolResult ->
+                executeToolWithObservation(function.name(), function.arguments(), function.id()) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(
@@ -302,7 +260,6 @@ class MasaicToolHandler(
                 }
             } else {
                 logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
-                // For unsupported tools, park them for client handling
                 parked.add(
                     ResponseInputItem.ofFunctionCall(
                         ResponseFunctionToolCall
@@ -317,10 +274,8 @@ class MasaicToolHandler(
             }
         }
 
-        // Add all parked items to the end
         logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
-
         return responseInputItems
     }
-} 
+}
