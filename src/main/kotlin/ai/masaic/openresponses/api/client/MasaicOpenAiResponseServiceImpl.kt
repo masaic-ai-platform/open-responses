@@ -153,50 +153,40 @@ class MasaicOpenAiResponseServiceImpl(
         return create(client, updatedParams, metadata)
     }
 
-
-    private fun emitModelInputEvents(observation: Observation, inputParams: ChatCompletionCreateParams, metadata: CreateResponseMetadataInput) {
+    private fun emitModelInputEvents(
+        observation: Observation,
+        inputParams: ChatCompletionCreateParams,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        val mapper = jsonMapper()
         inputParams.messages().forEach { message ->
-            if (message.isUser()) {
-                val eventData = mapOf(
-                    "gen_ai.system" to metadata.genAISystem,
-                    "role" to "user",
-                    "content" to message.user().get().content()
-                )
-                observation.event(
-                    Observation.Event.of(
-                        "gen_ai.user.message",
-                        jsonMapper().writeValueAsString(eventData)
-                    )
-                )
-            }
+            val (role, eventName, content) =
+                when {
+                    message.isUser() ->
+                        Triple("user", "gen_ai.user.message", message.user().get().content())
+                    message.isAssistant() &&
+                        message
+                            .assistant()
+                            .get()
+                            .content()
+                            .isPresent ->
+                        Triple("assistant", "gen_ai.assistant.system", message.assistant().get().content())
+                    message.isSystem() && message.system().isPresent ->
+                        Triple("system", "gen_ai.system.message", message.system().get().content())
+                    message.isDeveloper() && message.developer().isPresent ->
+                        Triple("system", "gen_ai.system.message", message.developer().get().content())
+                    else -> null
+                } ?: return@forEach
 
-            if ((message.isSystem() && message.system().isPresent) ||  (message.isDeveloper() && message.developer().isPresent)) {
-                val eventData = mapOf(
+            val eventData =
+                mapOf(
                     "gen_ai.system" to metadata.genAISystem,
-                    "role" to "system",
-                    "content" to message.system().get().content()
+                    "role" to role,
+                    "content" to content,
                 )
-                observation.event(
-                    Observation.Event.of(
-                        "gen_ai.system.message",
-                        jsonMapper().writeValueAsString(eventData)
-                    )
-                )
-            }
-
-            if (message.isAssistant() && message.assistant().get().content().isPresent) {
-                val eventData = mapOf(
-                    "gen_ai.system" to metadata.genAISystem,
-                    "role" to "assistant",
-                    "content" to message.assistant().get().content()
-                )
-                observation.event(
-                    Observation.Event.of(
-                        "gen_ai.assistant.system",
-                        jsonMapper().writeValueAsString(eventData)
-                    )
-                )
-            }
+            observation.event(
+                Observation.Event.of(eventName, mapper.writeValueAsString(eventData)),
+            )
         }
     }
 
@@ -206,62 +196,51 @@ class MasaicOpenAiResponseServiceImpl(
         metadata: CreateResponseMetadataInput,
     ) {
         chatCompletion.choices().forEach { choice ->
-            if(choice.message().content().isPresent) {
-                val message = mapOf(
-                    "role" to "assistant",
-                    "content" to choice.message().content().get()
-                )
+            if (choice.message().content().isPresent) {
+                val message =
+                    mapOf(
+                        "role" to "assistant",
+                        "content" to choice.message().content().get(),
+                    )
 
-                val eventData = mapOf(
-                    "gen_ai.system" to metadata.genAISystem,
-                    "role" to "assistant",
-                    "content" to choice.message().content().get()
-                )
+                val eventData =
+                    mapOf(
+                        "gen_ai.system" to metadata.genAISystem,
+                        "role" to "assistant",
+                        "content" to choice.message().content().get(),
+                    )
                 observation.event(
                     Observation.Event.of(
                         "gen_ai.assistant.system",
-                        jsonMapper().writeValueAsString(eventData)
-                    )
+                        jsonMapper().writeValueAsString(eventData),
+                    ),
                 )
             }
 
             val toolCalls = mutableListOf<Any>()
-            if(choice.finishReason().asString() == "tool_calls") {
+            if (choice.finishReason().asString() == "tool_calls") {
                 choice.message().toolCalls().get().forEach { tool ->
-                    val functionMap = mapOf(
-                        "id" to tool.id(),
-                        "type" to "function",
-                        "function" to jsonMapper().writeValueAsString(mapOf("name" to tool.function().name() to "arguments" to tool.function().arguments()))
-                    )
+                    val functionMap =
+                        mapOf(
+                            "id" to tool.id(),
+                            "type" to "function",
+                            "function" to jsonMapper().writeValueAsString(mapOf("name" to tool.function().name() to "arguments" to tool.function().arguments())),
+                        )
                     toolCalls.add(functionMap)
                 }
-                val eventData = mapOf(
-                    "gen_ai.system" to metadata.genAISystem,
-                    "finish_reason" to choice.finishReason().asString(),
-                    "index" to choice.index(),
-                    "tool_calls" to jsonMapper().writeValueAsString(toolCalls)
-                )
+                val eventData =
+                    mapOf(
+                        "gen_ai.system" to metadata.genAISystem,
+                        "finish_reason" to choice.finishReason().asString(),
+                        "index" to choice.index(),
+                        "tool_calls" to jsonMapper().writeValueAsString(toolCalls),
+                    )
                 observation.event(
                     Observation.Event.of(
                         "gen_ai.assistant.system",
-                        jsonMapper().writeValueAsString(eventData)
-                    )
+                        jsonMapper().writeValueAsString(eventData),
+                    ),
                 )
-            }
-        }
-
-    }
-
-    /**
-     * Gets message content based on content capturing settings.
-     */
-    private fun getMessageContent(message: ResponseInputItem.Message): String {
-        // Convert the content parts to a string representation
-        return message.content().joinToString(" ") { content ->
-            when {
-                content.isInputText() -> content.asInputText().text()
-                // Handle other content types as needed
-                else -> "[non-text content]"
             }
         }
     }
