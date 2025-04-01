@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
@@ -239,6 +240,7 @@ data class ResponseInputItemList(
  * @property status Status of the message
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class InputMessageItem(
     @JsonProperty("role")
     val role: String? = null,
@@ -259,7 +261,7 @@ data class InputMessageItem(
     @JsonProperty("output")
     val output: String? = null,
     @JsonProperty("status")
-    val status: String? = null,
+    val status: String = "completed", // Note: This value is not returned by completion API, so we will assume completed.
     @JsonProperty("created_at")
     val createdAt: BigDecimal? = BigDecimal.valueOf(Instant.now().toEpochMilli()),
 ) {
@@ -288,6 +290,7 @@ data class InputMessageItem(
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class InputMessageItemContent(
     val text: String? = null,
