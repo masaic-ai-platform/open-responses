@@ -62,6 +62,39 @@ Both storage implementations manage:
 - Input message items associated with each response
 - Automatic serialization/deserialization of response data
 
+## API Examples
+
+### Storing Responses
+
+To store a response (setting `store=true` in the request):
+
+```bash
+curl <open-responses-base-url>/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-4o",
+    "input": "Tell me a three sentence bedtime story about a unicorn.",
+    "store": true
+  }'
+```
+
+### Using Stored Responses
+
+To reference a previously stored response with `previous_response_id`:
+
+```bash
+curl <open-responses-base-url>/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-4o",
+    "previous_response_id": "resp_abc123",
+    "input": [{"role": "user", "content": "Make the story longer."}],
+    "store": true
+  }'
+```
+
 ## Usage Example
 
 The application automatically selects the appropriate store implementation based on your configuration. The `ResponseStore` interface is injected where needed, allowing the application to work with either implementation transparently.
