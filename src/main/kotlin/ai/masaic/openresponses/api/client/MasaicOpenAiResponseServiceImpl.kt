@@ -83,14 +83,13 @@ class MasaicOpenAiResponseServiceImpl(
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
                 telemetryService.emitModelOutputEvents(observation, chatCompletions, metadata)
                 telemetryService.setAllObservationAttributes(observation, chatCompletions, params, metadata)
+                telemetryService.recordTokenUsage(metadata, chatCompletions, params, "input", chatCompletions.usage().get().promptTokens())
+                telemetryService.recordTokenUsage(metadata, chatCompletions, params, "output", chatCompletions.usage().get().completionTokens())
 
                 if (!hasToolCalls(chatCompletions)) {
                     logger.info { "No tool calls detected, returning direct response" }
                     return@withClientObservation chatCompletions.toResponse(params)
                 }
-
-                telemetryService.recordTokenUsage(metadata, chatCompletions, params, "input", chatCompletions.usage().get().promptTokens())
-                telemetryService.recordTokenUsage(metadata, chatCompletions, params, "output", chatCompletions.usage().get().completionTokens())
 
                 chatCompletions
             }
@@ -118,26 +117,6 @@ class MasaicOpenAiResponseServiceImpl(
         }
 
         return create(client, updatedParams, metadata)
-    }
-
-    // Updated finish reasons function using observation instead of span
-    private fun setFinishReasons(
-        observation: Observation,
-        chatCompletion: ChatCompletion,
-    ) {
-        val finishReasons =
-            chatCompletion
-                .choices()
-                .mapNotNull {
-                    it
-                        .finishReason()
-                        .value()
-                        ?.name
-                        ?.lowercase()
-                }.distinct()
-        if (finishReasons.isNotEmpty()) {
-            observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_FINISH_REASONS, finishReasons.joinToString(","))
-        }
     }
 
     /**

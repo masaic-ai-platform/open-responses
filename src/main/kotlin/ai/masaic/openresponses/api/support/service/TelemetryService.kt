@@ -205,12 +205,12 @@ class TelemetryService(
                     GenAIObsAttributes.OPERATION_NAME,
                     "chat",
                     GenAIObsAttributes.SYSTEM,
-                    metadata.genAISystem,
+                    metadata.genAISystem ?: "not_available",
                     "gen_ai.token.type",
                     tokenType,
                 )
         params.model().let { summaryBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, it.value().name) }
-        chatCompletion.model().let { summaryBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, it) }
+        chatCompletion.model().let { summaryBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, it ?: "not_available") }
         summaryBuilder.tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
         val summary = summaryBuilder.register(meterRegistry)
         summary.record(tokenCount.toDouble())

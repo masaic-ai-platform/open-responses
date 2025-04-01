@@ -11,12 +11,10 @@ receivers:
           allowed_headers:
             - "*"
 
-
 processors:
   batch:
     timeout: 1s
     send_batch_size: 1024
-
 
 exporters:
   zipkin:
@@ -29,11 +27,9 @@ exporters:
     verbosity: detailed
   prometheus:
     endpoint: "0.0.0.0:8889"
-    namespace: "otel"
     const_labels:
       label1: value1
     send_timestamps: true
-
 
 extensions:
   health_check:

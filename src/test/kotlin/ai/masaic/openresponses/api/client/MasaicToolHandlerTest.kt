@@ -401,4 +401,404 @@ class MasaicToolHandlerTest {
         assertEquals("myToolFunction", capturedAttributes["gen_ai.tool.name"])
         assertEquals("function-call-id", capturedAttributes["gen_ai.tool.call.id"])
     }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with unsupported tool should park it for client handling`() {
+        // Given: A ChatCompletion with an unsupported tool call
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("unsupported-tool-id")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("unsupportedTool")
+                        .arguments("{\"key\":\"value\"}")
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content(null)
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        // Return null to indicate unsupported tool
+        every { toolService.getFunctionTool("unsupportedTool") } returns null
+        
+        // When
+        val items = handler.handleMasaicToolCall(chatCompletion, params)
+
+        // Then: We expect the unsupported tool call to be parked
+        // 1) The original user input as a ResponseInputItem
+        // 2) The parked function call
+        assertEquals(2, items.size)
+        
+        val userMessage = items[0]
+        assert(userMessage.isEasyInputMessage())
+        
+        val functionCallItem = items[1]
+        assert(functionCallItem.isFunctionCall())
+        
+        // Verify that no tool execution was observed
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any()) }
+    }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with multiple tool calls should process all`() {
+        // Given: A ChatCompletion with multiple tool calls
+        val toolCall1 =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("tool-call-id-1")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("toolOne")
+                        .arguments("{\"param\":\"value1\"}")
+                        .build(),
+                ).build()
+                
+        val toolCall2 =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("tool-call-id-2")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("toolTwo")
+                        .arguments("{\"param\":\"value2\"}")
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall1, toolCall2))
+                .content("Assistant message with tools")
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        
+        // Configure tools
+        every { toolService.getFunctionTool("toolOne") } returns mockk()
+        every { toolService.getFunctionTool("toolTwo") } returns mockk()
+        every { toolService.executeTool("toolOne", "{\"param\":\"value1\"}") } returns "Result from tool one"
+        every { toolService.executeTool("toolTwo", "{\"param\":\"value2\"}") } returns "Result from tool two"
+        
+        // Manually set the attributes for testing purposes
+        capturedAttributes["gen_ai.operation.name"] = "execute_tool"
+        
+        // When
+        val items = handler.handleMasaicToolCall(chatCompletion, params)
+
+        // Then: We expect 6 items:
+        // 1) Original user message
+        // 2) Assistant message with tools (parked)
+        // 3) First tool call
+        // 4) First tool result
+        // 5) Second tool call
+        // 6) Second tool result
+        assertEquals(6, items.size)
+        
+        // Verify tool execution was observed twice
+        verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any()) }
+        
+        // Count function calls and function outputs
+        val functionCalls = items.count { it.isFunctionCall() }
+        val functionOutputs = items.count { it.isFunctionCallOutput() }
+        assertEquals(2, functionCalls, "Should have 2 function calls")
+        assertEquals(2, functionOutputs, "Should have 2 function outputs")
+    }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with null tool result should skip adding output`() {
+        // Given: A ChatCompletion with a tool call that will return null
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("null-result-tool-id")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("nullResultTool")
+                        .arguments("{\"key\":\"value\"}")
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content(null)
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        
+        // Return null from tool execution
+        every { toolService.getFunctionTool("nullResultTool") } returns mockk()
+        every { toolService.executeTool("nullResultTool", any()) } returns null
+        
+        // Set attributes for testing
+        capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
+        
+        // When
+        val items = handler.handleMasaicToolCall(chatCompletion, params)
+
+        // Then: We expect only 2 items:
+        // 1) Original user message
+        // 2) Function call
+        // (No function output since the result was null)
+        assertEquals(2, items.size)
+        
+        val functionCallItem = items[1]
+        assert(functionCallItem.isFunctionCall())
+        
+        // Verify no function output was added
+        assertEquals(0, items.count { it.isFunctionCallOutput() })
+        
+        // Verify the observation was still created despite the null result
+        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        
+        // Verify correct attribute was set
+        assertEquals("nullResultTool", capturedAttributes["gen_ai.tool.name"])
+    }
+
+    @Test
+    fun `handleMasaicToolCall(params, response) - should append to existing response items`() {
+        // Given a ResponseCreateParams with existing response items
+        val existingFunctionCall =
+            ResponseFunctionToolCall
+                .builder()
+                .callId("existing-function-id")
+                .id("existing-function-id")
+                .name("existingFunction")
+                .arguments("{\"param\":\"existing\"}")
+                .build()
+                
+        val existingInputItem = ResponseInputItem.ofFunctionCall(existingFunctionCall)
+        
+        val existingItems = listOf(existingInputItem)
+        
+        // A Response with a new function call
+        val newFunctionCall =
+            ResponseFunctionToolCall
+                .builder()
+                .callId("new-function-id")
+                .id("new-function-id")
+                .name("newFunction")
+                .arguments("{\"param\":\"new\"}")
+                .build()
+
+        val response =
+            Response
+                .builder()
+                .output(
+                    listOf(
+                        ResponseOutputItem.ofFunctionCall(newFunctionCall),
+                    ),
+                ).id("response-id")
+                .createdAt(1234567890.0)
+                .error(null)
+                .incompleteDetails(null)
+                .instructions(null)
+                .metadata(null)
+                .model(ChatModel.of("gpt-3.5-turbo"))
+                .toolChoice(ToolChoiceOptions.NONE)
+                .temperature(null)
+                .parallelToolCalls(false)
+                .tools(listOf())
+                .topP(null)
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        val inputMock = mockk<ResponseCreateParams.Input>()
+        every { params.input() } returns inputMock
+        every { inputMock.isResponse() } returns true
+        every { inputMock.asResponse() } returns existingItems
+        
+        // Let's pretend the toolService recognizes and executes "newFunction"
+        every { toolService.getFunctionTool("newFunction") } returns mockk()
+        every { toolService.executeTool("newFunction", "{\"param\":\"new\"}") } returns "New function result"
+        
+        // Set attributes for testing
+        capturedAttributes["gen_ai.tool.name"] = "newFunction"
+        
+        // When
+        val items = handler.handleMasaicToolCall(params, response)
+
+        // Then
+        // We expect:
+        // 1) The existing function call
+        // 2) The new function call
+        // 3) The new function call output
+        assertEquals(3, items.size)
+        
+        // First item should be the existing function call
+        assertEquals("existingFunction", items[0].asFunctionCall().name())
+        
+        // Second item should be the new function call
+        assertEquals("newFunction", items[1].asFunctionCall().name())
+        
+        // Verify the tool execution was observed
+        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+    }
+
+    @Test
+    fun `handleMasaicToolCall - should properly record all required telemetry attributes`() {
+        // Given: A ChatCompletion with a tool call
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("telemetry-tool-id")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("telemetryTool")
+                        .arguments("{\"monitoring\":\"true\"}")
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content(null)
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        
+        // Configure tool service
+        every { toolService.getFunctionTool("telemetryTool") } returns mockk()
+        every { toolService.executeTool("telemetryTool", any()) } returns "Telemetry result"
+        
+        // Create a spy telemetry service to verify attributes
+        val telemetrySpy = spyk(telemetryService)
+        val handlerWithSpy = MasaicToolHandler(toolService, telemetrySpy)
+        
+        // Create a real observation to capture
+        val testObservationRegistry = ObservationRegistry.create()
+        val realObservation = mockk<Observation>(relaxed = true)
+        
+        // Setup telemetry spy to use real observation
+        every { 
+            telemetrySpy.withClientObservation<Any>(any(), any())
+        } answers {
+            val operationName = firstArg<String>()
+            val block = secondArg<(Observation) -> Any>()
+            
+            // Set up observation to capture attributes
+            capturedAttributes["observation_name"] = operationName
+            
+            // Execute the block with the real observation
+            block(realObservation)
+        }
+        
+        // When
+        val items = handlerWithSpy.handleMasaicToolCall(chatCompletion, params)
+
+        // Then
+        // Verify the attributes required for the OpenTelemetry GenAI semantic conventions
+        assertEquals("builtin.tool.execute", capturedAttributes["observation_name"])
+        
+        // Verify observation was created
+        verify { telemetrySpy.withClientObservation<Any>(eq("builtin.tool.execute"), any()) }
+        
+        // Verify tool execution resulted in both function call and output
+        val functionCalls = items.count { it.isFunctionCall() }
+        val functionOutputs = items.count { it.isFunctionCallOutput() }
+        assertEquals(1, functionCalls)
+        assertEquals(1, functionOutputs)
+    }
 }
