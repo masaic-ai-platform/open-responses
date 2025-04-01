@@ -1,7 +1,6 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
-import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.openai.client.OpenAIClient
 import com.openai.core.RequestOptions
@@ -10,7 +9,6 @@ import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
-import io.micrometer.observation.Observation
 import kotlinx.coroutines.flow.Flow
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
