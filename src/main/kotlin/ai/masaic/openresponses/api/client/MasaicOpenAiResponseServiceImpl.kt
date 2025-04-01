@@ -171,6 +171,34 @@ class MasaicOpenAiResponseServiceImpl(
                             .content()
                             .isPresent ->
                         Triple("assistant", "gen_ai.assistant.system", message.assistant().get().content())
+                    message.isAssistant() &&
+                        message
+                            .assistant()
+                            .get()
+                            .toolCalls()
+                            .isPresent -> {
+                        val toolCalls =
+                            message
+                                .assistant()
+                                .get()
+                                .toolCalls()
+                                .get()
+                        val tools =
+                            message.assistant().get().toolCalls().get().map { tool ->
+                                mapOf(
+                                    "id" to tool.id(),
+                                    "function" to
+                                        mapOf(
+                                            "name" to tool.function().name(),
+                                            "arguments" to tool.function().arguments(),
+                                        ),
+                                )
+                            }
+                        Triple("assistant", "gen_ai.assistant.system", mapOf("tool_calls" to tools))
+                    }
+                    message.isTool() -> {
+                        Triple("tool", "gen_ai.tool.message", mapOf("id" to message.tool().get().toolCallId(), "content" to message.tool().get().content()))
+                    }
                     message.isSystem() && message.system().isPresent ->
                         Triple("system", "gen_ai.system.message", message.system().get().content())
                     message.isDeveloper() && message.developer().isPresent ->
@@ -197,12 +225,6 @@ class MasaicOpenAiResponseServiceImpl(
     ) {
         chatCompletion.choices().forEach { choice ->
             if (choice.message().content().isPresent) {
-                val message =
-                    mapOf(
-                        "role" to "assistant",
-                        "content" to choice.message().content().get(),
-                    )
-
                 val eventData =
                     mapOf(
                         "gen_ai.system" to metadata.genAISystem,
@@ -211,7 +233,7 @@ class MasaicOpenAiResponseServiceImpl(
                     )
                 observation.event(
                     Observation.Event.of(
-                        "gen_ai.assistant.system",
+                        "gen_ai.choice",
                         jsonMapper().writeValueAsString(eventData),
                     ),
                 )
@@ -219,27 +241,27 @@ class MasaicOpenAiResponseServiceImpl(
 
             val toolCalls = mutableListOf<Any>()
             if (choice.finishReason().asString() == "tool_calls") {
-                choice.message().toolCalls().get().forEach { tool ->
-                    val functionMap =
+                val toolCalls =
+                    choice.message().toolCalls().get().map { tool ->
                         mapOf(
                             "id" to tool.id(),
                             "type" to "function",
-                            "function" to jsonMapper().writeValueAsString(mapOf("name" to tool.function().name() to "arguments" to tool.function().arguments())),
+                            "function" to
+                                mapOf(
+                                    "name" to tool.function().name(),
+                                    "arguments" to tool.function().arguments(),
+                                ),
                         )
-                    toolCalls.add(functionMap)
-                }
+                    }
                 val eventData =
                     mapOf(
                         "gen_ai.system" to metadata.genAISystem,
                         "finish_reason" to choice.finishReason().asString(),
                         "index" to choice.index(),
-                        "tool_calls" to jsonMapper().writeValueAsString(toolCalls),
+                        "tool_calls" to toolCalls,
                     )
                 observation.event(
-                    Observation.Event.of(
-                        "gen_ai.assistant.system",
-                        jsonMapper().writeValueAsString(eventData),
-                    ),
+                    Observation.Event.of("gen_ai.choice", jsonMapper().writeValueAsString(eventData)),
                 )
             }
         }
