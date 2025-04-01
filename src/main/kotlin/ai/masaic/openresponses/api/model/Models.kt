@@ -247,7 +247,7 @@ data class InputMessageItem(
     val tool_call_id: String? = null,
     val call_id: String? = null,
     val output: String? = null,
-    val status: String = "completed", //Note: This value is not returned by completion API, so we will assume completed.
+    val status: String = "completed", // Note: This value is not returned by completion API, so we will assume completed.
 ) {
     init {
         if (call_id != null) {
