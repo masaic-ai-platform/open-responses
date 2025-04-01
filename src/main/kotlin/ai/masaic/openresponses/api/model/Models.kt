@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
@@ -235,6 +236,7 @@ data class ResponseItemList(
  * @property status Status of the message
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class InputMessageItem(
     val role: String? = null,
     var content: Any? = null,
@@ -245,7 +247,7 @@ data class InputMessageItem(
     val tool_call_id: String? = null,
     val call_id: String? = null,
     val output: String? = null,
-    val status: String? = null,
+    val status: String = "completed",
 ) {
     init {
         if (call_id != null) {
@@ -268,6 +270,7 @@ data class InputMessageItem(
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class InputMessageItemContent(
     val text: String? = null,
     val type: String,
