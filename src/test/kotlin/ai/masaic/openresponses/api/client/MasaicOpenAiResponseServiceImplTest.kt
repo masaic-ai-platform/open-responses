@@ -1,13 +1,13 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonField
 import com.openai.core.RequestOptions
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
-import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.observation.ObservationRegistry
 import io.mockk.*
@@ -22,8 +22,7 @@ class MasaicOpenAiResponseServiceImplTest {
     private lateinit var parameterConverter: MasaicParameterConverter
     private lateinit var toolHandler: MasaicToolHandler
     private lateinit var streamingService: MasaicStreamingService
-    private lateinit var observationRegistry: ObservationRegistry
-    private lateinit var meterRegistry: MeterRegistry
+    private lateinit var telemetryService: TelemetryService
     private lateinit var serviceImpl: MasaicOpenAiResponseServiceImpl
 
     @BeforeEach
@@ -32,17 +31,19 @@ class MasaicOpenAiResponseServiceImplTest {
         toolHandler = mockk(relaxed = true)
         streamingService = mockk(relaxed = true)
         
-        // Use real implementations for metrics to avoid complex mocking
-        observationRegistry = ObservationRegistry.create()
-        meterRegistry = SimpleMeterRegistry()
+        // Create observation and meter registries
+        val observationRegistry = ObservationRegistry.create()
+        val meterRegistry = SimpleMeterRegistry()
+        
+        // Create telemetry service with real registries
+        telemetryService = TelemetryService(observationRegistry, meterRegistry)
 
         serviceImpl =
             MasaicOpenAiResponseServiceImpl(
                 parameterConverter = parameterConverter,
                 toolHandler = toolHandler,
                 streamingService = streamingService,
-                observationRegistry = observationRegistry,
-                meterRegistry = meterRegistry,
+                telemetryService = telemetryService,
             )
     }
 
@@ -96,8 +97,8 @@ class MasaicOpenAiResponseServiceImplTest {
             }
         val params = defaultParamsMock()
         
-        // Act - we'll just verify it doesn't throw an exception with the real registry
-        serviceImpl.recordTokenUsage(metadata, completion, params, "input", 100L)
+        // Act - use telemetryService instead of directly calling recordTokenUsage
+        telemetryService.recordTokenUsage(metadata, completion, params, "input", 100L)
         
         // No assertions needed - the test passes if no exception occurs
     }

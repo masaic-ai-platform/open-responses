@@ -164,7 +164,7 @@ class MasaicToolHandler(
         toolId: String,
         resultHandler: (String?) -> Unit,
     ) {
-        telemetryService.withClientObservation("builtin_tool_execute") { observation ->
+        telemetryService.withClientObservation("builtin.tool.execute") { observation ->
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
