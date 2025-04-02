@@ -142,8 +142,13 @@ The table below shows the detailed mapping between Responses API streaming event
 | `response.refusal.done`               | Error handling (Open-Responses enhancement)                           | Refusal text finalized | Marks completion of refusal |
 | `response.function_call_arguments.delta` | Partial function call arguments streaming (`choices[].delta`) | Partial function arguments | Mapped from tool call fragments |
 | `response.function_call_arguments.done`  | Final function arguments chunk                                | Function call arguments finalized | Generated when tool call completes |
-| `response.file_search_call.*`         | Managed as tool calls (Open-Responses enhancement)                         | File search lifecycle | Custom tool implementation |
-| `response.web_search_call.*`          | Managed as tool calls (Open-Responses enhancement)                         | Web search lifecycle | Custom tool implementation |
+| `response.{tool_name}.in_progress`    | N/A - Open-Responses-specific enhancement                     | Tool execution started | Custom tool lifecycle event indicating tool processing has begun |
+| `response.{tool_name}.executing`      | N/A - Open-Responses-specific enhancement                     | Tool is executing | Custom tool lifecycle event indicating active execution |
+| `response.{tool_name}.completed`      | N/A - Open-Responses-specific enhancement                     | Tool execution finished | Custom tool lifecycle event indicating successful completion |
+| `response.file_search_call.*`         | Managed as tool calls (Open-Responses enhancement)            | File search lifecycle | Custom tool implementation |
+| `response.web_search_call.*`          | Managed as tool calls (Open-Responses enhancement)            | Web search lifecycle | Custom tool implementation |
+
+> **Note**: For tool-specific events, `{tool_name}` is replaced with the actual name of the tool being executed, converted to lowercase with leading non-word characters replaced by underscores. These custom events provide detailed visibility into the tool execution lifecycle beyond what the standard Chat Completions API offers.
 
 #### Implementation Specifics
 
@@ -168,6 +173,33 @@ The Open-Responses implementation includes following components for streaming:
    - Synchronization between tool calls and results
    - Progress indication for tool execution
    - Proper sequencing of multi-turn tool interactions
+
+### Custom Tool Lifecycle Events
+
+Open-Responses extends the standard Chat Completions API streaming events with custom tool-specific events that provide more granular visibility into tool execution:
+
+1. **Tool Execution Progress Events**:
+   - `response.{tool_name}.in_progress`: Emitted when a tool call is detected and processing begins
+   - `response.{tool_name}.executing`: Emitted when the tool is actively executing
+   - `response.{tool_name}.completed`: Emitted when the tool execution completes successfully
+
+2. **Event Format**:
+   Each tool event includes standardized metadata:
+   ```json
+   {
+     "item_id": "tool-call-id",
+     "output_index": "0",
+     "type": "response.{tool_name}.{status}"
+   }
+   ```
+
+3. **Benefits**:
+   - Real-time visibility into hosted tool execution
+   - Better UX with tool-specific progress indicators
+   - Ability to show appropriate loading states for long-running tools
+   - Troubleshooting visibility for tool execution issues
+
+These custom events are emitted in addition to the standard Chat Completions API events, providing enhanced developer experience without breaking compatibility.
 
 ## Open-Responses Layer Managed Properties
 
@@ -265,6 +297,12 @@ When using Chat Completions functionality through the Responses API, follow thes
   - Structure parsers to handle the normalized output format
   - For streaming, process events based on the event mapping table
   - Handle both success and error states appropriately
+
+- **Tool Event Processing**:
+  - Listen for tool-specific events (`response.{tool_name}.*`) to provide better UX during tool execution
+  - Use the `item_id` and `output_index` in tool events to correlate with the associated function calls
+  - Implement appropriate loading states based on each tool's lifecycle events
+  - For long-running tools, show progress indicators during the `executing` phase
 
 ## Example API Calls
 
@@ -476,6 +514,82 @@ curl -X POST https://api.openai.com/v1/responses \
     "user": "test_user"
   }
 }'
+```
+
+### Handling Tool-Specific Events
+
+```javascript
+// Example client code for handling tool-specific events during streaming
+const response = await fetch('https://api.openai.com/v1/responses', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_API_KEY'
+  },
+  body: JSON.stringify({
+    model: "gpt-4o",
+    input: "Execute the weather tool for Boston, then analyze the results.",
+    tools: [{
+      type: "function",
+      name: "get_weather",
+      // tool definition...
+    }],
+    stream: true
+  })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+// Track tool execution state
+const toolExecutionState = new Map();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  const lines = chunk.split('\n\n').filter(line => line.trim() !== '');
+  
+  for (const line of lines) {
+    if (!line.startsWith('data:')) continue;
+    
+    const data = JSON.parse(line.substring(5));
+    const eventType = data.type || '';
+    
+    // Handle standard events
+    if (eventType === 'response.output_text.delta') {
+      // Process text output...
+    } 
+    // Handle tool lifecycle events
+    else if (eventType.startsWith('response.get_weather.')) {
+      const toolId = data.item_id;
+      const status = eventType.split('.').pop(); // in_progress, executing, completed
+      
+      if (status === 'in_progress') {
+        toolExecutionState.set(toolId, { status: 'starting' });
+        showToolLoadingUI(toolId, 'Starting weather lookup...');
+      } 
+      else if (status === 'executing') {
+        toolExecutionState.set(toolId, { status: 'running' });
+        showToolLoadingUI(toolId, 'Fetching weather data...');
+      }
+      else if (status === 'completed') {
+        toolExecutionState.set(toolId, { status: 'completed' });
+        updateToolLoadingUI(toolId, 'Weather data retrieved!');
+      }
+    }
+  }
+}
+
+// UI helper functions
+function showToolLoadingUI(toolId, message) {
+  // Update UI with loading indicator for the specific tool
+}
+
+function updateToolLoadingUI(toolId, message) {
+  // Update loading UI with status message
+}
 ```
 
 # Request flow:
