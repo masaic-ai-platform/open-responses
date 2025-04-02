@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
@@ -14,7 +15,7 @@ import org.junit.jupiter.api.Test
 
 class MasaicToolHandlerTest {
     private val toolService: ToolService = mockk()
-    private val handler = MasaicToolHandler(toolService)
+    private val handler = MasaicToolHandler(toolService, ObjectMapper())
 
     @Test
     fun `handleMasaicToolCall(chatCompletion, params) - with no tool calls should return text items only`() {
@@ -178,7 +179,7 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items = handler.handleMasaicToolCall(params, response, mockk())
 
         // Then
         // 1) The user input as a ResponseInputItem
@@ -230,7 +231,10 @@ class MasaicToolHandlerTest {
         every { toolService.executeTool("myToolFunction", "{\"foo\":\"bar\"}") } returns "Executed tool"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items =
+            handler.handleMasaicToolCall(params, response) { event ->
+                mockk(relaxed = true)
+            }
 
         // Then
         // 1) The user input

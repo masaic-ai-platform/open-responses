@@ -1,10 +1,12 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
 import mu.KotlinLogging
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
 
@@ -15,6 +17,7 @@ import java.util.UUID
 @Component
 class MasaicToolHandler(
     private val toolService: ToolService,
+    private val objectMapper: ObjectMapper,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -151,11 +154,13 @@ class MasaicToolHandler(
      *
      * @param params The original request parameters
      * @param response The Response object containing potential tool calls
+     * @param eventEmitter Optional callback function to emit tool execution events
      * @return List of ResponseInputItems with both tool calls and their outputs
      */
     fun handleMasaicToolCall(
         params: ResponseCreateParams,
         response: Response,
+        eventEmitter: ((ServerSentEvent<String>) -> Unit),
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
         val responseInputItems =
@@ -194,11 +199,29 @@ class MasaicToolHandler(
         val functionCalls = response.output().filter { it.isFunctionCall() }
         logger.debug { "Processing ${functionCalls.size} function calls" }
 
-        functionCalls.forEach { tool ->
+        functionCalls.forEachIndexed { index, tool ->
             val function = tool.asFunctionCall()
 
             if (toolService.getFunctionTool(function.name()) != null) {
                 logger.info { "Executing tool: ${function.name()} with ID: ${function.id()}" }
+
+                val eventPrefix = "response.${function.name().lowercase().replace("^\\W".toRegex(), "_")}"
+
+                eventEmitter.invoke(
+                    ServerSentEvent
+                        .builder<String>()
+                        .event("$eventPrefix.in_progress")
+                        .data(
+                            objectMapper.writeValueAsString(
+                                mapOf<String, String>(
+                                    "item_id" to function.id(),
+                                    "output_index" to index.toString(),
+                                    "type" to "$eventPrefix.in_progress",
+                                ),
+                            ),
+                        ).build(),
+                )
+
                 // Add the function call to response items
                 responseInputItems.add(
                     ResponseInputItem.ofFunctionCall(
@@ -210,6 +233,21 @@ class MasaicToolHandler(
                             .arguments(function.arguments())
                             .build(),
                     ),
+                )
+
+                eventEmitter.invoke(
+                    ServerSentEvent
+                        .builder<String>()
+                        .event("$eventPrefix.executing")
+                        .data(
+                            objectMapper.writeValueAsString(
+                                mapOf<String, String>(
+                                    "item_id" to function.id(),
+                                    "output_index" to index.toString(),
+                                    "type" to "$eventPrefix.executing",
+                                ),
+                            ),
+                        ).build(),
                 )
 
                 // Execute the tool and add its output if successful
@@ -229,6 +267,21 @@ class MasaicToolHandler(
                 } else {
                     logger.warn { "Tool execution returned null for ${function.name()}" }
                 }
+
+                eventEmitter.invoke(
+                    ServerSentEvent
+                        .builder<String>()
+                        .event("$eventPrefix.completed")
+                        .data(
+                            objectMapper.writeValueAsString(
+                                mapOf<String, String>(
+                                    "item_id" to function.id(),
+                                    "output_index" to index.toString(),
+                                    "type" to "$eventPrefix.completed",
+                                ),
+                            ),
+                        ).build(),
+                )
             } else {
                 logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
                 // For unsupported tools, park them for client handling

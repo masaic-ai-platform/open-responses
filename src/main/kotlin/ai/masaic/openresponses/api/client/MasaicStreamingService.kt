@@ -276,7 +276,12 @@ class MasaicStreamingService(
                                 )
                             } else {
                                 // Actually handle these calls
-                                val toolResponseItems = toolHandler.handleMasaicToolCall(params, finalResponse)
+                                val toolResponseItems =
+                                    toolHandler.handleMasaicToolCall(
+                                        params,
+                                        finalResponse,
+                                        eventEmitter = { event -> trySend(event) },
+                                    )
                                 updatedParams =
                                     params
                                         .toBuilder()
