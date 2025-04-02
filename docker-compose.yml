@@ -11,6 +11,8 @@ services:
       - "8080:8080"
     environment:
       - TOOLS_MCP_ENABLED=false
+    profiles:
+      - default
   # Services used only in the MCP flavor.
   mcp-github:
     image: mcp/github
@@ -107,3 +109,37 @@ services:
     environment:
       - TOOLS_MCP_ENABLED=false
       - MODEL_BASE_URL=${MODEL_BASE_URL}
+    profiles:
+      - openai
+
+  # MongoDB service for persistent storage
+  mongodb:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    environment:
+      - MONGO_INITDB_DATABASE=openresponses
+    profiles:
+      - mongodb
+    restart: unless-stopped
+
+  # Flavor 5: Open Responses with MongoDB storage integration
+  open-responses-with-mongodb:
+    <<: *open_responses
+    ports:
+      - "8080:8080"
+    environment:
+      - TOOLS_MCP_ENABLED=false
+      - OPEN_RESPONSES_MONGODB_DATABASE=openresponses
+      - OPEN_RESPONSES_MONGODB_URI=mongodb://mongodb:27017
+      - OPEN_RESPONSES_RESPONSE_STORE_TYPE=mongodb
+    depends_on:
+      - mongodb
+    profiles:
+      - mongodb
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

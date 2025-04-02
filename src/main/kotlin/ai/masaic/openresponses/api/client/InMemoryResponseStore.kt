@@ -2,28 +2,44 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.github.benmanes.caffeine.cache.Cache
+import com.github.benmanes.caffeine.cache.Caffeine
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
 import mu.KotlinLogging
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * In-memory implementation of ResponseStore.
- * Stores responses and their input items in memory using concurrent hash maps.
+ * Stores responses and their input items in memory using fixed-size caches with LRU eviction.
  */
 @Component
-@ConditionalOnProperty(name = ["app.response-store.type"], havingValue = "in-memory", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.response-store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryResponseStore(
     private val objectMapper: ObjectMapper,
+    @Value("\${open-responses.response-store.cache-size:10000}") private val cacheSize: Long,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
 
-    // Thread-safe maps to store responses and their related input items
-    private val responses = ConcurrentHashMap<String, Response>()
-    private val inputItemsMap = ConcurrentHashMap<String, List<InputMessageItem>>()
-    private val outputInputItemsMap = ConcurrentHashMap<String, List<InputMessageItem>>()
+    private val responses: Cache<String, Response> =
+        Caffeine
+            .newBuilder()
+            .maximumSize(cacheSize)
+            .build()
+    
+    private val inputItemsMap: Cache<String, List<InputMessageItem>> =
+        Caffeine
+            .newBuilder()
+            .maximumSize(cacheSize)
+            .build()
+    
+    private val outputInputItemsMap: Cache<String, List<InputMessageItem>> =
+        Caffeine
+            .newBuilder()
+            .maximumSize(cacheSize)
+            .build()
 
     override fun storeResponse(
         response: Response,
@@ -34,7 +50,6 @@ class InMemoryResponseStore(
 
         val inputMessageItems: List<InputMessageItem> =
             inputItems.map {
-                // Add mapping logic from ResponseInputItem to InputMessageItem if needed
                 objectMapper.convertValue(it, InputMessageItem::class.java)
             }
 
@@ -47,36 +62,43 @@ class InMemoryResponseStore(
                     objectMapper.convertValue(it, InputMessageItem::class.java)
                 }
 
-        responses[responseId] = response
-        if (inputItemsMap.containsKey(responseId)) {
-            inputItemsMap[responseId] = inputItemsMap.getValue(responseId).plus(inputMessageItems)
+        responses.put(responseId, response)
+        
+        val existingInputItems = inputItemsMap.getIfPresent(responseId)
+        if (existingInputItems != null) {
+            inputItemsMap.put(responseId, existingInputItems.plus(inputMessageItems))
         } else {
-            inputItemsMap[responseId] = inputMessageItems
+            inputItemsMap.put(responseId, inputMessageItems)
         }
 
-        if (outputInputItemsMap.containsKey(responseId)) {
-            outputInputItemsMap[responseId] = outputInputItemsMap.getValue(responseId).plus(outputMessageItems)
+        val existingOutputItems = outputInputItemsMap.getIfPresent(responseId)
+        if (existingOutputItems != null) {
+            outputInputItemsMap.put(responseId, existingOutputItems.plus(outputMessageItems))
         } else {
-            outputInputItemsMap[responseId] = outputMessageItems
+            outputInputItemsMap.put(responseId, outputMessageItems)
         }
     }
 
     override fun getResponse(responseId: String): Response? {
         logger.debug { "Retrieving response with ID: $responseId" }
-        return responses[responseId]
+        return responses.getIfPresent(responseId)
     }
 
     override fun getInputItems(responseId: String): List<InputMessageItem> {
         logger.debug { "Retrieving input items for response with ID: $responseId" }
-        return inputItemsMap[responseId] ?: emptyList()
+        return inputItemsMap.getIfPresent(responseId) ?: emptyList()
     }
 
     override fun deleteResponse(responseId: String): Boolean {
         logger.debug { "Deleting response with ID: $responseId" }
-        val responseRemoved = responses.remove(responseId) != null
-        inputItemsMap.remove(responseId)
-        return responseRemoved
+        val responseExists = responses.getIfPresent(responseId) != null
+        if (responseExists) {
+            responses.invalidate(responseId)
+            inputItemsMap.invalidate(responseId)
+            outputInputItemsMap.invalidate(responseId)
+        }
+        return responseExists
     }
 
-    override fun getOutputItems(responseId: String): List<InputMessageItem> = outputInputItemsMap[responseId] ?: emptyList()
+    override fun getOutputItems(responseId: String): List<InputMessageItem> = outputInputItemsMap.getIfPresent(responseId) ?: emptyList()
 }

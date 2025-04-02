@@ -2,6 +2,25 @@
 
 The Open Responses API provides a configurable storage mechanism for OpenAI API responses and their associated input items. This document explains the available storage options and how to configure them.
 
+## Value Addition Compared to OpenAI Managed Service
+
+Unlike OpenAI's managed service, our Response Store implementation offers:
+
+1. **Complete Data Control**: Store all your conversation data on your own infrastructure, ensuring data sovereignty and compliance with your organization's data policies.
+2. **Flexible Storage Options**: Choose between in-memory storage for development or MongoDB for persistent storage in production environments.
+3. **Customizable Retention**: Define your own data retention policies without being constrained by OpenAI's limits.
+4. **Integration Flexibility**: Easily integrate with your existing systems and data pipelines for analytics, auditing, or other business processes.
+5. **Cost Management**: Potentially reduce costs by optimizing storage and retrieval according to your specific usage patterns.
+
+## Controlling Response Storage with the `store` Attribute
+
+The API specification includes a `store` boolean attribute that explicitly controls whether response history is stored:
+
+- When `store=true` (explicitly set in the request), the response and its associated inputs are persisted in the configured store.
+- When `store=false` or omitted, no data is stored, regardless of the configured store implementation.
+
+**Important**: Response history is only stored when the `store` property is explicitly set to `true` in the API request. This gives you fine-grained control over which interactions should be preserved.
+
 ## Available Storage Implementations
 
 The API supports two storage implementations:
@@ -18,7 +37,7 @@ The in-memory store is enabled by default and requires no additional configurati
 To explicitly configure the in-memory store:
 
 ```properties
-app.response-store.type=in-memory
+open-responses.response-store.type=in-memory
 ```
 
 ### MongoDB Store
@@ -30,9 +49,9 @@ To enable the MongoDB store:
 1. Add the following properties to your configuration:
 
 ```properties
-app.response-store.type=mongodb
-spring.data.mongodb.uri=mongodb://localhost:27017
-spring.data.mongodb.database=openresponses
+open-responses.response-store.type=mongodb
+open-response.mongodb.uri=mongodb://localhost:27017
+open-response.mongodb.database=openresponses
 ```
 
 2. Ensure you have MongoDB installed and running, or provide the connection string to your MongoDB instance.
@@ -43,11 +62,11 @@ You can also configure the response store using environment variables:
 
 ```bash
 # Set the response store type
-export APP_RESPONSE_STORE_TYPE=mongodb
+export OPEN_RESPONSES_RESPONSE_STORE_TYPE=mongodb
 
 # Configure MongoDB (when using mongodb store type)
-export SPRING_DATA_MONGODB_URI=mongodb://localhost:27017
-export SPRING_DATA_MONGODB_DATABASE=openresponses
+export OPEN_RESPONSES_MONGODB_URI=mongodb://localhost:27017
+export OPEN_RESPONSES_MONGODB_DATABASE=openresponses
 ```
 
 Spring Boot automatically converts environment variables by:
@@ -66,7 +85,7 @@ Both storage implementations manage:
 
 ### Storing Responses
 
-To store a response (setting `store=true` in the request):
+The following example demonstrates storing a response by setting `store=true` in the request:
 
 ```bash
 curl <open-responses-base-url>/responses \
@@ -81,7 +100,7 @@ curl <open-responses-base-url>/responses \
 
 ### Using Stored Responses
 
-To reference a previously stored response with `previous_response_id`:
+To reference a previously stored response with `previous_response_id` (note that the original response must have been stored with `store=true`):
 
 ```bash
 curl <open-responses-base-url>/responses \
@@ -95,11 +114,24 @@ curl <open-responses-base-url>/responses \
   }'
 ```
 
+### Example Without Storage
+
+If you don't need to store a response (for ephemeral interactions), omit the `store` attribute or set it to `false`:
+
+```bash
+curl <open-responses-base-url>/responses \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -d '{
+    "model": "gpt-4o",
+    "input": "What's the capital of France?",
+    "store": false
+  }'
+```
+
 ## Usage Example
 
 Python OpenAI SDK example can be found here [example](https://github.com/masaic-ai-platform/openai-agents-python/blob/main/examples/open_responses/conversation_state.py)
-
-The application automatically selects the appropriate store implementation based on your configuration. The `ResponseStore` interface is injected where needed, allowing the application to work with either implementation transparently.
 
 ## Considerations
 

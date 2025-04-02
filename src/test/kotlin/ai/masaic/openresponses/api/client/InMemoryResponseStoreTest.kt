@@ -18,7 +18,7 @@ class InMemoryResponseStoreTest {
     fun setup() {
         objectMapper = mockk()
         every { objectMapper.convertValue(ofType<ResponseInputItem>(), InputMessageItem::class.java) } returns InputMessageItem()
-        responseStore = InMemoryResponseStore(objectMapper)
+        responseStore = InMemoryResponseStore(objectMapper, 500)
     }
 
     @Test

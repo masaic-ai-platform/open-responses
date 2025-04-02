@@ -7,6 +7,7 @@ Follow this guide to run the service in under 5 minutes using one of the followi
 3. Starting Docker with a Custom MCP Configuration
 4. Running example scripts with the openai-agent-python SDK
 5. Running Agent Examples Built with OpenAI Agent SDK To Use Open Responses API Built In Tools
+6. Starting Open Responses with MongoDB Persistent Storage
 
 ---
 
@@ -131,7 +132,7 @@ docker-compose --profile mcp up open-responses-mcp
 For Windows:
 ```bash
 docker-compose --profile mcp up open-responses-mcp-windows
-````
+```
 
 ### Example API Calls with Built-In Tools
 
@@ -336,6 +337,72 @@ This section demonstrates how to run examples that create Agents using the OpenA
    python -m examples.open_responses.think_tool_agent_with_claude
    ```
    Note: This example requires the CLAUDE_API_KEY along with the OPEN_RESPONSES_URL to be set appropriately.
+
+---
+
+## 7. Starting Open Responses with MongoDB Persistent Storage
+
+If you need persistent storage for your responses, you can use the MongoDB integration. This is useful for production environments or when you need to preserve conversation history across service restarts.
+
+### Prerequisites
+- Ensure port 8080 is available for the Open Responses service
+- Ensure port 27017 is available for MongoDB
+- Docker daemon must be running on your local machine
+
+### Run the Service with MongoDB
+
+Start the Open Responses service with MongoDB for persistent storage:
+
+```bash
+docker-compose --profile mongodb up
+```
+
+This will launch both the MongoDB database and the Open Responses service configured to use MongoDB as its storage backend.
+
+### Testing Persistent Storage
+
+To test that responses are being stored, make an API call with the `store` parameter set to `true`:
+
+```bash
+curl --location 'http://localhost:8080/v1/responses' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer YOUR_API_KEY' \
+--data '{
+    "model": "gpt-4o",
+    "store": true,
+    "input": [
+        {
+            "role": "user",
+            "content": "Write a short poem about persistence"
+        }
+    ]
+}'
+```
+
+The response will include a `response_id` that you can use to reference this conversation in future requests.
+
+### Following Up on a Stored Conversation
+
+To continue a stored conversation, use the `previous_response_id` from your earlier response:
+
+```bash
+curl --location 'http://localhost:8080/v1/responses' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer YOUR_API_KEY' \
+--data '{
+    "model": "gpt-4o",
+    "store": true,
+    "previous_response_id": "resp_abc123",
+    "input": [
+        {
+            "role": "user",
+            "content": "Make it longer and add a rhyme scheme"
+        }
+    ]
+}'
+```
+
+For more details on response storage options and configuration, refer to the [Response Store Configuration](Store.md) documentation.
 
 ---
 

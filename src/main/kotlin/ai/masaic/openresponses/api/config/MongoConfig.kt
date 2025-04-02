@@ -12,11 +12,11 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.data.mongodb.core.MongoTemplate
 
 @Configuration
-@ConditionalOnProperty(name = ["app.response-store.type"], havingValue = "mongodb", matchIfMissing = false)
+@ConditionalOnProperty(name = ["open-responses.response-store.type"], havingValue = "mongodb", matchIfMissing = false)
 class MongoConfig(
-    @Value("\${spring.data.mongodb.uri}")
+    @Value("\${open-responses.mongodb.uri}")
     private val mongoURI: String,
-    @Value("\${spring.data.mongodb.database}")
+    @Value("\${open-responses.mongodb.database}")
     private val databaseName: String,
 ) {
     private val logger = KotlinLogging.logger {}
