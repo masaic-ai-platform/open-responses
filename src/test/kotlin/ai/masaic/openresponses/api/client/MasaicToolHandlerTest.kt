@@ -48,6 +48,7 @@ class MasaicToolHandlerTest {
             telemetryService.withClientObservation<Any>(
                 any(), 
                 any(),
+                any(),
             ) 
         } answers {
             val block = secondArg<(Observation) -> Any>()
@@ -128,7 +129,7 @@ class MasaicToolHandlerTest {
         assert(item.isResponseOutputMessage())
         
         // Verify no tool execution observations were created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
 
     @Test
@@ -201,7 +202,7 @@ class MasaicToolHandlerTest {
         assert(functionCallOutput.isFunctionCallOutput())
         
         // Verify observation was created (without exact string name match)
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
         
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
@@ -332,7 +333,7 @@ class MasaicToolHandlerTest {
         assert(items[1].isResponseOutputMessage())
         
         // Verify no observation was created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
 
     @Test
@@ -394,7 +395,7 @@ class MasaicToolHandlerTest {
         assert(items[2].isFunctionCallOutput())
         
         // Verify observation was created (without exact string match)
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
         
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
@@ -465,7 +466,7 @@ class MasaicToolHandlerTest {
         assert(functionCallItem.isFunctionCall())
         
         // Verify that no tool execution was observed
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
 
     @Test
@@ -548,7 +549,7 @@ class MasaicToolHandlerTest {
         assertEquals(6, items.size)
         
         // Verify tool execution was observed twice
-        verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
         
         // Count function calls and function outputs
         val functionCalls = items.count { it.isFunctionCall() }
@@ -626,7 +627,7 @@ class MasaicToolHandlerTest {
         assertEquals(0, items.count { it.isFunctionCallOutput() })
         
         // Verify the observation was still created despite the null result
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
         
         // Verify correct attribute was set
         assertEquals("nullResultTool", capturedAttributes["gen_ai.tool.name"])
@@ -710,7 +711,7 @@ class MasaicToolHandlerTest {
         assertEquals("newFunction", items[1].asFunctionCall().name())
         
         // Verify the tool execution was observed
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
 
     @Test
@@ -773,7 +774,7 @@ class MasaicToolHandlerTest {
         
         // Setup telemetry spy to use real observation
         every { 
-            telemetrySpy.withClientObservation<Any>(any(), any())
+            telemetrySpy.withClientObservation<Any>(any(), any(), any())
         } answers {
             val operationName = firstArg<String>()
             val block = secondArg<(Observation) -> Any>()
@@ -793,7 +794,7 @@ class MasaicToolHandlerTest {
         assertEquals("builtin.tool.execute", capturedAttributes["observation_name"])
         
         // Verify observation was created
-        verify { telemetrySpy.withClientObservation<Any>(eq("builtin.tool.execute"), any()) }
+        verify { telemetrySpy.withClientObservation<Any>(eq("builtin.tool.execute"), any(), any()) }
         
         // Verify tool execution resulted in both function call and output
         val functionCalls = items.count { it.isFunctionCall() }

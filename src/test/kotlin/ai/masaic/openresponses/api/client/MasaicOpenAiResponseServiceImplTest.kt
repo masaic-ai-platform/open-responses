@@ -12,6 +12,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.observation.ObservationRegistry
 import io.mockk.*
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -107,17 +108,18 @@ class MasaicOpenAiResponseServiceImplTest {
      * createCompletionStream should delegate to streamingService.createCompletionStream
      */
     @Test
-    fun `test createCompletionStream`() {
-        val client = mockk<OpenAIClient>(relaxed = true)
-        val params = mockk<ResponseCreateParams>(relaxed = true)
-        val flowMock = mockk<Flow<ServerSentEvent<String>>>(relaxed = true)
+    fun `test createCompletionStream`() =
+        runBlocking {
+            val client = mockk<OpenAIClient>(relaxed = true)
+            val params = mockk<ResponseCreateParams>(relaxed = true)
+            val flowMock = mockk<Flow<ServerSentEvent<String>>>(relaxed = true)
 
-        every { streamingService.createCompletionStream(client, params) } returns flowMock
+            every { streamingService.createCompletionStream(client, params, any()) } returns flowMock
 
-        val resultFlow = serviceImpl.createCompletionStream(client, params)
-        assertSame(flowMock, resultFlow)
-        verify { streamingService.createCompletionStream(client, params) }
-    }
+            val resultFlow = serviceImpl.createCompletionStream(client, params, CreateResponseMetadataInput())
+            assertSame(flowMock, resultFlow)
+            verify { streamingService.createCompletionStream(client, params, any()) }
+        }
 
     /**
      * createStreaming(params, requestOptions) -> throws UnsupportedOperationException
