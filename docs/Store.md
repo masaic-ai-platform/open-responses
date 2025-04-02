@@ -97,6 +97,8 @@ curl <open-responses-base-url>/responses \
 
 ## Usage Example
 
+Python OpenAI SDK example can be found here [example](https://github.com/masaic-ai-platform/openai-agents-python/blob/main/examples/open_responses/conversation_state.py)
+
 The application automatically selects the appropriate store implementation based on your configuration. The `ResponseStore` interface is injected where needed, allowing the application to work with either implementation transparently.
 
 ## Considerations
