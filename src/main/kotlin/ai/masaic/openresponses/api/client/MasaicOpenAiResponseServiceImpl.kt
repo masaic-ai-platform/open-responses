@@ -219,12 +219,17 @@ class MasaicOpenAiResponseServiceImpl(
     ) {
         val responseId = params.responseId()
         logger.debug { "Deleting response with ID: $responseId" }
-        
+
+        val response = responseStore.getResponse(responseId)
+
+        if (response == null) {
+            logger.error { "Response with ID: $responseId not found" }
+            throw NoSuchElementException("Response with ID: $responseId not found")
+        }
+
         val deleted = responseStore.deleteResponse(responseId)
         if (deleted) {
             logger.info { "Successfully deleted response with ID: $responseId" }
-        } else {
-            throw NoSuchElementException("Response with ID: $responseId not found")
         }
     }
 
