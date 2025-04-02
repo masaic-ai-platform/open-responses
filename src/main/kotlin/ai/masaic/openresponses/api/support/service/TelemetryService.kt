@@ -4,14 +4,19 @@ import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import com.openai.core.jsonMapper
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import io.micrometer.core.instrument.DistributionSummary
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import io.micrometer.core.instrument.Timer.Sample
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
+import kotlinx.coroutines.reactor.ReactorContext
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
+import kotlin.coroutines.coroutineContext
 
 @Service
 class TelemetryService(
@@ -84,6 +89,57 @@ class TelemetryService(
 
     fun emitModelOutputEvents(
         observation: Observation,
+        response: Response,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        val mapper = jsonMapper()
+        if (response.output().isNotEmpty()) {
+            val toolCallMap = mutableMapOf<String, Any>()
+            response.output().forEachIndexed { index, output ->
+                if (output.isMessage()) {
+                    val eventData = mutableMapOf<String, Any>()
+                    if (response.output().size > 1) {
+                        eventData["index"] = index
+                        eventData["finish_reason"] = "stop"
+                    }
+                    eventData["gen_ai.system"] = metadata.genAISystem ?: "not_available"
+                    eventData["role"] = "assistant"
+                    eventData["content"] = output.asMessage().content()
+
+                    observation.event(
+                        Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+                    )
+                }
+
+                if (output.isFunctionCall()) {
+                    val toolCall = output.asFunctionCall()
+                    toolCallMap["id"] = toolCall.id()
+                    toolCallMap["type"] = "function"
+                    toolCallMap["function"] =
+                        mapOf(
+                            "name" to toolCall.name(),
+                            "arguments" to toolCall.arguments(),
+                        )
+                }
+            }
+
+            if (toolCallMap.isNotEmpty()) {
+                val eventData =
+                    mapOf(
+                        "gen_ai.system" to metadata.genAISystem,
+                        "finish_reason" to "tool_calls",
+                        "index" to 0, // TODO:: to revisit later with deeper look in open telemetry specs
+                        "tool_calls" to toolCallMap,
+                    )
+                observation.event(
+                    Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+                )
+            }
+        }
+    }
+
+    fun emitModelOutputEvents(
+        observation: Observation,
         chatCompletion: ChatCompletion,
         metadata: CreateResponseMetadataInput,
     ) {
@@ -124,6 +180,32 @@ class TelemetryService(
                     Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
                 )
             }
+        }
+    }
+
+    fun setAllObservationAttributes(
+        observation: Observation,
+        response: Response,
+        params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
+        finishReason: String,
+    ) {
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "chat")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SYSTEM, metadata.genAISystem ?: "not_available")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OUTPUT_TYPE, "text")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.REQUEST_MODEL, params.model().toString())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_MODEL, response.model().asString())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
+        observation.highCardinalityKeyValue(GenAIObsAttributes.RESPONSE_ID, response.id())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_FINISH_REASONS, finishReason)
+
+        params.temperature().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TEMPERATURE, it.toString()) }
+        params.maxOutputTokens().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_MAX_TOKENS, it.toString()) }
+        params.topP().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TOP_P, it.toString()) }
+
+        response.usage().ifPresent { usage ->
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_INPUT_TOKENS, usage.inputTokens().toString())
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_OUTPUT_TOKENS, usage.outputTokens().toString())
         }
     }
 
@@ -172,11 +254,39 @@ class TelemetryService(
         }
     }
 
+    suspend fun startObservation(obsName: String): Observation {
+        val parentObservation =
+            coroutineContext[ReactorContext]?.context?.get<Observation>(
+                ObservationThreadLocalAccessor.KEY,
+            )
+        val observation = Observation.createNotStarted(obsName, observationRegistry)
+        if (parentObservation?.isNoop != true) {
+            observation.parentObservation(parentObservation)
+        }
+        observation.start()
+        return observation
+    }
+
+    fun stopObservation(
+        observation: Observation,
+        response: Response,
+        params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        emitModelOutputEvents(observation, response, metadata)
+        setAllObservationAttributes(observation, response, params, metadata, "stop")
+        recordTokenUsage(metadata, response, params, "input")
+        recordTokenUsage(metadata, response, params, "output")
+        observation.stop()
+    }
+
     fun <T> withClientObservation(
         obsName: String,
+        parentObservation: Observation? = null,
         block: (Observation) -> T,
     ): T {
         val observation = Observation.createNotStarted(obsName, observationRegistry)
+        if (parentObservation != null) observation.parentObservation(parentObservation)
         observation.start()
         return try {
             block(observation)
@@ -191,8 +301,37 @@ class TelemetryService(
 
     fun recordTokenUsage(
         metadata: CreateResponseMetadataInput,
+        response: Response,
+        params: ResponseCreateParams,
+        tokenType: String,
+    ) {
+        val tokenCount =
+            if (tokenType == "input" && response.usage().isPresent) {
+                response.usage().get().inputTokens()
+            } else if (response.usage().isPresent) {
+                response.usage().get().outputTokens()
+            } else {
+                0
+            }
+        tokenUsage(metadata, params.model().asString(), params.model().asString(), tokenType, tokenCount)
+    }
+
+    fun recordTokenUsage(
+        metadata: CreateResponseMetadataInput,
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val requestModel = params.model().asString()
+        val responseMode = chatCompletion.model()
+        tokenUsage(metadata, responseMode, requestModel, tokenType, tokenCount)
+    }
+
+    private fun tokenUsage(
+        metadata: CreateResponseMetadataInput,
+        responseMode: String,
+        requestModel: String,
         tokenType: String,
         tokenCount: Long,
     ) {
@@ -209,17 +348,16 @@ class TelemetryService(
                     "gen_ai.token.type",
                     tokenType,
                 )
-        params.model().let { summaryBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, it.value().name) }
-        chatCompletion.model().let { summaryBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, it ?: "not_available") }
+        summaryBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, requestModel)
+        summaryBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, responseMode)
         summaryBuilder.tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
         val summary = summaryBuilder.register(meterRegistry)
         summary.record(tokenCount.toDouble())
     }
 
     fun <T> withTimer(
-        genAiSystem: String,
-        metadata: CreateResponseMetadataInput,
         params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
         block: () -> T,
     ): T {
         val timerBuilder =
@@ -227,9 +365,9 @@ class TelemetryService(
                 .builder(GenAIObsAttributes.OPERATION_DURATION)
                 .description("GenAI operation duration")
                 .tags(GenAIObsAttributes.OPERATION_NAME, "chat", GenAIObsAttributes.SYSTEM, metadata.genAISystem)
-        params.model().let { timerBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, it.value().name) }
-        params.model().let { timerBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, it.value().name) }
-        timerBuilder.tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
+                .tag(GenAIObsAttributes.REQUEST_MODEL, params.model().asString())
+                .tag(GenAIObsAttributes.RESPONSE_MODEL, params.model().asString())
+                .tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
         val timer = timerBuilder.register(meterRegistry)
         val sample = Timer.start(meterRegistry)
         try {
@@ -241,4 +379,28 @@ class TelemetryService(
             sample.stop(timer)
         }
     }
+
+    fun genAiDurationSample(): Sample {
+        val sample = Timer.start(meterRegistry)
+        return sample
+    }
+
+    fun stopGenAiDurationSample(
+        metadata: CreateResponseMetadataInput,
+        params: ResponseCreateParams,
+        sample: Sample,
+    ) {
+        val timerBuilder =
+            Timer
+                .builder(GenAIObsAttributes.OPERATION_DURATION)
+                .description("GenAI operation duration")
+                .tags(GenAIObsAttributes.OPERATION_NAME, "chat", GenAIObsAttributes.SYSTEM, metadata.genAISystem)
+                .tags(GenAIObsAttributes.REQUEST_MODEL, params.model().asString())
+                .tags(GenAIObsAttributes.RESPONSE_MODEL, params.model().asString())
+                .tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
+        val timer = timerBuilder.register(meterRegistry)
+        sample.stop(timer)
+    }
+
+    fun getCurrentObservation(): Observation? = observationRegistry.currentObservation
 }

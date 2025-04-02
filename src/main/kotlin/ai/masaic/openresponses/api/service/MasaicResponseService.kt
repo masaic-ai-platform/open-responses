@@ -201,6 +201,7 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
+                    responseMetadataInput(headers),
                 )
                 // Add error handling to the flow
                 .catch { error ->

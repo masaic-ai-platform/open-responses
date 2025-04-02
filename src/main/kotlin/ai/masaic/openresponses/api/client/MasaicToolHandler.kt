@@ -6,6 +6,7 @@ import ai.masaic.openresponses.tool.ToolService
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
+import io.micrometer.observation.Observation
 import mu.KotlinLogging
 import org.springframework.stereotype.Component
 import java.util.*
@@ -32,6 +33,7 @@ class MasaicToolHandler(
     fun handleMasaicToolCall(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
+        parentObservation: Observation? = null,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
         val responseInputItems =
@@ -110,7 +112,7 @@ class MasaicToolHandler(
                         )
 
                         // Execute the tool using the observation API
-                        executeToolWithObservation(function.name(), function.arguments(), tool.id()) { toolResult ->
+                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), parentObservation) { toolResult ->
                             if (toolResult != null) {
                                 logger.debug { "Tool execution successful for ${function.name()}" }
                                 responseInputItems.add(
@@ -162,9 +164,10 @@ class MasaicToolHandler(
         toolName: String,
         arguments: String,
         toolId: String,
+        parentObservation: Observation? = null,
         resultHandler: (String?) -> Unit,
     ) {
-        telemetryService.withClientObservation("builtin.tool.execute") { observation ->
+        telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
@@ -189,6 +192,7 @@ class MasaicToolHandler(
     fun handleMasaicToolCall(
         params: ResponseCreateParams,
         response: Response,
+        parentObservation: Observation? = null,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
         val responseInputItems =
@@ -241,7 +245,8 @@ class MasaicToolHandler(
                             .build(),
                     ),
                 )
-                executeToolWithObservation(function.name(), function.arguments(), function.id()) { toolResult ->
+
+                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

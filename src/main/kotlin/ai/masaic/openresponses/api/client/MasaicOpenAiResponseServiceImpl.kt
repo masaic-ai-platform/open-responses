@@ -9,10 +9,14 @@ import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import io.micrometer.observation.Observation
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.reactor.ReactorContext
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
+import kotlin.coroutines.coroutineContext
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.
@@ -64,20 +68,22 @@ class MasaicOpenAiResponseServiceImpl(
      * @param params Parameters for creating the response
      * @return Response object containing completion data
      */
-    fun create(
+    suspend fun create(
         client: OpenAIClient,
         params: ResponseCreateParams,
         metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
     ): Response {
+        val parentObservation =
+            coroutineContext[ReactorContext]?.context?.get<Observation>(
+                ObservationThreadLocalAccessor.KEY,
+            )
+
         val responseOrCompletions =
-            telemetryService.withClientObservation("open.responses.create") { observation ->
+            telemetryService.withClientObservation("open.responses.create", parentObservation) { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
                 val completionCreateParams = parameterConverter.prepareCompletion(params)
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
-                val chatCompletions =
-                    telemetryService.withTimer("open.responses.create", metadata, params) {
-                        client.chat().completions().create(completionCreateParams)
-                    }
+                val chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
                 telemetryService.emitModelOutputEvents(observation, chatCompletions, metadata)
                 telemetryService.setAllObservationAttributes(observation, chatCompletions, params, metadata)
@@ -96,7 +102,7 @@ class MasaicOpenAiResponseServiceImpl(
             return responseOrCompletions
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, parentObservation)
         val updatedParams =
             params
                 .toBuilder()
@@ -151,12 +157,13 @@ class MasaicOpenAiResponseServiceImpl(
      * @param initialParams Parameters for creating the completion
      * @return Flow of ServerSentEvents containing response chunks
      */
-    fun createCompletionStream(
+    suspend fun createCompletionStream(
         client: OpenAIClient,
         initialParams: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
-        return streamingService.createCompletionStream(client, initialParams)
+        return streamingService.createCompletionStream(client, initialParams, metadata)
     }
 
     /**

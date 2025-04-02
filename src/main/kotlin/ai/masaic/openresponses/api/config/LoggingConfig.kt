@@ -1,7 +1,5 @@
 package ai.masaic.openresponses.api.config
 
-import io.micrometer.observation.ObservationRegistry
-import io.micrometer.observation.aop.ObservedAspect
 import mu.KotlinLogging
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -21,13 +19,6 @@ private val logger = KotlinLogging.logger {}
 @Configuration
 @EnableAspectJAutoProxy
 class LoggingConfig {
-    /**
-     * Creates an observed aspect for automatic instrumentation of methods
-     * annotated with @Observed.
-     */
-    @Bean
-    fun observedAspect(observationRegistry: ObservationRegistry): ObservedAspect = ObservedAspect(observationRegistry)
-
     @Bean
     fun requestIdFilter(): WebFilter = RequestTraceWebFilter()
 
