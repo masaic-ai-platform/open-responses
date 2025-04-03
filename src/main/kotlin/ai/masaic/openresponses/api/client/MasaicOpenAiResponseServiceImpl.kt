@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.client
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.openai.client.OpenAIClient
+import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.*
@@ -32,6 +33,7 @@ class MasaicOpenAiResponseServiceImpl(
     private val parameterConverter: MasaicParameterConverter,
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService,
+    private val responseStore: ResponseStore,
     private val telemetryService: TelemetryService,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
@@ -99,6 +101,7 @@ class MasaicOpenAiResponseServiceImpl(
             }
 
         if (responseOrCompletions is Response) {
+            storeResponseWithInputItems(responseOrCompletions, params)
             return responseOrCompletions
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
@@ -111,6 +114,8 @@ class MasaicOpenAiResponseServiceImpl(
 
         if (hasUnresolvedFunctionCalls(updatedParams)) {
             logger.info { "Some function calls without outputs, returning current response" }
+            val response = chatCompletions.toResponse(updatedParams)
+            storeResponseWithInputItems(response, updatedParams)
             return chatCompletions.toResponse(updatedParams)
         }
 
@@ -151,6 +156,33 @@ class MasaicOpenAiResponseServiceImpl(
     private fun exceedsMaxToolCalls(items: List<ResponseInputItem>): Boolean = items.count { it.isFunctionCall() } > getAllowedMaxToolCalls()
 
     /**
+     * Stores a response and its associated input items in the response store.
+     */
+    private fun storeResponseWithInputItems(
+        response: Response,
+        params: ResponseCreateParams,
+    ) {
+        if (params.store().isPresent && params.store().get()) {
+            val inputItems =
+                if (params.input().isResponse()) {
+                    params.input().asResponse()
+                } else {
+                    listOf(
+                        ResponseInputItem.ofEasyInputMessage(
+                            EasyInputMessage
+                                .builder()
+                                .content(params.input().asText())
+                                .role(EasyInputMessage.Role.USER)
+                                .build(),
+                        ),
+                    )
+                }
+            responseStore.storeResponse(response, inputItems)
+            logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
+        }
+    }
+
+    /**
      * Creates a streaming completion that emits ServerSentEvents.
      * This allows for real-time response processing.
      *
@@ -178,25 +210,52 @@ class MasaicOpenAiResponseServiceImpl(
     }
 
     /**
-     * Not implemented: Retrieves a specific response by ID.
+     * Retrieves a specific response by ID.
+     *
+     * @param params The parameters containing the response ID to retrieve
+     * @param requestOptions Additional request options
+     * @return The retrieved response or throws an exception if not found
      */
     override fun retrieve(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions,
     ): Response {
-        logger.warn { "retrieve() method not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
+        val responseId = params.responseId()
+        logger.debug { "Retrieving response with ID: $responseId" }
+
+        // Attempt to retrieve the response from the store
+        val response = responseStore.getResponse(responseId)
+        if (response != null) {
+            logger.debug { "Found response with ID: $responseId" }
+            return response
+        }
+
+        // If response is not found, throw an exception
+        logger.error { "Response with ID: $responseId not found" }
+        throw NoSuchElementException("Response with ID: $responseId not found")
     }
 
     /**
-     * Not implemented: Deletes a response by ID.
+     * Deletes a response by ID.
      */
     override fun delete(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions,
     ) {
-        logger.warn { "delete() method not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
+        val responseId = params.responseId()
+        logger.debug { "Deleting response with ID: $responseId" }
+
+        val response = responseStore.getResponse(responseId)
+
+        if (response == null) {
+            logger.error { "Response with ID: $responseId not found" }
+            throw NoSuchElementException("Response with ID: $responseId not found")
+        }
+
+        val deleted = responseStore.deleteResponse(responseId)
+        if (deleted) {
+            logger.info { "Successfully deleted response with ID: $responseId" }
+        }
     }
 
     /**
@@ -208,3 +267,77 @@ class MasaicOpenAiResponseServiceImpl(
         return maxToolCalls
     }
 }
+
+/**
+ * Prepares user content from a message.
+ *
+ * @param message The message to extract content from
+ * @return List of ChatCompletionContentPart objects
+ */
+private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> = prepareUserContent(message.content())
+
+/**
+ * Prepares user content from a list of response input content.
+ * Converts various input types (text, image, file) to appropriate ChatCompletionContentPart objects.
+ *
+ * @param contentList List of response input content
+ * @return List of ChatCompletionContentPart objects
+ */
+private fun prepareUserContent(contentList: List<ResponseInputContent>): List<ChatCompletionContentPart> =
+    contentList.map { content ->
+        when {
+            content.isInputText() -> {
+                val inputText = content.asInputText()
+                ChatCompletionContentPart.ofText(
+                    ChatCompletionContentPartText
+                        .builder()
+                        .text(
+                            inputText.text(),
+                        ).build(),
+                )
+            }
+
+            content.isInputImage() -> {
+                val inputImage = content.asInputImage()
+                ChatCompletionContentPart.ofImageUrl(
+                    ChatCompletionContentPartImage
+                        .builder()
+                        .type(JsonValue.from("image_url"))
+                        .imageUrl(
+                            ChatCompletionContentPartImage.ImageUrl
+                                .builder()
+                                .url(inputImage._imageUrl())
+                                .detail(
+                                    ChatCompletionContentPartImage.ImageUrl.Detail.of(
+                                        inputImage
+                                            .detail()
+                                            .value()
+                                            .name
+                                            .lowercase(),
+                                    ),
+                                ).putAllAdditionalProperties(inputImage._additionalProperties())
+                                .build(),
+                        ).build(),
+                )
+            }
+
+            content.isInputFile() -> {
+                val inputFile = content.asInputFile()
+                ChatCompletionContentPart.ofFile(
+                    ChatCompletionContentPart.File
+                        .builder()
+                        .type(JsonValue.from("file"))
+                        .file(
+                            ChatCompletionContentPart.File.FileObject
+                                .builder()
+                                .fileData(inputFile._fileData())
+                                .fileId(inputFile._fileId())
+                                .fileName(inputFile._filename())
+                                .build(),
+                        ).build(),
+                )
+            }
+
+            else -> throw IllegalArgumentException("Unsupported input type")
+        }
+    }

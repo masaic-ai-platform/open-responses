@@ -1,16 +1,23 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
+import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.ChatModel
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseFunctionToolCall
+import com.openai.models.responses.ResponseInputContent
+import com.openai.models.responses.ResponseInputItem
+import com.openai.models.responses.ResponseInputText
 import com.openai.models.responses.ResponseTextConfig
 import com.openai.models.responses.ToolChoiceOptions
 import io.mockk.*
@@ -20,7 +27,6 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.http.codec.ServerSentEvent
@@ -35,11 +41,13 @@ class MasaicResponseServiceTest {
     private lateinit var openAIResponseService: MasaicOpenAiResponseServiceImpl
     private lateinit var masaicResponseService: MasaicResponseService
     private lateinit var payloadFormatter: PayloadFormatter
+    private lateinit var responseStore: ResponseStore
     private lateinit var objectMapper: ObjectMapper
 
     @BeforeEach
     fun setup() {
-        objectMapper = ObjectMapper()
+        responseStore = mockk()
+        objectMapper = jacksonObjectMapper()
         payloadFormatter =
             mockk {
                 every { formatResponse(any()) } answers {
@@ -48,7 +56,7 @@ class MasaicResponseServiceTest {
             }
         toolService = mockk()
         openAIResponseService = mockk()
-        masaicResponseService = MasaicResponseService(openAIResponseService, payloadFormatter, objectMapper)
+        masaicResponseService = MasaicResponseService(openAIResponseService, responseStore, payloadFormatter, objectMapper)
     }
 
     @Test
@@ -57,6 +65,7 @@ class MasaicResponseServiceTest {
             // Given
             val request =
                 mockk<ResponseCreateParams.Body> {
+                    every { previousResponseId() } returns Optional.empty()
                     every { input() } returns ResponseCreateParams.Input.ofText("Test")
                     every { model() } returns ChatModel.of("gpt-4o")
                     every { instructions() } returns Optional.empty()
@@ -141,6 +150,7 @@ class MasaicResponseServiceTest {
             // Given
             val request =
                 mockk<ResponseCreateParams.Body> {
+                    every { previousResponseId() } returns Optional.empty()
                     every { input() } returns ResponseCreateParams.Input.ofText("Test")
                     every { model() } returns ChatModel.of("gpt-4o")
                     every { instructions() } returns Optional.empty()
@@ -173,8 +183,8 @@ class MasaicResponseServiceTest {
 
             coEvery {
                 openAIResponseService.createCompletionStream(
-                    any(), 
-                    any(), 
+                    any(),
+                    any(),
                     metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
                 )
             } returns expectedFlow
@@ -190,8 +200,8 @@ class MasaicResponseServiceTest {
 
             coVerify(exactly = 1) {
                 openAIResponseService.createCompletionStream(
-                    any(), 
-                    any(), 
+                    any(),
+                    any(),
                     metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
                 )
             }
@@ -214,18 +224,133 @@ class MasaicResponseServiceTest {
     }
 
     @Test
-    @Disabled("This code is not yet implemented")
-    fun `getResponse should throw IllegalArgumentException if Authorization header is missing`() {
+    fun `listInputItems should retrieve input items from ResponseStore`() {
         // Given
-        val responseId = "testResponseId"
-        val headers: MultiValueMap<String, String> = LinkedMultiValueMap() // no "Authorization"
-        val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
+        val responseId = "resp_123456"
+        val mockResponse = mockk<Response>()
+
+        // Create actual ResponseInputItem objects instead of mocks
+        val inputItems =
+            listOf(
+                objectMapper.convertValue(
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall
+                            .builder()
+                            .id("fc_1")
+                            .name("test_function")
+                            .arguments("{}")
+                            .callId("fc_1")
+                            .build(),
+                    ),
+                    InputMessageItem::class.java,
+                ),
+                objectMapper.convertValue(
+                    ResponseInputItem.ofFunctionCallOutput(
+                        ResponseInputItem.FunctionCallOutput
+                            .builder()
+                            .callId("fc_1")
+                            .output("{\"result\": \"success\"}")
+                            .build(),
+                    ),
+                    InputMessageItem::class.java,
+                ),
+                objectMapper.convertValue(
+                    ResponseInputItem.ofMessage(
+                        ResponseInputItem.Message
+                            .builder()
+                            .role(ResponseInputItem.Message.Role.USER)
+                            .content(
+                                listOf(
+                                    ResponseInputContent.ofInputText(
+                                        ResponseInputText
+                                            .builder()
+                                            .text("Hello")
+                                            .build(),
+                                    ),
+                                ),
+                            ).build(),
+                    ),
+                    InputMessageItem::class.java,
+                ),
+            )
+
+        every { responseStore.getResponse(responseId) } returns mockResponse
+        every { responseStore.getInputItems(responseId) } returns inputItems
+
+        // When
+        val result = masaicResponseService.listInputItems(responseId, 2, "desc", null, null)
+
+        // Then
+        assertEquals(2, result.data.size, "Should return limited input items")
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
+        verify(exactly = 1) { responseStore.getInputItems(responseId) }
+    }
+
+    @Test
+    fun `listInputItems should return all items if limit is greater than available items`() {
+        // Given
+        val responseId = "resp_123456"
+        val mockResponse = mockk<Response>()
+
+        // Create actual ResponseInputItem objects instead of mocks
+        val inputItems =
+            listOf(
+                objectMapper.convertValue(
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall
+                            .builder()
+                            .id("fc_1")
+                            .name("test_function")
+                            .arguments("{}")
+                            .callId("fc_1")
+                            .build(),
+                    ),
+                    InputMessageItem::class.java,
+                ),
+                objectMapper.convertValue(
+                    ResponseInputItem.ofMessage(
+                        ResponseInputItem.Message
+                            .builder()
+                            .role(ResponseInputItem.Message.Role.USER)
+                            .content(
+                                listOf(
+                                    ResponseInputContent.ofInputText(
+                                        ResponseInputText
+                                            .builder()
+                                            .text("Hello")
+                                            .build(),
+                                    ),
+                                ),
+                            ).build(),
+                    ),
+                    InputMessageItem::class.java,
+                ),
+            )
+
+        every { responseStore.getResponse(responseId) } returns mockResponse
+        every { responseStore.getInputItems(responseId) } returns inputItems
+
+        // When
+        val result = masaicResponseService.listInputItems(responseId, 5, "desc", null, null)
+
+        // Then
+        assertEquals(2, result.data.size, "Should return all input items")
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
+        verify(exactly = 1) { responseStore.getInputItems(responseId) }
+    }
+
+    @Test
+    fun `listInputItems should throw ResponseNotFoundException if response not found`() {
+        // Given
+        val responseId = "nonexistent_resp"
+        every { responseStore.getResponse(responseId) } returns null
 
         // When & Then
-        assertThrows(ResponseProcessingException::class.java) {
-            runBlocking {
-                masaicResponseService.getResponse(responseId, headers, queryParams)
-            }
+        assertThrows(ResponseNotFoundException::class.java) {
+            masaicResponseService.listInputItems(responseId, 10, "desc", null, null)
         }
+
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
+        verify(exactly = 0) { responseStore.getInputItems(any()) }
     }
 }

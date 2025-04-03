@@ -281,14 +281,8 @@ class MasaicParameterConverter {
         if (params.maxOutputTokens().isPresent) {
             completionBuilder.maxCompletionTokens(params.maxOutputTokens())
         }
-        if (params.metadata().isPresent) {
-            completionBuilder.metadata(params.metadata())
-        }
         if (params.topP().isPresent) {
             completionBuilder.topP(params.topP())
-        }
-        if (params.store().isPresent) {
-            completionBuilder.store(params.store())
         }
     }
 
@@ -582,15 +576,28 @@ class MasaicParameterConverter {
                 }
                 easyInputMessage.content().isResponseInputMessageContentList() -> {
                     val contentList = easyInputMessage.content().asResponseInputMessageContentList()
-                    completionBuilder.addMessage(
-                        ChatCompletionUserMessageParam
-                            .builder()
-                            .content(
-                                ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
-                                    prepareUserContent(contentList),
-                                ),
-                            ).build(),
-                    )
+
+                    if (contentList.size == 1 && contentList.first().isInputText()) { // Single text input
+                        completionBuilder.addMessage(
+                            ChatCompletionUserMessageParam
+                                .builder()
+                                .content(
+                                    ChatCompletionUserMessageParam.Content.ofText(
+                                        contentList.first().asInputText().text(),
+                                    ),
+                                ).build(),
+                        )
+                    } else {
+                        completionBuilder.addMessage(
+                            ChatCompletionUserMessageParam
+                                .builder()
+                                .content(
+                                    ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                                        prepareUserContent(contentList),
+                                    ),
+                                ).build(),
+                        )
+                    }
                 }
                 else -> {
                     completionBuilder.addMessage(
@@ -633,20 +640,35 @@ class MasaicParameterConverter {
             } else if (item.asEasyInputMessage().content().isResponseInputMessageContentList()) {
                 val inputs = item.asEasyInputMessage().content().asResponseInputMessageContentList()
 
-                val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> =
-                    inputs.map {
-                        if (it.isInputText()) {
-                            ChatCompletionRequestAssistantMessageContentPart.ofText(
-                                ChatCompletionContentPartText.builder().text(it.asInputText().text()).build(),
-                            )
-                        } else {
-                            throw ResponseProcessingException("Assistant message other than text is not supported.")
+                if (inputs.size == 1 && inputs.first().isInputText()) { // Single text input
+                    completionBuilder.addMessage(
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(
+                                ChatCompletionUserMessageParam.Content.ofText(
+                                    inputs.first().asInputText().text(),
+                                ),
+                            ).build(),
+                    )
+                } else {
+                    val assistantMessages: List<ChatCompletionRequestAssistantMessageContentPart> =
+                        inputs.map {
+                            if (it.isInputText()) {
+                                ChatCompletionRequestAssistantMessageContentPart.ofText(
+                                    ChatCompletionContentPartText.builder().text(it.asInputText().text()).build(),
+                                )
+                            } else {
+                                throw ResponseProcessingException("Assistant message other than text is not supported.")
+                            }
                         }
-                    }
 
-                completionBuilder.addMessage(
-                    ChatCompletionAssistantMessageParam.builder().contentOfArrayOfContentParts(assistantMessages).build(),
-                )
+                    completionBuilder.addMessage(
+                        ChatCompletionAssistantMessageParam
+                            .builder()
+                            .contentOfArrayOfContentParts(assistantMessages)
+                            .build(),
+                    )
+                }
             }
         } else if (item.isResponseOutputMessage()) {
             item.asResponseOutputMessage().content().forEach {
@@ -805,58 +827,64 @@ class MasaicParameterConverter {
      */
     private fun prepareUserContent(contentList: List<ResponseInputContent>): List<ChatCompletionContentPart> =
         contentList.map { content ->
-            when {
-                content.isInputText() -> {
-                    val inputText = content.asInputText()
-                    ChatCompletionContentPart.ofText(
-                        ChatCompletionContentPartText
-                            .builder()
-                            .text(
-                                inputText.text(),
-                            ).build(),
-                    )
-                }
-                content.isInputImage() -> {
-                    val inputImage = content.asInputImage()
-                    ChatCompletionContentPart.ofImageUrl(
-                        ChatCompletionContentPartImage
-                            .builder()
-                            .type(JsonValue.from("image_url"))
-                            .imageUrl(
-                                ChatCompletionContentPartImage.ImageUrl
-                                    .builder()
-                                    .url(inputImage._imageUrl())
-                                    .detail(
-                                        ChatCompletionContentPartImage.ImageUrl.Detail.of(
-                                            inputImage
-                                                .detail()
-                                                .value()
-                                                .name
-                                                .lowercase(),
-                                        ),
-                                    ).putAllAdditionalProperties(inputImage._additionalProperties())
-                                    .build(),
-                            ).build(),
-                    )
-                }
-                content.isInputFile() -> {
-                    val inputFile = content.asInputFile()
-                    ChatCompletionContentPart.ofFile(
-                        ChatCompletionContentPart.File
-                            .builder()
-                            .type(JsonValue.from("file"))
-                            .file(
-                                ChatCompletionContentPart.File.FileObject
-                                    .builder()
-                                    .fileData(inputFile._fileData())
-                                    .fileId(inputFile._fileId())
-                                    .fileName(inputFile._filename())
-                                    .build(),
-                            ).build(),
-                    )
-                }
-                else -> throw IllegalArgumentException("Unsupported input type")
+            processionInputContent(content)
+        }
+
+    private fun processionInputContent(content: ResponseInputContent): ChatCompletionContentPart =
+        when {
+            content.isInputText() -> {
+                val inputText = content.asInputText()
+                ChatCompletionContentPart.ofText(
+                    ChatCompletionContentPartText
+                        .builder()
+                        .text(
+                            inputText.text(),
+                        ).build(),
+                )
             }
+
+            content.isInputImage() -> {
+                val inputImage = content.asInputImage()
+                ChatCompletionContentPart.ofImageUrl(
+                    ChatCompletionContentPartImage
+                        .builder()
+                        .type(JsonValue.from("image_url"))
+                        .imageUrl(
+                            ChatCompletionContentPartImage.ImageUrl
+                                .builder()
+                                .url(inputImage._imageUrl())
+                                .detail(
+                                    ChatCompletionContentPartImage.ImageUrl.Detail.of(
+                                        inputImage
+                                            .detail()
+                                            .value()
+                                            .name
+                                            .lowercase(),
+                                    ),
+                                ).putAllAdditionalProperties(inputImage._additionalProperties())
+                                .build(),
+                        ).build(),
+                )
+            }
+
+            content.isInputFile() -> {
+                val inputFile = content.asInputFile()
+                ChatCompletionContentPart.ofFile(
+                    ChatCompletionContentPart.File
+                        .builder()
+                        .type(JsonValue.from("file"))
+                        .file(
+                            ChatCompletionContentPart.File.FileObject
+                                .builder()
+                                .fileData(inputFile._fileData())
+                                .fileId(inputFile._fileId())
+                                .fileName(inputFile._filename())
+                                .build(),
+                        ).build(),
+                )
+            }
+
+            else -> throw IllegalArgumentException("Unsupported input type")
         }
 }
 

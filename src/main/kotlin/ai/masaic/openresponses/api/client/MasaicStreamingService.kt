@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactor.ReactorContext
+import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.*
@@ -30,6 +31,7 @@ class MasaicStreamingService(
     private val toolHandler: MasaicToolHandler,
     private val parameterConverter: MasaicParameterConverter,
     private val toolService: ToolService,
+    private val responseStore: ResponseStore,
     // Make these constructor params for easy mocking:
     private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10,
     private val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L, // 60 seconds
@@ -37,6 +39,8 @@ class MasaicStreamingService(
     private val objectMapper: ObjectMapper,
     private val telemetryService: TelemetryService,
 ) {
+    private val logger = KotlinLogging.logger {}
+
     /**
      * Creates a streaming completion that emits ServerSentEvents.
      * This allows for real-time response processing.
@@ -186,6 +190,11 @@ class MasaicStreamingService(
                                         responseId,
                                         responseOutputItemAccumulator,
                                     )
+
+                                // Store the response in the response store
+                                storeResponseWithInputItems(finalResponse, params)
+
+                                nextIteration = false
                                 trySend(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofCompleted(
@@ -223,6 +232,8 @@ class MasaicStreamingService(
                                         responseOutputItemAccumulator,
                                         incompleteDetails,
                                     )
+                                // Store the incomplete response in the response store
+                                storeResponseWithInputItems(finalResponse, params)
                                 trySend(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofIncomplete(
@@ -642,6 +653,33 @@ class MasaicStreamingService(
                     ),
                 )
             }
+        }
+    }
+
+    /**
+     * Helper method to store a response and its input items in the response store.
+     */
+    private fun ProducerScope<ServerSentEvent<String>>.storeResponseWithInputItems(
+        response: Response,
+        params: ResponseCreateParams,
+    ) {
+        if (params.store().isPresent && params.store().get()) {
+            val inputItems =
+                if (params.input().isResponse()) {
+                    params.input().asResponse()
+                } else {
+                    listOf(
+                        ResponseInputItem.ofEasyInputMessage(
+                            EasyInputMessage
+                                .builder()
+                                .content(params.input().asText())
+                                .role(EasyInputMessage.Role.USER)
+                                .build(),
+                        ),
+                    )
+                }
+            responseStore.storeResponse(response, inputItems)
+            logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
         }
     }
 }
