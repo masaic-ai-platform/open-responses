@@ -214,18 +214,6 @@ class MasaicResponseServiceTest {
     }
 
     @Test
-    fun `getResponse should call the underlying OpenAI client and return a Response`() {
-        // Given
-        val responseId = "testResponseId"
-        val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
-        headers.add("Authorization", "Bearer testKey")
-        val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
-
-        // TODO: Mock the OpenAI client and the response
-        val expectedResponse = mockk<Response>()
-    }
-
-    @Test
     @Disabled("This code is not yet implemented")
     fun `getResponse should throw IllegalArgumentException if Authorization header is missing`() {
         // Given
