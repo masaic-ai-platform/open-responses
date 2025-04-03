@@ -142,13 +142,13 @@ The table below shows the detailed mapping between Responses API streaming event
 | `response.refusal.done`               | Error handling (Open-Responses enhancement)                           | Refusal text finalized | Marks completion of refusal |
 | `response.function_call_arguments.delta` | Partial function call arguments streaming (`choices[].delta`) | Partial function arguments | Mapped from tool call fragments |
 | `response.function_call_arguments.done`  | Final function arguments chunk                                | Function call arguments finalized | Generated when tool call completes |
-| `response.{tool_name}.in_progress`    | N/A - Open-Responses-specific enhancement                     | Tool execution started | Custom tool lifecycle event indicating tool processing has begun |
-| `response.{tool_name}.executing`      | N/A - Open-Responses-specific enhancement                     | Tool is executing | Custom tool lifecycle event indicating active execution |
-| `response.{tool_name}.completed`      | N/A - Open-Responses-specific enhancement                     | Tool execution finished | Custom tool lifecycle event indicating successful completion |
-| `response.file_search_call.*`         | Managed as tool calls (Open-Responses enhancement)            | File search lifecycle | Custom tool implementation |
-| `response.web_search_call.*`          | Managed as tool calls (Open-Responses enhancement)            | Web search lifecycle | Custom tool implementation |
+| `response.{tool_name}.in_progress`    | N/A - Open-Responses-specific enhancement                     | Tool execution started | Open-responses managed tool lifecycle event indicating tool processing has begun |
+| `response.{tool_name}.executing`      | N/A - Open-Responses-specific enhancement                     | Tool is executing | Open-responses managed tool lifecycle event indicating active execution |
+| `response.{tool_name}.completed`      | N/A - Open-Responses-specific enhancement                     | Tool execution finished | Open-responses managed tool lifecycle event indicating successful completion |
+| `response.file_search_call.*`         | Managed as tool calls (Open-Responses enhancement)            | File search lifecycle | Open-responses managed tool implementation |
+| `response.web_search_call.*`          | Managed as tool calls (Open-Responses enhancement)            | Web search lifecycle | Open-responses managed tool implementation |
 
-> **Note**: For tool-specific events, `{tool_name}` is replaced with the actual name of the tool being executed, converted to lowercase with leading non-word characters replaced by underscores. These custom events provide detailed visibility into the tool execution lifecycle beyond what the standard Chat Completions API offers.
+> **Note**: For tool-specific events, `{tool_name}` is replaced with the actual name of the tool being executed, converted to lowercase with leading non-word characters replaced by underscores. These Open-responses managed tool events provide detailed visibility into the tool execution lifecycle beyond what the standard Chat Completions API offers.
 
 #### Implementation Specifics
 
@@ -174,9 +174,9 @@ The Open-Responses implementation includes following components for streaming:
    - Progress indication for tool execution
    - Proper sequencing of multi-turn tool interactions
 
-### Custom Tool Lifecycle Events
+### Open-responses Managed Tool Lifecycle Events
 
-Open-Responses extends the standard Chat Completions API streaming events with custom tool-specific events that provide more granular visibility into tool execution:
+Open-Responses extends the standard Chat Completions API streaming events with Open-responses managed tool-specific events that provide more granular visibility into tool execution:
 
 1. **Tool Execution Progress Events**:
    - `response.{tool_name}.in_progress`: Emitted when a tool call is detected and processing begins
@@ -199,7 +199,44 @@ Open-Responses extends the standard Chat Completions API streaming events with c
    - Ability to show appropriate loading states for long-running tools
    - Troubleshooting visibility for tool execution issues
 
-These custom events are emitted in addition to the standard Chat Completions API events, providing enhanced developer experience without breaking compatibility.
+## Open-responses Managed Tools
+
+Open-responses managed tools are specialized tool implementations that are handled entirely by the Open-Responses platform rather than being passed directly to the underlying model provider or client. These tools provide additional functionality and enhanced capabilities not available in the standard Model provider API.
+
+### Key Characteristics of Open-responses Managed Tools
+
+1. **Execution Environment**: 
+   - Tools run in a secure, isolated environment maintained by the Open-Responses platform
+   - Execution happens server-side with appropriate security measures
+
+2. **Tool Types**:
+   - **Web Search Tools**: Allow models to search the internet and retrieve up-to-date information
+   - **File Search Tools**: Enable searching and retrieving content from developer-provided files (COMING SOON)
+   - **Computer Use Tools**: Provide limited, controlled access to computing resources for specific tasks (COMING SOON)
+   - **Custom Function Tools**: Support for additional specialized tools maintained by the platform
+
+3. **Lifecycle Management**:
+   - Open-Responses manages the complete execution lifecycle of these tools
+   - Tools are executed asynchronously and can be monitored through specialized events
+   - Results are automatically fed back to the model during conversation
+
+4. **Benefits Over Standard Tool Calls**:
+   - Enhanced security through isolation and permission controls
+   - Improved performance through optimized execution
+   - Additional capabilities not natively supported by model providers
+   - Simplified developer experience with unified API surface
+
+### Using Open-responses Managed Tools
+
+To use these tools, developers specify them like regular tools but with special configuration parameters (currently MCPs) that indicate they should be managed by the Open-Responses platform.
+
+The platform automatically handles:
+- Tool execution and result processing
+- Streaming events for tool execution progress
+- Error handling
+- Formatting and presenting results to the model
+
+These tools enable powerful functionality like real-time web search, file operations, and other capabilities while maintaining a simple, consistent API surface for developers.
 
 ## Open-Responses Layer Managed Properties
 
