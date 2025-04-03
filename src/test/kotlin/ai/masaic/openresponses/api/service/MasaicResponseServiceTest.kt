@@ -172,7 +172,11 @@ class MasaicResponseServiceTest {
                 )
 
             coEvery {
-                openAIResponseService.createCompletionStream(any(), ofType(), metadata = CreateResponseMetadataInput())
+                openAIResponseService.createCompletionStream(
+                    any(), 
+                    any(), 
+                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                )
             } returns expectedFlow
 
             // When
@@ -185,7 +189,11 @@ class MasaicResponseServiceTest {
             assertEquals("data2", collectedEvents[1].data())
 
             coVerify(exactly = 1) {
-                openAIResponseService.createCompletionStream(any(), any(), metadata = CreateResponseMetadataInput())
+                openAIResponseService.createCompletionStream(
+                    any(), 
+                    any(), 
+                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                )
             }
             confirmVerified(openAIResponseService)
         }

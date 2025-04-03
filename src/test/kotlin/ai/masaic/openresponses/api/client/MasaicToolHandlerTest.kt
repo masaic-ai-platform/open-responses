@@ -47,11 +47,13 @@ class MasaicToolHandlerTest {
         every { 
             telemetryService.withClientObservation<Any>(
                 any(), 
-                any(),
+                any(), // This is the parentObservation parameter
                 any(),
             ) 
         } answers {
-            val block = secondArg<(Observation) -> Any>()
+            val operationName = firstArg<String>()
+            val parentObservation = secondArg<Observation?>() // Get the parentObservation
+            val block = thirdArg<(Observation) -> Any>() // Get the block as the third parameter
             val mockObservation = mockk<Observation>(relaxed = true)
             
             // Track attributes being set
@@ -69,6 +71,7 @@ class MasaicToolHandlerTest {
                 mockObservation
             }
             
+            // Execute the block with the mock observation
             block(mockObservation)
         }
         
@@ -777,7 +780,8 @@ class MasaicToolHandlerTest {
             telemetrySpy.withClientObservation<Any>(any(), any(), any())
         } answers {
             val operationName = firstArg<String>()
-            val block = secondArg<(Observation) -> Any>()
+            val parentObservation = secondArg<Observation?>() // Get parentObservation
+            val block = thirdArg<(Observation) -> Any>() // Get the block as the third parameter
             
             // Set up observation to capture attributes
             capturedAttributes["observation_name"] = operationName
