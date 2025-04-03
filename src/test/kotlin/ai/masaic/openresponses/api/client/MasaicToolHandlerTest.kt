@@ -806,4 +806,387 @@ class MasaicToolHandlerTest {
         assertEquals(1, functionCalls)
         assertEquals(1, functionOutputs)
     }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with empty choices should return only user message`() {
+        // Given: A ChatCompletion with no choices
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf())
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+
+        // When
+        val items = handler.handleMasaicToolCall(chatCompletion, params)
+
+        // Then: We expect only the user input message as there are no choices to process
+        assertEquals(1, items.size)
+        assert(items[0].isEasyInputMessage())
+        assertEquals("User message", items[0].asEasyInputMessage().content().asTextInput())
+        
+        // Verify no tool execution observations were created
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+    }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with both text content and tool calls`() {
+        // Given: A ChatCompletion with a choice that has both text content and tool calls
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("mixed-content-tool-id")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("mixedContentTool")
+                        .arguments("{\"param\":\"mixed\"}")
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content("This is a text message accompanying a tool call")
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        
+        // Mock tool service
+        every { toolService.getFunctionTool("mixedContentTool") } returns mockk()
+        every { toolService.executeTool("mixedContentTool", "{\"param\":\"mixed\"}") } returns "Mixed result"
+
+        // When
+        val items = handler.handleMasaicToolCall(chatCompletion, params)
+
+        // Then: We expect 4 items in the result:
+        // 1) The original user input as a ResponseInputItem
+        // 2) The assistant text message from the completion
+        // 3) The function call
+        // 4) The function call output
+        assertEquals(4, items.size)
+
+        // Verify function call and output
+        val functionCall = items[1]
+        assert(functionCall.isFunctionCall())
+        assertEquals("mixedContentTool", functionCall.asFunctionCall().name())
+        // Verify observation was created
+        verify(exactly = 1) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+    }
+
+    @Test
+    fun `handleMasaicToolCall(params, response) - with message outputs having empty content`() {
+        // Given a Response with an empty message content
+        val emptyMessageOutput =
+            ResponseOutputMessage
+                .builder()
+                .id("empty-msg-id")
+                .status(ResponseOutputMessage.Status.COMPLETED)
+                .content(listOf()) // Empty content list
+                .role(JsonValue.from("assistant"))
+                .build()
+
+        val response =
+            Response
+                .builder()
+                .output(
+                    listOf(
+                        ResponseOutputItem.ofMessage(emptyMessageOutput),
+                    ),
+                ).id("response-id")
+                .createdAt(1234567890.0)
+                .error(null)
+                .incompleteDetails(null)
+                .instructions(null)
+                .metadata(null)
+                .model(ChatModel.of("gpt-3.5-turbo"))
+                .toolChoice(ToolChoiceOptions.NONE)
+                .temperature(null)
+                .parallelToolCalls(false)
+                .tools(listOf())
+                .topP(null)
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+
+        // When
+        val items = handler.handleMasaicToolCall(params, response)
+
+        // Then: We expect only the user input message since the empty message content should be filtered out
+        assertEquals(1, items.size)
+        assert(items.first().isEasyInputMessage())
+        assertEquals(
+            "User message",
+            items
+                .first()
+                .asEasyInputMessage()
+                .content()
+                .asTextInput(),
+        )
+        
+        // Verify no observation was created
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+    }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with parent observation passed explicitly`() {
+        // Given: A ChatCompletion with a tool call
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("parent-obs-tool-id")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("parentObsTool")
+                        .arguments("{\"param\":\"parentTest\"}")
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content(null)
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        every { toolService.getFunctionTool("parentObsTool") } returns mockk()
+        every { toolService.executeTool("parentObsTool", "{\"param\":\"parentTest\"}") } returns "Parent observation test result"
+        
+        // Create a mock parent observation
+        val parentObservation = mockk<Observation>()
+        
+        // Call handler with explicit parent observation
+        val items = handler.handleMasaicToolCall(chatCompletion, params, parentObservation)
+
+        // Then verify parent observation was passed to the withClientObservation method
+        verify { 
+            telemetryService.withClientObservation<Any>(
+                any(), 
+                eq(parentObservation), // Verify parent observation was passed
+                any(),
+            ) 
+        }
+        
+        // Verify function call and output were added
+        assertEquals(3, items.size)
+        val functionCall = items[1]
+        assert(functionCall.isFunctionCall())
+        val functionOutput = items[2]
+        assert(functionOutput.isFunctionCallOutput())
+    }
+
+    @Test
+    fun `handleMasaicToolCall(chatCompletion, params) - with malformed tool arguments should propagate error`() {
+        // Given: A ChatCompletion with a tool call that has malformed arguments
+        val toolCall =
+            ChatCompletionMessageToolCall
+                .builder()
+                .id("malformed-args-tool-id")
+                .function(
+                    ChatCompletionMessageToolCall.Function
+                        .builder()
+                        .name("malformedArgsTool")
+                        .arguments("{invalid json") // Malformed JSON
+                        .build(),
+                ).build()
+
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .toolCalls(listOf(toolCall))
+                .content(null)
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        every { params.input().isResponse() } returns false
+        every { params.input().asText() } returns "User message"
+        every { toolService.getFunctionTool("malformedArgsTool") } returns mockk()
+        
+        // Tool service throws error when parsing malformed JSON
+        every { toolService.executeTool("malformedArgsTool", "{invalid json") } throws IllegalArgumentException("Malformed JSON arguments")
+        
+        // When & Then - verify exception is propagated
+        assertThrows<IllegalArgumentException> {
+            handler.handleMasaicToolCall(chatCompletion, params)
+        }
+        
+        // Verify observation recorded the error
+        verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+    }
+
+    @Test
+    fun `handleMasaicToolCall(params, response) - with response as input should preserve existing items`() {
+        // Given: An existing response with multiple items as input
+        val existingUserMessage = 
+            EasyInputMessage
+                .builder()
+                .content("Previous user message")
+                .role(EasyInputMessage.Role.USER)
+                .build()
+        
+        val existingAssistantMessage =
+            ResponseOutputMessage
+                .builder()
+                .id("existing-msg-id")
+                .status(ResponseOutputMessage.Status.COMPLETED)
+                .content(
+                    listOf(
+                        ResponseOutputMessage.Content.ofOutputText(
+                            ResponseOutputText
+                                .builder()
+                                .text("Previous assistant message")
+                                .annotations(listOf())
+                                .build(),
+                        ),
+                    ),
+                ).role(JsonValue.from("assistant"))
+                .build()
+        
+        val existingItems =
+            listOf(
+                ResponseInputItem.ofEasyInputMessage(existingUserMessage),
+                ResponseInputItem.ofResponseOutputMessage(existingAssistantMessage),
+            )
+        
+        // A Response with a new function call
+        val functionCall =
+            ResponseFunctionToolCall
+                .builder()
+                .callId("new-function-id-2")
+                .id("new-function-id-2")
+                .name("preserveFunction")
+                .arguments("{\"preserve\":\"existing\"}")
+                .build()
+
+        val response =
+            Response
+                .builder()
+                .output(
+                    listOf(
+                        ResponseOutputItem.ofFunctionCall(functionCall),
+                    ),
+                ).id("response-id")
+                .createdAt(1234567890.0)
+                .error(null)
+                .incompleteDetails(null)
+                .instructions(null)
+                .metadata(null)
+                .model(ChatModel.of("gpt-3.5-turbo"))
+                .toolChoice(ToolChoiceOptions.NONE)
+                .temperature(null)
+                .parallelToolCalls(false)
+                .tools(listOf())
+                .topP(null)
+                .build()
+
+        // Mocking
+        val params = mockk<ResponseCreateParams>()
+        val inputMock = mockk<ResponseCreateParams.Input>()
+        every { params.input() } returns inputMock
+        every { inputMock.isResponse() } returns true
+        every { inputMock.asResponse() } returns existingItems
+        
+        // Tool configuration
+        every { toolService.getFunctionTool("preserveFunction") } returns mockk()
+        every { toolService.executeTool("preserveFunction", "{\"preserve\":\"existing\"}") } returns "Preserved result"
+        
+        // When
+        val items = handler.handleMasaicToolCall(params, response)
+
+        // Then: We expect all existing items to be preserved and new items added
+        // 1) Previous user message
+        // 2) Previous assistant message
+        // 3) New function call
+        // 4) New function call output
+        assertEquals(4, items.size)
+        
+        // Verify first two items are preserved from existing items
+        assert(items[0].isEasyInputMessage())
+        assertEquals("Previous user message", items[0].asEasyInputMessage().content().asTextInput())
+        
+        assert(items[1].isResponseOutputMessage())
+        
+        // Verify new function call and output were added
+        assert(items[2].isFunctionCall())
+        assertEquals("preserveFunction", items[2].asFunctionCall().name())
+        
+        assert(items[3].isFunctionCallOutput())
+    }
 }
