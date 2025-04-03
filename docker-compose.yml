@@ -46,7 +46,7 @@ services:
 
   # Flavor 2: replicated for Windows with named pipe
   open-responses-mcp-windows:
-    image: jasbir34/open-responses:test-version-1
+    image: masaicai/open-responses:0.0.3-alpha
     ports:
       - "8080:8080"
     volumes:
@@ -82,7 +82,7 @@ services:
 
   #Flavour 3: replicated for Windows with named pipe
   open-responses-custom-mcp-windows:
-    image: jasbir34/open-responses:test-version-1
+    image: masaicai/open-responses:0.0.3-alpha
     ports:
       - "8080:8080"
     volumes:
