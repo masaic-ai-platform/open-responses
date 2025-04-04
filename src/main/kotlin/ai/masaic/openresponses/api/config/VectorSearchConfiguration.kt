@@ -14,9 +14,9 @@ import org.springframework.context.annotation.Configuration
 data class VectorSearchProperties(
     /**
      * The vector store provider to use.
-     * Supported values: "file-based", "in-memory", "qdrant"
+     * Supported values: "file", "qdrant"
      */
-    val provider: String = "file-based",
+    val provider: String = "file",
     /**
      * The chunk size for text splitting.
      */

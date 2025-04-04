@@ -6,7 +6,6 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
-import org.springframework.context.annotation.Primary
 import org.springframework.stereotype.Service
 import java.io.BufferedReader
 import java.io.InputStream
@@ -23,8 +22,7 @@ import java.util.concurrent.ConcurrentHashMap
  * This ensures persistence across application restarts.
  */
 @Service
-@Primary
-@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "file-based", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "file", matchIfMissing = true)
 class FileBasedVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val vectorSearchProperties: VectorSearchProperties,
