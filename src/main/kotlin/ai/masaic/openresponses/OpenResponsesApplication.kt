@@ -2,16 +2,16 @@ package ai.masaic.openresponses
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
+import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
 import org.springframework.boot.runApplication
 
 /**
  * Main application class for the OpenResponses Spring Boot application.
  *
  * This class serves as the entry point for the application and is annotated with
- * [SpringBootApplication] to enable Spring Boot's auto-configuration.
- * It also scans for configuration properties classes using [ConfigurationPropertiesScan].
+ * [SpringBootApplication] to enable Spring Boot's autoconfiguration.
  */
-@SpringBootApplication
+@SpringBootApplication(exclude = [MongoAutoConfiguration::class])
 @ConfigurationPropertiesScan
 class OpenResponsesApplication
 

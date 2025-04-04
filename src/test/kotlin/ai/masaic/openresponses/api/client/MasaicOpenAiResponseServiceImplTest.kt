@@ -15,12 +15,14 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.http.codec.ServerSentEvent
+import java.util.NoSuchElementException
 import java.util.Optional
 
 class MasaicOpenAiResponseServiceImplTest {
     private lateinit var parameterConverter: MasaicParameterConverter
     private lateinit var toolHandler: MasaicToolHandler
     private lateinit var streamingService: MasaicStreamingService
+    private lateinit var responseStore: ResponseStore
     private lateinit var serviceImpl: MasaicOpenAiResponseServiceImpl
 
     @BeforeEach
@@ -28,12 +30,14 @@ class MasaicOpenAiResponseServiceImplTest {
         parameterConverter = mockk(relaxed = true)
         toolHandler = mockk(relaxed = true)
         streamingService = mockk(relaxed = true)
+        responseStore = mockk(relaxed = true)
 
         serviceImpl =
             MasaicOpenAiResponseServiceImpl(
                 parameterConverter = parameterConverter,
                 toolHandler = toolHandler,
                 streamingService = streamingService,
+                responseStore = responseStore,
             )
     }
 
@@ -113,6 +117,53 @@ class MasaicOpenAiResponseServiceImplTest {
         verify(exactly = 1) { mockCompletions.create(preparedParams) }
         // confirm we never called toolHandler
         verify { toolHandler wasNot Called }
+        verify { responseStore wasNot Called }
+    }
+
+    /**
+     * create(client, params) tests:
+     * 1) No tool calls -> return direct response
+     * 2) Has tool calls -> calls handleMasaicToolCall and recurses
+     * 3) Too many tool calls -> throws IllegalArgumentException
+     */
+    @Test
+    fun `test create with no tool calls returns direct response with store`() {
+        // Setup
+        val client = mockk<OpenAIClient>(relaxed = true)
+        val params = defaultParamsMock(true)
+        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.instructions() } returns Optional.empty()
+
+        // Mock the completion response from OpenAI
+        val completion = mockk<ChatCompletion>(relaxed = true)
+        every { completion.id() } returns "chatcmpl-1"
+        val choice = mockk<ChatCompletion.Choice>(relaxed = true)
+        // No tool calls => finish reason is something else
+        every { choice.finishReason() } returns FinishReason.STOP
+        every { completion.choices() } returns listOf(choice)
+        every { completion.usage() } returns Optional.empty()
+
+        // Mock client.chat().completions().create(...) => returns 'completion'
+        val mockChat = mockk<ChatService>(relaxed = true)
+        val mockCompletions = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
+        every { client.chat() } returns mockChat
+        every { mockChat.completions() } returns mockCompletions
+        every { mockCompletions.create(any()) } returns completion
+
+        // Mock parameterConverter
+        val preparedParams = mockk<ChatCompletionCreateParams>(relaxed = true)
+        every { parameterConverter.prepareCompletion(params) } returns preparedParams
+
+        // Act
+        val result = serviceImpl.create(client, params)
+
+        // Assert
+        // Should return directly, no recursion
+        assertNotNull(result)
+        verify(exactly = 1) { mockCompletions.create(preparedParams) }
+        // confirm we never called toolHandler
+        verify { toolHandler wasNot Called }
+        verify { responseStore.storeResponse(any(), any()) }
     }
 
     @Test
@@ -161,7 +212,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Then build() returns the newParams
         every { mockBuilder.build() } returns newParams
 
-        // 4) Mock the OpenAI client’s chat/completion calls.
+        // 4) Mock the OpenAI client's chat/completion calls.
         val client = mockk<OpenAIClient>(relaxed = true)
         val mockChat = mockk<com.openai.services.blocking.ChatService>(relaxed = true)
         val mockCompletions = mockk<com.openai.services.blocking.chat.ChatCompletionService>(relaxed = true)
@@ -286,33 +337,75 @@ class MasaicOpenAiResponseServiceImplTest {
     }
 
     /**
-     * retrieve(params, requestOptions) -> throws UnsupportedOperationException
+     * Test retrieve method successfully returns a response from the store.
      */
     @Test
-    fun `test retrieve throws`() {
-        val retrieveParams = mockk<ResponseRetrieveParams>(relaxed = true)
+    fun `test retrieve returns response from store`() {
+        // Setup
+        val responseId = "resp_123456"
+        val params = mockk<ResponseRetrieveParams>(relaxed = true)
+        every { params.responseId() } returns responseId
+        
+        val mockResponse = mockk<Response>(relaxed = true)
+        every { responseStore.getResponse(responseId) } returns mockResponse
+        
         val options = mockk<RequestOptions>(relaxed = true)
-        assertThrows(UnsupportedOperationException::class.java) {
-            serviceImpl.retrieve(retrieveParams, options)
-        }
+        
+        // Act
+        val result = serviceImpl.retrieve(params, options)
+        
+        // Assert
+        assertNotNull(result)
+        assertEquals(mockResponse, result)
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
     }
 
     /**
-     * delete(params, requestOptions) -> throws UnsupportedOperationException
+     * Test retrieve method throws when response not found.
      */
     @Test
-    fun `test delete throws`() {
-        val deleteParams = mockk<ResponseDeleteParams>(relaxed = true)
+    fun `test retrieve throws when response not found`() {
+        // Setup
+        val responseId = "nonexistent_resp"
+        val params = mockk<ResponseRetrieveParams>(relaxed = true)
+        every { params.responseId() } returns responseId
+        
+        every { responseStore.getResponse(responseId) } returns null
+        
         val options = mockk<RequestOptions>(relaxed = true)
-        assertThrows(UnsupportedOperationException::class.java) {
-            serviceImpl.delete(deleteParams, options)
+        
+        // Act & Assert
+        assertThrows(NoSuchElementException::class.java) {
+            serviceImpl.retrieve(params, options)
         }
+        verify(exactly = 1) { responseStore.getResponse(responseId) }
+    }
+
+    /**
+     * Test delete method calls responseStore.deleteResponse.
+     */
+    @Test
+    fun `test delete calls responseStore deleteResponse`() {
+        // Setup
+        val responseId = "resp_123456"
+        val params = mockk<ResponseDeleteParams>(relaxed = true)
+        every { params.responseId() } returns responseId
+        
+        every { responseStore.deleteResponse(responseId) } returns true
+        
+        val options = mockk<RequestOptions>(relaxed = true)
+        
+        // Act
+        serviceImpl.delete(params, options)
+        
+        // Assert
+        verify(exactly = 1) { responseStore.deleteResponse(responseId) }
     }
 
     /**
      * Utility method that returns a partially mocked ResponseCreateParams with minimal needed fields.
      */
-    private fun defaultParamsMock(): ResponseCreateParams {
+    private fun defaultParamsMock(store: Boolean = false): ResponseCreateParams {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
@@ -325,6 +418,7 @@ class MasaicOpenAiResponseServiceImplTest {
         every { params.maxOutputTokens() } returns Optional.of(512)
         every { params.previousResponseId() } returns Optional.empty()
         every { params.reasoning() } returns Optional.empty()
+        every { params.store() } returns Optional.of(store)
         // By default, create a text-based input
         val mockInput =
             mockk<ResponseCreateParams.Input> {

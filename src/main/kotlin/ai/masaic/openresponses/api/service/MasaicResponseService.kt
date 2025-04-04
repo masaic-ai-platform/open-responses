@@ -1,7 +1,9 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
+import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.extensions.fromBody
+import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -44,6 +46,7 @@ private val logger = KotlinLogging.logger {}
 @Service
 class MasaicResponseService(
     private val openAIResponseService: MasaicOpenAiResponseServiceImpl,
+    private val responseStore: ResponseStore,
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
 ) {
@@ -236,58 +239,76 @@ class MasaicResponseService(
      * Retrieves a response by ID from the OpenAI API with improved error handling.
      *
      * @param responseId The ID of the response to retrieve
-     * @param headers HTTP headers for the request
-     * @param queryParams Query parameters for the request
      * @return The response from the OpenAI API
      * @throws ResponseNotFoundException If the response cannot be found
      * @throws ResponseProcessingException If there is an error processing the response
      */
     suspend fun getResponse(
         responseId: String,
-        headers: MultiValueMap<String, String>,
-        queryParams: MultiValueMap<String, String>,
-    ): Response {
-        val traceId = getTraceId(headers)
-        logger.info { "Retrieving response with ID: $responseId, traceId: $traceId" }
-
-        val headerBuilder = createHeadersBuilder(headers)
-        val queryBuilder = createQueryParamsBuilder(queryParams)
-
-        return try {
-            /*val client = OpenAIOkHttpClient.builder().apiKey(
-                headers.getFirst("Authorization") ?: throw IllegalArgumentException("api-key is missing.")
-            ).build()
-
-            client.responses().retrieve(
-                ResponseRetrieveParams.builder()
-                    .responseId(responseId)
-                    .additionalHeaders(headerBuilder.build())
-                    .additionalQueryParams(queryBuilder.build())
-                    .build()
-            )*/
-            throw NotImplementedError("Not implemented")
+    ): Response =
+        try {
+            responseStore.getResponse(responseId) ?: throw ResponseNotFoundException("Response not found with ID: $responseId")
         } catch (e: Exception) {
-            logger.error(e) { "Error retrieving response with ID: $responseId, traceId: $traceId" }
             when (e) {
-                is com.openai.errors.NotFoundException -> throw ResponseNotFoundException("Response with ID $responseId not found")
+                is ResponseNotFoundException -> throw ResponseNotFoundException("Response with ID $responseId not found")
                 else -> throw ResponseProcessingException("Error retrieving response: ${e.message}")
             }
         }
-    }
 
     /**
-     * Lists input items for a response.
-     * This is a stub that will be implemented in the future.
+     * Lists input items for a response with pagination.
+     *
+     * @param responseId The ID of the response
+     * @param limit Maximum number of items to return
+     * @param order Sort order (asc or desc)
+     * @param after Item ID to list items after
+     * @param before Item ID to list items before
+     * @return List of input items
+     * @throws ResponseNotFoundException If the response cannot be found
      */
     fun listInputItems(
         responseId: String,
-        validLimit: Int,
-        validOrder: String,
+        limit: Int,
+        order: String,
         after: String?,
         before: String?,
-    ): Any {
-        logger.warn { "listInputItems not yet implemented - responseId: $responseId" }
-        return mapOf("error" to "Not implemented")
+    ): ResponseInputItemList {
+        logger.info { "Listing input items for response ID: $responseId" }
+
+        val validLimit = limit.coerceIn(1, 100)
+        val validOrder = if (order in listOf("asc", "desc")) order else "asc"
+
+        // First check if response exists
+        responseStore.getResponse(responseId) ?: throw ResponseNotFoundException("Response not found with ID: $responseId")
+
+        // Get input items from the response store
+        val inputItems = responseStore.getInputItems(responseId)
+
+        val sortedItems =
+            if (validOrder == "asc") {
+                inputItems.sortedBy { it.createdAt }
+            } else {
+                inputItems.sortedByDescending { it.createdAt }
+            }
+
+        val fromIndex = after?.let { id -> sortedItems.indexOfFirst { it.id == id } + 1 } ?: 0
+        val toIndex = before?.let { id -> sortedItems.indexOfFirst { it.id == id } } ?: sortedItems.size
+
+        val validFromIndex = fromIndex.coerceIn(0, sortedItems.size)
+        val validToIndex = toIndex.coerceIn(validFromIndex, sortedItems.size)
+
+        val paginatedItems = sortedItems.subList(validFromIndex, validToIndex).take(validLimit)
+
+        val hasMore = (validToIndex - validFromIndex) > paginatedItems.size
+        val firstId = paginatedItems.firstOrNull()?.id
+        val lastId = paginatedItems.lastOrNull()?.id
+
+        return ResponseInputItemList(
+            data = paginatedItems,
+            hasMore = hasMore,
+            firstId = firstId,
+            lastId = lastId,
+        )
     }
 
     /**
@@ -370,7 +391,7 @@ class MasaicResponseService(
     ): ResponseCreateParams =
         ResponseCreateParams
             .builder()
-            .fromBody(request)
+            .fromBody(request, responseStore, objectMapper)
             .additionalHeaders(headerBuilder.build())
             .additionalQueryParams(queryBuilder.build())
             .build()

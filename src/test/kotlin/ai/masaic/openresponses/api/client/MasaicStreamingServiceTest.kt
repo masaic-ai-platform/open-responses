@@ -39,6 +39,7 @@ class MasaicStreamingServiceTest {
     private lateinit var streamingService: MasaicStreamingService
     private lateinit var payloadFormatter: PayloadFormatter
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var responseStore: ResponseStore
 
     @BeforeEach
     fun setUp() {
@@ -46,6 +47,7 @@ class MasaicStreamingServiceTest {
         parameterConverter = mockk()
         toolService = mockk()
         openAIClient = mockk()
+        responseStore = mockk()
         objectMapper = ObjectMapper()
         payloadFormatter =
             mockk {
@@ -61,8 +63,9 @@ class MasaicStreamingServiceTest {
                 toolService = toolService,
                 allowedMaxToolCalls = 3, // test limit
                 maxDuration = 10_000, // test duration,
-                payloadFormatter,
-                objectMapper,
+                responseStore = responseStore,
+                payloadFormatter = payloadFormatter,
+                objectMapper = objectMapper,
             )
     }
 
@@ -143,7 +146,7 @@ class MasaicStreamingServiceTest {
      *    (which indirectly tests 'executeStreamingIteration' and text handling).
      */
     @Test
-    fun `test streaming iteration with normal chunk`() =
+    fun `test streaming iteration with normal chunk without store`() =
         runTest {
             val params = defaultParamsMock()
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
@@ -178,6 +181,7 @@ class MasaicStreamingServiceTest {
                 mockk {
                     every { chat() } returns mockChat
                 }
+            every { responseStore.storeResponse(any(), any()) } just runs
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
@@ -190,6 +194,65 @@ class MasaicStreamingServiceTest {
             assertTrue(events.any { it.data()?.contains("response.in_progress") == true })
             // And a COMPLETED event for the STOP
             assertTrue(events.any { it.data()?.contains("response.completed") == true })
+
+            verify { responseStore wasNot Called }
+        }
+
+    /**
+     *    Tests a normal streaming chunk scenario, verifying that we get an IN_PROGRESS event
+     *    (which indirectly tests 'executeStreamingIteration' and text handling).
+     */
+    @Test
+    fun `test streaming iteration with normal chunk with store`() =
+        runTest {
+            val params = defaultParamsMock(true)
+            val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
+            every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
+
+            // Provide a chunk that has a 'stop' finish reason to finalize quickly
+            val chunkChoice =
+                ChatCompletionChunk.Choice
+                    .builder()
+                    .index(0)
+                    .finishReason(ChatCompletionChunk.Choice.FinishReason.STOP)
+                    .delta(
+                        ChatCompletionChunk.Choice.Delta
+                            .builder()
+                            .content("Hello from AI")
+                            .build(),
+                    ).build()
+            val chunk =
+                ChatCompletionChunk
+                    .builder()
+                    .choices(listOf(chunkChoice))
+                    .id("test_id")
+                    .created(123456)
+                    .model("gpt-4")
+                    .build()
+
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+
+            every { openAIClient.async() } returns
+                mockk {
+                    every { chat() } returns mockChat
+                }
+            every { responseStore.storeResponse(any(), any()) } just runs
+            every { mockChat.completions() } returns mockCompletions
+            every { mockCompletions.createStreaming(any()) } returns mockedSubscription
+
+            // When
+            val flow = streamingService.createCompletionStream(openAIClient, params)
+            val events = flow.toList(mutableListOf())
+
+            // Then
+            // Expect to see at least one 'IN_PROGRESS' event (some substring or marker) from the chunk
+            assertTrue(events.any { it.data()?.contains("response.in_progress") == true })
+            // And a COMPLETED event for the STOP
+            assertTrue(events.any { it.data()?.contains("response.completed") == true })
+
+            verify { responseStore.storeResponse(any(), any()) }
         }
 
     /**
@@ -311,6 +374,8 @@ class MasaicStreamingServiceTest {
             val mockCompletions = mockk<ChatCompletionServiceAsync>(relaxed = false)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
 
+            every { responseStore.storeResponse(any(), any()) } just runs
+
             // The parameterConverter returns a prepared completion for any iteration:
             every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
@@ -337,7 +402,7 @@ class MasaicStreamingServiceTest {
                         every { isResponseOutputMessage() } returns true
                     },
                 )
-            every { toolHandler.handleMasaicToolCall(ofType<ResponseCreateParams>(), ofType()) } returns toolHandlerItems
+            every { toolHandler.handleMasaicToolCall(ofType<ResponseCreateParams>(), ofType(), ofType()) } returns toolHandlerItems
 
             // 6) Now run the flow. This should trigger TWO iterations:
             val events =
@@ -358,7 +423,7 @@ class MasaicStreamingServiceTest {
     /**
      * Utility method that returns a partially mocked ResponseCreateParams with minimal needed fields.
      */
-    private fun defaultParamsMock(): ResponseCreateParams {
+    private fun defaultParamsMock(store: Boolean = false): ResponseCreateParams {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
@@ -371,10 +436,12 @@ class MasaicStreamingServiceTest {
         every { params.maxOutputTokens() } returns Optional.of(512)
         every { params.previousResponseId() } returns Optional.empty()
         every { params.reasoning() } returns Optional.empty()
+        every { params.store() } returns Optional.of(store)
         // By default, create a text-based input
         val mockInput =
             mockk<ResponseCreateParams.Input> {
                 every { isResponse() } returns false
+                every { asResponse() } returns listOf()
                 every { isText() } returns true
                 every { asText() } returns "Hello world"
             }

@@ -6,35 +6,35 @@ This guide provides a comprehensive mapping to help you use the Chat Completions
 
 ### Request Parameters
 
-| Responses API Property                | Chat Completions API Equivalent                    | Notes                                   |
-|---------------------------------------|---------------------------------------------------|-----------------------------------------|
-| `input`                               | `messages`                                        | Structure your input as messages array  |
-| `input.content`                       | `messages.content`                                | Content structure for messages          |
-| `input.content.text`                  | `messages.content.text`                           | Text content in message                 |
-| `input.content.image_url`             | `messages.content.image_url`                      | Image URL for multimodal inputs         |
-| `input.content.file_id`               | `messages.content.file_id`                        | File reference                          |
-| `input.role`                          | `messages.role`                                   | User, assistant, or system role         |
-| `model`                               | `model`                                           | Model identifier                        |
-| `instructions`                        | `messages` (role: `system` or `developer`)        | Add as system/developer messages        |
-| `max_output_tokens`                   | `max_completion_tokens`                           | Maximum tokens in response              |
-| `parallel_tool_calls`                 | `parallel_tool_calls`                             | Enable parallel tool calls              |
-| `temperature`                         | `temperature`                                     | Controls randomness                     |
-| `top_p`                               | `top_p`                                           | Controls diversity via nucleus sampling |
-| `tools`                               | `tools`                                           | Available tools for the model           |
-| `tool_choice`                         | `tool_choice`                                     | Specifies which tool to use             |
-| `metadata`                            | `metadata`                                        | Custom metadata for the request         |
-| `stream`                              | `stream`                                          | Enable streaming response               |
-| `store`                               | `store`                                           | Persist conversation history            |
-| `reasoning.effort`                    | `reasoning_effort`                                | Controls reasoning depth                |
-| `text.format`                         | `response_format.type`                            | Specifies response format               |
-| `text.format.type`                    | `response_format.type`                            | Type of response format                 |
-| `text.format.json_schema`             | `response_format.json_schema`                     | JSON schema for structured responses    |
+| Responses API Property                | Chat Completions API Equivalent                    | Notes                                                                                                                            |
+|---------------------------------------|---------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `input`                               | `messages`                                        | Structure your input as messages array                                                                                           |
+| `input.content`                       | `messages.content`                                | Content structure for messages                                                                                                   |
+| `input.content.text`                  | `messages.content.text`                           | Text content in message                                                                                                          |
+| `input.content.image_url`             | `messages.content.image_url`                      | Image URL for multimodal inputs                                                                                                  |
+| `input.content.file_id`               | `messages.content.file_id`                        | File reference                                                                                                                   |
+| `input.role`                          | `messages.role`                                   | User, assistant, or system role                                                                                                  |
+| `model`                               | `model`                                           | Model identifier                                                                                                                 |
+| `instructions`                        | `messages` (role: `system` or `developer`)        | Add as system/developer messages                                                                                                 |
+| `max_output_tokens`                   | `max_completion_tokens`                           | Maximum tokens in response                                                                                                       |
+| `parallel_tool_calls`                 | `parallel_tool_calls`                             | Enable parallel tool calls                                                                                                       |
+| `temperature`                         | `temperature`                                     | Controls randomness                                                                                                              |
+| `top_p`                               | `top_p`                                           | Controls diversity via nucleus sampling                                                                                          |
+| `tools`                               | `tools`                                           | Available tools for the model                                                                                                    |
+| `tool_choice`                         | `tool_choice`                                     | Specifies which tool to use                                                                                                      |
+| `metadata`                            | `metadata`                                        | Custom metadata for the request. This feature is managed and not forward to model provider.                                      |
+| `stream`                              | `stream`                                          | Enable streaming response                                                                                                        |
+| `store`                               | `store`                                           | Persist conversation history. This feature is managed and not forward to model provider. Default value is null in Open-Responses. See [Response Store Configuration](./Store.md) for details. |
+| `reasoning.effort`                    | `reasoning_effort`                                | Controls reasoning depth                                                                                                         |
+| `text.format`                         | `response_format.type`                            | Specifies response format                                                                                                        |
+| `text.format.type`                    | `response_format.type`                            | Type of response format                                                                                                          |
+| `text.format.json_schema`             | `response_format.json_schema`                     | JSON schema for structured responses                                                                                             |
 
 ## Implementation Details
 
-The Masaic platform handles several complex mappings between Responses API and Chat Completions API that are worth noting:
+The Open-Responses platform handles several complex mappings between Responses API and Chat Completions API that are worth noting:
 
-### Input Message Conversion (Handled by Masaic)
+### Input Message Conversion (Handled by Open-Responses)
 
 The conversion between `input` and `messages` involves complex logic:
 
@@ -50,7 +50,7 @@ The conversion between `input` and `messages` involves complex logic:
   - Image input: Converted to image URL parameters with detail settings
   - File input: Mapped to file references with appropriate metadata
 
-### Tool Integration (Handled by Masaic)
+### Tool Integration (Handled by Open-Responses)
 
 Tools conversion is more sophisticated than documented:
 
@@ -65,7 +65,7 @@ Tools conversion is more sophisticated than documented:
   - Function-based choice: Mapped to specific function name reference
   - Types-based choice: Mapped to type identifier
 
-### Response Format Handling (Handled by Masaic)
+### Response Format Handling (Handled by Open-Responses)
 
 The conversion between `text.format` and `response_format` includes:
 
@@ -74,17 +74,17 @@ The conversion between `text.format` and `response_format` includes:
   - JSON Object format: Mapped to structured JSON output
   - JSON Schema format: Complex mapping with schema definition conversion
 
-### System Interaction (Handled by Masaic)
+### System Interaction (Handled by Open-Responses)
 
 - **Instructions Merging**: When system messages exist in the input, instructions are appended rather than replacing
 - **System Message Priority**: System messages from the input take precedence over separate instruction fields
 
-### Reasoning Configuration (Handled by Masaic)
+### Reasoning Configuration (Handled by Open-Responses)
 
 - **Reasoning Effort**: Converted to the appropriate `ReasoningEffort` enum value
 - **Reasoning Summary**: Generated separately in the response based on model output
 
-### Hosted Tool Call Processing (Handled by Masaic)
+### Hosted Tool Call Processing (Handled by Open-Responses)
 
 - **Hosted Function Calls**: Processed in sequence and fed-back to the completion API for response generation.
 
@@ -102,7 +102,7 @@ The conversion between `text.format` and `response_format` includes:
 | `usage`                               | `usage`                                          | Token usage statistics                    |
 | `tool_calls`                          | `choices[].message.tool_calls`                   | Tool calls in the response                |
 
-### Streaming Implementation (Handled by Masaic)
+### Streaming Implementation (Handled by Open-Responses)
 
 Streaming events in the Responses API are mapped to Chat Completions API events through a customized conversion process:
 
@@ -111,7 +111,7 @@ Streaming events in the Responses API are mapped to Chat Completions API events 
   - Content delta events map to content updates in Chat Completions
   - Tool call events are carefully synchronized with function call chunks
   
-- **State Management**: The Masaic layer maintains internal state to ensure:
+- **State Management**: The Open-Responses layer maintains internal state to ensure:
   - Proper sequencing of events
   - Tracking of incremental content updates
   - Appropriate event aggregation
@@ -127,27 +127,32 @@ The table below shows the detailed mapping between Responses API streaming event
 
 | Responses API Event                   | Chat Completions API Equivalent                               | When Published | Implementation Details |
 |---------------------------------------|---------------------------------------------------------------|----------------|------------------------|
-| `response.created`                    | Initial chunk creation                                        | On request initiation | Masaic generates this when streaming starts |
+| `response.created`                    | Initial chunk creation                                        | On request initiation | Open-Responses generates this when streaming starts |
 | `response.in_progress`                | Streaming chunks (`choices[].delta`)                          | As response streams | Sent for each content chunk |
 | `response.completed`                  | Final chunk with `finish_reason: stop`                        | Completion of response | Generated when final chunk is received |
-| `response.failed`                     | HTTP error response                                           | On error occurrence | Masaic handles error mapping |
+| `response.failed`                     | HTTP error response                                           | On error occurrence | Open-Responses handles error mapping |
 | `response.incomplete`                 | Final chunk with `finish_reason: length`                      | Token limit exceeded | Detected via finish reason |
 | `response.output_item.added`          | Streaming chunks (`choices[].delta`)                          | As new items begin streaming | Generated at content boundaries |
 | `response.output_item.done`           | Final chunk completion (`finish_reason`)                      | Item streaming completion | Sent when item is complete |
-| `response.content_part.added`         | N/A - Masaic-specific enhancement                             | As content parts start | Provides finer-grained progress |
-| `response.content_part.done`          | N/A - Masaic-specific enhancement                             | Content streaming completed | Indicates part completion |
+| `response.content_part.added`         | N/A - Open-Responses-specific enhancement                             | As content parts start | Provides finer-grained progress |
+| `response.content_part.done`          | N/A - Open-Responses-specific enhancement                             | Content streaming completed | Indicates part completion |
 | `response.output_text.delta`          | Partial streaming (`choices[].delta.content`)                 | Each incremental content piece | Direct mapping of content chunks |
 | `response.output_text.done`           | Final chunk (`choices[].message.content`)                     | Text content finalized | Generated when content finishes |
-| `response.refusal.delta`              | Error handling (Masaic enhancement)                           | Incremental refusal text | Special handling for moderation |
-| `response.refusal.done`               | Error handling (Masaic enhancement)                           | Refusal text finalized | Marks completion of refusal |
+| `response.refusal.delta`              | Error handling (Open-Responses enhancement)                           | Incremental refusal text | Special handling for moderation |
+| `response.refusal.done`               | Error handling (Open-Responses enhancement)                           | Refusal text finalized | Marks completion of refusal |
 | `response.function_call_arguments.delta` | Partial function call arguments streaming (`choices[].delta`) | Partial function arguments | Mapped from tool call fragments |
 | `response.function_call_arguments.done`  | Final function arguments chunk                                | Function call arguments finalized | Generated when tool call completes |
-| `response.file_search_call.*`         | Managed as tool calls (Masaic enhancement)                         | File search lifecycle | Custom tool implementation |
-| `response.web_search_call.*`          | Managed as tool calls (Masaic enhancement)                         | Web search lifecycle | Custom tool implementation |
+| `response.{tool_name}.in_progress`    | N/A - Open-Responses-specific enhancement                     | Tool execution started | Open-responses managed tool lifecycle event indicating tool processing has begun |
+| `response.{tool_name}.executing`      | N/A - Open-Responses-specific enhancement                     | Tool is executing | Open-responses managed tool lifecycle event indicating active execution |
+| `response.{tool_name}.completed`      | N/A - Open-Responses-specific enhancement                     | Tool execution finished | Open-responses managed tool lifecycle event indicating successful completion |
+| `response.file_search_call.*`         | Managed as tool calls (Open-Responses enhancement)            | File search lifecycle | Open-responses managed tool implementation |
+| `response.web_search_call.*`          | Managed as tool calls (Open-Responses enhancement)            | Web search lifecycle | Open-responses managed tool implementation |
+
+> **Note**: For tool-specific events, `{tool_name}` is replaced with the actual name of the tool being executed, converted to lowercase with leading non-word characters replaced by underscores. These Open-responses managed tool events provide detailed visibility into the tool execution lifecycle beyond what the standard Chat Completions API offers.
 
 #### Implementation Specifics
 
-The Masaic implementation includes following components for streaming:
+The Open-Responses implementation includes following components for streaming:
 
 1. **Event Buffer Management**:
    - Maintains partial content state across stream chunks
@@ -155,7 +160,7 @@ The Masaic implementation includes following components for streaming:
    - Manages tool call state across multiple chunks
 
 2. **Custom Event Generation**:
-   - Creates Masaic-specific events for enhanced user experience
+   - Creates Open-Responses-specific events for enhanced user experience
    - Provides finer-grained progress indication than Chat Completions API
    - Handles special cases like content refusals
 
@@ -169,38 +174,102 @@ The Masaic implementation includes following components for streaming:
    - Progress indication for tool execution
    - Proper sequencing of multi-turn tool interactions
 
-## Masaic Layer Managed Properties
+### Open-responses Managed Tool Lifecycle Events
 
-When using Chat Completions API via Responses API, the following Responses API features have limited or no direct support in the standard Chat Completions API and require special handling by the Masaic platform:
+Open-Responses extends the standard Chat Completions API streaming events with Open-responses managed tool-specific events that provide more granular visibility into tool execution:
 
-### Conversation Management (Masaic-Managed) (COMING SOON)
+1. **Tool Execution Progress Events**:
+   - `response.{tool_name}.in_progress`: Emitted when a tool call is detected and processing begins
+   - `response.{tool_name}.executing`: Emitted when the tool is actively executing
+   - `response.{tool_name}.completed`: Emitted when the tool execution completes successfully
+
+2. **Event Format**:
+   Each tool event includes standardized metadata:
+   ```json
+   {
+     "item_id": "tool-call-id",
+     "output_index": "0",
+     "type": "response.{tool_name}.{status}"
+   }
+   ```
+
+3. **Benefits**:
+   - Real-time visibility into hosted tool execution
+   - Better UX with tool-specific progress indicators
+   - Ability to show appropriate loading states for long-running tools
+   - Troubleshooting visibility for tool execution issues
+
+## Open-responses Managed Tools
+
+Open-responses managed tools are specialized tool implementations that are handled entirely by the Open-Responses platform rather than being passed directly to the underlying model provider or client. These tools provide additional functionality and enhanced capabilities not available in the standard Model provider API.
+
+### Key Characteristics of Open-responses Managed Tools
+
+1. **Execution Environment**: 
+   - Tools run in a secure, isolated environment maintained by the Open-Responses platform
+   - Execution happens server-side with appropriate security measures
+
+2. **Tool Types**:
+   - **Web Search Tools**: Allow models to search the internet and retrieve up-to-date information
+   - **File Search Tools**: Enable searching and retrieving content from developer-provided files (COMING SOON)
+   - **Computer Use Tools**: Provide limited, controlled access to computing resources for specific tasks (COMING SOON)
+   - **Custom Function Tools**: Support for additional specialized tools maintained by the platform
+
+3. **Lifecycle Management**:
+   - Open-Responses manages the complete execution lifecycle of these tools
+   - Tools are executed asynchronously and can be monitored through specialized events
+   - Results are automatically fed back to the model during conversation
+
+4. **Benefits Over Standard Tool Calls**:
+   - Enhanced security through isolation and permission controls
+   - Improved performance through optimized execution
+   - Additional capabilities not natively supported by model providers
+   - Simplified developer experience with unified API surface
+
+### Using Open-responses Managed Tools
+
+To use these tools, developers specify them like regular tools but with special configuration parameters (currently MCPs) that indicate they should be managed by the Open-Responses platform.
+
+The platform automatically handles:
+- Tool execution and result processing
+- Streaming events for tool execution progress
+- Error handling
+- Formatting and presenting results to the model
+
+These tools enable powerful functionality like real-time web search, file operations, and other capabilities while maintaining a simple, consistent API surface for developers.
+
+## Open-Responses Layer Managed Properties
+
+When using Chat Completions API via Responses API, the following Responses API features have limited or no direct support in the standard Chat Completions API and require special handling by the Open-Responses platform:
+
+### Conversation Management (Open-Responses-Managed) 
 
 - **`previous_response_id`**: Conversation history tracking and chaining
-  - Masaic maintains conversation state between requests
+  - Open-Responses maintains conversation state between requests
   - Reconstructs message history based on previous interactions
   - Not directly supported in Chat Completions API
 
-### Response Control (Masaic-Managed) (COMING SOON)
+### Response Control (Open-Responses-Managed) (COMING SOON)
 
 - **`truncation` Strategy**:
-  - `auto`: Masaic implements automatic content truncation based on token limits
+  - `auto`: Open-Responses implements automatic content truncation based on token limits
   - `disabled`: Platform ensures complete responses without truncation
   - Custom handling required as Chat Completions has simpler max token controls
 
-### Output Customization (Masaic-Managed) (COMING SOON)
+### Output Customization (Open-Responses-Managed) (COMING SOON)
 
 - **`include` Parameter**:
   - Controls which components appear in the response
-  - Masaic filters response objects based on these specifications
+  - Open-Responses filters response objects based on these specifications
   - Not directly available in Chat Completions API
 
-### Reasoning Features (Masaic-Enhanced)
+### Reasoning Features (Open-Responses-Enhanced)
 
 - **`reasoning.generate_summary`**:
-  - Masaic extracts and generates reasoning summaries from model outputs
+  - Open-Responses extracts and generates reasoning summaries from model outputs
   - Platform performs additional processing to extract reasoning patterns
 
-### Additional Masaic-Specific Enhancements
+### Additional Open-Responses-Specific Enhancements
 
 1. **Error Handling**:
    - Enhanced error reporting with detailed status codes
@@ -230,7 +299,7 @@ Both interfaces will support:
 
 ## Implementation Notes
 
-When using Chat Completions functionality through the Responses API, follow these best practices based on how the Masaic platform processes your requests:
+When using Chat Completions functionality through the Responses API, follow these best practices based on how the Open-Responses platform processes your requests:
 
 ### Input Structure Best Practices
 
@@ -257,7 +326,7 @@ When using Chat Completions functionality through the Responses API, follow thes
   - Use only one approach (either `instructions` or system messages) for clarity
 
 - **Tool Call Handling**:
-  - Multi-turn tool calls are processed recursively by Masaic
+  - Multi-turn tool calls are processed recursively by Open-Responses
   - Tool call IDs are crucial for proper mapping between calls and responses
   - Limit the number of tool calls to avoid hitting platform limits
 
@@ -266,15 +335,21 @@ When using Chat Completions functionality through the Responses API, follow thes
   - For streaming, process events based on the event mapping table
   - Handle both success and error states appropriately
 
+- **Tool Event Processing**:
+  - Listen for tool-specific events (`response.{tool_name}.*`) to provide better UX during tool execution
+  - Use the `item_id` and `output_index` in tool events to correlate with the associated function calls
+  - Implement appropriate loading states based on each tool's lifecycle events
+  - For long-running tools, show progress indicators during the `executing` phase
+
 ## Example API Calls
 
-The following examples demonstrate how to structure requests for the Responses API, with comments explaining how Masaic processes each one:
+The following examples demonstrate how to structure requests for the Responses API, with comments explaining how Open-Responses processes each one:
 
 ### Basic Text Completion
 
 ```bash
 # This example shows a simple text input
-# Masaic processes this by:
+# Open-Responses processes this by:
 # 1. Converting the string input to a user message
 # 2. Creating a User message
 # 3. Setting the content directly as text
@@ -291,7 +366,7 @@ curl -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example demonstrates using instructions
-# Masaic processes this by:
+# Open-Responses processes this by:
 # 1. Creating a system message with the instructions
 # 2. Adding it before the user message
 # 3. Setting appropriate roles for each message
@@ -309,7 +384,7 @@ curl -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example shows parameter passing
-# Masaic directly maps the temperature parameter to ChatCompletions
+# Open-Responses directly maps the temperature parameter to ChatCompletions
 curl -X POST https://api.openai.com/v1/responses \
 -H "Content-Type: application/json" \
 -H "Authorization: Bearer YOUR_API_KEY" \
@@ -324,7 +399,7 @@ curl -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example demonstrates JSON formatting
-# Masaic processes this by:
+# Open-Responses processes this by:
 # 1. Converting text.format to response_format
 # 2. Setting the appropriate JSON schema parameters
 # 3. Configuring the model to return structured output
@@ -377,7 +452,7 @@ curl -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example shows multimodal input handling
-# Masaic processes this by:
+# Open-Responses processes this by:
 # 1. Converting each content item to content part objects
 # 2. Creating appropriate type-specific handlers for text and image
 # 3. Setting detail parameters for the image
@@ -405,7 +480,7 @@ curl -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example demonstrates tool usage
-# Masaic processes this by:
+# Open-Responses processes this by:
 # 1. Converting tool definitions to completion tools objects
 # 2. Setting up the appropriate function structure
 # 3. Handling tool calls and responses through recursive processing
@@ -444,7 +519,7 @@ curl -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example shows streaming configuration
-# Masaic handles this by:
+# Open-Responses handles this by:
 # 1. Setting up an SSE connection
 # 2. Converting Chat Completion chunks to Responses API events
 # 3. Managing state across streamed chunks
@@ -462,7 +537,7 @@ curl -N -X POST https://api.openai.com/v1/responses \
 
 ```bash
 # This example demonstrates metadata handling
-# Masaic preserves and passes through metadata (Coming soon)
+# Open-Responses preserves and passes through metadata (Coming soon)
 # This is useful for request tracing and client-side state management 
 curl -X POST https://api.openai.com/v1/responses \
 -H "Content-Type: application/json" \
@@ -476,6 +551,82 @@ curl -X POST https://api.openai.com/v1/responses \
     "user": "test_user"
   }
 }'
+```
+
+### Handling Tool-Specific Events
+
+```javascript
+// Example client code for handling tool-specific events during streaming
+const response = await fetch('https://api.openai.com/v1/responses', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer YOUR_API_KEY'
+  },
+  body: JSON.stringify({
+    model: "gpt-4o",
+    input: "Execute the weather tool for Boston, then analyze the results.",
+    tools: [{
+      type: "function",
+      name: "get_weather",
+      // tool definition...
+    }],
+    stream: true
+  })
+});
+
+const reader = response.body.getReader();
+const decoder = new TextDecoder();
+
+// Track tool execution state
+const toolExecutionState = new Map();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+  
+  const chunk = decoder.decode(value);
+  const lines = chunk.split('\n\n').filter(line => line.trim() !== '');
+  
+  for (const line of lines) {
+    if (!line.startsWith('data:')) continue;
+    
+    const data = JSON.parse(line.substring(5));
+    const eventType = data.type || '';
+    
+    // Handle standard events
+    if (eventType === 'response.output_text.delta') {
+      // Process text output...
+    } 
+    // Handle tool lifecycle events
+    else if (eventType.startsWith('response.get_weather.')) {
+      const toolId = data.item_id;
+      const status = eventType.split('.').pop(); // in_progress, executing, completed
+      
+      if (status === 'in_progress') {
+        toolExecutionState.set(toolId, { status: 'starting' });
+        showToolLoadingUI(toolId, 'Starting weather lookup...');
+      } 
+      else if (status === 'executing') {
+        toolExecutionState.set(toolId, { status: 'running' });
+        showToolLoadingUI(toolId, 'Fetching weather data...');
+      }
+      else if (status === 'completed') {
+        toolExecutionState.set(toolId, { status: 'completed' });
+        updateToolLoadingUI(toolId, 'Weather data retrieved!');
+      }
+    }
+  }
+}
+
+// UI helper functions
+function showToolLoadingUI(toolId, message) {
+  // Update UI with loading indicator for the specific tool
+}
+
+function updateToolLoadingUI(toolId, message) {
+  // Update loading UI with status message
+}
 ```
 
 # Request flow:

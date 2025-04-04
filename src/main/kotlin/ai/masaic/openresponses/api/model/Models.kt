@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
@@ -10,6 +11,9 @@ import com.openai.models.Metadata
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseOutputText
 import com.openai.models.responses.ResponseTextConfig
+import java.math.BigDecimal
+import java.time.Instant
+import java.util.UUID
 
 /**
  * Represents the reasoning information for a response.
@@ -167,6 +171,7 @@ data class CreateResponseRequest(
     val maxOutputTokens: Int? = null,
     var tools: List<Tool>? = null,
     val temperature: Double = 1.0,
+    @JsonProperty("previous_response_id")
     val previousResponseId: String? = null,
     @JsonProperty("top_p")
     val topP: Double? = null,
@@ -209,7 +214,7 @@ data class CreateResponseRequest(
  * @property lastId ID of the last item in the list
  * @property hasMore Whether there are more items available
  */
-data class ResponseItemList(
+data class ResponseInputItemList(
     val `object`: String = "list",
     val data: List<InputMessageItem>,
     @JsonProperty("first_id")
@@ -235,17 +240,30 @@ data class ResponseItemList(
  * @property status Status of the message
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class InputMessageItem(
+    @JsonProperty("role")
     val role: String? = null,
+    @JsonProperty("content")
     var content: Any? = null,
+    @JsonProperty("type")
     var type: String = "message",
-    val id: String? = null,
+    @JsonProperty("id")
+    var id: String? = null,
+    @JsonProperty("arguments")
     val arguments: String? = null,
+    @JsonProperty("name")
     val name: String? = null,
+    @JsonProperty("tool_call_id")
     val tool_call_id: String? = null,
+    @JsonProperty("call_id")
     val call_id: String? = null,
+    @JsonProperty("output")
     val output: String? = null,
-    val status: String? = null,
+    @JsonProperty("status")
+    val status: String = "completed", // Note: This value is not returned by completion API, so we will assume completed.
+    @JsonProperty("created_at")
+    val createdAt: BigDecimal? = BigDecimal.valueOf(Instant.now().toEpochMilli()),
 ) {
     init {
         if (call_id != null) {
@@ -254,6 +272,10 @@ data class InputMessageItem(
             } else {
                 type = "function_call"
             }
+        }
+
+        if (id == null) {
+            id = UUID.randomUUID().toString()
         }
     }
 
@@ -268,6 +290,8 @@ data class InputMessageItem(
     }
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 data class InputMessageItemContent(
     val text: String? = null,
     val type: String,

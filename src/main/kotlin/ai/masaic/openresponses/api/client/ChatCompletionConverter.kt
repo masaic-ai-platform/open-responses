@@ -125,12 +125,12 @@ object ChatCompletionConverter {
 
                 // Add the main message output
                 if (messageWithoutReasoning.isNotBlank()) {
-                    outputs.add(createMessageOutput(choice, responseOutputTextBuilder, messageWithoutReasoning))
+                    outputs.add(createMessageOutput(responseOutputTextBuilder, messageWithoutReasoning))
                 }
 
                 // Add reasoning output if present
                 if (reasoning.isNotBlank()) {
-                    outputs.add(createReasoningOutput(choice, reasoning))
+                    outputs.add(createReasoningOutput(reasoning))
                 }
 
                 // Add tool calls if present
@@ -219,13 +219,11 @@ object ChatCompletionConverter {
     /**
      * Creates a message output item from the choice.
      *
-     * @param choice The ChatCompletion choice
      * @param builder The ResponseOutputText.Builder to use
      * @param messageText The text content for the message
      * @return A ResponseOutputItem containing the message
      */
     private fun createMessageOutput(
-        choice: ChatCompletion.Choice,
         builder: ResponseOutputText.Builder,
         messageText: String,
     ): ResponseOutputItem =
@@ -234,7 +232,7 @@ object ChatCompletionConverter {
                 .builder()
                 .addContent(
                     builder.text(messageText).annotations(listOf()).build(),
-                ).id(choice.index().toString())
+                ).id(UUID.randomUUID().toString())
                 .status(ResponseOutputMessage.Status.COMPLETED)
                 .build(),
         )
@@ -242,12 +240,10 @@ object ChatCompletionConverter {
     /**
      * Creates a reasoning output item from the choice.
      *
-     * @param choice The ChatCompletion choice
      * @param reasoning The reasoning text
      * @return A ResponseOutputItem containing the reasoning
      */
     private fun createReasoningOutput(
-        choice: ChatCompletion.Choice,
         reasoning: String,
     ): ResponseOutputItem =
         ResponseOutputItem.ofReasoning(
@@ -258,7 +254,7 @@ object ChatCompletionConverter {
                         .builder()
                         .text(reasoning)
                         .build(),
-                ).id(choice.index().toString())
+                ).id(UUID.randomUUID().toString())
                 .build(),
         )
 
@@ -286,7 +282,7 @@ object ChatCompletionConverter {
                     ResponseOutputItem.ofFunctionCall(
                         ResponseFunctionToolCall
                             .builder()
-                            .id(completion.id())
+                            .id(UUID.randomUUID().toString())
                             .callId(toolCall.id())
                             .name(toolCall.function().name())
                             .arguments(toolCall.function().arguments())

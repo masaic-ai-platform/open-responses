@@ -281,14 +281,8 @@ class MasaicParameterConverter {
         if (params.maxOutputTokens().isPresent) {
             completionBuilder.maxCompletionTokens(params.maxOutputTokens())
         }
-        if (params.metadata().isPresent) {
-            completionBuilder.metadata(params.metadata())
-        }
         if (params.topP().isPresent) {
             completionBuilder.topP(params.topP())
-        }
-        if (params.store().isPresent) {
-            completionBuilder.store(params.store())
         }
     }
 
