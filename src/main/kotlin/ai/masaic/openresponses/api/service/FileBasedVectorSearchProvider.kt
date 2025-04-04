@@ -1,15 +1,15 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.io.BufferedReader
 import java.io.InputStream
-import java.io.InputStreamReader
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.concurrent.ConcurrentHashMap
@@ -139,11 +139,15 @@ class FileBasedVectorSearchProvider(
         filename: String,
     ): Boolean {
         try {
-            // Read the file content
-            val text = BufferedReader(InputStreamReader(content)).use { it.readText() }
+            // Extract text from the document using Apache Tika
+            val text = DocumentTextExtractor.extractAndCleanText(content, filename)
+            if (text.isBlank()) {
+                log.warn("Extracted text is empty for file: $filename")
+                return false
+            }
             
-            // Split the content into chunks
-            val chunks = chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
+            // Split the content into chunks using the common utility
+            val chunks = TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
             
             // Generate embeddings for each chunk
             val chunksWithEmbeddings =
@@ -253,39 +257,5 @@ class FileBasedVectorSearchProvider(
             log.error("Error deleting file embeddings: $fileId", e)
             return false
         }
-    }
-
-    /**
-     * Helper function to split text into overlapping chunks.
-     *
-     * @param text The text to split
-     * @param chunkSize The size of each chunk
-     * @param overlap The overlap between chunks
-     * @return List of text chunks
-     */
-    private fun chunkText(
-        text: String,
-        chunkSize: Int,
-        overlap: Int,
-    ): List<String> {
-        if (text.length <= chunkSize) {
-            return listOf(text)
-        }
-        
-        val chunks = mutableListOf<String>()
-        var start = 0
-        
-        while (start < text.length) {
-            val end = minOf(start + chunkSize, text.length)
-            chunks.add(text.substring(start, end))
-            start += (chunkSize - overlap)
-            
-            // Prevent infinite loop if overlap >= chunkSize
-            if (start <= 0) {
-                start = end
-            }
-        }
-        
-        return chunks
     }
 } 

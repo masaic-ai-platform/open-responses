@@ -41,6 +41,10 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     
+    // Apache Tika dependencies for document parsing
+    implementation("org.apache.tika:tika-core:3.1.0")
+    implementation("org.apache.tika:tika-parsers-standard-package:3.1.0")
+
     // MongoDB dependencies
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb-reactive")
     

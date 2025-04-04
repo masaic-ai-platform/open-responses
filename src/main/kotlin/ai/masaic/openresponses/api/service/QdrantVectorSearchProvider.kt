@@ -2,6 +2,8 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
@@ -11,11 +13,10 @@ import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore
 import io.qdrant.client.QdrantClient
 import io.qdrant.client.grpc.Collections
+import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
-import java.io.BufferedReader
 import java.io.InputStream
-import java.io.InputStreamReader
 
 /**
  * Qdrant implementation of VectorSearchProvider.
@@ -31,6 +32,7 @@ class QdrantVectorSearchProvider(
     private val vectorSearchProperties: VectorSearchProperties,
     client: QdrantClient,
 ) : VectorSearchProvider {
+    private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
     private val collectionName = qdrantProperties.collectionName ?: "open-responses-documents"
     private val vectorDimension: Long = qdrantProperties.vectorDimension.toLong()
     private val embeddingStore: QdrantEmbeddingStore
@@ -49,8 +51,10 @@ class QdrantVectorSearchProvider(
                             .setSize(vectorDimension)
                             .build(),
                     ).get()
+                log.info("Created Qdrant collection: {}", collectionName)
             }
         } catch (e: Exception) {
+            log.error("Failed to initialize Qdrant collection: {}", e.message, e)
             throw RuntimeException("Failed to initialize Qdrant collection: ${e.message}", e)
         }
         
@@ -63,6 +67,8 @@ class QdrantVectorSearchProvider(
                 .useTls(qdrantProperties.useTls)
                 .collectionName(collectionName)
                 .build()
+        
+        log.info("Initialized Qdrant vector search provider with collection: {}", collectionName)
     }
 
     /**
@@ -79,11 +85,16 @@ class QdrantVectorSearchProvider(
         filename: String,
     ): Boolean {
         try {
-            // Read the file content
-            val text = BufferedReader(InputStreamReader(content)).use { it.readText() }
+            // Extract text from the document using Apache Tika
+            val text = DocumentTextExtractor.extractAndCleanText(content, filename)
+            if (text.isBlank()) {
+                log.warn("Extracted text is empty for file: {}", filename)
+                return false
+            }
             
-            // Split the content into chunks
-            val chunks = chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
+            // Split the content into chunks using the common utility
+            val chunks = TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
+            log.debug("Split file {} into {} chunks", filename, chunks.size)
             
             // Process each chunk
             chunks.forEachIndexed { index, chunk ->
@@ -105,9 +116,10 @@ class QdrantVectorSearchProvider(
                 embeddingStore.add(embedding, segment)
             }
             
+            log.info("Successfully indexed file: {}", filename)
             return true
         } catch (e: Exception) {
-            println("Error indexing file: ${e.message}")
+            log.error("Error indexing file {}: {}", filename, e.message, e)
             return false
         }
     }
@@ -125,44 +137,54 @@ class QdrantVectorSearchProvider(
         maxResults: Int,
         filters: Map<String, Any>?,
     ): List<VectorSearchProvider.SearchResult> {
-        // Generate embedding for the query
-        val queryEmbedding = Embedding.from(embeddingService.embedText(query))
-        
-        // Find relevant documents
-        val minScore = qdrantProperties.minScore ?: 0.0f
-        
-        // Search the store with filter
-        val matches =
-            if (filters != null && filters.isNotEmpty()) {
-                // Convert filter to Qdrant filter format
-                val qdrantFilter = createQdrantFilter(filters)
-                val searchBuilder =
-                    EmbeddingSearchRequest
-                        .builder()
-                        .minScore(minScore.toDouble())
-                        .queryEmbedding(queryEmbedding)
-                        .maxResults(maxResults)
-
-                if (qdrantFilter != null) {
-                    searchBuilder.filter(qdrantFilter)
-                }
-
-                embeddingStore.search(searchBuilder.build()).matches()
-            } else {
-                embeddingStore.findRelevant(queryEmbedding, maxResults, minScore.toDouble())
-            }
-        
-        // Convert to search results
-        return matches.map { match ->
-            val segment = match.embedded()
-            val metadata = segment.metadata().toMap()
+        try {
+            // Generate embedding for the query
+            val queryEmbedding = Embedding.from(embeddingService.embedText(query))
             
-            VectorSearchProvider.SearchResult(
-                fileId = (metadata["fileId"] ?: "") as String,
-                score = match.score(),
-                content = segment.text(),
-                metadata = metadata,
-            )
+            // Find relevant documents
+            val minScore = qdrantProperties.minScore ?: 0.0f
+            
+            // Search the store with filter
+            val matches =
+                if (filters != null && filters.isNotEmpty()) {
+                    log.debug("Searching with filters: {}", filters)
+                    // Convert filter to Qdrant filter format
+                    val qdrantFilter = createQdrantFilter(filters)
+                    val searchBuilder =
+                        EmbeddingSearchRequest
+                            .builder()
+                            .minScore(minScore.toDouble())
+                            .queryEmbedding(queryEmbedding)
+                            .maxResults(maxResults)
+    
+                    if (qdrantFilter != null) {
+                        searchBuilder.filter(qdrantFilter)
+                    }
+    
+                    embeddingStore.search(searchBuilder.build()).matches()
+                } else {
+                    embeddingStore.findRelevant(queryEmbedding, maxResults, minScore.toDouble())
+                }
+            
+            // Convert to search results
+            val results =
+                matches.map { match ->
+                    val segment = match.embedded()
+                    val metadata = segment.metadata().toMap()
+                
+                    VectorSearchProvider.SearchResult(
+                        fileId = (metadata["fileId"] ?: "") as String,
+                        score = match.score(),
+                        content = segment.text(),
+                        metadata = metadata,
+                    )
+                }
+            
+            log.debug("Found {} results for query", results.size)
+            return results
+        } catch (e: Exception) {
+            log.error("Error searching similar content: {}", e.message, e)
+            return emptyList()
         }
     }
 
@@ -176,9 +198,10 @@ class QdrantVectorSearchProvider(
         try {
             // Delete points with matching fileId
             embeddingStore.removeAll(IsEqualTo("fileId", fileId))
+            log.info("Deleted embeddings for file: {}", fileId)
             return true
         } catch (e: Exception) {
-            println("Error deleting file: ${e.message}")
+            log.error("Error deleting file {}: {}", fileId, e.message, e)
             return false
         }
     }
@@ -187,7 +210,8 @@ class QdrantVectorSearchProvider(
      * Helper function to create a Qdrant filter from a map of filters.
      */
     private fun createQdrantFilter(filters: Map<String, Any>): Filter? {
-        var filter: Filter? = null
+        // Use a mutable reference to avoid smart cast issues with captured variables
+        val filterRef = arrayOfNulls<Filter>(1)
         
         filters.forEach { (key, value) ->
             when {
@@ -201,52 +225,18 @@ class QdrantVectorSearchProvider(
                                 acc.or(IsEqualTo("fileId", fileId)) as IsEqualTo
                             }
                         
-                        filter = if (filter == null) fileIdsFilter else filter.and(fileIdsFilter)
+                        filterRef[0] = if (filterRef[0] == null) fileIdsFilter else filterRef[0]!!.and(fileIdsFilter)
                     }
                 }
                 else -> {
                     // Handle regular key-value filters
                     val newFilter = IsEqualTo(key, value)
-                    filter = if (filter == null) newFilter else filter.and(newFilter)
+                    filterRef[0] = if (filterRef[0] == null) newFilter else filterRef[0]!!.and(newFilter)
                 }
             }
         }
         
         // Return default filter if no valid filters (matches all records)
-        return null
-    }
-
-    /**
-     * Helper function to split text into overlapping chunks.
-     *
-     * @param text The text to split
-     * @param chunkSize The size of each chunk
-     * @param overlap The overlap between chunks
-     * @return List of text chunks
-     */
-    private fun chunkText(
-        text: String,
-        chunkSize: Int,
-        overlap: Int,
-    ): List<String> {
-        if (text.length <= chunkSize) {
-            return listOf(text)
-        }
-        
-        val chunks = mutableListOf<String>()
-        var start = 0
-        
-        while (start < text.length) {
-            val end = minOf(start + chunkSize, text.length)
-            chunks.add(text.substring(start, end))
-            start += (chunkSize - overlap)
-            
-            // Prevent infinite loop if overlap >= chunkSize
-            if (start <= 0) {
-                start = end
-            }
-        }
-        
-        return chunks
+        return filterRef[0]
     }
 } 

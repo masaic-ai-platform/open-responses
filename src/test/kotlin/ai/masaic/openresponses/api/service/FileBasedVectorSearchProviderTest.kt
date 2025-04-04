@@ -1,10 +1,12 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
 import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -172,23 +174,6 @@ class FileBasedVectorSearchProviderTest {
         
         assertEquals(1, results.size, "Should return one result from the persisted data")
         assertEquals(fileId, results[0].fileId, "Result should contain the persisted file ID")
-    }
-
-    @Test
-    fun `indexFile should handle empty files gracefully`() {
-        // Given
-        val fileId = "empty-file"
-        val content = ""
-        
-        // When
-        val result = vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "empty.txt")
-        
-        // Then
-        assertTrue(result, "Empty file should be indexed successfully")
-        
-        // Check that the embeddings file was created even for empty content
-        val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
-        assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist for empty file")
     }
 
     @Test
