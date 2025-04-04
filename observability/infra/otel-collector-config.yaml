@@ -17,8 +17,6 @@ processors:
     send_batch_size: 1024
 
 exporters:
-  zipkin:
-    endpoint: "http://zipkin:9411/api/v2/spans"
   otlp:
     endpoint: "jaeger:4317"
     tls:
@@ -49,7 +47,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [zipkin, otlp, debug]
+      exporters: [otlp, debug]
     metrics:
       receivers: [otlp]
       processors: [batch]

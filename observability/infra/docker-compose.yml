@@ -14,12 +14,11 @@ services:
       - "8889:8889"   # Prometheus exporter
       - "8888:8888"   # Metrics endpoint
     depends_on:
-      - zipkin
       - jaeger
 
   # Jaeger
   jaeger:
-    image: jaegertracing/all-in-one:latest
+    image: jaegertracing/all-in-one:1.67.0
     container_name: jaeger
     ports:
       - "16686:16686"  # Jaeger UI
@@ -30,16 +29,9 @@ services:
     environment:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
 
-  # Zipkin
-  zipkin:
-    image: openzipkin/zipkin:latest
-    container_name: zipkin
-    ports:
-      - "9411:9411"
-
   # Prometheus
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.53.4
     container_name: prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
@@ -50,15 +42,16 @@ services:
 
   # Grafana
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.6.0
     container_name: grafana
     ports:
       - "3000:3000"
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_LOG_LEVEL=debug
+      - GF_LOG_FILTERS=provisioning.dashboard:debug
     volumes:
-      - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
-      - zipkin 
