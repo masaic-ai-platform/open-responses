@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
 @SpringBootTest(classes = [MongoConfig::class, MongoVectorStoreRepository::class])
 @Testcontainers
 @ActiveProfiles("test")
-@TestPropertySource(properties = ["app.vector-store.repository.type=mongodb"])
+@TestPropertySource(properties = ["open-responses.vector-store.repository.type=mongodb"])
 @Disabled("Enable this test to run the complete workflow") // Disable this line to run the test
 class MongoVectorStoreRepositoryIntegrationTest {
     companion object {
@@ -42,7 +42,7 @@ class MongoVectorStoreRepositoryIntegrationTest {
         @JvmStatic
         @DynamicPropertySource
         fun setProperties(registry: DynamicPropertyRegistry) {
-            registry.add("spring.data.mongodb.uri") { 
+            registry.add("open-responses.mongodb.uri") {
                 "mongodb://${mongoDBContainer.host}:${mongoDBContainer.firstMappedPort}/testdb" 
             }
         }

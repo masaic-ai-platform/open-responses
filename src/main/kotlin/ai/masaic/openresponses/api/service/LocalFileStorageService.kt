@@ -28,7 +28,7 @@ import kotlin.streams.asSequence
  */
 @Service
 class LocalFileStorageService(
-    @Value("\${app.file-storage.local.root-dir}") private val rootDir: String,
+    @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
 ) : FileStorageService {
     private val log = LoggerFactory.getLogger(LocalFileStorageService::class.java)
     private val rootLocation: Path = Paths.get(rootDir)
@@ -170,6 +170,7 @@ class LocalFileStorageService(
                 log.error("Error deleting file $fileId", e)
                 false
             } catch (e: FileNotFoundException) {
+                log.error("File not found for deletion: $fileId", e)
                 false
             }
         }
@@ -211,6 +212,7 @@ class LocalFileStorageService(
                 val path = load(fileId)
                 Files.exists(path)
             } catch (e: Exception) {
+                log.error("Error checking existence of file $fileId", e)
                 false
             }
         }

@@ -13,7 +13,7 @@ import org.springframework.context.annotation.Configuration
 /**
  * Configuration properties for embedding models.
  */
-@ConfigurationProperties(prefix = "app.embeddings")
+@ConfigurationProperties(prefix = "open-responses.embeddings")
 data class EmbeddingProperties(
     // The type of embedding model to use (e.g., "all-minilm-l6-v2", "custom")
     val modelType: String = "all-minilm-l6-v2",

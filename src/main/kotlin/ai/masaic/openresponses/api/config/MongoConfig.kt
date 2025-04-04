@@ -9,10 +9,10 @@ import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.ReactiveMongoDatabaseFactory
 import org.springframework.data.mongodb.ReactiveMongoTransactionManager
 import org.springframework.data.mongodb.config.EnableReactiveMongoAuditing
+import org.springframework.data.mongodb.core.MongoTemplate
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.convert.MappingMongoConverter
 import org.springframework.data.mongodb.core.mapping.event.ValidatingMongoEventListener
@@ -58,11 +58,11 @@ class MongoConfig(
      *
      * This removes the _class field from MongoDB documents.
      */
+    @Bean
     fun reactiveMongoTemplate(
         factory: ReactiveMongoDatabaseFactory,
         converter: MappingMongoConverter,
     ): ReactiveMongoTemplate = ReactiveMongoTemplate(factory, converter)
-
 
     @Bean
     fun mongoResponseStore(
@@ -76,5 +76,6 @@ class MongoConfig(
     /**
      * Configures a transaction manager for MongoDB.
      */
+    @Bean
     fun transactionManager(factory: ReactiveMongoDatabaseFactory): ReactiveMongoTransactionManager = ReactiveMongoTransactionManager(factory)
 }

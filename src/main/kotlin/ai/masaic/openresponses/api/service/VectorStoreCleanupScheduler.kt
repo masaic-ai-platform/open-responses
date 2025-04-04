@@ -17,15 +17,15 @@ import org.springframework.stereotype.Component
 @Component
 class VectorStoreCleanupScheduler(
     @Autowired private val vectorStoreService: VectorStoreService,
-    @Value("\${app.vector-store.cleanup.enabled:true}") private val cleanupEnabled: Boolean,
+    @Value("\${open-responses.vector-store.cleanup.enabled:true}") private val cleanupEnabled: Boolean,
 ) {
     private val log = LoggerFactory.getLogger(VectorStoreCleanupScheduler::class.java)
 
     /**
      * Scheduled task to clean up vector stores.
-     * Runs every hour by default, but can be configured with app.vector-store.cleanup.cron property.
+     * Runs every hour by default, but can be configured with open-responses.vector-store.cleanup.cron property.
      */
-    @Scheduled(cron = "\${app.vector-store.cleanup.cron:0 0 * * * ?}")
+    @Scheduled(cron = "\${open-responses.vector-store.cleanup.cron:0 0 * * * ?}")
     fun cleanupVectorStores() {
         if (!cleanupEnabled) {
             log.debug("Vector store cleanup is disabled")

@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
 @DataMongoTest
 @ExtendWith(SpringExtension::class)
 @Import(MongoVectorStoreRepository::class)
-@TestPropertySource(properties = ["app.vector-store.repository.type=mongodb"])
+@TestPropertySource(properties = ["open-responses.vector-store.repository.type=mongodb"])
 class MongoVectorStoreRepositoryTest {
     companion object {
         @Container

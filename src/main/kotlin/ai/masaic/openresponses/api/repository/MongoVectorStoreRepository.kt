@@ -22,10 +22,10 @@ import org.springframework.stereotype.Repository
  * This implementation stores vector store metadata and vector store file metadata in MongoDB.
  * It does not handle the actual file content, which is managed by FileStorageService.
  * 
- * It is only enabled when app.vector-store.repository.type=mongodb
+ * It is only enabled when open-responses.vector-store.repository.type=mongodb
  */
 @Repository
-@ConditionalOnProperty(name = ["app.vector-store.repository.type"], havingValue = "mongodb")
+@ConditionalOnProperty(name = ["open-responses.vector-store.repository.type"], havingValue = "mongodb")
 class MongoVectorStoreRepository(
     private val mongoTemplate: ReactiveMongoTemplate,
 ) : VectorStoreRepository {

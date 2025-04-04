@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration
 /**
  * Configuration properties for vector search.
  */
-@ConfigurationProperties(prefix = "app.vector-store")
+@ConfigurationProperties(prefix = "open-responses.vector-store")
 data class VectorSearchProperties(
     /**
      * The vector store provider to use.
@@ -31,7 +31,7 @@ data class VectorSearchProperties(
 /**
  * Configuration properties for Qdrant vector database.
  */
-@ConfigurationProperties(prefix = "app.vector-store.qdrant")
+@ConfigurationProperties(prefix = "open-responses.vector-store.qdrant")
 data class QdrantProperties(
     /**
      * Qdrant server hostname.
@@ -66,7 +66,7 @@ data class QdrantProperties(
 @Configuration
 class VectorSearchConfiguration {
     @Bean
-    @ConditionalOnProperty(name = ["app.vector-store.provider"], havingValue = "qdrant")
+    @ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "qdrant")
     fun qdrantClient(qdrantProperties: QdrantProperties): QdrantClient =
         QdrantClient(
             QdrantGrpcClient

@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
  * It's suitable for development and testing or small-scale applications.
  */
 @Service
-@ConditionalOnProperty(name = ["app.vector-store.provider"], havingValue = "in-memory", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val vectorSearchProperties: VectorSearchProperties,
