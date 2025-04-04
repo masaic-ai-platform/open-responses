@@ -300,7 +300,13 @@ class MasaicStreamingService(
                                         ObservationThreadLocalAccessor.KEY,
                                     )
                                 // Actually handle these calls
-                                val toolResponseItems = toolHandler.handleMasaicToolCall(params, finalResponse, parentObservation)
+                                val toolResponseItems =
+                                    toolHandler.handleMasaicToolCall(
+                                        params,
+                                        finalResponse,
+                                        eventEmitter = { event -> trySend(event) },
+                                        parentObservation,
+                                    )
                                 updatedParams =
                                     params
                                         .toBuilder()
