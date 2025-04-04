@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
@@ -17,17 +18,18 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.springframework.http.codec.ServerSentEvent
 
 class MasaicToolHandlerTest {
     // Tool service mock
     private val toolService: ToolService = mockk()
-    
+
     // TelemetryService mock
     private lateinit var telemetryService: TelemetryService
-    
+
     // To capture attribute values
     private val capturedAttributes = mutableMapOf<String, String>()
-    
+
     // System under test
     private lateinit var handler: MasaicToolHandler
 
@@ -35,27 +37,27 @@ class MasaicToolHandlerTest {
     fun setUp() {
         // Clear attributes from previous tests
         capturedAttributes.clear()
-        
+
         // Create observation registry for telemetry service
         val observationRegistry = ObservationRegistry.create()
         val meterRegistry = SimpleMeterRegistry()
-        
+
         // Create real telemetry service with spied observation
         telemetryService = spyk(TelemetryService(observationRegistry, meterRegistry))
-        
+
         // Setup telemetryService mock to track attributes
-        every { 
+        every {
             telemetryService.withClientObservation<Any>(
-                any(), 
+                any(),
                 any(), // This is the parentObservation parameter
                 any(),
-            ) 
+            )
         } answers {
             val operationName = firstArg<String>()
             val parentObservation = secondArg<Observation?>() // Get the parentObservation
             val block = thirdArg<(Observation) -> Any>() // Get the block as the third parameter
             val mockObservation = mockk<Observation>(relaxed = true)
-            
+
             // Track attributes being set
             every { mockObservation.lowCardinalityKeyValue(any(), any<String>()) } answers {
                 val key = firstArg<String>()
@@ -63,20 +65,20 @@ class MasaicToolHandlerTest {
                 capturedAttributes[key] = value
                 mockObservation
             }
-            
+
             every { mockObservation.highCardinalityKeyValue(any(), any<String>()) } answers {
                 val key = firstArg<String>()
                 val value = secondArg<String>()
                 capturedAttributes[key] = value
                 mockObservation
             }
-            
+
             // Execute the block with the mock observation
             block(mockObservation)
         }
-        
+
         // Initialize system under test
-        handler = MasaicToolHandler(toolService, telemetryService)
+        handler = MasaicToolHandler(toolService, ObjectMapper(), telemetryService)
     }
 
     @AfterEach
@@ -130,7 +132,7 @@ class MasaicToolHandlerTest {
         val item = items[1]
         // Confirm that it is a response output message of some sort
         assert(item.isResponseOutputMessage())
-        
+
         // Verify no tool execution observations were created
         verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -183,7 +185,7 @@ class MasaicToolHandlerTest {
         // Let's pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction") } returns mockk()
         every { toolService.executeTool("myToolFunction", "{\"key\":\"value\"}") } returns "Tool execution result"
-        
+
         // Manually set the attributes since we're mocking the observation
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
         capturedAttributes["gen_ai.tool.name"] = "myToolFunction"
@@ -203,10 +205,10 @@ class MasaicToolHandlerTest {
 
         val functionCallOutput = items[2]
         assert(functionCallOutput.isFunctionCallOutput())
-        
+
         // Verify observation was created (without exact string name match)
         verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
-        
+
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
         assertEquals("myToolFunction", capturedAttributes["gen_ai.tool.name"])
@@ -217,7 +219,7 @@ class MasaicToolHandlerTest {
     fun `handleMasaicToolCall(chatCompletion, params) - with tool execution error should propagate error and end span`() {
         // Before running the test, ensure we're going to get the right error type attribute set
         val errorTypeKey = "error.type"
-        
+
         // Given: A ChatCompletion with a tool call that will throw an exception
         val toolCall =
             ChatCompletionMessageToolCall
@@ -262,18 +264,18 @@ class MasaicToolHandlerTest {
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
         every { toolService.getFunctionTool("errorTool") } returns mockk()
-        
+
         // Setup direct exception throw when the tool executes
         every { toolService.executeTool("errorTool", any()) } throws RuntimeException("Tool execution failed")
-        
+
         // Manually set the error attribute for testing purposes since we're using a mock
         capturedAttributes[errorTypeKey] = "RuntimeException"
-        
+
         // When/Then - exception should be propagated
         assertThrows<RuntimeException> {
             handler.handleMasaicToolCall(chatCompletion, params)
         }
-        
+
         // Skip the assertion on error message since it's being set differently in the actual code
     }
 
@@ -326,7 +328,7 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items = handler.handleMasaicToolCall(params, response, mockk())
 
         // Then
         // 1) The user input as a ResponseInputItem
@@ -334,7 +336,7 @@ class MasaicToolHandlerTest {
         assertEquals(2, items.size)
         assert(items.first().isEasyInputMessage())
         assert(items[1].isResponseOutputMessage())
-        
+
         // Verify no observation was created
         verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -372,6 +374,32 @@ class MasaicToolHandlerTest {
                 .topP(null)
                 .build()
 
+        val chatMessage =
+            ChatCompletionMessage
+                .builder()
+                .content("Hello from the assistant")
+                .toolCalls(listOf())
+                .refusal(null)
+                .build()
+
+        val choice =
+            ChatCompletion.Choice
+                .builder()
+                .message(chatMessage)
+                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                .index(0)
+                .logprobs(null)
+                .build()
+
+        val chatCompletion =
+            ChatCompletion
+                .builder()
+                .choices(listOf(choice))
+                .id("completion-id")
+                .created(1234567890)
+                .model("gpt-3.5-turbo")
+                .build()
+
         // Mocking
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
@@ -379,14 +407,17 @@ class MasaicToolHandlerTest {
         // Let's pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction") } returns mockk()
         every { toolService.executeTool("myToolFunction", "{\"foo\":\"bar\"}") } returns "Executed tool"
-        
+
+        // Mock event emitter function
+        val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
+
         // Manually set the attributes since we're mocking the observation
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
         capturedAttributes["gen_ai.tool.name"] = "myToolFunction"
         capturedAttributes["gen_ai.tool.call.id"] = "function-call-id"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
 
         // Then
         // 1) The user input
@@ -396,10 +427,10 @@ class MasaicToolHandlerTest {
         assert(items[0].isEasyInputMessage())
         assert(items[1].isFunctionCall())
         assert(items[2].isFunctionCallOutput())
-        
+
         // Verify observation was created (without exact string match)
         verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
-        
+
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
         assertEquals("myToolFunction", capturedAttributes["gen_ai.tool.name"])
@@ -453,7 +484,7 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
         // Return null to indicate unsupported tool
         every { toolService.getFunctionTool("unsupportedTool") } returns null
-        
+
         // When
         val items = handler.handleMasaicToolCall(chatCompletion, params)
 
@@ -461,13 +492,13 @@ class MasaicToolHandlerTest {
         // 1) The original user input as a ResponseInputItem
         // 2) The parked function call
         assertEquals(2, items.size)
-        
+
         val userMessage = items[0]
         assert(userMessage.isEasyInputMessage())
-        
+
         val functionCallItem = items[1]
         assert(functionCallItem.isFunctionCall())
-        
+
         // Verify that no tool execution was observed
         verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -486,7 +517,7 @@ class MasaicToolHandlerTest {
                         .arguments("{\"param\":\"value1\"}")
                         .build(),
                 ).build()
-                
+
         val toolCall2 =
             ChatCompletionMessageToolCall
                 .builder()
@@ -529,16 +560,16 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        
+
         // Configure tools
         every { toolService.getFunctionTool("toolOne") } returns mockk()
         every { toolService.getFunctionTool("toolTwo") } returns mockk()
         every { toolService.executeTool("toolOne", "{\"param\":\"value1\"}") } returns "Result from tool one"
         every { toolService.executeTool("toolTwo", "{\"param\":\"value2\"}") } returns "Result from tool two"
-        
+
         // Manually set the attributes for testing purposes
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
-        
+
         // When
         val items = handler.handleMasaicToolCall(chatCompletion, params)
 
@@ -550,10 +581,10 @@ class MasaicToolHandlerTest {
         // 5) Second tool call
         // 6) Second tool result
         assertEquals(6, items.size)
-        
+
         // Verify tool execution was observed twice
         verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
-        
+
         // Count function calls and function outputs
         val functionCalls = items.count { it.isFunctionCall() }
         val functionOutputs = items.count { it.isFunctionCallOutput() }
@@ -606,14 +637,14 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        
+
         // Return null from tool execution
         every { toolService.getFunctionTool("nullResultTool") } returns mockk()
         every { toolService.executeTool("nullResultTool", any()) } returns null
-        
+
         // Set attributes for testing
         capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
-        
+
         // When
         val items = handler.handleMasaicToolCall(chatCompletion, params)
 
@@ -622,16 +653,16 @@ class MasaicToolHandlerTest {
         // 2) Function call
         // (No function output since the result was null)
         assertEquals(2, items.size)
-        
+
         val functionCallItem = items[1]
         assert(functionCallItem.isFunctionCall())
-        
+
         // Verify no function output was added
         assertEquals(0, items.count { it.isFunctionCallOutput() })
-        
+
         // Verify the observation was still created despite the null result
         verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
-        
+
         // Verify correct attribute was set
         assertEquals("nullResultTool", capturedAttributes["gen_ai.tool.name"])
     }
@@ -647,11 +678,11 @@ class MasaicToolHandlerTest {
                 .name("existingFunction")
                 .arguments("{\"param\":\"existing\"}")
                 .build()
-                
+
         val existingInputItem = ResponseInputItem.ofFunctionCall(existingFunctionCall)
-        
+
         val existingItems = listOf(existingInputItem)
-        
+
         // A Response with a new function call
         val newFunctionCall =
             ResponseFunctionToolCall
@@ -689,16 +720,19 @@ class MasaicToolHandlerTest {
         every { params.input() } returns inputMock
         every { inputMock.isResponse() } returns true
         every { inputMock.asResponse() } returns existingItems
-        
+
         // Let's pretend the toolService recognizes and executes "newFunction"
         every { toolService.getFunctionTool("newFunction") } returns mockk()
         every { toolService.executeTool("newFunction", "{\"param\":\"new\"}") } returns "New function result"
-        
+
+        // Mock event emitter function
+        val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
+
         // Set attributes for testing
         capturedAttributes["gen_ai.tool.name"] = "newFunction"
-        
+
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
 
         // Then
         // We expect:
@@ -706,13 +740,13 @@ class MasaicToolHandlerTest {
         // 2) The new function call
         // 3) The new function call output
         assertEquals(3, items.size)
-        
+
         // First item should be the existing function call
         assertEquals("existingFunction", items[0].asFunctionCall().name())
-        
+
         // Second item should be the new function call
         assertEquals("newFunction", items[1].asFunctionCall().name())
-        
+
         // Verify the tool execution was observed
         verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -762,44 +796,44 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        
+
         // Configure tool service
         every { toolService.getFunctionTool("telemetryTool") } returns mockk()
         every { toolService.executeTool("telemetryTool", any()) } returns "Telemetry result"
-        
+
         // Create a spy telemetry service to verify attributes
         val telemetrySpy = spyk(telemetryService)
-        val handlerWithSpy = MasaicToolHandler(toolService, telemetrySpy)
-        
+        val handlerWithSpy = MasaicToolHandler(toolService, ObjectMapper(), telemetrySpy)
+
         // Create a real observation to capture
         val testObservationRegistry = ObservationRegistry.create()
         val realObservation = mockk<Observation>(relaxed = true)
-        
+
         // Setup telemetry spy to use real observation
-        every { 
+        every {
             telemetrySpy.withClientObservation<Any>(any(), any(), any())
         } answers {
             val operationName = firstArg<String>()
             val parentObservation = secondArg<Observation?>() // Get parentObservation
             val block = thirdArg<(Observation) -> Any>() // Get the block as the third parameter
-            
+
             // Set up observation to capture attributes
             capturedAttributes["observation_name"] = operationName
-            
+
             // Execute the block with the real observation
             block(realObservation)
         }
-        
+
         // When
         val items = handlerWithSpy.handleMasaicToolCall(chatCompletion, params)
 
         // Then
         // Verify the attributes required for the OpenTelemetry GenAI semantic conventions
         assertEquals("builtin.tool.execute", capturedAttributes["observation_name"])
-        
+
         // Verify observation was created
         verify { telemetrySpy.withClientObservation<Any>(eq("builtin.tool.execute"), any(), any()) }
-        
+
         // Verify tool execution resulted in both function call and output
         val functionCalls = items.count { it.isFunctionCall() }
         val functionOutputs = items.count { it.isFunctionCallOutput() }
@@ -831,7 +865,7 @@ class MasaicToolHandlerTest {
         assertEquals(1, items.size)
         assert(items[0].isEasyInputMessage())
         assertEquals("User message", items[0].asEasyInputMessage().content().asTextInput())
-        
+
         // Verify no tool execution observations were created
         verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -881,7 +915,7 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        
+
         // Mock tool service
         every { toolService.getFunctionTool("mixedContentTool") } returns mockk()
         every { toolService.executeTool("mixedContentTool", "{\"param\":\"mixed\"}") } returns "Mixed result"
@@ -942,8 +976,11 @@ class MasaicToolHandlerTest {
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
 
+        // Mock event emitter function
+        val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
+
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
 
         // Then: We expect only the user input message since the empty message content should be filtered out
         assertEquals(1, items.size)
@@ -956,7 +993,7 @@ class MasaicToolHandlerTest {
                 .content()
                 .asTextInput(),
         )
-        
+
         // Verify no observation was created
         verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -1008,22 +1045,22 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
         every { toolService.getFunctionTool("parentObsTool") } returns mockk()
         every { toolService.executeTool("parentObsTool", "{\"param\":\"parentTest\"}") } returns "Parent observation test result"
-        
+
         // Create a mock parent observation
         val parentObservation = mockk<Observation>()
-        
+
         // Call handler with explicit parent observation
         val items = handler.handleMasaicToolCall(chatCompletion, params, parentObservation)
 
         // Then verify parent observation was passed to the withClientObservation method
-        verify { 
+        verify {
             telemetryService.withClientObservation<Any>(
-                any(), 
+                any(),
                 eq(parentObservation), // Verify parent observation was passed
                 any(),
-            ) 
+            )
         }
-        
+
         // Verify function call and output were added
         assertEquals(3, items.size)
         val functionCall = items[1]
@@ -1078,15 +1115,15 @@ class MasaicToolHandlerTest {
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
         every { toolService.getFunctionTool("malformedArgsTool") } returns mockk()
-        
+
         // Tool service throws error when parsing malformed JSON
         every { toolService.executeTool("malformedArgsTool", "{invalid json") } throws IllegalArgumentException("Malformed JSON arguments")
-        
+
         // When & Then - verify exception is propagated
         assertThrows<IllegalArgumentException> {
             handler.handleMasaicToolCall(chatCompletion, params)
         }
-        
+
         // Verify observation recorded the error
         verify { telemetryService.withClientObservation<Any>(any(), any(), any()) }
     }
@@ -1094,13 +1131,13 @@ class MasaicToolHandlerTest {
     @Test
     fun `handleMasaicToolCall(params, response) - with response as input should preserve existing items`() {
         // Given: An existing response with multiple items as input
-        val existingUserMessage = 
+        val existingUserMessage =
             EasyInputMessage
                 .builder()
                 .content("Previous user message")
                 .role(EasyInputMessage.Role.USER)
                 .build()
-        
+
         val existingAssistantMessage =
             ResponseOutputMessage
                 .builder()
@@ -1118,13 +1155,13 @@ class MasaicToolHandlerTest {
                     ),
                 ).role(JsonValue.from("assistant"))
                 .build()
-        
+
         val existingItems =
             listOf(
                 ResponseInputItem.ofEasyInputMessage(existingUserMessage),
                 ResponseInputItem.ofResponseOutputMessage(existingAssistantMessage),
             )
-        
+
         // A Response with a new function call
         val functionCall =
             ResponseFunctionToolCall
@@ -1162,13 +1199,16 @@ class MasaicToolHandlerTest {
         every { params.input() } returns inputMock
         every { inputMock.isResponse() } returns true
         every { inputMock.asResponse() } returns existingItems
-        
+
         // Tool configuration
         every { toolService.getFunctionTool("preserveFunction") } returns mockk()
         every { toolService.executeTool("preserveFunction", "{\"preserve\":\"existing\"}") } returns "Preserved result"
-        
+
+        // Mock event emitter function
+        val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
+
         // When
-        val items = handler.handleMasaicToolCall(params, response)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
 
         // Then: We expect all existing items to be preserved and new items added
         // 1) Previous user message
@@ -1176,17 +1216,17 @@ class MasaicToolHandlerTest {
         // 3) New function call
         // 4) New function call output
         assertEquals(4, items.size)
-        
+
         // Verify first two items are preserved from existing items
         assert(items[0].isEasyInputMessage())
         assertEquals("Previous user message", items[0].asEasyInputMessage().content().asTextInput())
-        
+
         assert(items[1].isResponseOutputMessage())
-        
+
         // Verify new function call and output were added
         assert(items[2].isFunctionCall())
         assertEquals("preserveFunction", items[2].asFunctionCall().name())
-        
+
         assert(items[3].isFunctionCallOutput())
     }
 }
