@@ -14,9 +14,12 @@ import java.util.concurrent.ConcurrentHashMap
  * This class provides a simple in-memory vector search implementation
  * that uses the EmbeddingService to generate and compare vector embeddings.
  * It's suitable for development and testing or small-scale applications.
+ * 
+ * Note: This implementation does not persist data across application restarts.
+ * Use FileBasedVectorSearchProvider for persistence.
  */
 @Service
-@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "in-memory", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "in-memory")
 class InMemoryVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val vectorSearchProperties: VectorSearchProperties,
