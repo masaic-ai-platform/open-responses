@@ -136,15 +136,18 @@ class QdrantVectorSearchProvider(
             if (filters != null && filters.isNotEmpty()) {
                 // Convert filter to Qdrant filter format
                 val qdrantFilter = createQdrantFilter(filters)
-                embeddingStore
-                    .search(
-                        EmbeddingSearchRequest
-                            .builder()
-                            .minScore(minScore.toDouble())
-                            .queryEmbedding(queryEmbedding)
-                            .filter(qdrantFilter)
-                            .build(),
-                    ).matches()
+                val searchBuilder =
+                    EmbeddingSearchRequest
+                        .builder()
+                        .minScore(minScore.toDouble())
+                        .queryEmbedding(queryEmbedding)
+                        .maxResults(maxResults)
+
+                if (qdrantFilter != null) {
+                    searchBuilder.filter(qdrantFilter)
+                }
+
+                embeddingStore.search(searchBuilder.build()).matches()
             } else {
                 embeddingStore.findRelevant(queryEmbedding, maxResults, minScore.toDouble())
             }
@@ -183,17 +186,34 @@ class QdrantVectorSearchProvider(
     /**
      * Helper function to create a Qdrant filter from a map of filters.
      */
-    private fun createQdrantFilter(filters: Map<String, Any>): Filter {
-        filters.run {
-            val key = keys.first()
-            val value = values.first()
-            val first: Filter = IsEqualTo(key, value)
-
-            return filters.keys.drop(1).fold(first) { acc, key ->
-                val value = filters[key]
-                acc.and(IsEqualTo(key, value))
+    private fun createQdrantFilter(filters: Map<String, Any>): Filter? {
+        var filter: Filter? = null
+        
+        filters.forEach { (key, value) ->
+            when {
+                key == "fileIds" && value is List<*> -> {
+                    // Handle the fileIds list by creating an OR filter for each fileId
+                    val fileIdsList = value.filterIsInstance<String>()
+                    if (fileIdsList.isNotEmpty()) {
+                        val firstFilter = IsEqualTo("fileId", fileIdsList.first())
+                        val fileIdsFilter =
+                            fileIdsList.drop(1).fold(firstFilter) { acc, fileId ->
+                                acc.or(IsEqualTo("fileId", fileId)) as IsEqualTo
+                            }
+                        
+                        filter = if (filter == null) fileIdsFilter else filter.and(fileIdsFilter)
+                    }
+                }
+                else -> {
+                    // Handle regular key-value filters
+                    val newFilter = IsEqualTo(key, value)
+                    filter = if (filter == null) newFilter else filter.and(newFilter)
+                }
             }
         }
+        
+        // Return default filter if no valid filters (matches all records)
+        return null
     }
 
     /**

@@ -591,7 +591,7 @@ class VectorStoreService(
                 missingFiles.forEach { file ->
                     try {
                         vectorStoreRepository.deleteVectorStoreFile(vectorStoreId, file.id)
-                        vectorSearchProvider?.deleteFile(file.id)
+                        vectorSearchProvider.deleteFile(file.id)
                     } catch (e: Exception) {
                         log.error("Error removing missing file ${file.id} from vector store $vectorStoreId", e)
                     }
@@ -613,8 +613,12 @@ class VectorStoreService(
             // Add file filter to the request filters
             val filters = mutableMapOf<String, Any>()
             request.filters?.let { filters.putAll(it) }
+            
+            // Add fileIds filter (list of file IDs to search within)
+            // This supports both implementations - newer ones handle 'fileIds' as a list,
+            // while older ones might look for individual 'fileId' matches
             filters["fileIds"] = fileIds
-        
+            
             // Search the vector store
             val maxResults = request.maxNumResults ?: 10
             val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters)

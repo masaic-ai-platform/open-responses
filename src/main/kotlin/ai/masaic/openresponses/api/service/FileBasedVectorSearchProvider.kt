@@ -195,6 +195,7 @@ class FileBasedVectorSearchProvider(
                 allChunks.filter { chunk ->
                     filters.all { (key, value) ->
                         when {
+                            key == "fileIds" && value is List<*> -> (value as List<*>).contains(chunk.fileId)
                             key == "fileId" -> chunk.fileId == value
                             chunk.chunkMetadata.containsKey(key) -> chunk.chunkMetadata[key] == value
                             fileMetadataCache[chunk.fileId]?.containsKey(key) == true -> 
