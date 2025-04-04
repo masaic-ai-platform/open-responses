@@ -48,7 +48,7 @@ class FileBasedVectorStoreRepository(
             try {
                 val json = objectMapper.writeValueAsString(vectorStore)
                 Files.write(filePath, json.toByteArray())
-                log.info("Saved vector store metadata ${vectorStore.id} to $filePath")
+                log.info("Saved vector store metadata ${vectorStore.id} to $filePath with status ${vectorStore.status}")
                 vectorStore
             } catch (e: Exception) {
                 log.error("Error saving vector store metadata ${vectorStore.id}", e)
@@ -172,7 +172,7 @@ class FileBasedVectorStoreRepository(
             try {
                 val json = objectMapper.writeValueAsString(vectorStoreFile)
                 Files.write(filePath, json.toByteArray())
-                log.info("Saved vector store file metadata ${vectorStoreFile.id} to $filePath")
+                log.info("Saved vector store file metadata ${vectorStoreFile.id} to $filePath with status ${vectorStoreFile.status}")
                 vectorStoreFile
             } catch (e: Exception) {
                 log.error("Error saving vector store file metadata ${vectorStoreFile.id}", e)

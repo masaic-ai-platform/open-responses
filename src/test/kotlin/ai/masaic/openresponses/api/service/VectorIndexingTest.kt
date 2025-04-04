@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.CreateVectorStoreFileRequest
 import ai.masaic.openresponses.api.model.CreateVectorStoreRequest
+import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -9,8 +10,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.core.io.ByteArrayResource
 import org.springframework.core.io.Resource
 import org.springframework.http.MediaType
+import org.springframework.http.codec.multipart.FilePart
 import org.springframework.mock.web.MockMultipartFile
-import org.springframework.web.multipart.MultipartFile
 import java.io.InputStream
 import java.time.Instant
 import kotlin.test.assertEquals
@@ -45,7 +46,7 @@ class VectorIndexingTest {
     private lateinit var fileStorageService: FileStorageService
     private lateinit var vectorSearchProvider: VectorSearchProvider
     private lateinit var vectorStoreService: VectorStoreService
-    private lateinit var mockFile: MultipartFile
+    private lateinit var mockFile: FilePart
     private lateinit var mockResource: Resource
 
     @BeforeEach
@@ -65,7 +66,7 @@ class VectorIndexingTest {
                 "test.txt",
                 MediaType.TEXT_PLAIN_VALUE,
                 "test content".toByteArray(),
-            )
+            ).toFilePart()
 
         // Setup mock resources
         mockResource = mockk<ByteArrayResource>()
@@ -95,7 +96,7 @@ class VectorIndexingTest {
 
             // When
             // 1. Upload a file
-            val uploadedFile = fileService.uploadFile(mockFile, purpose)
+            val uploadedFile = fileService.uploadFilePart(mockFile, purpose)
             
             // 2. Create a vector store with the file
             coEvery { 
@@ -139,7 +140,7 @@ class VectorIndexingTest {
         
             // When
             // 1. Upload a file
-            val uploadedFile = fileService.uploadFile(mockFile, purpose)
+            val uploadedFile = fileService.uploadFilePart(mockFile, purpose)
             
             // 2. Add file to existing vector store
             coEvery { 
@@ -177,7 +178,7 @@ class VectorIndexingTest {
         
             // When
             // 1. Upload a file
-            val uploadedFile = fileService.uploadFile(mockFile, purpose)
+            val uploadedFile = fileService.uploadFilePart(mockFile, purpose)
         
             // Then
             // 1. File should be uploaded

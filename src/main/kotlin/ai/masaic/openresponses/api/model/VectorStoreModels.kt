@@ -50,7 +50,7 @@ data class VectorStore(
     /**
      * The status of the vector store, which can be either expired, in_progress, or completed.
      */
-    val status: String = "completed",
+    val status: String = "in_progress",
     /**
      * Set of key-value pairs that can be attached to an object.
      */

@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.utils.toFilePart
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
@@ -39,7 +40,7 @@ class LocalFileStorageServiceTest {
     fun `init should create necessary directories`() =
         runTest {
             // Test that the service creates all the required subdirectories
-            val purposes = listOf("assistants", "batch", "fine-tune", "vision", "user_data", "evals")
+            val purposes = listOf("assistants", "batch", "fine_tune", "vision", "user_data", "evals")
             purposes.forEach { purpose ->
                 val purposeDir = tempDir.resolve(purpose)
                 assertTrue(Files.exists(purposeDir))
@@ -60,13 +61,13 @@ class LocalFileStorageServiceTest {
                     fileName,
                     MediaType.TEXT_PLAIN_VALUE,
                     fileContent.toByteArray(),
-                )
+                ).toFilePart()
 
             // When
             val fileId = fileStorageService.store(file, purpose)
 
             // Then
-            assertTrue(fileId.startsWith("file-"))
+            assertTrue(fileId.startsWith("open-responses"))
             val filePath = tempDir.resolve(purpose).resolve(fileId)
             assertTrue(Files.exists(filePath))
             assertEquals(fileContent, Files.readString(filePath))
@@ -82,14 +83,14 @@ class LocalFileStorageServiceTest {
                     "file1.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Content 1".toByteArray(),
-                )
+                ).toFilePart()
             val file2 =
                 MockMultipartFile(
                     "file",
                     "file2.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Content 2".toByteArray(),
-                )
+                ).toFilePart()
 
             // Store files in two different purposes
             val fileId1 = fileStorageService.store(file1, "assistants")
@@ -114,14 +115,14 @@ class LocalFileStorageServiceTest {
                     "file1.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Content 1".toByteArray(),
-                )
+                ).toFilePart()
             val file2 =
                 MockMultipartFile(
                     "file2",
                     "file2.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Content 2".toByteArray(),
-                )
+                ).toFilePart()
 
             // Store files with different purposes
             val fileId1 = fileStorageService.store(file1, "assistants")
@@ -149,7 +150,7 @@ class LocalFileStorageServiceTest {
                     "test.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Test content".toByteArray(),
-                )
+                ).toFilePart()
             val fileId = fileStorageService.store(file, "assistants")
 
             // When
@@ -171,7 +172,7 @@ class LocalFileStorageServiceTest {
                     "test.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     content.toByteArray(),
-                )
+                ).toFilePart()
             val fileId = fileStorageService.store(file, "assistants")
 
             // When
@@ -193,7 +194,7 @@ class LocalFileStorageServiceTest {
                     "test.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Test content".toByteArray(),
-                )
+                ).toFilePart()
             val fileId = fileStorageService.store(file, "assistants")
             val filePath = fileStorageService.load(fileId)
 
@@ -231,7 +232,7 @@ class LocalFileStorageServiceTest {
                     fileName,
                     MediaType.TEXT_PLAIN_VALUE,
                     content.toByteArray(),
-                )
+                ).toFilePart()
             val fileId = fileStorageService.store(file, purpose)
 
             // When
@@ -239,7 +240,7 @@ class LocalFileStorageServiceTest {
 
             // Then
             assertEquals(fileId, metadata["id"])
-            assertEquals(fileName, metadata["filename"])
+            assertTrue((metadata["filename"] as String).contains("open-responses-file"))
             assertEquals(purpose, metadata["purpose"])
             assertEquals(content.toByteArray().size.toLong(), metadata["bytes"])
             assertTrue(metadata.containsKey("created_at"))
@@ -255,7 +256,7 @@ class LocalFileStorageServiceTest {
                     "test.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Test content".toByteArray(),
-                )
+                ).toFilePart()
             val fileId = fileStorageService.store(file, "assistants")
 
             // When
@@ -296,7 +297,7 @@ class LocalFileStorageServiceTest {
                     "hook-test.txt",
                     MediaType.TEXT_PLAIN_VALUE,
                     "Testing hooks".toByteArray(),
-                )
+                ).toFilePart()
             val fileId = fileStorageService.store(file, "assistants")
 
             // Then
@@ -304,4 +305,4 @@ class LocalFileStorageServiceTest {
             assertEquals(fileId, hookFileId)
             assertEquals("assistants", hookPurpose)
         }
-} 
+}

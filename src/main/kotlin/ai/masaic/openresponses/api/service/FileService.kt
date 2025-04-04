@@ -11,8 +11,8 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.core.io.Resource
+import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
-import org.springframework.web.multipart.MultipartFile
 import java.nio.file.Path
 import java.time.Instant
 
@@ -30,14 +30,14 @@ class FileService(
     private val log = LoggerFactory.getLogger(FileService::class.java)
 
     /**
-     * Uploads a file.
+     * Uploads a file using reactive FilePart.
      *
-     * @param file The file to upload
+     * @param filePart The file part to upload
      * @param purpose The purpose of the file
      * @return The uploaded file object
      */
-    suspend fun uploadFile(
-        file: MultipartFile,
+    suspend fun uploadFilePart(
+        filePart: FilePart,
         purpose: String,
     ): File =
         withContext(Dispatchers.IO) {
@@ -47,13 +47,13 @@ class FileService(
             }
         
             // Store the file
-            val fileId = fileStorageService.store(file, purpose)
+            val fileId = fileStorageService.store(filePart, purpose)
         
             // Create file object
             File(
                 id = fileId,
-                bytes = file.size,
-                filename = file.originalFilename ?: "unknown",
+                bytes = 0, // Size will be updated by storage service
+                filename = filePart.filename(),
                 purpose = purpose,
                 createdAt = Instant.now().epochSecond,
             )

@@ -2,7 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import kotlinx.coroutines.flow.Flow
 import org.springframework.core.io.Resource
-import org.springframework.web.multipart.MultipartFile
+import org.springframework.http.codec.multipart.FilePart
 import java.nio.file.Path
 
 /**
@@ -18,7 +18,7 @@ interface FileStorageService {
      * @return The stored file's ID
      */
     suspend fun store(
-        file: MultipartFile,
+        file: FilePart,
         purpose: String,
     ): String
 

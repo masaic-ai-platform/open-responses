@@ -32,7 +32,7 @@ data class File(
     val filename: String,
     /**
      * The intended purpose of the file.
-     * Supported values are: assistants, batch, fine-tune, vision, user_data, evals
+     * Supported values are: assistants, batch, fine_tune, vision, user_data, evals
      */
     val purpose: String,
     /**

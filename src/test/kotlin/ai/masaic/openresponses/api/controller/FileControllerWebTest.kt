@@ -53,7 +53,7 @@ class FileControllerWebTest {
                 )
 
             coEvery {
-                fileService.uploadFile(any(), purpose)
+                fileService.uploadFilePart(any(), purpose)
             } answers {
                 val file = firstArg<MultipartFile>()
                 require(file.originalFilename == fileName) { "Filename doesn't match" }
@@ -105,7 +105,7 @@ class FileControllerWebTest {
             val fileContent = "test content"
             val invalidPurpose = "invalid_purpose"
 
-            coEvery { fileService.uploadFile(any(), invalidPurpose) } throws
+            coEvery { fileService.uploadFilePart(any(), invalidPurpose) } throws
                 IllegalArgumentException("Invalid purpose: $invalidPurpose")
 
             // When/Then - use MultipartBodyBuilder to properly handle the multipart request

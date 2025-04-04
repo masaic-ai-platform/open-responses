@@ -50,7 +50,7 @@ class FileControllerUploadTest {
                 )
         
             coEvery { 
-                fileService.uploadFile(any(), eq(purpose)) 
+                fileService.uploadFilePart(any(), eq(purpose))
             } returns file
         
             val bodyBuilder = MultipartBodyBuilder()
@@ -83,7 +83,7 @@ class FileControllerUploadTest {
                 .jsonPath("$.created_at")
                 .isEqualTo(createdAt)
         
-            coVerify { fileService.uploadFile(any(), eq(purpose)) }
+            coVerify { fileService.uploadFilePart(any(), eq(purpose)) }
         }
 
     @Test
@@ -96,7 +96,7 @@ class FileControllerUploadTest {
             val fileContent = "Test content".toByteArray()
         
             coEvery { 
-                fileService.uploadFile(any(), eq(purpose)) 
+                fileService.uploadFilePart(any(), eq(purpose))
             } throws IllegalArgumentException("Invalid purpose: $purpose")
         
             val bodyBuilder = MultipartBodyBuilder()
@@ -118,6 +118,6 @@ class FileControllerUploadTest {
                 .expectStatus()
                 .isBadRequest
         
-            coVerify { fileService.uploadFile(any(), eq(purpose)) }
+            coVerify { fileService.uploadFilePart(any(), eq(purpose)) }
         }
 } 

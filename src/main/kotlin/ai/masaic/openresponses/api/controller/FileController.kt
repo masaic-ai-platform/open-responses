@@ -17,8 +17,8 @@ import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.http.codec.multipart.FilePart
 import org.springframework.web.bind.annotation.*
-import org.springframework.web.multipart.MultipartFile
 import org.springframework.web.server.ResponseStatusException
 
 /**
@@ -35,7 +35,7 @@ class FileController(
 ) {
     private val log = LoggerFactory.getLogger(FileController::class.java)
 
-    @PostMapping("/files", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    @PostMapping("/files", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.MULTIPART_MIXED_VALUE])
     @Operation(
         summary = "Upload a file",
         description = "Upload a file that can be used across various endpoints. Individual files can be up to 512 MB.",
@@ -53,18 +53,18 @@ class FileController(
     )
     suspend fun uploadFile(
         @Parameter(description = "The File object (not file name) to be uploaded", required = true)
-        @RequestParam("file") file: MultipartFile,
+        @RequestPart("file") filePart: FilePart,
         @Parameter(
             description =
                 "The intended purpose of the uploaded file. " +
-                    "One of: assistants, batch, fine-tune, vision, user_data, evals",
+                    "One of: assistants, batch, fine_tune, vision, user_data, evals",
             required = true,
         )
-        @RequestParam("purpose") purpose: String,
+        @RequestPart("purpose") purpose: String,
     ): ResponseEntity<File> {
         try {
-            log.info("Uploading file: ${file.originalFilename} for purpose: $purpose")
-            val uploadedFile = fileService.uploadFile(file, purpose)
+            log.info("Uploading file: ${filePart.filename()} for purpose: $purpose")
+            val uploadedFile = fileService.uploadFilePart(filePart, purpose)
             return ResponseEntity.ok(uploadedFile)
         } catch (e: IllegalArgumentException) {
             log.error("Error uploading file: ${e.message}")

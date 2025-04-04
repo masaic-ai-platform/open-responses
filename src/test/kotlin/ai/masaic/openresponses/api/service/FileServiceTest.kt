@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -47,21 +48,20 @@ class FileServiceTest {
                     "test.txt", 
                     MediaType.TEXT_PLAIN_VALUE, 
                     "test content".toByteArray(),
-                )
+                ).toFilePart()
             val purpose = "assistants"
             val fileId = "file-123456"
         
             coEvery { fileStorageService.store(file, purpose) } returns fileId
         
             // When
-            val result = fileService.uploadFile(file, purpose)
+            val result = fileService.uploadFilePart(file, purpose)
         
             // Then
             assertEquals(fileId, result.id)
             assertEquals("test.txt", result.filename)
             assertEquals(purpose, result.purpose)
-            assertEquals(file.size, result.bytes)
-        
+
             coVerify { fileStorageService.store(file, purpose) }
         }
 
@@ -69,12 +69,12 @@ class FileServiceTest {
     fun `uploadFile should throw IllegalArgumentException for invalid purpose`() =
         runTest {
             // Given
-            val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "content".toByteArray())
+            val file = MockMultipartFile("file", "test.txt", MediaType.TEXT_PLAIN_VALUE, "content".toByteArray()).toFilePart()
             val invalidPurpose = "invalid_purpose"
         
             // When/Then
             assertThrows<IllegalArgumentException> {
-                fileService.uploadFile(file, invalidPurpose)
+                fileService.uploadFilePart(file, invalidPurpose)
             }
         }
 
