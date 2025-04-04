@@ -11,6 +11,7 @@ import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -63,7 +64,7 @@ class MasaicOpenAiResponseServiceImpl(
      * @param params Parameters for creating the response
      * @return Response object containing completion data
      */
-    fun create(
+    suspend fun create(
         client: OpenAIClient,
         params: ResponseCreateParams,
     ): Response {
@@ -134,7 +135,7 @@ class MasaicOpenAiResponseServiceImpl(
     /**
      * Stores a response and its associated input items in the response store.
      */
-    private fun storeResponseWithInputItems(
+    private suspend fun storeResponseWithInputItems(
         response: Response,
         params: ResponseCreateParams,
     ) {
@@ -184,6 +185,18 @@ class MasaicOpenAiResponseServiceImpl(
         throw UnsupportedOperationException("Not yet implemented")
     }
 
+    override fun retrieve(
+        params: ResponseRetrieveParams,
+        requestOptions: RequestOptions,
+    ): Response = runBlocking { retrieveAsync(params, requestOptions) }
+
+    override fun delete(
+        params: ResponseDeleteParams,
+        requestOptions: RequestOptions,
+    ) {
+        runBlocking { deleteAsync(params, requestOptions) }
+    }
+
     /**
      * Retrieves a specific response by ID.
      * 
@@ -191,7 +204,7 @@ class MasaicOpenAiResponseServiceImpl(
      * @param requestOptions Additional request options
      * @return The retrieved response or throws an exception if not found
      */
-    override fun retrieve(
+    suspend fun retrieveAsync(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions,
     ): Response {
@@ -213,7 +226,7 @@ class MasaicOpenAiResponseServiceImpl(
     /**
      * Deletes a response by ID.
      */
-    override fun delete(
+    suspend fun deleteAsync(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions,
     ) {

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -178,7 +179,7 @@ class MasaicStreamingService(
                                     )
 
                                 // Store the response in the response store
-                                storeResponseWithInputItems(finalResponse, params)
+                                runBlocking { storeResponseWithInputItems(finalResponse, params) }
                                 
                                 nextIteration = false
                                 trySend(
@@ -216,7 +217,7 @@ class MasaicStreamingService(
                                         incompleteDetails,
                                     )
                                 // Store the incomplete response in the response store
-                                storeResponseWithInputItems(finalResponse, params)
+                                runBlocking { storeResponseWithInputItems(finalResponse, params) }
                                 trySend(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofIncomplete(
@@ -640,7 +641,7 @@ class MasaicStreamingService(
     /**
      * Helper method to store a response and its input items in the response store.
      */
-    private fun ProducerScope<ServerSentEvent<String>>.storeResponseWithInputItems(
+    private suspend fun ProducerScope<ServerSentEvent<String>>.storeResponseWithInputItems(
         response: Response,
         params: ResponseCreateParams,
     ) {

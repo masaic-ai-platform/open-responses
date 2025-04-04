@@ -266,7 +266,7 @@ class MasaicResponseService(
      * @return List of input items
      * @throws ResponseNotFoundException If the response cannot be found
      */
-    fun listInputItems(
+    suspend fun listInputItems(
         responseId: String,
         limit: Int,
         order: String,
@@ -384,7 +384,7 @@ class MasaicResponseService(
      * @param queryBuilder The query parameters builder
      * @return The request parameters
      */
-    private fun createRequestParams(
+    private suspend fun createRequestParams(
         request: ResponseCreateParams.Body,
         headerBuilder: Headers.Builder,
         queryBuilder: QueryParams.Builder,

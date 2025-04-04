@@ -1,7 +1,7 @@
 package ai.masaic.openresponses
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration
+import org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
 
@@ -10,8 +10,14 @@ import org.springframework.boot.runApplication
  *
  * This class serves as the entry point for the application and is annotated with
  * [SpringBootApplication] to enable Spring Boot's autoconfiguration.
+ * We explicitly exclude both MongoDB auto-configurations to prevent Spring from automatically
+ * connecting to MongoDB when it's not explicitly enabled via properties.
  */
-@SpringBootApplication(exclude = [MongoAutoConfiguration::class])
+@SpringBootApplication(
+    exclude = [
+        MongoReactiveAutoConfiguration::class,
+    ],
+)
 @ConfigurationPropertiesScan
 class OpenResponsesApplication
 

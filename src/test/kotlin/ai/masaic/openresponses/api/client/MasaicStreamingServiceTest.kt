@@ -181,7 +181,7 @@ class MasaicStreamingServiceTest {
                 mockk {
                     every { chat() } returns mockChat
                 }
-            every { responseStore.storeResponse(any(), any()) } just runs
+            coEvery { responseStore.storeResponse(any(), any()) } just runs
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
@@ -238,7 +238,7 @@ class MasaicStreamingServiceTest {
                 mockk {
                     every { chat() } returns mockChat
                 }
-            every { responseStore.storeResponse(any(), any()) } just runs
+            coEvery { responseStore.storeResponse(any(), any()) } just runs
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
@@ -252,7 +252,7 @@ class MasaicStreamingServiceTest {
             // And a COMPLETED event for the STOP
             assertTrue(events.any { it.data()?.contains("response.completed") == true })
 
-            verify { responseStore.storeResponse(any(), any()) }
+            coVerify { responseStore.storeResponse(any(), any()) }
         }
 
     /**
@@ -374,7 +374,7 @@ class MasaicStreamingServiceTest {
             val mockCompletions = mockk<ChatCompletionServiceAsync>(relaxed = false)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
 
-            every { responseStore.storeResponse(any(), any()) } just runs
+            coEvery { responseStore.storeResponse(any(), any()) } just runs
 
             // The parameterConverter returns a prepared completion for any iteration:
             every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion

@@ -124,7 +124,7 @@ class ResponseControllerTest {
                 ),
             )
 
-        every { responseService.listInputItems(any(), any(), any(), null, null) } returns
+        coEvery { responseService.listInputItems(any(), any(), any(), null, null) } returns
             ResponseInputItemList(
                 data = inputItems,
                 firstId = "test",
@@ -150,7 +150,7 @@ class ResponseControllerTest {
         // Given
         val responseId = "nonexistent_resp"
 
-        every { responseService.listInputItems(any(), any(), any(), null, null) } throws ResponseNotFoundException(message = "not found")
+        coEvery { responseService.listInputItems(any(), any(), any(), null, null) } throws ResponseNotFoundException(message = "not found")
 
         // When/Then
         webTestClient

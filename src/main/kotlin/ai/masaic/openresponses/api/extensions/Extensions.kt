@@ -13,7 +13,7 @@ import com.openai.models.responses.ResponseInputItem
  * @param body The request body to copy properties from
  * @return The builder with properties copied from the body
  */
-fun ResponseCreateParams.Builder.fromBody(
+suspend fun ResponseCreateParams.Builder.fromBody(
     body: ResponseCreateParams.Body,
     responseStore: ResponseStore,
     objectMapper: ObjectMapper,

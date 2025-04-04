@@ -151,7 +151,7 @@ class ResponseController(
             ),
         ],
     )
-    fun deleteResponse(
+    suspend fun deleteResponse(
         @Parameter(description = "The ID of the response to delete", required = true)
         @PathVariable responseId: String,
     ): ResponseEntity<Map<String, Any>> {
@@ -181,7 +181,7 @@ class ResponseController(
             ),
         ],
     )
-    fun listInputItems(
+    suspend fun listInputItems(
         @Parameter(description = "The ID of the response to retrieve input items for", required = true)
         @PathVariable responseId: String,
         @Parameter(
