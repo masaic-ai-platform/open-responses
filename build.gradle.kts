@@ -20,6 +20,12 @@ repositories {
     mavenCentral()
 }
 
+dependencyManagement {
+    imports {
+        mavenBom("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:2.14.0")
+    }
+}
+
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
@@ -37,12 +43,16 @@ dependencies {
     implementation("com.openai:openai-java:0.34.1")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-tracing-bridge-otel:1.4.4")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter")
     
-    implementation("io.micrometer:micrometer-tracing-bridge-brave:1.2.3")
-    implementation("io.micrometer:micrometer-registry-prometheus:1.12.4")
-    implementation("io.micrometer:micrometer-observation:1.12.4")
-    implementation("io.micrometer:micrometer-core:1.12.4")
-    implementation("io.zipkin.reporter2:zipkin-reporter-brave:2.16.4")
+    // Micrometer for metrics
+    implementation("io.micrometer:micrometer-core")
+    implementation("io.micrometer:micrometer-observation")
+    implementation("io.micrometer:micrometer-registry-otlp")
+
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
 

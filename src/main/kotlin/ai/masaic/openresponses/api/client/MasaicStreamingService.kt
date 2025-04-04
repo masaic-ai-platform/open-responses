@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
@@ -8,6 +10,8 @@ import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.responses.*
+import io.micrometer.observation.Observation
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -16,10 +20,11 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.reactor.ReactorContext
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
-import java.util.UUID
+import java.util.*
 
 @Service
 class MasaicStreamingService(
@@ -32,6 +37,7 @@ class MasaicStreamingService(
     private val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L, // 60 seconds
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
+    private val telemetryService: TelemetryService,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -46,6 +52,7 @@ class MasaicStreamingService(
     fun createCompletionStream(
         client: OpenAIClient,
         initialParams: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
     ): Flow<ServerSentEvent<String>> =
         flow {
             var currentParams = initialParams
@@ -84,6 +91,7 @@ class MasaicStreamingService(
                         currentParams,
                         responseId,
                         inProgressEventFired,
+                        metadata,
                     )
 
                 currentParams = iterationResult.updatedParams
@@ -105,25 +113,31 @@ class MasaicStreamingService(
         params: ResponseCreateParams,
         responseId: String,
         alreadyInProgressEventFired: Boolean,
+        metadata: CreateResponseMetadataInput,
     ): IterationResult {
         var nextIteration = false
         var updatedParams = params
         var inProgressFired = alreadyInProgressEventFired
 
         // We'll collect SSE events from the streaming call:
+        val createParams = parameterConverter.prepareCompletion(params)
+        val genAiSample = telemetryService.genAiDurationSample()
         callbackFlow {
             val subscription =
                 client
                     .async()
                     .chat()
                     .completions()
-                    .createStreaming(parameterConverter.prepareCompletion(params))
+                    .createStreaming(createParams)
 
             val functionCallAccumulator = mutableMapOf<Long, MutableList<ResponseStreamEvent>>()
             val textAccumulator = mutableMapOf<Long, MutableList<ResponseStreamEvent>>()
             val responseOutputItemAccumulator = mutableListOf<ResponseOutputItem>()
             val internalToolItemIds = mutableSetOf<String>()
             val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
+
+            val observation = telemetryService.startObservation("open.responses.createStream")
+            telemetryService.emitModelInputEvents(observation, createParams, metadata)
 
             subscription.subscribe { completion ->
                 if (!completion._choices().isMissing()) {
@@ -179,7 +193,7 @@ class MasaicStreamingService(
 
                                 // Store the response in the response store
                                 storeResponseWithInputItems(finalResponse, params)
-                                
+
                                 nextIteration = false
                                 trySend(
                                     EventUtils.convertEvent(
@@ -193,6 +207,9 @@ class MasaicStreamingService(
                                         objectMapper,
                                     ),
                                 )
+
+                                telemetryService.stopObservation(observation, finalResponse, params, metadata)
+                                telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
                             }
                             "length", "content_filter" -> {
                                 val incompleteDetails =
@@ -259,6 +276,9 @@ class MasaicStreamingService(
                                     responseOutputItemAccumulator,
                                 )
 
+                            telemetryService.stopObservation(observation, finalResponse, params, metadata)
+                            telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
+
                             if (internalToolItemIds.isEmpty()) {
                                 // No calls to actually handle
                                 nextIteration = false
@@ -275,12 +295,17 @@ class MasaicStreamingService(
                                     ),
                                 )
                             } else {
+                                val parentObservation =
+                                    coroutineContext[ReactorContext]?.context?.get<Observation>(
+                                        ObservationThreadLocalAccessor.KEY,
+                                    )
                                 // Actually handle these calls
                                 val toolResponseItems =
                                     toolHandler.handleMasaicToolCall(
                                         params,
                                         finalResponse,
                                         eventEmitter = { event -> trySend(event) },
+                                        parentObservation,
                                     )
                                 updatedParams =
                                     params

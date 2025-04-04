@@ -55,49 +55,49 @@ class ResponseController(
         @RequestBody request: CreateResponseRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-        exchange: ServerWebExchange,
+//        exchange: ServerWebExchange,
     ): ResponseEntity<*> {
         // Extract trace ID from exchange
-        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
+//        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
 
         // Use our custom coroutine-aware MDC context
-        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-            payloadFormatter.formatResponseRequest(request)
-            request.parseInput(mapper)
-            val requestBodyJson = mapper.writeValueAsString(request)
-            log.debug("Request body: $requestBodyJson")
+//        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
+        payloadFormatter.formatResponseRequest(request)
+        request.parseInput(mapper)
+        val requestBodyJson = mapper.writeValueAsString(request)
+        log.debug("Request body: $requestBodyJson")
 
-            // If streaming is requested, set the appropriate content type and return a flow
-            if (request.stream == true) {
-                ResponseEntity
-                    .ok()
-                    .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .body(
-                        masaicResponseService.createStreamingResponse(
-                            mapper.readValue(
-                                requestBodyJson,
-                                ResponseCreateParams.Body::class.java,
-                            ),
-                            headers,
-                            queryParams,
-                        ),
-                    )
-            } else {
-                // For non-streaming, return a regular response
-                val responseObj =
-                    masaicResponseService.createResponse(
+        // If streaming is requested, set the appropriate content type and return a flow
+        if (request.stream == true) {
+            return ResponseEntity
+                .ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(
+                    masaicResponseService.createStreamingResponse(
                         mapper.readValue(
                             requestBodyJson,
                             ResponseCreateParams.Body::class.java,
                         ),
                         headers,
                         queryParams,
-                    )
+                    ),
+                )
+        } else {
+            // For non-streaming, return a regular response
+            val responseObj =
+                masaicResponseService.createResponse(
+                    mapper.readValue(
+                        requestBodyJson,
+                        ResponseCreateParams.Body::class.java,
+                    ),
+                    headers,
+                    queryParams,
+                )
 
-                log.debug("Response Body: $responseObj")
-                ResponseEntity.ok(payloadFormatter.formatResponse(responseObj))
-            }
+            log.debug("Response Body: $responseObj")
+            return ResponseEntity.ok(payloadFormatter.formatResponse(responseObj))
         }
+//        }
     }
 
     @GetMapping("/responses/{responseId}", produces = [MediaType.APPLICATION_JSON_VALUE])

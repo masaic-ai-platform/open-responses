@@ -1,19 +1,23 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
 import com.openai.core.http.StreamResponse
-import com.openai.models.chat.completions.ChatCompletionContentPart
-import com.openai.models.chat.completions.ChatCompletionContentPartImage
-import com.openai.models.chat.completions.ChatCompletionContentPartText
+import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import io.micrometer.observation.Observation
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.reactor.ReactorContext
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
+import kotlin.coroutines.coroutineContext
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.
@@ -30,6 +34,7 @@ class MasaicOpenAiResponseServiceImpl(
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService,
     private val responseStore: ResponseStore,
+    private val telemetryService: TelemetryService,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
 
@@ -59,77 +64,96 @@ class MasaicOpenAiResponseServiceImpl(
 
     /**
      * Creates a new completion response based on provided parameters.
+     * Enhanced with OpenTelemetry GenAI span semantics.
      *
+     * @param client OpenAI client to use for the request
      * @param params Parameters for creating the response
      * @return Response object containing completion data
      */
-    fun create(
+    suspend fun create(
         client: OpenAIClient,
         params: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
     ): Response {
-        logger.debug { "Creating completion with model: ${params.model()}" }
-        try {
-            // Convert params to OpenAI format and create the chat completion
-            val chatCompletions = client.chat().completions().create(parameterConverter.prepareCompletion(params))
-            logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
+        val parentObservation =
+            coroutineContext[ReactorContext]?.context?.get<Observation>(
+                ObservationThreadLocalAccessor.KEY,
+            )
 
-            if (!chatCompletions.choices().any {
-                    it
-                        .finishReason()
-                        .value()
-                        .name
-                        .lowercase() == "tool_calls"
+        val responseOrCompletions =
+            telemetryService.withClientObservation("open.responses.create", parentObservation) { observation ->
+                logger.debug { "Creating completion with model: ${params.model()}" }
+                val completionCreateParams = parameterConverter.prepareCompletion(params)
+                telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
+                val chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
+                logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
+                telemetryService.emitModelOutputEvents(observation, chatCompletions, metadata)
+                telemetryService.setAllObservationAttributes(observation, chatCompletions, params, metadata)
+                telemetryService.recordTokenUsage(metadata, chatCompletions, params, "input", chatCompletions.usage().get().promptTokens())
+                telemetryService.recordTokenUsage(metadata, chatCompletions, params, "output", chatCompletions.usage().get().completionTokens())
+
+                if (!hasToolCalls(chatCompletions)) {
+                    logger.info { "No tool calls detected, returning direct response" }
+                    return@withClientObservation chatCompletions.toResponse(params)
                 }
-            ) {
-                logger.info { "No tool calls detected, returning direct response" }
-                val response = chatCompletions.toResponse(params)
-                // Store the response and input items for later retrieval
-                storeResponseWithInputItems(response, params)
-                return response
+
+                chatCompletions
             }
 
-            // Process any tool calls in the response
-            logger.debug { "Processing tool calls from completion response" }
-            val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params)
-
-            // Rebuild the params with the updated input items for the follow-up request
-            val newParams =
-                params
-                    .toBuilder()
-                    .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
-                    .build()
-
-            // Check if we need to make follow-up requests for tool calls
-            if (newParams
-                    .input()
-                    .asResponse()
-                    .filter { it.isFunctionCall() }
-                    .size >
-                newParams
-                    .input()
-                    .asResponse()
-                    .filter { it.isFunctionCallOutput() }
-                    .size
-            ) {
-                logger.info { "Some function calls without outputs, returning current response" }
-                val response = chatCompletions.toResponse(newParams)
-                // Store the response and input items for later retrieval
-                storeResponseWithInputItems(response, newParams)
-                return response
-            } else if (responseInputItems.filter { it.isFunctionCall() }.size > getAllowedMaxToolCalls()) {
-                val errorMsg = "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable."
-                logger.error { errorMsg }
-                throw IllegalArgumentException(errorMsg)
-            }
-
-            // Recursively make the next request with the updated params
-            logger.debug { "Making recursive completion request with updated parameters" }
-            return create(client, newParams)
-        } catch (e: Exception) {
-            logger.error(e) { "Error creating completion: ${e.message}" }
-            throw e
+        if (responseOrCompletions is Response) {
+            storeResponseWithInputItems(responseOrCompletions, params)
+            return responseOrCompletions
         }
+        val chatCompletions = responseOrCompletions as ChatCompletion
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, parentObservation)
+        val updatedParams =
+            params
+                .toBuilder()
+                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+                .build()
+
+        if (hasUnresolvedFunctionCalls(updatedParams)) {
+            logger.info { "Some function calls without outputs, returning current response" }
+            val response = chatCompletions.toResponse(updatedParams)
+            storeResponseWithInputItems(response, updatedParams)
+            return chatCompletions.toResponse(updatedParams)
+        }
+
+        if (exceedsMaxToolCalls(responseInputItems)) {
+            val errorMsg = "Too many tool calls. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
+            logger.error { errorMsg }
+            throw IllegalArgumentException(errorMsg)
+        }
+
+        return create(client, updatedParams, metadata)
     }
+
+    /**
+     * Returns true if the [chatCompletions] contain any tool_calls finish reason.
+     */
+    private fun hasToolCalls(chatCompletion: ChatCompletion): Boolean =
+        chatCompletion.choices().any {
+            it
+                .finishReason()
+                .value()
+                .name
+                .lowercase() == "tool_calls"
+        }
+
+    /**
+     * Returns true if the new parameters have more function calls than function outputs,
+     * indicating unresolved calls that need to be returned.
+     */
+    private fun hasUnresolvedFunctionCalls(params: ResponseCreateParams): Boolean {
+        val numFunctionCalls = params.input().asResponse().count { it.isFunctionCall() }
+        val numFunctionOutputs = params.input().asResponse().count { it.isFunctionCallOutput() }
+        return numFunctionCalls > numFunctionOutputs
+    }
+
+    /**
+     * Returns true if the [items] exceed the max allowed function calls set in the environment.
+     */
+    private fun exceedsMaxToolCalls(items: List<ResponseInputItem>): Boolean = items.count { it.isFunctionCall() } > getAllowedMaxToolCalls()
 
     /**
      * Stores a response and its associated input items in the response store.
@@ -165,12 +189,13 @@ class MasaicOpenAiResponseServiceImpl(
      * @param initialParams Parameters for creating the completion
      * @return Flow of ServerSentEvents containing response chunks
      */
-    fun createCompletionStream(
+    suspend fun createCompletionStream(
         client: OpenAIClient,
         initialParams: ResponseCreateParams,
+        metadata: CreateResponseMetadataInput,
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
-        return streamingService.createCompletionStream(client, initialParams)
+        return streamingService.createCompletionStream(client, initialParams, metadata)
     }
 
     /**
@@ -186,7 +211,7 @@ class MasaicOpenAiResponseServiceImpl(
 
     /**
      * Retrieves a specific response by ID.
-     * 
+     *
      * @param params The parameters containing the response ID to retrieve
      * @param requestOptions Additional request options
      * @return The retrieved response or throws an exception if not found
@@ -197,14 +222,14 @@ class MasaicOpenAiResponseServiceImpl(
     ): Response {
         val responseId = params.responseId()
         logger.debug { "Retrieving response with ID: $responseId" }
-        
+
         // Attempt to retrieve the response from the store
         val response = responseStore.getResponse(responseId)
         if (response != null) {
             logger.debug { "Found response with ID: $responseId" }
             return response
         }
-        
+
         // If response is not found, throw an exception
         logger.error { "Response with ID: $responseId not found" }
         throw NoSuchElementException("Response with ID: $responseId not found")

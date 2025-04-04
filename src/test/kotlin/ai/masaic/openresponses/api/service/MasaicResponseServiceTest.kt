@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.client.ResponseStore
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
@@ -90,8 +91,8 @@ class MasaicResponseServiceTest {
             val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
 
             val expectedResponse = mockk<Response>()
-            every {
-                openAIResponseService.create(ofType<OpenAIClient>(), any())
+            coEvery {
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
             } returns expectedResponse
 
             // When
@@ -99,8 +100,8 @@ class MasaicResponseServiceTest {
 
             // Then
             assertSame(expectedResponse, result, "Should return the mocked response")
-            verify(exactly = 1) {
-                openAIResponseService.create(ofType<OpenAIClient>(), any())
+            coVerify(exactly = 1) {
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
             }
             confirmVerified(openAIResponseService)
         }
@@ -180,8 +181,12 @@ class MasaicResponseServiceTest {
                     ServerSentEvent.builder("data2").build(),
                 )
 
-            every {
-                openAIResponseService.createCompletionStream(any(), ofType())
+            coEvery {
+                openAIResponseService.createCompletionStream(
+                    any(),
+                    any(),
+                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                )
             } returns expectedFlow
 
             // When
@@ -193,8 +198,12 @@ class MasaicResponseServiceTest {
             assertEquals("data1", collectedEvents[0].data())
             assertEquals("data2", collectedEvents[1].data())
 
-            verify(exactly = 1) {
-                openAIResponseService.createCompletionStream(any(), any())
+            coVerify(exactly = 1) {
+                openAIResponseService.createCompletionStream(
+                    any(),
+                    any(),
+                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                )
             }
             confirmVerified(openAIResponseService)
         }
