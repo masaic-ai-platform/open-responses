@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.model.FunctionTool
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.JsonNode
@@ -13,11 +15,14 @@ import com.openai.core.http.AsyncStreamResponse
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.Tool
 import com.openai.services.async.ChatServiceAsync
 import com.openai.services.async.chat.ChatCompletionServiceAsync
+import io.micrometer.core.instrument.Timer.Sample
+import io.micrometer.observation.Observation
 import io.mockk.*
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -39,6 +44,12 @@ class MasaicStreamingServiceTest {
     private lateinit var streamingService: MasaicStreamingService
     private lateinit var payloadFormatter: PayloadFormatter
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var telemetryService: TelemetryService
+    private val metadata = CreateResponseMetadataInput()
+    private val mockObservation = mockk<Observation>()
+    private val mockSample = mockk<Sample>()
+    private val mockResponse = mockk<Response>()
+    private val mockCompletionParams = mockk<ChatCompletionCreateParams>()
     private lateinit var responseStore: ResponseStore
 
     @BeforeEach
@@ -49,6 +60,7 @@ class MasaicStreamingServiceTest {
         openAIClient = mockk()
         responseStore = mockk()
         objectMapper = ObjectMapper()
+        telemetryService = mockk()
         payloadFormatter =
             mockk {
                 every { formatResponseStreamEvent(any()) } answers {
@@ -66,7 +78,15 @@ class MasaicStreamingServiceTest {
                 responseStore = responseStore,
                 payloadFormatter = payloadFormatter,
                 objectMapper = objectMapper,
+                telemetryService = telemetryService,
             )
+
+        every { telemetryService.genAiDurationSample() } returns mockSample
+        coEvery { telemetryService.startObservation(any()) } returns mockObservation
+        every { telemetryService.stopObservation(any(), any(), any(), any()) } just runs
+        every { telemetryService.stopGenAiDurationSample(any(), any(), any()) } just runs
+        every { telemetryService.emitModelOutputEvents(any(), mockResponse, any()) } just runs
+        every { telemetryService.emitModelInputEvents(any(), any(), any()) } just runs
     }
 
     /**
@@ -92,11 +112,10 @@ class MasaicStreamingServiceTest {
                 }
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
-
             // When
             val resultEvents =
                 streamingService
-                    .createCompletionStream(openAIClient, params)
+                    .createCompletionStream(openAIClient, params, metadata)
                     .toList(mutableListOf())
 
             // Then
@@ -133,7 +152,7 @@ class MasaicStreamingServiceTest {
             every { params.input() } returns mockInput
 
             // When we try to collect the flow, an error event is produced and an exception is thrown
-            val flow = streamingService.createCompletionStream(openAIClient, params)
+            val flow = streamingService.createCompletionStream(openAIClient, params, metadata)
 
             // Then
             assertThrows<UnsupportedOperationException> {
@@ -186,7 +205,7 @@ class MasaicStreamingServiceTest {
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
             // When
-            val flow = streamingService.createCompletionStream(openAIClient, params)
+            val flow = streamingService.createCompletionStream(openAIClient, params, metadata)
             val events = flow.toList(mutableListOf())
 
             // Then
@@ -243,7 +262,7 @@ class MasaicStreamingServiceTest {
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
             // When
-            val flow = streamingService.createCompletionStream(openAIClient, params)
+            val flow = streamingService.createCompletionStream(openAIClient, params, metadata)
             val events = flow.toList(mutableListOf())
 
             // Then
@@ -407,7 +426,7 @@ class MasaicStreamingServiceTest {
             // 6) Now run the flow. This should trigger TWO iterations:
             val events =
                 streamingService
-                    .createCompletionStream(openAIClient, originalParams)
+                    .createCompletionStream(openAIClient, originalParams, metadata)
                     .toList(mutableListOf())
 
             // 7) Verify the result. We expect 2 subscriptions -> 2 iterations.

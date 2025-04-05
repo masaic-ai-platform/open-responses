@@ -1,14 +1,17 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
+import io.micrometer.observation.Observation
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
-import java.util.UUID
+import java.util.*
 
 /**
  * Handles tool-related operations for the Masaic OpenAI API integration.
@@ -18,11 +21,13 @@ import java.util.UUID
 class MasaicToolHandler(
     private val toolService: ToolService,
     private val objectMapper: ObjectMapper,
+    private val telemetryService: TelemetryService,
 ) {
     private val logger = KotlinLogging.logger {}
 
     /**
      * Processes tool calls from a chat completion and executes relevant tools.
+     * Each tool execution is recorded using the telemetry observation API.
      *
      * @param chatCompletion The ChatCompletion containing potential tool calls
      * @param params The original request parameters
@@ -31,6 +36,7 @@ class MasaicToolHandler(
     fun handleMasaicToolCall(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
+        parentObservation: Observation? = null,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
         val responseInputItems =
@@ -71,7 +77,7 @@ class MasaicToolHandler(
                                         ResponseOutputText
                                             .builder()
                                             .text(it.message().content().get())
-                                            .annotations(listOf())
+                                            .annotations(emptyList())
                                             .build(),
                                     ),
                                 ),
@@ -83,16 +89,18 @@ class MasaicToolHandler(
                 )
             }
 
-        // Process tool calls
+        // Process tool calls from the ChatCompletion
         chatCompletion.choices().forEach { chatChoice ->
             if (ChatCompletion.Choice.FinishReason.TOOL_CALLS == chatChoice.finishReason()) {
                 val message = chatChoice.message()
-                logger.debug { "Processing ${message.toolCalls().get().size} tool calls" }
+                val toolCalls = message.toolCalls().get()
+                logger.debug { "Processing ${toolCalls.size} tool calls" }
 
-                message.toolCalls().get().forEach { tool ->
+                toolCalls.forEach { tool ->
                     val function = tool.function()
                     if (toolService.getFunctionTool(function.name()) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
+
                         // Add the function call to response items
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCall(
@@ -106,26 +114,26 @@ class MasaicToolHandler(
                             ),
                         )
 
-                        // Execute the tool and add its output if successful
-                        val toolResult = toolService.executeTool(function.name(), function.arguments())
-                        if (toolResult != null) {
-                            logger.debug { "Tool execution successful for ${function.name()}" }
-                            responseInputItems.add(
-                                ResponseInputItem.ofFunctionCallOutput(
-                                    ResponseInputItem.FunctionCallOutput
-                                        .builder()
-                                        .callId(tool.id())
-                                        .id(tool.id())
-                                        .output(toolResult)
-                                        .build(),
-                                ),
-                            )
-                        } else {
-                            logger.warn { "Tool execution returned null for ${function.name()}" }
+                        // Execute the tool using the observation API
+                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), parentObservation) { toolResult ->
+                            if (toolResult != null) {
+                                logger.debug { "Tool execution successful for ${function.name()}" }
+                                responseInputItems.add(
+                                    ResponseInputItem.ofFunctionCallOutput(
+                                        ResponseInputItem.FunctionCallOutput
+                                            .builder()
+                                            .callId(tool.id())
+                                            .id(tool.id())
+                                            .output(toolResult)
+                                            .build(),
+                                    ),
+                                )
+                            } else {
+                                logger.warn { "Tool execution returned null for ${function.name()}" }
+                            }
                         }
                     } else {
                         logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
-                        // For unsupported tools, park them for client handling
                         parked.add(
                             ResponseInputItem.ofFunctionCall(
                                 ResponseFunctionToolCall
@@ -142,15 +150,43 @@ class MasaicToolHandler(
             }
         }
 
-        // Add all parked items to the end
         logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
-
         return responseInputItems
     }
 
     /**
-     * Processes tool calls from a response and executes relevant tools.
+     * Executes a tool using the telemetry observation API and processes the result with the provided callback.
+     *
+     * @param toolName The name of the tool to execute
+     * @param arguments The arguments to pass to the tool
+     * @param toolId The ID of the tool call
+     * @param resultHandler A function that processes the tool execution result
+     */
+    private fun executeToolWithObservation(
+        toolName: String,
+        arguments: String,
+        toolId: String,
+        parentObservation: Observation? = null,
+        resultHandler: (String?) -> Unit,
+    ) {
+        telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
+            try {
+                val toolResult = toolService.executeTool(toolName, arguments)
+                resultHandler(toolResult)
+            } catch (e: Exception) {
+                observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
+                logger.error(e) { "Error executing tool $toolName: ${e.message}" }
+                throw e
+            }
+        }
+    }
+
+    /**
+     * Processes tool calls from a Response and executes relevant tools.
      *
      * @param params The original request parameters
      * @param response The Response object containing potential tool calls
@@ -161,6 +197,7 @@ class MasaicToolHandler(
         params: ResponseCreateParams,
         response: Response,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
+        parentObservation: Observation? = null,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
         val responseInputItems =
@@ -195,7 +232,7 @@ class MasaicToolHandler(
             parked.add(ResponseInputItem.ofResponseOutputMessage(it.asMessage()))
         }
 
-        // Process function calls
+        // Process function calls from the response
         val functionCalls = response.output().filter { it.isFunctionCall() }
         logger.debug { "Processing ${functionCalls.size} function calls" }
 
@@ -250,22 +287,22 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                // Execute the tool and add its output if successful
-                val toolResult = toolService.executeTool(function.name(), function.arguments())
-                if (toolResult != null) {
-                    logger.debug { "Tool execution successful for ${function.name()}" }
-                    responseInputItems.add(
-                        ResponseInputItem.ofFunctionCallOutput(
-                            ResponseInputItem.FunctionCallOutput
-                                .builder()
-                                .callId(function.callId())
-                                .id(function.id())
-                                .output(toolResult)
-                                .build(),
-                        ),
-                    )
-                } else {
-                    logger.warn { "Tool execution returned null for ${function.name()}" }
+                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation) { toolResult ->
+                    if (toolResult != null) {
+                        logger.debug { "Tool execution successful for ${function.name()}" }
+                        responseInputItems.add(
+                            ResponseInputItem.ofFunctionCallOutput(
+                                ResponseInputItem.FunctionCallOutput
+                                    .builder()
+                                    .callId(function.callId())
+                                    .id(function.id())
+                                    .output(toolResult)
+                                    .build(),
+                            ),
+                        )
+                    } else {
+                        logger.warn { "Tool execution returned null for ${function.name()}" }
+                    }
                 }
 
                 eventEmitter.invoke(
@@ -284,7 +321,6 @@ class MasaicToolHandler(
                 )
             } else {
                 logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
-                // For unsupported tools, park them for client handling
                 parked.add(
                     ResponseInputItem.ofFunctionCall(
                         ResponseFunctionToolCall
@@ -299,10 +335,8 @@ class MasaicToolHandler(
             }
         }
 
-        // Add all parked items to the end
         logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
-
         return responseInputItems
     }
-} 
+}

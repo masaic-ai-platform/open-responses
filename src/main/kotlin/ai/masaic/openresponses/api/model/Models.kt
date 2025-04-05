@@ -306,3 +306,8 @@ data class InputMessageItemContent(
     val fileName: String? = null,
     val annotations: ResponseOutputText.Annotation? = null,
 )
+
+data class CreateResponseMetadataInput(
+    val genAISystem: String? = null,
+    val modelProviderAddress: String? = null,
+)

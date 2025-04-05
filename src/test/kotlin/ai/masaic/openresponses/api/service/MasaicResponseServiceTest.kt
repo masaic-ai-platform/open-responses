@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.client.ResponseStore
+import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
@@ -92,7 +93,7 @@ class MasaicResponseServiceTest {
 
             val expectedResponse = mockk<Response>()
             coEvery {
-                openAIResponseService.create(ofType<OpenAIClient>(), any())
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
             } returns expectedResponse
 
             // When
@@ -101,7 +102,7 @@ class MasaicResponseServiceTest {
             // Then
             assertSame(expectedResponse, result, "Should return the mocked response")
             coVerify(exactly = 1) {
-                openAIResponseService.create(ofType<OpenAIClient>(), any())
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
             }
             confirmVerified(openAIResponseService)
         }
@@ -181,8 +182,12 @@ class MasaicResponseServiceTest {
                     ServerSentEvent.builder("data2").build(),
                 )
 
-            every {
-                openAIResponseService.createCompletionStream(any(), ofType())
+            coEvery {
+                openAIResponseService.createCompletionStream(
+                    any(),
+                    any(),
+                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                )
             } returns expectedFlow
 
             // When
@@ -194,8 +199,12 @@ class MasaicResponseServiceTest {
             assertEquals("data1", collectedEvents[0].data())
             assertEquals("data2", collectedEvents[1].data())
 
-            verify(exactly = 1) {
-                openAIResponseService.createCompletionStream(any(), any())
+            coVerify(exactly = 1) {
+                openAIResponseService.createCompletionStream(
+                    any(),
+                    any(),
+                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                )
             }
             confirmVerified(openAIResponseService)
         }
@@ -216,62 +225,61 @@ class MasaicResponseServiceTest {
     }
 
     @Test
-    fun `listInputItems should retrieve input items from ResponseStore`() =
-        runTest {
-            // Given
-            val responseId = "resp_123456"
-            val mockResponse = mockk<Response>()
+    fun `listInputItems should retrieve input items from ResponseStore`() {
+        // Given
+        val responseId = "resp_123456"
+        val mockResponse = mockk<Response>()
 
-            // Create actual ResponseInputItem objects instead of mocks
-            val inputItems =
-                listOf(
-                    objectMapper.convertValue(
-                        ResponseInputItem.ofFunctionCall(
-                            ResponseFunctionToolCall
-                                .builder()
-                                .id("fc_1")
-                                .name("test_function")
-                                .arguments("{}")
-                                .callId("fc_1")
-                                .build(),
-                        ),
-                        InputMessageItem::class.java,
+        // Create actual ResponseInputItem objects instead of mocks
+        val inputItems =
+            listOf(
+                objectMapper.convertValue(
+                    ResponseInputItem.ofFunctionCall(
+                        ResponseFunctionToolCall
+                            .builder()
+                            .id("fc_1")
+                            .name("test_function")
+                            .arguments("{}")
+                            .callId("fc_1")
+                            .build(),
                     ),
-                    objectMapper.convertValue(
-                        ResponseInputItem.ofFunctionCallOutput(
-                            ResponseInputItem.FunctionCallOutput
-                                .builder()
-                                .callId("fc_1")
-                                .output("{\"result\": \"success\"}")
-                                .build(),
-                        ),
-                        InputMessageItem::class.java,
+                    InputMessageItem::class.java,
+                ),
+                objectMapper.convertValue(
+                    ResponseInputItem.ofFunctionCallOutput(
+                        ResponseInputItem.FunctionCallOutput
+                            .builder()
+                            .callId("fc_1")
+                            .output("{\"result\": \"success\"}")
+                            .build(),
                     ),
-                    objectMapper.convertValue(
-                        ResponseInputItem.ofMessage(
-                            ResponseInputItem.Message
-                                .builder()
-                                .role(ResponseInputItem.Message.Role.USER)
-                                .content(
-                                    listOf(
-                                        ResponseInputContent.ofInputText(
-                                            ResponseInputText
-                                                .builder()
-                                                .text("Hello")
-                                                .build(),
-                                        ),
+                    InputMessageItem::class.java,
+                ),
+                objectMapper.convertValue(
+                    ResponseInputItem.ofMessage(
+                        ResponseInputItem.Message
+                            .builder()
+                            .role(ResponseInputItem.Message.Role.USER)
+                            .content(
+                                listOf(
+                                    ResponseInputContent.ofInputText(
+                                        ResponseInputText
+                                            .builder()
+                                            .text("Hello")
+                                            .build(),
                                     ),
-                                ).build(),
-                        ),
-                        InputMessageItem::class.java,
+                                ),
+                            ).build(),
                     ),
-                )
+                    InputMessageItem::class.java,
+                ),
+            )
 
-            coEvery { responseStore.getResponse(responseId) } returns mockResponse
-            coEvery { responseStore.getInputItems(responseId) } returns inputItems
+        coEvery { responseStore.getResponse(responseId) } returns mockResponse
+        coEvery { responseStore.getInputItems(responseId) } returns inputItems
 
-            // When
-            val result = masaicResponseService.listInputItems(responseId, 2, "desc", null, null)
+        // When
+        val result = masaicResponseService.listInputItems(responseId, 2, "desc", null, null)
 
             // Then
             assertEquals(2, result.data.size, "Should return limited input items")

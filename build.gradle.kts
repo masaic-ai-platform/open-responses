@@ -20,6 +20,12 @@ repositories {
     mavenCentral()
 }
 
+dependencyManagement {
+    imports {
+        mavenBom("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:2.14.0")
+    }
+}
+
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     implementation("org.springframework.boot:spring-boot-starter-webflux")
@@ -40,14 +46,23 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-embeddings-all-minilm-l6-v2:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
-    
+
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("io.micrometer:micrometer-tracing-bridge-otel:1.4.4")
+    implementation("io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter")
+
+    // Micrometer for metrics
+    implementation("io.micrometer:micrometer-core")
+    implementation("io.micrometer:micrometer-observation")
+    implementation("io.micrometer:micrometer-registry-otlp")
+
     // Apache Tika dependencies for document parsing
     implementation("org.apache.tika:tika-core:3.1.0")
     implementation("org.apache.tika:tika-parsers-standard-package:3.1.0")
 
     // MongoDB dependencies
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb-reactive")
-    
+
     implementation("io.micrometer:micrometer-tracing-bridge-brave:1.2.3")
     implementation("io.micrometer:micrometer-registry-prometheus:1.12.4")
     implementation("io.micrometer:micrometer-observation:1.12.4")
@@ -61,7 +76,7 @@ dependencies {
     testImplementation("io.mockk:mockk:1.13.17")
     implementation("io.projectreactor:reactor-test")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
-    
+
     // MongoDB Testcontainers for testing
     testImplementation("org.testcontainers:mongodb:1.19.1")
     testImplementation("org.testcontainers:junit-jupiter:1.19.1")
