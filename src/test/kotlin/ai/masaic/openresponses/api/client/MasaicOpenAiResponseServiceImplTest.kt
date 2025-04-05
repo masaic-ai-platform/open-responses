@@ -13,8 +13,6 @@ import io.micrometer.observation.ObservationRegistry
 import io.mockk.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -151,7 +149,7 @@ class MasaicOpenAiResponseServiceImplTest {
         every { params.responseId() } returns responseId
 
         val mockResponse = mockk<Response>(relaxed = true)
-        every { responseStore.getResponse(responseId) } returns mockResponse
+        coEvery { responseStore.getResponse(responseId) } returns mockResponse
 
         val options = mockk<RequestOptions>(relaxed = true)
 
@@ -161,7 +159,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Assert
         assertNotNull(result)
         assertEquals(mockResponse, result)
-        verify(exactly = 1) { responseStore.getResponse(responseId) }
+        coVerify(exactly = 1) { responseStore.getResponse(responseId) }
     }
 
     /**
@@ -174,8 +172,7 @@ class MasaicOpenAiResponseServiceImplTest {
         val params = mockk<ResponseRetrieveParams>(relaxed = true)
         every { params.responseId() } returns responseId
 
-        every { responseStore.getResponse(responseId) } returns null
-
+        coEvery { responseStore.getResponse(responseId) } returns null
 
         coEvery { responseStore.getResponse(responseId) } returns null
 

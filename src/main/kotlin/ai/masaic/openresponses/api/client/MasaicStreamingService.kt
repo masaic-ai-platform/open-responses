@@ -193,7 +193,7 @@ class MasaicStreamingService(
                                     )
 
                                 // Store the response in the response store
-                                storeResponseWithInputItems(finalResponse, params)
+                                runBlocking { storeResponseWithInputItems(finalResponse, params) }
 
                                 nextIteration = false
                                 trySend(
@@ -234,7 +234,7 @@ class MasaicStreamingService(
                                         incompleteDetails,
                                     )
                                 // Store the incomplete response in the response store
-                                storeResponseWithInputItems(finalResponse, params)
+                                runBlocking { storeResponseWithInputItems(finalResponse, params) }
                                 trySend(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofIncomplete(

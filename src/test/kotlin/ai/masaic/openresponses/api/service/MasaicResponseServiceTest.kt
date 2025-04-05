@@ -279,13 +279,13 @@ class MasaicResponseServiceTest {
         coEvery { responseStore.getInputItems(responseId) } returns inputItems
 
         // When
-        val result = masaicResponseService.listInputItems(responseId, 2, "desc", null, null)
+        val result = runBlocking { masaicResponseService.listInputItems(responseId, 2, "desc", null, null) }
 
-            // Then
-            assertEquals(2, result.data.size, "Should return limited input items")
-            coVerify(exactly = 1) { responseStore.getResponse(responseId) }
-            coVerify(exactly = 1) { responseStore.getInputItems(responseId) }
-        }
+        // Then
+        assertEquals(2, result.data.size, "Should return limited input items")
+        coVerify(exactly = 1) { responseStore.getResponse(responseId) }
+        coVerify(exactly = 1) { responseStore.getInputItems(responseId) }
+    }
 
     @Test
     fun `listInputItems should return all items if limit is greater than available items`() =
