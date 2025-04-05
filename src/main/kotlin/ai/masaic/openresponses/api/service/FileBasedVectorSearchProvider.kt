@@ -219,6 +219,11 @@ class FileBasedVectorSearchProvider(
         maxResults: Int,
         filters: Map<String, Any>?,
     ): List<VectorSearchProvider.SearchResult> {
+        if (query.isBlank()) {
+            log.warn("Query is empty or blank")
+            return emptyList()
+        }
+
         // Generate embedding for the query
         val queryEmbedding = embeddingService.embedText(query)
         

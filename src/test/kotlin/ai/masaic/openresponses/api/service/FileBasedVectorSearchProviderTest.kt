@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
@@ -14,6 +16,9 @@ import java.io.ByteArrayInputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class FileBasedVectorSearchProviderTest {
@@ -206,5 +211,139 @@ class FileBasedVectorSearchProviderTest {
             val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
             assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist for $fileId")
         }
+    }
+
+    @Test
+    fun `indexFile should handle errors from embedding service`() {
+        // Given
+        val fileId = "error-test-file"
+        val content = "This is a test document for error handling."
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // Mock embedding service to throw exception
+        every { embeddingService.embedText(any()) } throws RuntimeException("Embedding service error")
+        
+        // When
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "error-test.txt")
+        
+        // Then
+        assertFalse(result, "Indexing should fail when embedding service throws an error")
+    }
+
+    @Test
+    fun `indexFile should handle empty text content`() {
+        // Given
+        val fileId = "empty-content-file"
+        val content = ""
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // When
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt")
+        
+        // Then
+        assertFalse(result, "Indexing should fail for empty content")
+    }
+
+    @Test
+    fun `indexFile should use custom chunking strategy when provided`() {
+        // Given
+        val fileId = "chunking-test-file"
+        val content = "This is a test document for custom chunking strategy."
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // Create custom chunking strategy
+        val staticChunkingStrategy = mockk<StaticChunkingConfig>()
+        every { staticChunkingStrategy.maxChunkSizeTokens } returns 50
+        every { staticChunkingStrategy.chunkOverlapTokens } returns 10
+        
+        val chunkingStrategy = mockk<ChunkingStrategy>()
+        every { chunkingStrategy.type } returns "static"
+        every { chunkingStrategy.static } returns staticChunkingStrategy
+        
+        // When
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "chunking-test.txt", chunkingStrategy)
+        
+        // Then
+        assertTrue(result, "File should be successfully indexed with custom chunking strategy")
+    }
+
+    @Test
+    fun `getFileMetadata should return metadata for existing file`() {
+        // Given
+        val fileId = "metadata-test-file"
+        val filename = "metadata-test.txt"
+        val content = "This is a test document for metadata retrieval."
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // Index the file
+        vectorSearchProvider.indexFile(fileId, inputStream, filename)
+        
+        // When
+        val metadata = vectorSearchProvider.getFileMetadata(fileId)
+        
+        // Then
+        assertNotNull(metadata, "Metadata should not be null for existing file")
+        assertEquals(filename, metadata!!["filename"], "Metadata should contain correct filename")
+    }
+
+    @Test
+    fun `getFileMetadata should return null for non-existent file`() {
+        // Given
+        val fileId = "non-existent-file"
+        
+        // When
+        val metadata = vectorSearchProvider.getFileMetadata(fileId)
+        
+        // Then
+        assertNull(metadata, "Metadata should be null for non-existent file")
+    }
+
+    @Test
+    fun `searchSimilar should handle empty query`() {
+        // Given
+        val fileId = "test-file-id"
+        val content = "This is a test document."
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // Index a file
+        vectorSearchProvider.indexFile(fileId, inputStream, "test.txt")
+        
+        // When
+        val results = vectorSearchProvider.searchSimilar("", 10, null)
+        
+        // Then
+        assertTrue(results.isEmpty(), "Should return empty results for empty query")
+    }
+
+    @Test
+    fun `performance test with large number of documents`() {
+        // Skip in CI environments
+        if (System.getenv("CI") != null) {
+            return
+        }
+        
+        // Given - a large number of documents (but still reasonable for a unit test)
+        val numDocuments = 100
+        val documentsAndIds =
+            (1..numDocuments).map { 
+                val fileId = "perf-file-$it"
+                val content = "This is performance test document number $it with some unique content: ${java.util.UUID.randomUUID()}"
+                fileId to content
+            }
+        
+        // Index all documents
+        documentsAndIds.forEach { (fileId, content) ->
+            vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "$fileId.txt")
+        }
+        
+        // When - perform a search
+        val startTime = System.currentTimeMillis()
+        val results = vectorSearchProvider.searchSimilar("performance test document", 10, null)
+        val duration = System.currentTimeMillis() - startTime
+        
+        // Then
+        // Just verify we got results and log the time - no hard assertions on time as it's environment-dependent
+        assertTrue(results.isNotEmpty(), "Should return results for the query")
+        println("Search across $numDocuments documents completed in $duration ms")
     }
 } 

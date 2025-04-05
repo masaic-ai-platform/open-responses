@@ -2,6 +2,8 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dev.langchain4j.data.document.Metadata
@@ -20,6 +22,9 @@ import org.junit.jupiter.api.Test
 import java.io.ByteArrayInputStream
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
@@ -183,5 +188,142 @@ class QdrantVectorSearchProviderTest {
         // Then
         assertTrue(result, "File should be successfully deleted")
         verify { embeddingStore.removeAll(ofType<IsEqualTo>()) }
+    }
+
+    @Test
+    fun `indexFile should handle error from embedding service`() {
+        // Given
+        val fileId = "test-file-id"
+        val content = "This is a test document for vector indexing."
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // Mock embedding service to throw exception
+        every { embeddingService.embedText(any()) } throws RuntimeException("Embedding service error")
+        
+        // When
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt")
+        
+        // Then
+        assertFalse(result, "Indexing should fail when embedding service throws an error")
+        verify { embeddingService.embedText(any()) }
+    }
+
+    @Test
+    fun `indexFile should handle empty text content`() {
+        // Given
+        val fileId = "test-file-id"
+        val content = ""
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        
+        // When
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt")
+        
+        // Then
+        assertFalse(result, "Indexing should fail for empty content")
+    }
+
+    @Test
+    fun `indexFile should use custom chunking strategy when provided`() {
+        // Given
+        val fileId = "test-file-id"
+        val content = "This is a test document for vector indexing with custom chunking strategy."
+        val inputStream = ByteArrayInputStream(content.toByteArray())
+        val filename = "test.txt"
+        
+        // Create custom chunking strategy
+        val staticChunkingStrategy = mockk<StaticChunkingConfig>()
+        every { staticChunkingStrategy.maxChunkSizeTokens } returns 50
+        every { staticChunkingStrategy.chunkOverlapTokens } returns 10
+        
+        val chunkingStrategy = mockk<ChunkingStrategy>()
+        every { chunkingStrategy.type } returns "static"
+        every { chunkingStrategy.static } returns staticChunkingStrategy
+        
+        // When
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename, chunkingStrategy)
+        
+        // Then
+        assertTrue(result, "File should be successfully indexed with custom chunking strategy")
+        verify { embeddingService.embedText(any()) }
+        verify { embeddingStore.add(ofType<Embedding>(), any()) }
+    }
+
+    @Test
+    fun `getFileMetadata should return metadata for existing file`() {
+        // Given
+        val fileId = "test-file-id"
+        val metadata = mapOf("fileId" to fileId, "filename" to "test.txt")
+        
+        // Mock embedding store search result
+        val segment = TextSegment.from("content", Metadata.from(metadata))
+        val match = EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), segment)
+        
+        // Setup mock for finding documents by file ID
+        every { embeddingStore.search(any()) } returns EmbeddingSearchResult(listOf(match))
+        
+        // When
+        val result = vectorSearchProvider.getFileMetadata(fileId)
+        
+        // Then
+        assertNotNull(result, "Should return metadata for existing file")
+        assertEquals(fileId, result["fileId"], "Metadata should contain correct file ID")
+        assertEquals("test.txt", result["filename"], "Metadata should contain filename")
+    }
+
+    @Test
+    fun `getFileMetadata should return null for non-existent file`() {
+        // Given
+        val fileId = "non-existent-file"
+        
+        // Mock empty search results
+        every { embeddingStore.search(any()) } returns EmbeddingSearchResult(emptyList())
+        
+        // When
+        val result = vectorSearchProvider.getFileMetadata(fileId)
+        
+        // Then
+        assertNull(result, "Should return null for non-existent file")
+    }
+
+    @Test
+    fun `searchSimilar should handle empty query`() {
+        // Given
+        val query = ""
+        
+        // When
+        val results = vectorSearchProvider.searchSimilar(query, 10, null)
+        
+        // Then
+        assertTrue(results.isEmpty(), "Should return empty results for empty query")
+    }
+
+    @Test
+    fun `searchSimilar should handle search errors`() {
+        // Given
+        val query = "test query"
+        
+        // Mock embedding store to throw exception
+        every { embeddingService.embedText(any()) } throws RuntimeException("Search error")
+        
+        // When
+        val results = vectorSearchProvider.searchSimilar(query, 10, null)
+        
+        // Then
+        assertTrue(results.isEmpty(), "Should return empty results when search throws an error")
+    }
+
+    @Test
+    fun `deleteFile should handle errors gracefully`() {
+        // Given
+        val fileId = "test-file-id"
+        
+        // Mock embedding store to throw exception
+        every { embeddingStore.removeAll(ofType<IsEqualTo>()) } throws RuntimeException("Delete error")
+        
+        // When
+        val result = vectorSearchProvider.deleteFile(fileId)
+        
+        // Then
+        assertFalse(result, "Should return false when delete operation fails")
     }
 }

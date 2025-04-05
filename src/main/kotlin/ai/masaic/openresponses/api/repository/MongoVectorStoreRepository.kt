@@ -176,11 +176,7 @@ class MongoVectorStoreRepository(
             } else if (before != null) {
                 val beforeFile = findVectorStoreFileById(vectorStoreId, before)
                 beforeFile?.let {
-                    if (order.equals("asc", ignoreCase = true)) {
-                        query.addCriteria(Criteria.where("createdAt").lt(it.createdAt))
-                    } else {
-                        query.addCriteria(Criteria.where("createdAt").gt(it.createdAt))
-                    }
+                    query.addCriteria(Criteria.where("createdAt").lt(it.createdAt))
                 }
             }
             

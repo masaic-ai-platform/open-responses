@@ -4,7 +4,6 @@ import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
-import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
@@ -77,26 +76,33 @@ class QdrantVectorSearchProvider(
      * Indexes a file in the vector store.
      *
      * @param fileId The ID of the file
-     * @param content The file content as an InputStream
+     * @param inputStream The file content as an InputStream
      * @param filename The name of the file
      * @param chunkingStrategy Optional chunking strategy for the file
      * @return True if indexing was successful, false otherwise
      */
     override fun indexFile(
         fileId: String,
-        content: InputStream,
+        inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
     ): Boolean {
         try {
-            // Extract text from the document using Apache Tika
-            val text = DocumentTextExtractor.extractAndCleanText(content, filename)
+            // Extract text content from the document
+            val text =
+                try {
+                    DocumentTextExtractor.extractAndCleanText(inputStream, filename)
+                } catch (e: Exception) {
+                    log.warn("Extracted text is empty for file: {}", filename)
+                    return false
+                }
+            
             if (text.isBlank()) {
                 log.warn("Extracted text is empty for file: {}", filename)
                 return false
             }
-            
-            // Determine chunking parameters based on the strategy or fallback to properties
+
+            // Create chunks
             val chunks =
                 if (chunkingStrategy != null && chunkingStrategy.type == "static" && chunkingStrategy.static != null) {
                     log.debug(
@@ -119,30 +125,36 @@ class QdrantVectorSearchProvider(
                     TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
                 }
             
-            log.debug("Split file {} into {} chunks", filename, chunks.size)
-            
-            // Process each chunk
-            chunks.forEachIndexed { index, chunk ->
-                // Generate a short unique ID for each chunk using IdGenerator
-                val chunkId = IdGenerator.generateChunkId()
-                
-                // Create metadata
-                val metadata =
-                    mapOf(
-                        "fileId" to fileId,
-                        "filename" to filename,
-                        "chunkIndex" to index,
-                        "chunk_id" to chunkId,
-                    )
+            if (chunks.isEmpty()) {
+                log.warn("No chunks created for file: {}", filename)
+                return false
+            }
 
-                // Convert to TextSegment with metadata
-                val segment = TextSegment.from(chunk, Metadata.from(metadata))
-                
-                // Generate embedding
-                val embedding = Embedding.from(embeddingService.embedText(chunk))
-                
-                // Add to embedding store
-                embeddingStore.add(embedding, segment)
+            // Generate embeddings and store them
+            for (i in chunks.indices) {
+                try {
+                    val chunk = chunks[i]
+                    // Generate embedding for the chunk
+                    val embedding = embeddingService.embedText(chunk)
+                    
+                    // Create metadata for this chunk
+                    val metadata = 
+                        mapOf(
+                            "fileId" to fileId,
+                            "filename" to filename,
+                            "chunkIndex" to i,
+                            "totalChunks" to chunks.size,
+                        )
+                    
+                    // Store the embedding with metadata
+                    embeddingStore.add(
+                        Embedding.from(embedding),
+                        TextSegment.from(chunk, Metadata.from(metadata)),
+                    )
+                } catch (e: Exception) {
+                    log.error("Error indexing file {}: {}", filename, e.message, e)
+                    return false
+                }
             }
             
             log.info("Successfully indexed file: {}", filename)
@@ -167,6 +179,12 @@ class QdrantVectorSearchProvider(
         filters: Map<String, Any>?,
     ): List<VectorSearchProvider.SearchResult> {
         try {
+            // Return empty results for empty query
+            if (query.isBlank()) {
+                log.debug("Empty query provided, returning empty results")
+                return emptyList()
+            }
+            
             // Generate embedding for the query
             val queryEmbedding = Embedding.from(embeddingService.embedText(query))
             
@@ -243,12 +261,16 @@ class QdrantVectorSearchProvider(
      */
     override fun getFileMetadata(fileId: String): Map<String, Any>? {
         try {
+            // Create a dummy embedding for search - we're only using filter but API requires non-null embedding
+            val dummyEmbedding = Embedding.from(FloatArray(vectorDimension.toInt()) { 0f })
+            
             // Create a search request with fileId filter
             val searchRequest =
                 EmbeddingSearchRequest
                     .builder()
                     .filter(IsEqualTo("fileId", fileId))
                     .maxResults(1)
+                    .queryEmbedding(dummyEmbedding)
                     .build()
             
             // Search for any segment with this fileId
