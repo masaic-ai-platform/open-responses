@@ -1,18 +1,19 @@
 version: '3.9'
 
 x-open-responses: &open_responses
-  image: masaicai/open-responses:0.0.3-alpha
+  image: masaicai/open-responses:0.1.0-M1
 
 services:
-  # Flavor 1: Default service (runs when no profile is specified)
+  # Default service
   open-responses:
     <<: *open_responses
     ports:
       - "8080:8080"
-    environment:
-      - TOOLS_MCP_ENABLED=false
+    networks:
+      - observability-network
     profiles:
       - default
+
   # Services used only in the MCP flavor.
   mcp-github:
     image: mcp/github
@@ -36,8 +37,11 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
     environment:
+      - OPEN_RESPONSES_TOOLS_MCP_ENABLED=true
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
+    networks:
+      - observability-network
     depends_on:
       - mcp-github
       - mcp-brave-search
@@ -53,8 +57,11 @@ services:
       # Use the Docker named pipe on Windows
       - "//./pipe/docker_engine://./pipe/docker_engine"
     environment:
+      - OPEN_RESPONSES_TOOLS_MCP_ENABLED=true
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
+    networks:
+      - observability-network
     depends_on:
       - mcp-github
       - mcp-brave-search
@@ -71,9 +78,12 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
     environment:
+      - OPEN_RESPONSES_TOOLS_MCP_ENABLED=true
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
       - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp_server_config.json
+    networks:
+      - observability-network
     depends_on:
       - mcp-github
       - mcp-brave-search
@@ -91,9 +101,12 @@ services:
       # Mount the MCP config file: if MCP_CONFIG_FILE_PATH is not defined, use the default path in the container
       - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
     environment:
+      - OPEN_RESPONSES_TOOLS_MCP_ENABLED=true
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
       - MCP_SERVER_CONFIG_FILE_PATH=/app/mcp_server_config.json
+    networks:
+      - observability-network
     depends_on:
       - mcp-github
       - mcp-brave-search
@@ -107,8 +120,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - TOOLS_MCP_ENABLED=false
       - MODEL_BASE_URL=${MODEL_BASE_URL}
+    networks:
+      - observability-network
     profiles:
       - openai
 
@@ -131,15 +145,42 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - TOOLS_MCP_ENABLED=false
       - OPEN_RESPONSES_MONGODB_DATABASE=openresponses
       - OPEN_RESPONSES_MONGODB_URI=mongodb://mongodb:27017
       - OPEN_RESPONSES_RESPONSE_STORE_TYPE=mongodb
+    networks:
+      - observability-network
     depends_on:
       - mongodb
     profiles:
       - mongodb
     restart: unless-stopped
+
+  #Flavour 6: Open Responses with Observability stack
+  open-responses-otel:
+    <<: *open_responses
+    ports:
+      - "8080:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    environment:
+      - SPRING_PROFILES_ACTIVE=otel
+      - OPEN_RESPONSES_TOOLS_MCP_ENABLED=true
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - MANAGEMENT_OTLP_METRICS_EXPORT_URL=http://otel-collector:4318/v1/metrics
+    networks:
+      - observability-network
+    depends_on:
+      - mcp-github
+      - mcp-brave-search
+    profiles:
+      - mcp
+
+networks:
+  observability-network:
+    name: observability-network
 
 volumes:
   mongodb_data:
