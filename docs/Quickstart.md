@@ -306,7 +306,7 @@ This section demonstrates how to run examples that create Agents using the OpenA
 2. Setup the SDK  
    Follow the steps outlined in [Clone the Forked Repository](#5-running-example-scripts-with-the-openai-agent-python-sdk) to set up your environment.  
    • Ensure that you have defined the environment variables:
-   - GROK_API_KEY
+   - GROQ_API_KEY
    - OPEN_RESPONSES_URL  
      These can be set in your environment or configured within a file.
 

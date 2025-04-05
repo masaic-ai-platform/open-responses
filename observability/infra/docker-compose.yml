@@ -15,6 +15,8 @@ services:
       - "8888:8888"   # Metrics endpoint
     depends_on:
       - jaeger
+    networks:
+      - observability-network
 
   # Jaeger
   jaeger:
@@ -28,6 +30,8 @@ services:
       - "6832:6832/udp"  # Accept jaeger.thrift in binary Thrift protocol over UDP
     environment:
       - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    networks:
+      - observability-network
 
   # Prometheus
   prometheus:
@@ -39,6 +43,8 @@ services:
       - "9090:9090"
     depends_on:
       - otel-collector
+    networks:
+      - observability-network
 
   # Grafana
   grafana:
@@ -55,3 +61,9 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:
       - prometheus
+    networks:
+      - observability-network
+
+networks:
+  observability-network:
+    name: observability-network

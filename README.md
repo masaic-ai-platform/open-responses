@@ -160,13 +160,16 @@ OpenResponses standardizes error responses across providers:
 
 The application supports the following environment variables:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MCP_SERVER_CONFIG_FILE_PATH` | Path to MCP server configuration | - |
-| `MASAIC_MAX_TOOL_CALLS` | Maximum number of allowed tool calls | 10 |
-| `MASAIC_MAX_STREAMING_TIMEOUT` | Maximum streaming timeout in ms | 60000 |
+| Variable                       | Description                                   | Default |
+|--------------------------------|-----------------------------------------------|---------|
+| `MCP_SERVER_CONFIG_FILE_PATH`  | Path to MCP server configuration              | -       |
+| `MASAIC_MAX_TOOL_CALLS`        | Maximum number of allowed tool calls          | 10      |
+| `MASAIC_MAX_STREAMING_TIMEOUT` | Maximum streaming timeout in ms               | 60000   |
+| `SPRING_PRODFILES_ACTIVE`      | `otel` profile enables open telemetry exports | -       |
 
-
+For more details on granular configurations refer:
+- [application.properties](https://github.com/masaic-ai-platform/open-responses/blob/main/src/main/resources/application.properties)
+- [application-otel.properties](https://github.com/masaic-ai-platform/open-responses/blob/main/src/main/resources/application-otel.properties)
 ## 📚 Documentation
 
 For more detailed information about using OpenResponses API via Completion API, check out our documentation:

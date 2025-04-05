@@ -129,7 +129,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(rate(gen_ai_client_operation_duration_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+          "expr": "sum(rate(gen_ai_client_operation_duration_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
           "legendFormat": "GenAI Requests Rate",
           "range": true,
           "refId": "A"
@@ -200,7 +200,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(gen_ai_client_operation_duration_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"})",
+          "expr": "sum(gen_ai_client_operation_duration_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"})",
           "legendFormat": "Total GenAI Operations",
           "range": true,
           "refId": "A"
@@ -277,7 +277,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "topk(5, sum by(gen_ai_request_model, gen_ai_response_model) (gen_ai_client_token_usage_sum{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}))",
+          "expr": "topk(5, sum by(gen_ai_request_model, gen_ai_response_model) (gen_ai_client_token_usage_sum{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}))",
           "legendFormat": "{{gen_ai_request_model}}",
           "range": true,
           "refId": "A"
@@ -435,7 +435,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "topk(5, sum by(gen_ai_tool_name) (builtin_tool_execute_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}))",
+          "expr": "topk(5, sum by(gen_ai_tool_name) (builtin_tool_execute_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}))",
           "legendFormat": "{{tool}}",
           "range": true,
           "refId": "A"
@@ -1264,7 +1264,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "Sum by(gen_ai_response_finish_reasons) (rate(open_responses_create_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "Sum by(gen_ai_response_finish_reasons) (rate(open_responses_create_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "{{gen_ai_response_finish_reasons}}",
               "range": true,
               "refId": "A"
@@ -1275,7 +1275,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "rate(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval])",
+              "expr": "rate(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval])",
               "legendFormat": "CreateStream Operations",
               "range": true,
               "refId": "B"
@@ -1374,7 +1374,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "Sum by(gen_ai_response_finish_reasons) (rate(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "Sum by(gen_ai_response_finish_reasons) (rate(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "{{gen_ai_response_finish_reasons}}",
               "range": true,
               "refId": "A"
@@ -1474,7 +1474,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "Sum(open_responses_create_max_seconds{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"})",
+              "expr": "Sum(open_responses_create_max_seconds{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"})",
               "legendFormat": "Create (Max)",
               "range": true,
               "refId": "A"
@@ -1485,7 +1485,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "open_responses_createStream_max_seconds{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}",
+              "expr": "open_responses_createStream_max_seconds{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}",
               "hide": true,
               "legendFormat": "CreateStream (Max)",
               "range": true,
@@ -1497,7 +1497,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "rate(open_responses_create_seconds_sum{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]) / rate(open_responses_create_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval])",
+              "expr": "rate(open_responses_create_seconds_sum{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]) / rate(open_responses_create_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval])",
               "legendFormat": "Create (Avg)",
               "range": true,
               "refId": "C"
@@ -1508,7 +1508,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "rate(open_responses_createStream_seconds_sum{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]) / rate(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval])",
+              "expr": "rate(open_responses_createStream_seconds_sum{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]) / rate(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval])",
               "hide": true,
               "legendFormat": "CreateStream (Avg)",
               "range": true,
@@ -1608,7 +1608,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(increase(open_responses_create_gen_ai_user_message_total{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "sum(increase(open_responses_create_gen_ai_user_message_total{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "User Messages",
               "range": true,
               "refId": "A"
@@ -1619,7 +1619,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(increase(open_responses_create_gen_ai_assistant_system_total{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "sum(increase(open_responses_create_gen_ai_assistant_system_total{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "Assistant/System Messages",
               "range": true,
               "refId": "B"
@@ -1630,7 +1630,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(increase(open_responses_create_gen_ai_tool_message_total{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "sum(increase(open_responses_create_gen_ai_tool_message_total{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "Tool Messages",
               "range": true,
               "refId": "C"
@@ -1641,7 +1641,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(increase(open_responses_create_gen_ai_choice_total{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "sum(increase(open_responses_create_gen_ai_choice_total{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "Choices",
               "range": true,
               "refId": "D"
@@ -1706,7 +1706,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(open_responses_create_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"})",
+              "expr": "sum(open_responses_create_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"})",
               "legendFormat": "Create Operations",
               "range": true,
               "refId": "A"
@@ -1717,7 +1717,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"})",
+              "expr": "sum(open_responses_createStream_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"})",
               "legendFormat": "CreateStream Operations",
               "range": true,
               "refId": "B"
@@ -1805,7 +1805,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(rate(builtin_tool_execute_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "sum(rate(builtin_tool_execute_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "Tool Execution Rate",
               "range": true,
               "refId": "A"
@@ -1879,7 +1879,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "sum(rate(builtin_tool_execute_seconds_sum{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval])) / sum(rate(builtin_tool_execute_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=\"$instance\"}[$interval]))",
+              "expr": "sum(rate(builtin_tool_execute_seconds_sum{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval])) / sum(rate(builtin_tool_execute_seconds_count{app=\"$application\", instance=\"$namespace\", exported_instance=~\"$instance\"}[$interval]))",
               "legendFormat": "Avg Duration",
               "range": true,
               "refId": "A"

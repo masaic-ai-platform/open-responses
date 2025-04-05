@@ -112,7 +112,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "process_uptime_seconds{app=\"$application\", exported_instance=\"$instance\", instance=\"$Namespace\"}",
+          "expr": "process_uptime_seconds{app=\"$application\", exported_instance=~\"$instance\", instance=\"$Namespace\"}",
           "format": "time_series",
           "intervalFactor": 2,
           "legendFormat": "",
@@ -200,7 +200,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(jvm_memory_used_bytes{app=\"$application\", exported_instance=\"$instance\", area=\"heap\", instance=\"$Namespace\"})*100/sum(jvm_memory_max_bytes{app=\"$application\",exported_instance=\"$instance\", area=\"heap\", instance=\"$Namespace\"})",
+          "expr": "sum(jvm_memory_used_bytes{app=\"$application\", exported_instance=~\"$instance\", area=\"heap\", instance=\"$Namespace\"})*100/sum(jvm_memory_max_bytes{app=\"$application\",exported_instance=~\"$instance\", area=\"heap\", instance=\"$Namespace\"})",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "",
@@ -297,7 +297,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum(jvm_memory_used_bytes{app=\"$application\", exported_instance=\"$instance\", area=\"nonheap\", instance=\"$Namespace\"})*100/sum(jvm_memory_max_bytes{app=\"$application\",exported_instance=\"$instance\", area=\"nonheap\", instance=\"$Namespace\"})",
+          "expr": "sum(jvm_memory_used_bytes{app=\"$application\", exported_instance=~\"$instance\", area=\"nonheap\", instance=\"$Namespace\"})*100/sum(jvm_memory_max_bytes{app=\"$application\",exported_instance=~\"$instance\", area=\"nonheap\", instance=\"$Namespace\"})",
           "format": "time_series",
           "intervalFactor": 2,
           "legendFormat": "",
@@ -398,7 +398,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "process_files_open{app=\"$application\", exported_instance=\"$instance\", instance=\"$Namespace\"}",
+          "expr": "process_files_open{app=\"$application\", exported_instance=~\"$instance\", instance=\"$Namespace\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Open Files",
@@ -479,7 +479,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "process_start_time_seconds{app=\"$application\", exported_instance=\"$instance\", instance=\"$Namespace\"}*1000",
+          "expr": "process_start_time_seconds{app=\"$application\", exported_instance=~\"$instance\", instance=\"$Namespace\"}*1000",
           "format": "time_series",
           "intervalFactor": 2,
           "legendFormat": "",
@@ -585,7 +585,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "system_cpu_usage{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+          "expr": "system_cpu_usage{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "System CPU Usage",
@@ -598,7 +598,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "process_cpu_usage{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+          "expr": "process_cpu_usage{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Process CPU Usage",
@@ -702,7 +702,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "system_load_average_1m{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+          "expr": "system_load_average_1m{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "Load Average [1m]",
@@ -715,7 +715,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "system_cpu_count{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+          "expr": "system_cpu_count{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
           "format": "time_series",
           "intervalFactor": 1,
           "legendFormat": "CPU Core Size",
@@ -852,7 +852,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "irate(http_server_requests_seconds_count{exported_instance=\"$instance\", app=\"$application\", uri!~\".*(prometheus|health).*\", instance=\"$Namespace\"}[$__rate_interval])",
+          "expr": "irate(http_server_requests_seconds_count{exported_instance=~\"$instance\", app=\"$application\", uri!~\".*(prometheus|health).*\", instance=\"$Namespace\"}[$__rate_interval])",
           "format": "time_series",
           "interval": "5m",
           "intervalFactor": 1,
@@ -956,7 +956,7 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "irate(http_server_requests_seconds_sum{exported_instance=\"$instance\", app=\"$application\", exception=\"none\", uri!~\".*(prometheus|health).*\", instance=\"$Namespace\"}[$__rate_interval]) / irate(http_server_requests_seconds_count{exported_instance=\"$instance\", app=\"$application\", exception=\"none\",uri!~\".*(prometheus|health).*\", instance=\"$Namespace\"}[$__rate_interval])",
+          "expr": "irate(http_server_requests_seconds_sum{exported_instance=~\"$instance\", app=\"$application\", exception=\"none\", uri!~\".*(prometheus|health).*\", instance=\"$Namespace\"}[$__rate_interval]) / irate(http_server_requests_seconds_count{exported_instance=~\"$instance\", app=\"$application\", exception=\"none\",uri!~\".*(prometheus|health).*\", instance=\"$Namespace\"}[$__rate_interval])",
           "format": "time_series",
           "interval": "5m",
           "intervalFactor": 1,
@@ -1069,7 +1069,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_memory_used_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"$memory_pool_heap\", instance=\"$Namespace\"}",
+              "expr": "jvm_memory_used_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"$memory_pool_heap\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Used",
@@ -1082,7 +1082,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_memory_committed_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"$memory_pool_heap\", instance=\"$Namespace\"}",
+              "expr": "jvm_memory_committed_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"$memory_pool_heap\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Commited",
@@ -1095,7 +1095,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_memory_max_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"$memory_pool_heap\", instance=\"$Namespace\"}",
+              "expr": "jvm_memory_max_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"$memory_pool_heap\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Max",
@@ -1197,7 +1197,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_memory_used_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"${memory_pool_nonheap:raw}\", instance=\"$Namespace\"}",
+              "expr": "jvm_memory_used_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"${memory_pool_nonheap:raw}\", instance=\"$Namespace\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -1211,7 +1211,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_memory_committed_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"${memory_pool_nonheap:raw}\", instance=\"$Namespace\"}",
+              "expr": "jvm_memory_committed_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"${memory_pool_nonheap:raw}\", instance=\"$Namespace\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -1225,7 +1225,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_memory_max_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"${memory_pool_nonheap:raw}\", instance=\"$Namespace\"}",
+              "expr": "jvm_memory_max_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"${memory_pool_nonheap:raw}\", instance=\"$Namespace\"}",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 1,
@@ -1325,7 +1325,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_buffer_memory_used_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"direct\", instance=\"$Namespace\"}",
+              "expr": "jvm_buffer_memory_used_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"direct\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Used Bytes",
@@ -1338,7 +1338,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_buffer_total_capacity_bytes{exported_instance=\"$instance\", app=\"$application\", id=\"direct\", instance=\"$Namespace\"}",
+              "expr": "jvm_buffer_total_capacity_bytes{exported_instance=~\"$instance\", app=\"$application\", id=\"direct\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Capacity Bytes",
@@ -1442,7 +1442,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_threads_daemon{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+              "expr": "jvm_threads_daemon{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Daemon",
@@ -1455,7 +1455,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_threads_live{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+              "expr": "jvm_threads_live{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Live",
@@ -1468,7 +1468,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_threads_peak{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+              "expr": "jvm_threads_peak{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Peak",
@@ -1681,7 +1681,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_buffer_memory_used_bytes{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+              "expr": "jvm_buffer_memory_used_bytes{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Used Bytes",
@@ -1694,7 +1694,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "jvm_buffer_total_capacity_bytes{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
+              "expr": "jvm_buffer_total_capacity_bytes{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Capacity Bytes",
@@ -1812,7 +1812,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(jvm_gc_pause_seconds_count{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(jvm_gc_pause_seconds_count{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "interval": "5m",
               "intervalFactor": 1,
@@ -1917,7 +1917,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(jvm_gc_pause_seconds_sum{exported_instance=\"$instance\", app=\"$application\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(jvm_gc_pause_seconds_sum{exported_instance=~\"$instance\", app=\"$application\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "interval": "5m",
               "intervalFactor": 1,
@@ -2038,7 +2038,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(logback_events_total{exported_instance=\"$instance\", app=\"$application\", level=\"info\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(logback_events_total{exported_instance=~\"$instance\", app=\"$application\", level=\"info\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "interval": "5m",
               "intervalFactor": 1,
@@ -2053,7 +2053,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "logback_events_total{exported_instance=\"$instance\", app=\"$application\"}",
+              "expr": "logback_events_total{exported_instance=~\"$instance\", app=\"$application\"}",
               "hide": true,
               "interval": "",
               "legendFormat": "__auto",
@@ -2159,7 +2159,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(logback_events_total{exported_instance=\"$instance\", app=\"$application\", level=\"error\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(logback_events_total{exported_instance=~\"$instance\", app=\"$application\", level=\"error\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "error",
@@ -2266,7 +2266,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(logback_events_total{exported_instance=\"$instance\", app=\"$application\", level=\"warn\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(logback_events_total{exported_instance=~\"$instance\", app=\"$application\", level=\"warn\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "warn",
@@ -2373,7 +2373,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(logback_events_total{exported_instance=\"$instance\", app=\"$application\", level=\"debug\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(logback_events_total{exported_instance=~\"$instance\", app=\"$application\", level=\"debug\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "debug",
@@ -2480,7 +2480,7 @@
                 "uid": "PBFA97CFB590B2093"
               },
               "editorMode": "code",
-              "expr": "irate(logback_events_total{exported_instance=\"$instance\", app=\"$application\", level=\"trace\", instance=\"$Namespace\"}[$__rate_interval])",
+              "expr": "irate(logback_events_total{exported_instance=~\"$instance\", app=\"$application\", level=\"trace\", instance=\"$Namespace\"}[$__rate_interval])",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "trace",
@@ -2584,13 +2584,13 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "definition": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=\"$instance\", area=\"heap\"},id)",
+        "definition": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=~\"$instance\", area=\"heap\"},id)",
         "includeAll": true,
         "label": "Memory Pool (heap)",
         "name": "memory_pool_heap",
         "options": [],
         "query": {
-          "query": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=\"$instance\", area=\"heap\"},id)",
+          "query": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=~\"$instance\", area=\"heap\"},id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
@@ -2607,13 +2607,13 @@
           "type": "prometheus",
           "uid": "PBFA97CFB590B2093"
         },
-        "definition": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=\"$instance\", area=\"nonheap\"},id)",
+        "definition": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=~\"$instance\", area=\"nonheap\"},id)",
         "includeAll": true,
         "label": "Memory Pool (nonheap)",
         "name": "memory_pool_nonheap",
         "options": [],
         "query": {
-          "query": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=\"$instance\", area=\"nonheap\"},id)",
+          "query": "label_values(jvm_memory_used_bytes{app=\"$application\", exported_instance=~\"$instance\", area=\"nonheap\"},id)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
