@@ -4,6 +4,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
+import org.springframework.scheduling.annotation.EnableScheduling
 
 /**
  * Main application class for the OpenResponses Spring Boot application.
@@ -19,6 +20,7 @@ import org.springframework.boot.runApplication
     ],
 )
 @ConfigurationPropertiesScan
+@EnableScheduling
 class OpenResponsesApplication
 
 /**
