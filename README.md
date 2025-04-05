@@ -4,13 +4,15 @@
 
 > **Unlock enterprise-grade AI capabilities through a single, powerful API — simplify development, accelerate deployment, and maintain complete data control**
 
+[![Discord](https://img.shields.io/discord/1335132819260702723?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.com/channels/1335132819260702723/1354795442004820068)
+
 ## Overview
 
 OpenResponses revolutionizes how developers build AI applications by providing a comprehensive, production-ready toolkit with essential enterprise features—all through an elegantly simplified API interface. Stop cobbling together disparate tools and start building what matters.
 
 ## 🚀 Getting Started
 
-Ready to transform your AI development workflow? Follow our detailed instructions here: [Quick Start Guide](docs/Quickstart.md)
+Run OpenResponses locally to access an OpenAI-compatible API that works seamlessly with multiple model providers and supports unlimited tool integrations. Deploy a complete AI infrastructure on your own hardware with full data sovereignty.
 
 ### Run with Docker
 
@@ -58,6 +60,23 @@ curl --location 'http://localhost:8080/v1/responses' \
     ]
 }'
 ```
+For detailed implementation instructions, see our [Quick Start Guide](docs/Quickstart.md).
+
+## Table of Contents
+
+- [Getting Started](#-getting-started)
+- [Core Capabilities](#core-capabilities)
+- [Key Problems Solved](#key-problems-solved)
+- [Why Engineering Teams Should Choose OpenResponses](#why-engineering-teams-should-choose-openresponses)
+- [API Reference](#api-reference)
+- [Coming Soon](#-coming-soon)
+- [Frequently Asked Questions](#-frequently-asked-questions)
+- [Configuration](#️#-configuration)
+- [Documentation](#-documentation)
+- [Local Development](#-local-development)
+- [Production Use](#-production-use)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ## Core Capabilities
 
@@ -199,9 +218,7 @@ For more details on granular configurations refer:
 - [application-otel.properties](https://github.com/masaic-ai-platform/open-responses/blob/main/src/main/resources/application-otel.properties)
 ## 📚 Documentation
 
-For more detailed information about using OpenResponses API via Completion API, check out our documentation:
-
-- [OpenAI Compatibility Guide](docs/OpenAICompatibility.md)
+Explore our comprehensive [documentation](docs/Doc-Index.md) to learn more about OpenResponses features, configuration options, and integration methods.
 
 ## 💻 Local Development
 
