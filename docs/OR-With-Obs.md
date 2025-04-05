@@ -4,17 +4,12 @@ This guide provides step-by-step instructions for running the Open Responses ser
 
 ## Steps to Run Open Responses with Observability
 
-1. Run Open Responses service with OpenTelemetry enabled:
-   ```bash
-   docker-compose --profile mcp up open-responses-otel
-   ```
-
-2. Navigate to the observability infrastructure directory:
+1. Navigate to the observability infrastructure directory:
    ```bash
    cd observability/infra
    ```
 
-3. Start the observability stack:
+2Start the observability stack:
    ```bash
    docker-compose up
    ```
@@ -23,6 +18,11 @@ This guide provides step-by-step instructions for running the Open Responses ser
    - Jaeger
    - Prometheus
    - Grafana
+
+3. Navigate back to open-responses directory. Run Open Responses service with OpenTelemetry enabled:
+   ```bash
+   docker-compose --profile mcp up open-responses-otel
+   ```
 
 4. **Note:** You might see momentary exceptions like:
    ```
@@ -41,7 +41,7 @@ This guide provides step-by-step instructions for running the Open Responses ser
    - **Open-Responses GenAI Stats**: Contains generative AI performance and usage metrics
    - **Open-Responses Service Stats**: Contains service compute level metrics like CPU, memory usage, etc.
 
-8. Run any of the curl examples mentioned in the [Quickstart guide](https://github.com/masaic-ai-platform/open-responses/blob/feature/otel-dashboards/docs/Quickstart.md#example-api-calls) to generate data. You should see statistics in the Grafana dashboards and traces in Jaeger.
+8. Run few times any of the curl examples mentioned in the [Quickstart guide](https://github.com/masaic-ai-platform/open-responses/blob/feature/otel-dashboards/docs/Quickstart.md#example-api-calls) to generate data. You should see statistics in the Grafana dashboards and traces in Jaeger.
 
 9. You can also run examples from the OpenAI Agent SDK by following the instructions in the [Quickstart guide](https://github.com/masaic-ai-platform/open-responses/blob/feature/otel-dashboards/docs/Quickstart.md#6-running-agent-examples-built-with-openai-agent-sdk-to-use-open-responses-api-built-in-tools).
 
