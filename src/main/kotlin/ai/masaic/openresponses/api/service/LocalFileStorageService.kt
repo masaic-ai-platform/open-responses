@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.service
 
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -29,6 +31,7 @@ import kotlin.streams.asSequence
 @Service
 class LocalFileStorageService(
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
+    private val objectMapper: ObjectMapper,
 ) : FileStorageService {
     private val log = LoggerFactory.getLogger(LocalFileStorageService::class.java)
     private val rootLocation: Path = Paths.get(rootDir)
@@ -134,11 +137,27 @@ class LocalFileStorageService(
                 val attrs = Files.readAttributes(filePath, BasicFileAttributes::class.java)
                 val fileName = filePath.fileName.toString()
                 val purpose = filePath.parent.fileName.toString()
+                
+                // Try to load original filename from metadata file
+                val metadataPath = filePath.resolveSibling("$fileName.metadata")
+                val originalFilename =
+                    if (Files.exists(metadataPath)) {
+                        try {
+                            val metadataJson = Files.readString(metadataPath)
+                            val metadata: Map<String, String> = objectMapper.readValue(metadataJson)
+                            metadata["original_filename"] ?: fileName
+                        } catch (e: Exception) {
+                            log.warn("Could not read original filename from metadata: $e")
+                            fileName
+                        }
+                    } else {
+                        fileName
+                    }
             
                 val metadata =
                     mutableMapOf<String, Any>(
                         "id" to fileId,
-                        "filename" to fileName,
+                        "filename" to originalFilename,
                         "purpose" to purpose,
                         "bytes" to attrs.size(),
                         "created_at" to attrs.creationTime().toInstant().epochSecond,
@@ -171,10 +190,11 @@ class LocalFileStorageService(
     ): String =
         withContext(Dispatchers.IO) {
             try {
+                val originalFilename = filePart.filename()
                 val fileId =
                     "open-responses-file-" + UUID.randomUUID().toString() + "." +
-                        if (filePart.filename().substringAfterLast('.', "").isNotEmpty()) {
-                            filePart.filename().substringAfterLast('.', "")
+                        if (originalFilename.substringAfterLast('.', "").isNotEmpty()) {
+                            originalFilename.substringAfterLast('.', "")
                         } else {
                             log.error("File has no extension")
                             throw FileStorageException("Failed to recognize file extension")
@@ -194,6 +214,14 @@ class LocalFileStorageService(
                     .doOnSuccess {
                         log.info("File $fileId stored successfully in purpose directory $purpose")
                     }.awaitSingleOrNull()
+
+                // Store the original filename in metadata file
+                val metadataPath = purposeDir.resolve("$fileId.metadata")
+                val metadata =
+                    mapOf(
+                        "original_filename" to originalFilename,
+                    )
+                Files.write(metadataPath, objectMapper.writeValueAsString(metadata).toByteArray())
 
                 log.info("Stored file $fileId in purpose directory $purpose")
 

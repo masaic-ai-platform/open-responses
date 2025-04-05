@@ -3,6 +3,8 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.repository.VectorStoreRepository
 import io.mockk.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -75,6 +77,7 @@ class VectorStoreServiceTest {
         every { mockResource.filename } returns "test.txt"
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `createVectorStore should create a vector store with files`() =
         runTest {
@@ -98,6 +101,24 @@ class VectorStoreServiceTest {
             coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
             coEvery { vectorSearchProvider.indexFile(fileId, any(), any()) } returns true
             
+            // Mock repository to return the vector store with correct initial counts
+            coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
+                val store = firstArg<VectorStore>()
+                store
+            }
+            
+            // Mock update counts after async processing
+            coEvery { vectorStoreRepository.listVectorStoreFiles(any(), any()) } returns
+                listOf(
+                    VectorStoreFile(
+                        id = fileId,
+                        createdAt = Instant.now().epochSecond,
+                        usageBytes = 100L,
+                        vectorStoreId = "vs_123",
+                        status = "completed",
+                    ),
+                )
+            
             // When
             val vectorStore = vectorStoreService.createVectorStore(request)
             
@@ -105,9 +126,17 @@ class VectorStoreServiceTest {
             assertNotNull(vectorStore)
             assertEquals("Test Vector Store", vectorStore.name)
             assertTrue(vectorStore.id.startsWith("vs_"))
+            
+            // Verify initial state shows correct file counts
             assertEquals(1, vectorStore.fileCounts.total)
-            assertEquals(1, vectorStore.fileCounts.completed)
+            assertEquals(0, vectorStore.fileCounts.completed)
+            assertEquals(1, vectorStore.fileCounts.inProgress)
             assertEquals(0, vectorStore.fileCounts.failed)
+            
+            // Process all pending background coroutines
+            advanceUntilIdle()
+            
+            // Verify indexing was called in the background
             coVerify { vectorSearchProvider.indexFile(fileId, any(), any()) }
         }
 
@@ -204,6 +233,7 @@ class VectorStoreServiceTest {
             coVerify { vectorSearchProvider.deleteFile(fileId) }
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `createVectorStoreFile should attach a file to a vector store`() =
         runTest {
@@ -232,7 +262,14 @@ class VectorStoreServiceTest {
             // Then
             assertEquals(fileId, vectorStoreFile.id)
             assertEquals(vectorStore.id, vectorStoreFile.vectorStoreId)
-            assertEquals("completed", vectorStoreFile.status)
+            
+            // Initially the file status should be in_progress
+            assertEquals("in_progress", vectorStoreFile.status)
+            
+            // Process all pending background coroutines
+            advanceUntilIdle()
+            
+            // Verify indexing was called in the background
             coVerify { vectorSearchProvider.indexFile(fileId, any(), any()) }
         }
 

@@ -1,12 +1,10 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
-import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.mockkStatic
 import io.mockk.verify
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach

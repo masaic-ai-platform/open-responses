@@ -365,7 +365,7 @@ class VectorStoreControllerTest {
                     id = "file-123",
                     vectorStoreId = vectorStoreId,
                     createdAt = Instant.now().epochSecond,
-                    status = "completed",
+                    status = "in_progress",
                 )
             
             coEvery { 
@@ -387,7 +387,7 @@ class VectorStoreControllerTest {
                 .jsonPath("$.vector_store_id")
                 .isEqualTo(vectorStoreId)
                 .jsonPath("$.status")
-                .isEqualTo("completed")
+                .isEqualTo("in_progress")
             
             coVerify { vectorStoreService.createVectorStoreFile(vectorStoreId, request) }
         }

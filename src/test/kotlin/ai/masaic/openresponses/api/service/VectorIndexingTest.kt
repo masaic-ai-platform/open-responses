@@ -2,8 +2,12 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.CreateVectorStoreFileRequest
 import ai.masaic.openresponses.api.model.CreateVectorStoreRequest
+import ai.masaic.openresponses.api.model.VectorStore
+import ai.masaic.openresponses.api.model.VectorStoreFile
 import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -75,6 +79,7 @@ class VectorIndexingTest {
         every { mockResource.filename } returns "test.txt"
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `should create vector store and index file`() =
         runTest {
@@ -99,16 +104,20 @@ class VectorIndexingTest {
             val uploadedFile = fileService.uploadFilePart(mockFile, purpose)
             
             // 2. Create a vector store with the file
+            val mockVectorStore = mockk<VectorStore>(relaxed = true)
             coEvery { 
                 vectorStoreService.createVectorStore(any()) 
-            } returns mockk(relaxed = true)
+            } returns mockVectorStore
             
             val createVectorStoreRequest =
                 CreateVectorStoreRequest(
                     name = "Test Vector Store",
                     fileIds = listOf(fileId),
                 )
-            vectorStoreService.createVectorStore(createVectorStoreRequest)
+            val result = vectorStoreService.createVectorStore(createVectorStoreRequest)
+            
+            // Process all pending background coroutines
+            advanceUntilIdle()
         
             // Then
             // 1. File should be uploaded
@@ -116,8 +125,10 @@ class VectorIndexingTest {
             
             // 2. Vector store should be created with the file
             coVerify { vectorStoreService.createVectorStore(createVectorStoreRequest) }
+            assertEquals(mockVectorStore, result)
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `should add existing file to vector store`() =
         runTest {
@@ -143,12 +154,16 @@ class VectorIndexingTest {
             val uploadedFile = fileService.uploadFilePart(mockFile, purpose)
             
             // 2. Add file to existing vector store
+            val mockVectorStoreFile = mockk<VectorStoreFile>(relaxed = true)
             coEvery { 
                 vectorStoreService.createVectorStoreFile(any(), any()) 
-            } returns mockk(relaxed = true)
+            } returns mockVectorStoreFile
             
             val createFileRequest = CreateVectorStoreFileRequest(fileId = fileId)
-            vectorStoreService.createVectorStoreFile(vectorStoreId, createFileRequest)
+            val result = vectorStoreService.createVectorStoreFile(vectorStoreId, createFileRequest)
+            
+            // Process all pending background coroutines
+            advanceUntilIdle()
         
             // Then
             // 1. File should be uploaded
@@ -156,6 +171,7 @@ class VectorIndexingTest {
             
             // 2. File should be added to vector store
             coVerify { vectorStoreService.createVectorStoreFile(vectorStoreId, createFileRequest) }
+            assertEquals(mockVectorStoreFile, result)
         }
 
     @Test

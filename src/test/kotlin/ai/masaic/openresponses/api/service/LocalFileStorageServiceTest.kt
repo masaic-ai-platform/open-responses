@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.utils.toFilePart
+import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
@@ -23,7 +24,7 @@ class LocalFileStorageServiceTest {
     @BeforeEach
     fun setUp() =
         runTest {
-            fileStorageService = LocalFileStorageService(tempDir.toString())
+            fileStorageService = LocalFileStorageService(tempDir.toString(), ObjectMapper())
         }
 
     @AfterEach

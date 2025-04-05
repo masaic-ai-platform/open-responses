@@ -156,13 +156,13 @@ class FileBasedVectorSearchProvider(
                         fileId = fileId,
                         content = chunk,
                         embedding = embeddingService.embedText(chunk),
-                        chunkMetadata = mapOf("filename" to filename),
+                        chunkMetadata = mapOf("original_filename" to filename),
                     )
                 }
             
             // Store in memory cache
             fileChunksCache[fileId] = chunksWithEmbeddings
-            fileMetadataCache[fileId] = mapOf("filename" to filename)
+            fileMetadataCache[fileId] = mapOf("original_filename" to filename)
             
             // Persist to disk
             saveEmbeddings(fileId)
@@ -258,4 +258,12 @@ class FileBasedVectorSearchProvider(
             return false
         }
     }
+
+    /**
+     * Gets metadata for a file from the vector store.
+     *
+     * @param fileId The ID of the file
+     * @return Map of metadata, or null if the file doesn't exist
+     */
+    override fun getFileMetadata(fileId: String): Map<String, Any>? = fileMetadataCache[fileId]
 } 

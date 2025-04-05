@@ -102,7 +102,7 @@ class QdrantVectorSearchProvider(
                 val metadata =
                     mapOf(
                         "fileId" to fileId,
-                        "filename" to filename,
+                        "original_filename" to filename,
                         "chunkIndex" to index,
                     )
 
@@ -203,6 +203,38 @@ class QdrantVectorSearchProvider(
         } catch (e: Exception) {
             log.error("Error deleting file {}: {}", fileId, e.message, e)
             return false
+        }
+    }
+
+    /**
+     * Gets metadata for a file from the vector store.
+     *
+     * @param fileId The ID of the file to get metadata for
+     * @return Map of metadata, or null if the file doesn't exist
+     */
+    override fun getFileMetadata(fileId: String): Map<String, Any>? {
+        try {
+            // Create a search request with fileId filter
+            val searchRequest =
+                EmbeddingSearchRequest
+                    .builder()
+                    .filter(IsEqualTo("fileId", fileId))
+                    .maxResults(1)
+                    .build()
+            
+            // Search for any segment with this fileId
+            val matches = embeddingStore.search(searchRequest).matches()
+            if (matches.isEmpty()) return null
+            
+            // Return metadata from the first segment
+            return matches
+                .first()
+                .embedded()
+                .metadata()
+                .toMap()
+        } catch (e: Exception) {
+            log.error("Error getting metadata for file {}: {}", fileId, e.message, e)
+            return null
         }
     }
 

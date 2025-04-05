@@ -46,6 +46,14 @@ interface VectorSearchProvider {
     fun deleteFile(fileId: String): Boolean
 
     /**
+     * Gets metadata for a file from the vector store.
+     *
+     * @param fileId The ID of the file
+     * @return Map of metadata, or null if the file doesn't exist
+     */
+    fun getFileMetadata(fileId: String): Map<String, Any>? = null
+
+    /**
      * Represents a search result from the vector store.
      *
      * @property fileId The ID of the file
