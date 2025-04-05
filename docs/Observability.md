@@ -83,7 +83,7 @@ The collected data can be shipped to various monitoring tools:
 - **For Traces**: Jaeger, Zipkin, or other tracing backends
 - **For Logs**: Various log aggregation systems
 
-![Observability Architecture](observability.png)
+![Observability Architecture](assets/observability.png)
 
 ## Observability in Action
 
@@ -93,19 +93,19 @@ Below are some examples of the observability insights available in Open Response
 
 The following image shows distributed tracing of a Brave search agent with streaming, including the complete conversation logs:
 
-![Tracing Example](brave_search_agent_with_groq_stream-traces.png)
+![Tracing Example](assets/brave_search_agent_with_groq_stream-traces.png)
 
 ### GenAI Performance Metrics
 
 This dashboard displays token usage and model performance metrics:
 
-![GenAI Metrics](Genai-stats.png)
+![GenAI Metrics](assets/Genai-stats.png)
 
 ### System Health Monitoring
 
 Monitor the overall health and performance of your Open Responses service:
 
-![System Stats](Service-stats.png)
+![System Stats](assets/Service-stats.png)
 
 ## Standard Metrics
 
