@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "ai.masaic"
-version = "0.0.3-alpha"
+version = "0.1.0-M1"
 
 java {
     toolchain {

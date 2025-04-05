@@ -38,7 +38,7 @@ extensions:
 service:
   telemetry:
     logs:
-      level: "debug"
+      level: "info"
     metrics:
       level: "detailed"
       address: "0.0.0.0:8888"
@@ -47,7 +47,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp, debug]
+      exporters: [otlp]
     metrics:
       receivers: [otlp]
       processors: [batch]

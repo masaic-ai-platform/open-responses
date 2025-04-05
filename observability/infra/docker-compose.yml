@@ -55,8 +55,7 @@ services:
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
-      - GF_LOG_LEVEL=debug
-      - GF_LOG_FILTERS=provisioning.dashboard:debug
+      - GF_LOG_LEVEL=info
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     depends_on:

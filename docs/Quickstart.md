@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-Follow this guide to run the service in under 5 minutes using one of the following flows:
+Follow this detailed guide to run the service with different modes:
 
 1. Getting Started (Clone repo and quick setup without additional tool overhead)
 2. Starting Docker with Built-In Tools
@@ -8,6 +8,7 @@ Follow this guide to run the service in under 5 minutes using one of the followi
 4. Running example scripts with the openai-agent-python SDK
 5. Running Agent Examples Built with OpenAI Agent SDK To Use Open Responses API Built In Tools
 6. Starting Open Responses with MongoDB Persistent Storage
+7. Running Open Responses with Observability Stack
 
 ---
 
@@ -338,7 +339,6 @@ This section demonstrates how to run examples that create Agents using the OpenA
    ```
    Note: This example requires the CLAUDE_API_KEY along with the OPEN_RESPONSES_URL to be set appropriately.
 
----
 
 ## 7. Starting Open Responses with MongoDB Persistent Storage
 
@@ -366,7 +366,7 @@ To test that responses are being stored, make an API call with the `store` param
 ```bash
 curl --location 'http://localhost:8080/v1/responses' \
 --header 'Content-Type: application/json' \
---header 'Authorization: Bearer YOUR_API_KEY' \
+--header 'Authorization: Bearer OPENAI_API_KEY' \
 --data '{
     "model": "gpt-4o",
     "store": true,
@@ -388,7 +388,7 @@ To continue a stored conversation, use the `previous_response_id` from your earl
 ```bash
 curl --location 'http://localhost:8080/v1/responses' \
 --header 'Content-Type: application/json' \
---header 'Authorization: Bearer YOUR_API_KEY' \
+--header 'Authorization: Bearer OPENAI_API_KEY' \
 --data '{
     "model": "gpt-4o",
     "store": true,
@@ -403,6 +403,14 @@ curl --location 'http://localhost:8080/v1/responses' \
 ```
 
 For more details on response storage options and configuration, refer to the [Response Store Configuration](Store.md) documentation.
+
+---
+
+## 8. Running Open Responses with Observability Stack
+
+Open Responses comes with built-in observability features for monitoring performance, tokens usage, and system health. The observability stack includes OpenTelemetry, Jaeger, Prometheus, and Grafana.
+
+For comprehensive instructions on setting up and using the observability stack, see the [Running Open Responses with Observability Stack](OR-With-Obs.md) guide.
 
 ---
 

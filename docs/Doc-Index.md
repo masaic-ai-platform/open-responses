@@ -10,6 +10,7 @@ Welcome to the OpenResponses documentation. This guide provides links to all ava
 | [OpenAI Compatibility Guide](OpenAICompatibility.md) | Detailed information about OpenAI API compatibility |
 | [Store Documentation](Store.md) | Information about the storage capabilities |
 | [Observability](Observability.md) | Guide to monitoring and observability features |
+| [Running with Observability Stack](OR-With-Obs.md) | Step-by-step guide to run the service with the observability stack |
 
 ## Additional Resources
 
