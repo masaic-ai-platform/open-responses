@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -59,6 +60,7 @@ class FileBasedVectorSearchProvider(
      */
     private data class ChunkWithEmbedding(
         val fileId: String,
+        val chunkId: String,
         val content: String,
         val embedding: List<Float>,
         val chunkMetadata: Map<String, Any> = emptyMap(),
@@ -151,12 +153,21 @@ class FileBasedVectorSearchProvider(
             
             // Generate embeddings for each chunk
             val chunksWithEmbeddings =
-                chunks.map { chunk ->
+                chunks.mapIndexed { index, chunk ->
+                    // Generate a short unique ID for each chunk
+                    val chunkId = IdGenerator.generateChunkId()
+                    
                     ChunkWithEmbedding(
                         fileId = fileId,
+                        chunkId = chunkId,
                         content = chunk,
                         embedding = embeddingService.embedText(chunk),
-                        chunkMetadata = mapOf("filename" to filename),
+                        chunkMetadata =
+                            mapOf(
+                                "filename" to filename,
+                                "chunk_id" to chunkId,
+                                "chunk_index" to index,
+                            ),
                     )
                 }
             

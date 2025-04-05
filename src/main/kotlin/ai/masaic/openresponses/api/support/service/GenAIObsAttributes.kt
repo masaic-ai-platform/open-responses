@@ -28,3 +28,28 @@ object GenAIObsAttributes {
     const val CHOICE = "gen_ai.choice"
     const val CLIENT_TOKEN_USAGE = "gen_ai.client.token.usage"
 }
+
+object OpenResponsesObsAttributes {
+    // File operations
+    const val FILE_OPERATION = "open-responses.file.operation"
+    const val FILE_ID = "open-responses.file.id"
+    const val FILE_NAME = "open-responses.file.name"
+    const val FILE_SIZE = "open-responses.file.size"
+    const val FILE_OPERATION_DURATION = "open-responses.file.operation.duration"
+    const val FILE_PURPOSE = "open-responses.file.purpose"
+
+    // Vector store operations
+    const val VECTOR_STORE_OPERATION = "open-responses.vector_store.operation"
+    const val VECTOR_STORE_ID = "open-responses.vector_store.id"
+    const val VECTOR_STORE_OPERATION_DURATION = "open-responses.vector_store.operation.duration"
+
+    // Search operations
+    const val SEARCH_OPERATION = "open-responses.search.operation"
+    const val SEARCH_QUERY = "open-responses.search.query"
+    const val SEARCH_RESULTS_COUNT = "open-responses.search.results.count"
+    const val SEARCH_DURATION = "open-responses.search.duration"
+    const val SEARCH_DOCUMENT_IDS = "open-responses.search.document_ids"
+    const val SEARCH_CHUNK_IDS = "open-responses.search.chunk_ids"
+    const val SEARCH_TOP_SCORE = "open-responses.search.top_score"
+    const val SEARCH_AVG_SCORE = "open-responses.search.avg_score"
+}

@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.model.File
 import ai.masaic.openresponses.api.model.FileDeleteResponse
 import ai.masaic.openresponses.api.model.FileListResponse
 import ai.masaic.openresponses.api.model.FilePurpose
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
@@ -26,6 +27,7 @@ import java.time.Instant
 class FileService(
     @Autowired private val fileStorageService: FileStorageService,
     @Autowired(required = false) private val vectorSearchProvider: VectorSearchProvider?,
+    @Autowired private val telemetryService: TelemetryService,
 ) {
     private val log = LoggerFactory.getLogger(FileService::class.java)
 
@@ -45,18 +47,26 @@ class FileService(
             if (!FilePurpose.isValid(purpose)) {
                 throw IllegalArgumentException("Invalid purpose: $purpose. Valid purposes are: ${FilePurpose.entries.joinToString()}")
             }
-        
-            // Store the file
-            val fileId = fileStorageService.store(filePart, purpose)
-        
-            // Create file object
-            File(
-                id = fileId,
-                bytes = 0, // Size will be updated by storage service
-                filename = filePart.filename(),
+            
+            // Track the file upload operation with telemetry
+            telemetryService.withFileOperation(
+                operationName = "upload",
+                fileId = "temp", // We don't have the ID yet, will be generated during storage
+                fileName = filePart.filename(),
                 purpose = purpose,
-                createdAt = Instant.now().epochSecond,
-            )
+            ) { 
+                // Store the file
+                val fileId = fileStorageService.store(filePart, purpose)
+                
+                // Create file object
+                File(
+                    id = fileId,
+                    bytes = 0, // Size will be updated by storage service
+                    filename = filePart.filename(),
+                    purpose = purpose,
+                    createdAt = Instant.now().epochSecond,
+                )
+            }
         }
 
     /**

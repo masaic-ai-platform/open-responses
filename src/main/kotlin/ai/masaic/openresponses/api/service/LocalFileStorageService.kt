@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.utils.IdGenerator
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.Dispatchers
@@ -198,14 +199,16 @@ class LocalFileStorageService(
         withContext(Dispatchers.IO) {
             try {
                 val originalFilename = filePart.filename()
-                val fileId =
-                    "open-responses-file-" + UUID.randomUUID().toString() + "." +
-                        if (originalFilename.substringAfterLast('.', "").isNotEmpty()) {
-                            originalFilename.substringAfterLast('.', "")
-                        } else {
-                            log.error("File has no extension")
-                            throw FileStorageException("Failed to recognize file extension")
-                        }
+                val extension =
+                    if (originalFilename.substringAfterLast('.', "").isNotEmpty()) {
+                        "." + originalFilename.substringAfterLast('.', "")
+                    } else {
+                        log.error("File has no extension")
+                        throw FileStorageException("Failed to recognize file extension")
+                    }
+                
+                // Generate a file ID using the IdGenerator utility
+                val fileId = IdGenerator.generateFileId() + extension
 
                 val purposeDir = rootLocation.resolve(purpose)
 

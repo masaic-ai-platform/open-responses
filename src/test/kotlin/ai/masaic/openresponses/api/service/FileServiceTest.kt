@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
@@ -23,11 +24,13 @@ class FileServiceTest {
     private lateinit var fileService: FileService
     private lateinit var fileStorageService: FileStorageService
     private lateinit var vectorSearchProvider: VectorSearchProvider
+    private lateinit var telemetryService: TelemetryService
 
     @BeforeEach
     fun setup() {
         fileStorageService = mockk()
         vectorSearchProvider = mockk()
+        telemetryService = mockk(relaxed = true)
 
         // Set up default mock behaviors
         // Mock behavior: just capture invocation
@@ -35,7 +38,7 @@ class FileServiceTest {
             val hook = firstArg<suspend (String, String) -> Unit>()
             // simulate the callback being invoked - we can't actually run it since it's suspending
         }
-        fileService = FileService(fileStorageService, vectorSearchProvider)
+        fileService = FileService(fileStorageService, vectorSearchProvider, telemetryService)
     }
 
     @Test
@@ -52,7 +55,33 @@ class FileServiceTest {
             val purpose = "assistants"
             val fileId = "file-123456"
         
+            // Mock file storage and telemetry
             coEvery { fileStorageService.store(file, purpose) } returns fileId
+            
+            // Properly mock the telemetry service to return our expected File
+            val expectedFile =
+                ai.masaic.openresponses.api.model.File(
+                    id = fileId,
+                    bytes = 0,
+                    filename = "test.txt",
+                    purpose = purpose,
+                    createdAt = Instant.now().epochSecond,
+                )
+            
+            coEvery { 
+                telemetryService.withFileOperation<ai.masaic.openresponses.api.model.File>(
+                    operationName = "upload",
+                    fileId = "temp",
+                    fileName = "test.txt",
+                    purpose = purpose,
+                    block = any(),
+                ) 
+            } coAnswers { call ->
+                // Extract the lambda block and call it
+                val block = call.invocation.args[4] as (suspend () -> ai.masaic.openresponses.api.model.File)
+                block() // This will call our mocked fileStorageService.store
+                expectedFile
+            }
         
             // When
             val result = fileService.uploadFilePart(file, purpose)

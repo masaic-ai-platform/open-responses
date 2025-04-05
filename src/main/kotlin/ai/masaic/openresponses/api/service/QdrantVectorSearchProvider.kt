@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
@@ -98,12 +99,16 @@ class QdrantVectorSearchProvider(
             
             // Process each chunk
             chunks.forEachIndexed { index, chunk ->
+                // Generate a short unique ID for each chunk using IdGenerator
+                val chunkId = IdGenerator.generateChunkId()
+                
                 // Create metadata
                 val metadata =
                     mapOf(
                         "fileId" to fileId,
                         "filename" to filename,
                         "chunkIndex" to index,
+                        "chunk_id" to chunkId,
                     )
 
                 // Convert to TextSegment with metadata

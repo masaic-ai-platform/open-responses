@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.model.CreateVectorStoreFileRequest
 import ai.masaic.openresponses.api.model.CreateVectorStoreRequest
 import ai.masaic.openresponses.api.model.VectorStore
 import ai.masaic.openresponses.api.model.VectorStoreFile
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,16 +53,18 @@ class VectorIndexingTest {
     private lateinit var vectorStoreService: VectorStoreService
     private lateinit var mockFile: FilePart
     private lateinit var mockResource: Resource
+    private lateinit var telemetryService: TelemetryService
 
     @BeforeEach
     fun setup() {
         fileStorageService = mockk()
         vectorSearchProvider = mockk()
+        telemetryService = mockk(relaxed = true)
         
         coEvery { vectorSearchProvider.indexFile(any(), any(), any()) } returns true
         coEvery { vectorSearchProvider.deleteFile(any()) } returns true
         
-        fileService = FileService(fileStorageService, vectorSearchProvider)
+        fileService = FileService(fileStorageService, vectorSearchProvider, telemetryService)
         vectorStoreService = mockk()
 
         mockFile =
@@ -98,6 +101,27 @@ class VectorIndexingTest {
                 )
             coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
             coEvery { fileStorageService.exists(fileId) } returns true
+
+            // Setup mock file response
+            val mockApiFile =
+                ai.masaic.openresponses.api.model.File(
+                    id = fileId,
+                    bytes = 100L,
+                    filename = "test.txt",
+                    purpose = purpose,
+                    createdAt = Instant.now().epochSecond,
+                )
+            
+            // When uploading a file, return the mock file
+            coEvery { 
+                telemetryService.withFileOperation<ai.masaic.openresponses.api.model.File>(
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                ) 
+            } returns mockApiFile
 
             // When
             // 1. Upload a file
@@ -148,6 +172,27 @@ class VectorIndexingTest {
                 )
             coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
             coEvery { fileStorageService.exists(fileId) } returns true
+            
+            // Setup mock file response
+            val mockApiFile =
+                ai.masaic.openresponses.api.model.File(
+                    id = fileId,
+                    bytes = 100L,
+                    filename = "test.txt",
+                    purpose = purpose,
+                    createdAt = Instant.now().epochSecond,
+                )
+            
+            // When uploading a file, return the mock file
+            coEvery { 
+                telemetryService.withFileOperation<ai.masaic.openresponses.api.model.File>(
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                ) 
+            } returns mockApiFile
         
             // When
             // 1. Upload a file
@@ -191,6 +236,27 @@ class VectorIndexingTest {
                     "created_at" to Instant.now().epochSecond,
                 )
             coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
+            
+            // Setup mock file response
+            val mockApiFile =
+                ai.masaic.openresponses.api.model.File(
+                    id = fileId,
+                    bytes = 100L,
+                    filename = "test.txt",
+                    purpose = purpose,
+                    createdAt = Instant.now().epochSecond,
+                )
+            
+            // When uploading a file, return the mock file
+            coEvery { 
+                telemetryService.withFileOperation<ai.masaic.openresponses.api.model.File>(
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                    any(),
+                ) 
+            } returns mockApiFile
         
             // When
             // 1. Upload a file

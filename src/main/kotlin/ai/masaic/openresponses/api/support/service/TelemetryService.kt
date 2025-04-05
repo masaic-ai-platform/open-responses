@@ -21,7 +21,7 @@ import kotlin.coroutines.coroutineContext
 @Service
 class TelemetryService(
     private val observationRegistry: ObservationRegistry,
-    private val meterRegistry: MeterRegistry,
+    val meterRegistry: MeterRegistry,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -400,6 +400,282 @@ class TelemetryService(
                 .tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
         val timer = timerBuilder.register(meterRegistry)
         sample.stop(timer)
+    }
+
+    // ------------------------------------------------------------------------
+    // File Operation Telemetry Methods
+    // ------------------------------------------------------------------------
+
+    /**
+     * Starts an observation for a file operation.
+     *
+     * @param operationName The name of the file operation (e.g., "create", "read", "delete")
+     * @param fileId The ID of the file
+     * @param fileName The name of the file (optional)
+     * @param purpose The purpose of the file (optional)
+     * @return The created observation
+     */
+    suspend fun startFileOperation(
+        operationName: String,
+        fileId: String,
+        fileName: String? = null,
+        purpose: String? = null,
+    ): Observation {
+        val observation = startObservation("open-responses.file.$operationName")
+        observation.lowCardinalityKeyValue(OpenResponsesObsAttributes.FILE_OPERATION, operationName)
+        observation.highCardinalityKeyValue(OpenResponsesObsAttributes.FILE_ID, fileId)
+        
+        fileName?.let {
+            observation.highCardinalityKeyValue(OpenResponsesObsAttributes.FILE_NAME, it)
+        }
+        
+        purpose?.let {
+            observation.lowCardinalityKeyValue(OpenResponsesObsAttributes.FILE_PURPOSE, it)
+        }
+        
+        return observation
+    }
+
+    /**
+     * Stops a file operation observation and records metrics.
+     *
+     * @param observation The observation to stop
+     * @param fileSize The size of the file in bytes (optional)
+     * @param success Whether the operation was successful
+     */
+    fun stopFileOperation(
+        observation: Observation,
+        fileSize: Long? = null,
+        success: Boolean = true,
+    ) {
+        try {
+            fileSize?.let {
+                observation.highCardinalityKeyValue(OpenResponsesObsAttributes.FILE_SIZE, it.toString())
+            }
+            
+            if (!success) {
+                observation.error(RuntimeException("File operation failed"))
+            }
+        } finally {
+            observation.stop()
+        }
+    }
+
+    /**
+     * Executes a file operation with observability.
+     *
+     * @param operationName The name of the file operation
+     * @param fileId The ID of the file
+     * @param fileName The name of the file (optional)
+     * @param purpose The purpose of the file (optional)
+     * @param block The operation to execute
+     * @return The result of the operation
+     */
+    suspend fun <T> withFileOperation(
+        operationName: String,
+        fileId: String,
+        fileName: String? = null,
+        purpose: String? = null,
+        block: suspend () -> T,
+    ): T {
+        val observation = startFileOperation(operationName, fileId, fileName, purpose)
+        val timer =
+            Timer
+                .builder(OpenResponsesObsAttributes.FILE_OPERATION_DURATION)
+                .description("File operation duration")
+                .tags(OpenResponsesObsAttributes.FILE_OPERATION, operationName)
+                .register(meterRegistry)
+        val sample = Timer.start(meterRegistry)
+        
+        return try {
+            val result = block()
+            stopFileOperation(observation, success = true)
+            result
+        } catch (e: Exception) {
+            stopFileOperation(observation, success = false)
+            observation.error(e)
+            throw e
+        } finally {
+            sample.stop(timer)
+        }
+    }
+    
+    // ------------------------------------------------------------------------
+    // Vector Store Operation Telemetry Methods
+    // ------------------------------------------------------------------------
+
+    /**
+     * Starts an observation for a vector store operation.
+     *
+     * @param operationName The name of the vector store operation (e.g., "create", "update", "delete")
+     * @param vectorStoreId The ID of the vector store
+     * @return The created observation
+     */
+    suspend fun startVectorStoreOperation(
+        operationName: String,
+        vectorStoreId: String,
+    ): Observation {
+        val observation = startObservation("open-responses.vector_store.$operationName")
+        observation.lowCardinalityKeyValue(OpenResponsesObsAttributes.VECTOR_STORE_OPERATION, operationName)
+        observation.highCardinalityKeyValue(OpenResponsesObsAttributes.VECTOR_STORE_ID, vectorStoreId)
+        
+        return observation
+    }
+
+    /**
+     * Stops a vector store operation observation.
+     *
+     * @param observation The observation to stop
+     * @param success Whether the operation was successful
+     */
+    fun stopVectorStoreOperation(
+        observation: Observation,
+        success: Boolean = true,
+    ) {
+        try {
+            if (!success) {
+                observation.error(RuntimeException("Vector store operation failed"))
+            }
+        } finally {
+            observation.stop()
+        }
+    }
+
+    /**
+     * Executes a vector store operation with observability.
+     *
+     * @param operationName The name of the vector store operation
+     * @param vectorStoreId The ID of the vector store
+     * @param block The operation to execute
+     * @return The result of the operation
+     */
+    suspend fun <T> withVectorStoreOperation(
+        operationName: String,
+        vectorStoreId: String,
+        block: suspend () -> T,
+    ): T {
+        val observation = startVectorStoreOperation(operationName, vectorStoreId)
+        val timer =
+            Timer
+                .builder(OpenResponsesObsAttributes.VECTOR_STORE_OPERATION_DURATION)
+                .description("Vector store operation duration")
+                .tags(OpenResponsesObsAttributes.VECTOR_STORE_OPERATION, operationName)
+                .tags(OpenResponsesObsAttributes.VECTOR_STORE_ID, vectorStoreId)
+                .register(meterRegistry)
+        val sample = Timer.start(meterRegistry)
+        
+        return try {
+            val result = block()
+            stopVectorStoreOperation(observation, success = true)
+            result
+        } catch (e: Exception) {
+            stopVectorStoreOperation(observation, success = false)
+            observation.error(e)
+            throw e
+        } finally {
+            sample.stop(timer)
+        }
+    }
+    
+    // ------------------------------------------------------------------------
+    // Search Operation Telemetry Methods
+    // ------------------------------------------------------------------------
+
+    /**
+     * Starts an observation for a search operation.
+     *
+     * @param operationName The name of the search operation (e.g., "semantic", "keyword")
+     * @param vectorStoreId The ID of the vector store (optional)
+     * @param query The search query
+     * @return The created observation
+     */
+    suspend fun startSearchOperation(
+        operationName: String,
+        vectorStoreId: String? = null,
+        query: String,
+    ): Observation {
+        val observation = startObservation("open-responses.search.$operationName")
+        observation.lowCardinalityKeyValue(OpenResponsesObsAttributes.SEARCH_OPERATION, operationName)
+        observation.highCardinalityKeyValue(OpenResponsesObsAttributes.SEARCH_QUERY, query)
+        
+        vectorStoreId?.let {
+            observation.highCardinalityKeyValue(OpenResponsesObsAttributes.VECTOR_STORE_ID, it)
+        }
+        
+        return observation
+    }
+
+    /**
+     * Stops a search operation observation and records metrics.
+     *
+     * @param observation The observation to stop
+     * @param resultsCount The number of search results (optional)
+     * @param documentIds List of document IDs that were fetched (optional)
+     * @param chunkIds List of chunk IDs that were fetched (optional)
+     * @param scores List of similarity scores for the results (optional)
+     * @param success Whether the operation was successful
+     */
+    fun stopSearchOperation(
+        observation: Observation,
+        resultsCount: Int? = null,
+        documentIds: List<String>? = null,
+        chunkIds: List<String>? = null,
+        scores: List<Double>? = null,
+        success: Boolean = true,
+    ) {
+        try {
+            resultsCount?.let {
+                observation.highCardinalityKeyValue(OpenResponsesObsAttributes.SEARCH_RESULTS_COUNT, it.toString())
+            }
+            
+            documentIds?.let {
+                if (it.isNotEmpty()) {
+                    // Only record up to 10 document IDs to keep the metric cardinality under control
+                    val limitedDocs = it.take(10)
+                    observation.highCardinalityKeyValue(
+                        OpenResponsesObsAttributes.SEARCH_DOCUMENT_IDS,
+                        limitedDocs.joinToString(","),
+                    )
+                }
+            }
+            
+            chunkIds?.let {
+                if (it.isNotEmpty()) {
+                    // Only record up to 10 chunk IDs to keep the metric cardinality under control
+                    val limitedChunks = it.take(10)
+                    observation.highCardinalityKeyValue(
+                        OpenResponsesObsAttributes.SEARCH_CHUNK_IDS,
+                        limitedChunks.joinToString(","),
+                    )
+                }
+            }
+            
+            scores?.let {
+                if (it.isNotEmpty()) {
+                    // Record the top score (highest similarity)
+                    val topScore = it.maxOrNull()
+                    topScore?.let { score ->
+                        observation.highCardinalityKeyValue(
+                            OpenResponsesObsAttributes.SEARCH_TOP_SCORE,
+                            score.toString(),
+                        )
+                    }
+                    
+                    // Record the average score
+                    val avgScore = it.average()
+                    observation.highCardinalityKeyValue(
+                        OpenResponsesObsAttributes.SEARCH_AVG_SCORE,
+                        avgScore.toString(),
+                    )
+                }
+            }
+            
+            if (!success) {
+                observation.error(RuntimeException("Search operation failed"))
+            }
+        } finally {
+            observation.stop()
+        }
     }
 
     fun getCurrentObservation(): Observation? = observationRegistry.currentObservation

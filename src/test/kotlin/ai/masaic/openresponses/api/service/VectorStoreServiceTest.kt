@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.repository.VectorStoreRepository
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -23,6 +24,7 @@ class VectorStoreServiceTest {
     private lateinit var vectorStoreService: VectorStoreService
     private lateinit var vectorStoreRepository: VectorStoreRepository
     private lateinit var mockResource: Resource
+    private lateinit var telemetryService: TelemetryService
 
     @BeforeEach
     fun setup() {
@@ -67,8 +69,9 @@ class VectorStoreServiceTest {
         fileService = mockk()
         fileStorageService = mockk()
         vectorSearchProvider = mockk()
+        telemetryService = mockk(relaxed = true)
 
-        vectorStoreService = VectorStoreService(fileStorageService, vectorStoreRepository, vectorSearchProvider)
+        vectorStoreService = VectorStoreService(fileStorageService, vectorStoreRepository, vectorSearchProvider, telemetryService)
         
         // Setup mock resources
         mockResource = mockk<ByteArrayResource>()
@@ -255,6 +258,31 @@ class VectorStoreServiceTest {
                 )
             coEvery { fileStorageService.loadAsResource(fileId) } returns mockResource
             coEvery { vectorSearchProvider.indexFile(fileId, any(), any()) } returns true
+            
+            // Mock the vector store file that should be returned
+            val mockVectorStoreFile =
+                VectorStoreFile(
+                    id = fileId,
+                    vectorStoreId = vectorStore.id,
+                    status = "in_progress",
+                    createdAt = Instant.now().epochSecond,
+                    usageBytes = 100L,
+                    attributes = mapOf("filename" to "test.txt"),
+                )
+            
+            // Mock the telemetry withVectorStoreOperation method to return our expected file
+            coEvery { 
+                telemetryService.withVectorStoreOperation<VectorStoreFile>(
+                    operationName = "create_file",
+                    vectorStoreId = vectorStore.id,
+                    block = any(),
+                ) 
+            } coAnswers { call ->
+                // Execute the block to make all necessary calls happen
+                val block = call.invocation.args[2] as (suspend () -> VectorStoreFile)
+                block() // This makes the internal function run
+                mockVectorStoreFile // Return our mock object
+            }
             
             // When
             val vectorStoreFile = vectorStoreService.createVectorStoreFile(vectorStore.id, fileRequest)
