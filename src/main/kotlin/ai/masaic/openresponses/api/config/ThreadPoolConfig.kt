@@ -110,6 +110,14 @@ class ThreadPoolConfig : WebFluxConfigurer {
                         .childOption(ChannelOption.SO_KEEPALIVE, enableKeepAlive)
                         .option(ChannelOption.SO_REUSEADDR, enableReuseAddress)
                         .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
+                        .httpRequestDecoder { spec ->
+                            // Increase limits for handling large file uploads
+                            spec.maxInitialLineLength(65536) // 64KB
+                            spec.maxHeaderSize(65536) // 64KB
+                            spec.maxChunkSize(10 * 1024 * 1024) // 10MB chunks
+                            spec.validateHeaders(true)
+                            spec.initialBufferSize(1024 * 128) // 128KB
+                        }.wiretap(false) // Set to true for debugging HTTP traffic
             }
         factory.addServerCustomizers(serverCustomizer)
         return factory

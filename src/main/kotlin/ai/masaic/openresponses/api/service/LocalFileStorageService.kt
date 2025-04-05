@@ -6,6 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
@@ -15,13 +16,19 @@ import org.springframework.core.io.UrlResource
 import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
+import reactor.core.publisher.Mono
 import java.io.IOException
 import java.net.MalformedURLException
+import java.nio.ByteBuffer
+import java.nio.channels.AsynchronousFileChannel
+import java.nio.channels.CompletionHandler
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
+import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.BasicFileAttributes
 import java.util.*
+import java.util.concurrent.CompletableFuture
 import kotlin.io.path.name
 import kotlin.streams.asSequence
 
@@ -208,29 +215,111 @@ class LocalFileStorageService(
             
                 val filePath = purposeDir.resolve(fileId)
 
-                // Store the file content from reactive stream
-                DataBufferUtils
-                    .write(filePart.content(), filePath)
-                    .doOnSuccess {
-                        log.info("File $fileId stored successfully in purpose directory $purpose")
-                    }.awaitSingleOrNull()
+                // Optimize file writing for large files
+                val channel =
+                    AsynchronousFileChannel.open(
+                        filePath,
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.WRITE,
+                    )
+                
+                try {
+                    // Process content in memory-efficient chunks with sequential writing
+                    var position = 0L
+                    var bytesProcessed = 0L
+                    val startTime = System.currentTimeMillis()
+                    var lastLogTime = startTime
+                    
+                    filePart
+                        .content()
+                        .map { buffer ->
+                            val bytes = ByteArray(buffer.readableByteCount())
+                            buffer.read(bytes)
+                            DataBufferUtils.release(buffer)
+                            
+                            // Update progress tracking
+                            bytesProcessed += bytes.size
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastLogTime > 2000) { // Log every 2 seconds for large files
+                                val mbProcessed = bytesProcessed / (1024.0 * 1024.0)
+                                val elapsedSeconds = (currentTime - startTime) / 1000.0
+                                val mbPerSecond = if (elapsedSeconds > 0) mbProcessed / elapsedSeconds else 0.0
+                                log.info("File upload progress: ${mbProcessed.toInt()} MB, rate: ${String.format("%.2f", mbPerSecond)} MB/s")
+                                lastLogTime = currentTime
+                            }
+                            
+                            bytes
+                        }.concatMap { bytes ->
+                            val byteBuffer = ByteBuffer.wrap(bytes)
+                            val currentPosition = position
+                            position += bytes.size
+                            
+                            val completableFuture = CompletableFuture<Int>()
+                            channel.write(
+                                byteBuffer,
+                                currentPosition,
+                                null,
+                                object : CompletionHandler<Int, Void?> {
+                                    override fun completed(
+                                        result: Int,
+                                        attachment: Void?,
+                                    ) {
+                                        completableFuture.complete(result)
+                                    }
 
-                // Store the original filename in metadata file
+                                    override fun failed(
+                                        exc: Throwable,
+                                        attachment: Void?,
+                                    ) {
+                                        completableFuture.completeExceptionally(exc)
+                                    }
+                                },
+                            )
+                            Mono.fromFuture(completableFuture)
+                        }.doFinally { 
+                            channel.close()
+                            val totalTime = (System.currentTimeMillis() - startTime) / 1000.0
+                            val totalSizeMB = bytesProcessed / (1024.0 * 1024.0)
+                            val mbPerSecond = if (totalTime > 0) totalSizeMB / totalTime else 0.0
+                            log.info("File $fileId upload complete: $totalSizeMB MB in ${String.format("%.2f", totalTime)} seconds, avg rate: ${String.format("%.2f", mbPerSecond)} MB/s")
+                        }.then()
+                        .awaitSingleOrNull()
+                } catch (e: Exception) {
+                    channel.close()
+                    throw e
+                }
+                
+                log.info("File $fileId stored successfully in purpose directory $purpose")
+
+                // Store the original filename in metadata file asynchronously
+                // This is done in a separate coroutine to not block the main file upload
                 val metadataPath = purposeDir.resolve("$fileId.metadata")
                 val metadata =
                     mapOf(
                         "filename" to originalFilename,
                     )
-                Files.write(metadataPath, objectMapper.writeValueAsString(metadata).toByteArray())
+                
+                // Write metadata in parallel
+                launch {
+                    try {
+                        Files.write(metadataPath, objectMapper.writeValueAsString(metadata).toByteArray())
+                    } catch (e: Exception) {
+                        log.error("Error writing metadata for file $fileId", e)
+                    }
+                }
 
                 log.info("Stored file $fileId in purpose directory $purpose")
 
-                // Run post-process hooks
-                postProcessHooks.forEach { hook ->
-                    try {
-                        hook(fileId, purpose)
-                    } catch (e: Exception) {
-                        log.error("Error executing post-process hook for file $fileId", e)
+                // Run post-process hooks in parallel if any exist
+                if (postProcessHooks.isNotEmpty()) {
+                    launch {
+                        postProcessHooks.forEach { hook ->
+                            try {
+                                hook(fileId, purpose)
+                            } catch (e: Exception) {
+                                log.error("Error executing post-process hook for file $fileId", e)
+                            }
+                        }
                     }
                 }
             
