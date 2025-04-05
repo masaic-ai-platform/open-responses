@@ -404,7 +404,7 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        // Let's pretend the toolService recognizes and executes "myToolFunction"
+        // Let’s pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction") } returns mockk()
         every { toolService.executeTool("myToolFunction", "{\"foo\":\"bar\"}") } returns "Executed tool"
 

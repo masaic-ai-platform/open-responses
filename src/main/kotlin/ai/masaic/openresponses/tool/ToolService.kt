@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ResourceLoader
 import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
@@ -33,6 +34,9 @@ class ToolService(
     private val resourceLoader: ResourceLoader,
     private val nativeToolRegistry: NativeToolRegistry,
 ) {
+    @Value("\${open-responses.tools.mcp.enabled:false}")
+    private val toolsMCPEnabled: Boolean = false
+
     private val json = Json { ignoreUnknownKeys = true }
     private val log = LoggerFactory.getLogger(ToolService::class.java)
 
@@ -174,7 +178,7 @@ class ToolService(
      */
     @PostConstruct
     fun loadTools() {
-        if (!isMcpToolsEnabled()) {
+        if (!toolsMCPEnabled) {
             log.info("MCP tools are not enabled, skipping loading of MCP tools.")
             return
         }
@@ -189,13 +193,6 @@ class ToolService(
 
         loadToolRegistry(mcpServerConfigJson)
     }
-
-    /**
-     * Checks if MCP tools are enabled via environment variable.
-     *
-     * @return true if MCP tools are enabled, false otherwise
-     */
-    private fun isMcpToolsEnabled(): Boolean = System.getenv("TOOLS_MCP_ENABLED")?.toBoolean() ?: true
 
     /**
      * Determines the configuration file path from environment variable or default.
