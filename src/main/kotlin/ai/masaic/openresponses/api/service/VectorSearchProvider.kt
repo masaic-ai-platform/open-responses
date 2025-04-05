@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.model.ChunkingStrategy
 import java.io.InputStream
 
 /**
@@ -15,12 +16,14 @@ interface VectorSearchProvider {
      * @param fileId The ID of the file
      * @param content The file content as an InputStream
      * @param filename The name of the file
+     * @param chunkingStrategy Optional chunking strategy to use when splitting the text
      * @return True if indexing was successful, false otherwise
      */
     fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,
+        chunkingStrategy: ChunkingStrategy? = null,
     ): Boolean
 
     /**

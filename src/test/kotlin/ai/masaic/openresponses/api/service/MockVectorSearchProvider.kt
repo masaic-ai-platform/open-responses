@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.model.ChunkingStrategy
 import org.springframework.context.annotation.Primary
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
@@ -27,6 +28,7 @@ class MockVectorSearchProvider : VectorSearchProvider {
         fileId: String,
         content: InputStream,
         filename: String,
+        chunkingStrategy: ChunkingStrategy?,
     ): Boolean {
         try {
             val contentString = content.readAllBytes().toString(Charsets.UTF_8)

@@ -178,7 +178,13 @@ class VectorStoreService(
                     backgroundScope.launch {
                         try {
                             val resource = fileStorageService.loadAsResource(fileId)
-                            val indexed = vectorSearchProvider.indexFile(fileId, resource.inputStream, filename)
+                            val indexed =
+                                vectorSearchProvider.indexFile(
+                                    fileId,
+                                    resource.inputStream,
+                                    filename,
+                                    request.chunkingStrategy,
+                                )
                         
                             if (indexed) {
                                 // Update the file status
@@ -399,7 +405,13 @@ class VectorStoreService(
                 backgroundScope.launch {
                     try {
                         val resource = fileStorageService.loadAsResource(fileId)
-                        val indexed = vectorSearchProvider.indexFile(fileId, resource.inputStream, filename)
+                        val indexed =
+                            vectorSearchProvider.indexFile(
+                                fileId,
+                                resource.inputStream,
+                                filename,
+                                vectorStoreFile.chunkingStrategy,
+                            )
                     
                         if (indexed) {
                             // Update the file status

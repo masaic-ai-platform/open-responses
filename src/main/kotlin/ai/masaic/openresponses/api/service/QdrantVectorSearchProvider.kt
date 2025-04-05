@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
@@ -78,12 +79,14 @@ class QdrantVectorSearchProvider(
      * @param fileId The ID of the file
      * @param content The file content as an InputStream
      * @param filename The name of the file
+     * @param chunkingStrategy Optional chunking strategy for the file
      * @return True if indexing was successful, false otherwise
      */
     override fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,
+        chunkingStrategy: ChunkingStrategy?,
     ): Boolean {
         try {
             // Extract text from the document using Apache Tika
@@ -93,8 +96,29 @@ class QdrantVectorSearchProvider(
                 return false
             }
             
-            // Split the content into chunks using the common utility
-            val chunks = TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
+            // Determine chunking parameters based on the strategy or fallback to properties
+            val chunks =
+                if (chunkingStrategy != null && chunkingStrategy.type == "static" && chunkingStrategy.static != null) {
+                    log.debug(
+                        "Using provided chunking strategy: type={}, maxChunkSize={}, overlap={}", 
+                        chunkingStrategy.type,
+                        chunkingStrategy.static.maxChunkSizeTokens, 
+                        chunkingStrategy.static.chunkOverlapTokens,
+                    )
+                    TextChunkingUtil.chunkText(
+                        text, 
+                        chunkingStrategy.static.maxChunkSizeTokens, 
+                        chunkingStrategy.static.chunkOverlapTokens,
+                    )
+                } else {
+                    log.debug(
+                        "Using default chunking parameters: chunkSize={}, overlap={}", 
+                        vectorSearchProperties.chunkSize,
+                        vectorSearchProperties.chunkOverlap,
+                    )
+                    TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
+                }
+            
             log.debug("Split file {} into {} chunks", filename, chunks.size)
             
             // Process each chunk
