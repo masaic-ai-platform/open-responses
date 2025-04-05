@@ -8,56 +8,40 @@
 
 OpenResponses revolutionizes how developers build AI applications by providing a comprehensive, production-ready toolkit with essential enterprise features—all through an elegantly simplified API interface. Stop cobbling together disparate tools and start building what matters.
 
-## Key Problems Solved
+## 🚀 Getting Started
 
-### Development Challenges
-- **Feature Gap**: Most open-source AI models lack critical enterprise capabilities required for production environments
-- **Integration Complexity**: Implementing supplementary features like retrieval augmentation and monitoring requires significant development overhead
-- **Resource Diversion**: Engineering teams spend excessive time on infrastructure rather than core application logic
+Ready to transform your AI development workflow? Follow our detailed instructions here: [Quick Start Guide](docs/Quickstart.md)
 
-### Operational Concerns
-- **Data Privacy**: Organizations with sensitive data face compliance barriers when using cloud-hosted AI services
-- **Operational Control**: Many applications require full control over the AI processing pipeline
+### Run with Docker
 
-## Core Capabilities
+```bash
+docker run masaicai/open-responses:latest
+```
 
-| Feature | Description | Benefit |
-|---------|-------------|---------|
-| **Automated Tracing** | Comprehensive request and response monitoring | Track performance and usage without additional code |
-| **Integrated RAG** | Contextual information retrieval | Enhance responses with relevant external data automatically |
-| **Pre-built Tool Integrations** | Web search, GitHub access, and more | Deploy advanced capabilities instantly |
-| **Self-Hosted Architecture** | Full control of deployment infrastructure | Maintain complete data sovereignty |
-| **OpenAI-Compatible Interface** | Drop-in replacement for existing OpenAI implementations | Minimal code changes for migration |
+### Using with OpenAI SDK
 
-## Why Engineering Teams Should Choose OpenResponses
+```python
+openai_client = OpenAI(base_url="http://localhost:8080/v1", api_key=os.getenv("OPENAI_API_KEY"), default_headers={'x-model-provider': 'openai'})
 
-- **Developer Productivity**: Focus engineering efforts on application features rather than infrastructure
-- **Production Readiness**: Enterprise capabilities and batteries included out-of-the-box
-- **Compliance Confidence**: Deploy with data privacy requirements fully addressed
-- **Simplified Architecture**: Consolidate AI infrastructure through widely used OpenAI API Specifications
+response = openai_client.responses.create(
+    model="gpt-4o-mini",
+    input="Write a poem on Masaic"
+)
+```
 
-## Getting Started
+### Using with OpenAI Agent SDK
 
-Visit our [Quick Start Guide](docs/Quickstart.md) to deploy OpenResponses in your environment in minutes.
+```python
+client = AsyncOpenAI(base_url="http://localhost:8080/v1", api_key=os.getenv("OPENAI_API_KEY"), default_headers={'x-model-provider': 'openai'})
+agent = Agent(
+    name="Assistant",
+    instructions="You are a humorous poet who can write funny poems of 4 lines.",
+    model=OpenAIResponsesModel(model="gpt-4o-mini", openai_client=client)
+)
+```
 
-The API implements the following OpenAI-compatible endpoints:
+### Using with cURL
 
-| Endpoint | Description |
-|----------|-------------|
-| `POST /v1/responses` | Create a new model response | 
-| `GET /v1/responses/{responseId}` | Retrieve a specific response | 
-| `DELETE /v1/responses/{responseId}` | Delete a response | 
-| `GET /v1/responses/{responseId}/input_items` | List input items for a response | 
-
-## 🚀 Quick Start
-
-Ready to transform your AI development workflow? Follow our step-by-step guide here: [Quick Start Guide](docs/Quickstart.md)
-
-### Example API Calls
-
-Replace the placeholder API keys with your own values.
-
-#### OpenAI Example
 ```bash
 curl --location 'http://localhost:8080/v1/responses' \
 --header 'Content-Type: application/json' \
@@ -69,11 +53,54 @@ curl --location 'http://localhost:8080/v1/responses' \
     "input": [
         {
             "role": "user",
-            "content": "Write a poem on OpenResponses"
+            "content": "Write a poem on Masaic"
         }
     ]
 }'
 ```
+
+## Core Capabilities
+
+| Feature | Description | Benefit |
+|---------|-------------|---------|
+| **Automated Tracing** | Comprehensive request and response monitoring | Track performance and usage without additional code |
+| **Integrated RAG** | Contextual information retrieval | Enhance responses with relevant external data automatically |
+| **Pre-built Tool Integrations** | Web search, GitHub access, and more | Deploy advanced capabilities instantly |
+| **Self-Hosted Architecture** | Full control of deployment infrastructure | Maintain complete data sovereignty |
+| **OpenAI-Compatible Interface** | Drop-in replacement for existing OpenAI implementations | Minimal code changes for migration |
+
+## Key Problems Solved
+
+### Development Challenges
+- **Feature Gap**: Most open-source AI models lack critical enterprise capabilities required for production environments
+- **Integration Complexity**: Implementing supplementary features like retrieval augmentation and monitoring requires significant development overhead
+- **Resource Diversion**: Engineering teams spend excessive time on infrastructure rather than core application logic
+
+### Operational Concerns
+- **Data Privacy**: Organizations with sensitive data face compliance barriers when using cloud-hosted AI services
+- **Operational Control**: Many applications require full control over the AI processing pipeline
+
+## Why Engineering Teams Should Choose OpenResponses
+
+- **Developer Productivity**: Focus engineering efforts on application features rather than infrastructure
+- **Production Readiness**: Enterprise capabilities and batteries included out-of-the-box
+- **Compliance Confidence**: Deploy with data privacy requirements fully addressed
+- **Simplified Architecture**: Consolidate AI infrastructure through widely used OpenAI API Specifications
+
+## API Reference
+
+The API implements the following OpenAI-compatible endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/responses` | Create a new model response | 
+| `GET /v1/responses/{responseId}` | Retrieve a specific response | 
+| `DELETE /v1/responses/{responseId}` | Delete a response | 
+| `GET /v1/responses/{responseId}/input_items` | List input items for a response | 
+
+### More Example API Calls
+
+Replace the placeholder API keys with your own values.
 
 #### Groq Example (with Streaming)
 ```bash
