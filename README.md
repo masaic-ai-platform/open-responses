@@ -1,10 +1,11 @@
 # OpenResponses API
 
-![OpenResponses - All-in-One AI Toolkit](docs/about.png)
+![OpenResponses - All-in-One AI Toolkit](docs/assets/about.png)
 
 > **Unlock enterprise-grade AI capabilities through a single, powerful API — simplify development, accelerate deployment, and maintain complete data control**
 
-[![Discord](https://img.shields.io/discord/1335132819260702723?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.com/channels/1335132819260702723/1354795442004820068)
+[![Discord](https://img.shields.io/static/v1?label=Discord&message=Join%20Us&color=5865F2&logo=discord&logoColor=white)](https://discord.com/channels/1335132819260702723/1354795442004820068)
+[![Discussions](https://img.shields.io/static/v1?label=Discussions&message=Community&color=3FB950&logo=github&logoColor=white)](https://github.com/orgs/masaic-ai-platform/discussions)
 
 ## Overview
 
