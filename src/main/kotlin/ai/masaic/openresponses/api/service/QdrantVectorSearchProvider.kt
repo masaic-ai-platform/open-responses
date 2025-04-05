@@ -102,7 +102,7 @@ class QdrantVectorSearchProvider(
                 val metadata =
                     mapOf(
                         "fileId" to fileId,
-                        "original_filename" to filename,
+                        "filename" to filename,
                         "chunkIndex" to index,
                     )
 

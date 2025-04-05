@@ -51,7 +51,7 @@ class MockVectorSearchProvider : VectorSearchProvider {
                         fileId = indexedFile.fileId,
                         score = 0.9, // Mock score
                         content = indexedFile.content,
-                        metadata = mapOf("original_filename" to indexedFile.filename),
+                        metadata = mapOf("filename" to indexedFile.filename),
                     )
                 }.take(maxResults)
         
@@ -62,7 +62,9 @@ class MockVectorSearchProvider : VectorSearchProvider {
 
     override fun getFileMetadata(fileId: String): Map<String, Any>? {
         val file = indexedFiles[fileId] ?: return null
-        return mapOf("original_filename" to file.filename) + file.metadata
+        return mapOf(
+            "filename" to file.filename,
+        ) + file.metadata
     }
 
     /**

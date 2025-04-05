@@ -36,9 +36,24 @@ class FileBasedVectorStoreRepository(
     private val vectorStoreFilesDir = "$rootDir/vector-store-files"
 
     init {
-        // Create directories if they don't exist
-        Files.createDirectories(Paths.get(vectorStoresDir))
-        Files.createDirectories(Paths.get(vectorStoreFilesDir))
+        try {
+            // Create directories if they don't exist
+            val vectorStoresDirPath = Paths.get(vectorStoresDir)
+            val vectorStoreFilesDirPath = Paths.get(vectorStoreFilesDir)
+            
+            if (!Files.exists(vectorStoresDirPath)) {
+                Files.createDirectories(vectorStoresDirPath)
+                log.info("Created vector stores directory at {}", vectorStoresDirPath.toAbsolutePath())
+            }
+            
+            if (!Files.exists(vectorStoreFilesDirPath)) {
+                Files.createDirectories(vectorStoreFilesDirPath)
+                log.info("Created vector store files directory at {}", vectorStoreFilesDirPath.toAbsolutePath())
+            }
+        } catch (e: Exception) {
+            log.error("Error creating vector store directories", e)
+            throw RuntimeException("Failed to initialize vector store directories: ${e.message}", e)
+        }
     }
 
     override suspend fun saveVectorStore(vectorStore: VectorStore): VectorStore =
@@ -46,9 +61,16 @@ class FileBasedVectorStoreRepository(
             val filePath = Paths.get(vectorStoresDir, "${vectorStore.id}.json")
         
             try {
+                // Ensure parent directory exists
+                val parentDir = filePath.parent
+                if (!Files.exists(parentDir)) {
+                    Files.createDirectories(parentDir)
+                    log.info("Created directory: {}", parentDir)
+                }
+                
                 val json = objectMapper.writeValueAsString(vectorStore)
                 Files.write(filePath, json.toByteArray())
-                log.info("Saved vector store metadata ${vectorStore.id} to $filePath with status ${vectorStore.status}")
+                log.info("Saved vector store metadata ${vectorStore.id} with status ${vectorStore.status}")
                 vectorStore
             } catch (e: Exception) {
                 log.error("Error saving vector store metadata ${vectorStore.id}", e)
@@ -170,9 +192,16 @@ class FileBasedVectorStoreRepository(
             val filePath = Paths.get(vectorStoreFilesDir, "${vectorStoreFile.vectorStoreId}-${vectorStoreFile.id}.json")
         
             try {
+                // Ensure parent directory exists
+                val parentDir = filePath.parent
+                if (!Files.exists(parentDir)) {
+                    Files.createDirectories(parentDir)
+                    log.info("Created directory: {}", parentDir)
+                }
+                
                 val json = objectMapper.writeValueAsString(vectorStoreFile)
                 Files.write(filePath, json.toByteArray())
-                log.info("Saved vector store file metadata ${vectorStoreFile.id} to $filePath with status ${vectorStoreFile.status}")
+                log.info("Saved vector store file metadata ${vectorStoreFile.id} for vector store ${vectorStoreFile.vectorStoreId}")
                 vectorStoreFile
             } catch (e: Exception) {
                 log.error("Error saving vector store file metadata ${vectorStoreFile.id}", e)

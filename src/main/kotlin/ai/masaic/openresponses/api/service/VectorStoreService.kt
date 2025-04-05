@@ -164,7 +164,7 @@ class VectorStoreService(
                             usageBytes = bytes,
                             vectorStoreId = vectorStoreId,
                             status = "in_progress",
-                            attributes = mapOf("original_filename" to filename),
+                            attributes = mapOf("filename" to filename),
                         )
                 
                     // Save the vector store file
@@ -336,10 +336,10 @@ class VectorStoreService(
         }
 
     /**
-     * Creates a vector store file by attaching a file to a vector store.
+     * Creates a file in a vector store.
      *
      * @param vectorStoreId The ID of the vector store
-     * @param request The request to create a vector store file
+     * @param request The request to create a file
      * @return The created vector store file
      * @throws VectorStoreNotFoundException if the vector store is not found
      * @throws FileNotFoundException if the file is not found
@@ -365,9 +365,9 @@ class VectorStoreService(
             val filename = fileMetadata["filename"] as String
             val bytes = fileMetadata["bytes"] as Long
         
-            // Create the vector store file - merge attributes with original filename
+            // Create the vector store file - merge attributes with filename
             val attributes = request.attributes?.toMutableMap() ?: mutableMapOf()
-            attributes["original_filename"] = filename
+            attributes["filename"] = filename
             
             val vectorStoreFile =
                 VectorStoreFile(
@@ -673,9 +673,9 @@ class VectorStoreService(
                         val fileId = result.fileId
                         val file = existingFiles.find { it.id == fileId }
                         
-                        // Get the original filename or fall back to file id if not found
+                        // Get the filename or fall back to file id if not found
                         val filename = 
-                            file?.attributes?.get("original_filename") as? String
+                            file?.attributes?.get("filename") as? String
                                 ?: fileStorageService.getFileMetadata(fileId)["filename"] as? String 
                                 ?: fileId
                 
@@ -739,15 +739,15 @@ class VectorStoreService(
             val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
             vectorStoreRepository.saveVectorStore(updatedVectorStore)
 
-            // Get original filename from file attributes or fall back to file id if not found
-            val originalFilename =
-                file.attributes?.get("original_filename") as? String 
+            // Get filename from file attributes or fall back to file id if not found
+            val filename =
+                file.attributes?.get("filename") as? String 
                     ?: fileStorageService.getFileMetadata(fileId)["filename"] as? String
                     ?: fileId
         
             VectorStoreFileContent(
                 fileId = fileId,
-                filename = originalFilename,
+                filename = filename,
                 attributes = file.attributes,
                 content =
                     listOf(

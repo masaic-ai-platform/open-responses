@@ -138,16 +138,16 @@ class LocalFileStorageService(
                 val fileName = filePath.fileName.toString()
                 val purpose = filePath.parent.fileName.toString()
                 
-                // Try to load original filename from metadata file
+                // Try to load filename from metadata file
                 val metadataPath = filePath.resolveSibling("$fileName.metadata")
                 val originalFilename =
                     if (Files.exists(metadataPath)) {
                         try {
                             val metadataJson = Files.readString(metadataPath)
                             val metadata: Map<String, String> = objectMapper.readValue(metadataJson)
-                            metadata["original_filename"] ?: fileName
+                            metadata["filename"] ?: fileName
                         } catch (e: Exception) {
-                            log.warn("Could not read original filename from metadata: $e")
+                            log.warn("Could not read filename from metadata: $e")
                             fileName
                         }
                     } else {
@@ -219,7 +219,7 @@ class LocalFileStorageService(
                 val metadataPath = purposeDir.resolve("$fileId.metadata")
                 val metadata =
                     mapOf(
-                        "original_filename" to originalFilename,
+                        "filename" to originalFilename,
                     )
                 Files.write(metadataPath, objectMapper.writeValueAsString(metadata).toByteArray())
 

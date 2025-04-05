@@ -156,13 +156,13 @@ class FileBasedVectorSearchProvider(
                         fileId = fileId,
                         content = chunk,
                         embedding = embeddingService.embedText(chunk),
-                        chunkMetadata = mapOf("original_filename" to filename),
+                        chunkMetadata = mapOf("filename" to filename),
                     )
                 }
             
             // Store in memory cache
             fileChunksCache[fileId] = chunksWithEmbeddings
-            fileMetadataCache[fileId] = mapOf("original_filename" to filename)
+            fileMetadataCache[fileId] = mapOf("filename" to filename)
             
             // Persist to disk
             saveEmbeddings(fileId)
