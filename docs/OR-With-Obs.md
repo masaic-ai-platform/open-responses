@@ -54,7 +54,7 @@ This guide provides step-by-step instructions for running the Open Responses ser
     **Examples**:
     1. Simple agent load generation:
        ```bash
-       python -m examples.open_responses.agent_hands_off_for_load_genertion
+       python -m examples.open_responses.agent_hands_off_for_load_generation
        ```
        You can choose the model provider of your choice (groq, openai, claude). The trace outcome is shown in agent_hands_off_for_load_genertion.png.
 
