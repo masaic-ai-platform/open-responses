@@ -138,6 +138,8 @@ services:
     profiles:
       - mongodb
     restart: unless-stopped
+    networks:
+      - observability-network
 
   # Flavor 5: Open Responses with MongoDB storage integration
   open-responses-with-mongodb:

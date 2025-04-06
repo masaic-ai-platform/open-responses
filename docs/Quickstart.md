@@ -367,6 +367,7 @@ To test that responses are being stored, make an API call with the `store` param
 curl --location 'http://localhost:8080/v1/responses' \
 --header 'Content-Type: application/json' \
 --header 'Authorization: Bearer OPENAI_API_KEY' \
+--header 'x-model-provider: openai' \
 --data '{
     "model": "gpt-4o",
     "store": true,
@@ -389,6 +390,7 @@ To continue a stored conversation, use the `previous_response_id` from your earl
 curl --location 'http://localhost:8080/v1/responses' \
 --header 'Content-Type: application/json' \
 --header 'Authorization: Bearer OPENAI_API_KEY' \
+--header 'x-model-provider: openai' \
 --data '{
     "model": "gpt-4o",
     "store": true,
