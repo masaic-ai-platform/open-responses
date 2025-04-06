@@ -18,7 +18,7 @@ Run OpenResponses locally to access an OpenAI-compatible API that works seamless
 ### Run with Docker
 
 ```bash
-docker run masaicai/open-responses:latest
+docker run -p 8080:8080 masaicai/open-responses:latest
 ```
 
 ### Using with OpenAI SDK
