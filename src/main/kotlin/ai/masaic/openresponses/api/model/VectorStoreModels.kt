@@ -6,6 +6,7 @@ import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 /**
  * Vector store object representing a collection of processed files.
@@ -55,7 +56,22 @@ data class VectorStore(
      * Set of key-value pairs that can be attached to an object.
      */
     val metadata: Map<String, String>? = null,
+    /**
+     * The Unix timestamp (in seconds) for when the vector store will expire.
+     */
+    @JsonProperty("expires_at")
+    val expiresAt: Long? = null,
 )
+
+/**
+ * Extension function to check if a vector store is expired.
+ *
+ * @return true if the vector store is expired, false otherwise
+ */
+fun VectorStore.isExpired(): Boolean {
+    if (expiresAt == null) return false
+    return Instant.now().epochSecond >= expiresAt
+}
 
 /**
  * File counts in a vector store.
@@ -223,11 +239,36 @@ data class ModifyVectorStoreRequest(
  */
 data class ExpirationPolicy(
     /**
-     * The Unix timestamp (in seconds) for when the vector store will expire.
+     * Anchor timestamp after which the expiration policy applies.
+     * Supported anchors: last_active_at
      */
-    @JsonProperty("expires_at")
-    val expiresAt: Long? = null,
-)
+    val anchor: String,
+    /**
+     * The number of days after the anchor time that the vector store will expire.
+     */
+    val days: Int,
+) {
+    /**
+     * Calculates the expiration timestamp based on the anchor time.
+     *
+     * @param anchorTime The anchor timestamp in seconds
+     * @return The expiration timestamp in seconds, or null if calculation fails
+     */
+    fun calculateExpiresAt(anchorTime: Long?): Long? {
+        if (anchorTime == null) return null
+        
+        return when (anchor.lowercase()) {
+            "last_active_at" -> {
+                val expirationTime =
+                    Instant
+                        .ofEpochSecond(anchorTime)
+                        .plus(days.toLong(), ChronoUnit.DAYS)
+                expirationTime.epochSecond
+            }
+            else -> null
+        }
+    }
+}
 
 /**
  * Request to create a vector store file.

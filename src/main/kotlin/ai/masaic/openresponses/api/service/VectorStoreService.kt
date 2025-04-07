@@ -90,6 +90,42 @@ class VectorStoreService(
         }
 
     /**
+     * Updates the expiration timestamp for a vector store based on its expiration policy.
+     *
+     * @param vectorStore The vector store to update
+     * @param expirationPolicy The expiration policy to apply
+     * @return The updated vector store
+     */
+    private fun updateExpirationTimestamp(
+        vectorStore: VectorStore,
+        expirationPolicy: ExpirationPolicy?,
+    ): VectorStore {
+        if (expirationPolicy == null) {
+            return vectorStore.copy(expiresAt = null)
+        }
+
+        val expiresAt = expirationPolicy.calculateExpiresAt(vectorStore.lastActiveAt)
+        return vectorStore.copy(expiresAt = expiresAt)
+    }
+
+    /**
+     * Checks if a vector store is expired and updates its status if needed.
+     *
+     * @param vectorStore The vector store to check
+     * @return The updated vector store if it was expired, or the original vector store if not
+     */
+    private suspend fun checkAndUpdateExpiration(vectorStore: VectorStore): VectorStore =
+        withContext(Dispatchers.IO) {
+            if (vectorStore.isExpired() && vectorStore.status != "expired") {
+                val updatedVectorStore = vectorStore.copy(status = "expired")
+                vectorStoreRepository.saveVectorStore(updatedVectorStore)
+                updatedVectorStore
+            } else {
+                vectorStore
+            }
+        }
+
+    /**
      * Creates a vector store.
      *
      * @param request The request to create a vector store
@@ -124,15 +160,18 @@ class VectorStoreService(
                         ),
                 )
             
+            // Apply expiration policy if provided
+            val vectorStoreWithExpiration = updateExpirationTimestamp(vectorStore, request.expiresAfter)
+            
             // Process file IDs if provided
-            var vectorStoreToSave = vectorStore
+            var vectorStoreToSave = vectorStoreWithExpiration
             if (!request.fileIds.isNullOrEmpty()) {
                 fileCount = request.fileIds.size
                 inProgressCount = fileCount // All files start as in_progress
                 
                 // Update the vector store with initial file counts before processing files
                 vectorStoreToSave =
-                    vectorStore.copy(
+                    vectorStoreWithExpiration.copy(
                         fileCounts =
                             FileCounts(
                                 inProgress = inProgressCount,
@@ -263,13 +302,16 @@ class VectorStoreService(
         withContext(Dispatchers.IO) {
             // Get vector stores from repository
             val vectorStores = vectorStoreRepository.listVectorStores(limit, order, after, before)
+            
+            // Check and update expiration status for each vector store
+            val updatedVectorStores = vectorStores.map { checkAndUpdateExpiration(it) }
         
             // Create response
             VectorStoreListResponse(
-                data = vectorStores,
-                firstId = vectorStores.firstOrNull()?.id,
-                lastId = vectorStores.lastOrNull()?.id,
-                hasMore = vectorStores.size >= limit, // If we got exactly the limit, there might be more
+                data = updatedVectorStores,
+                firstId = updatedVectorStores.firstOrNull()?.id,
+                lastId = updatedVectorStores.lastOrNull()?.id,
+                hasMore = updatedVectorStores.size >= limit, // If we got exactly the limit, there might be more
             )
         }
 
@@ -282,8 +324,12 @@ class VectorStoreService(
      */
     suspend fun getVectorStore(vectorStoreId: String): VectorStore =
         withContext(Dispatchers.IO) {
-            vectorStoreRepository.findVectorStoreById(vectorStoreId) 
-                ?: throw VectorStoreNotFoundException("Vector store not found: $vectorStoreId")
+            val vectorStore =
+                vectorStoreRepository.findVectorStoreById(vectorStoreId) 
+                    ?: throw VectorStoreNotFoundException("Vector store not found: $vectorStoreId")
+            
+            // Check and update expiration status
+            checkAndUpdateExpiration(vectorStore)
         }
 
     /**
@@ -311,7 +357,10 @@ class VectorStoreService(
                     lastActiveAt = Instant.now().epochSecond,
                 )
         
-            vectorStoreRepository.saveVectorStore(updatedVectorStore)
+            // Apply expiration policy if provided
+            val vectorStoreWithExpiration = updateExpirationTimestamp(updatedVectorStore, request.expiresAfter)
+        
+            vectorStoreRepository.saveVectorStore(vectorStoreWithExpiration)
         }
 
     /**
@@ -905,5 +954,42 @@ class VectorStoreService(
             }
         
             removedFilesCount
+        }
+
+    /**
+     * Cleans up expired vector stores.
+     *
+     * @return The number of expired vector stores that were cleaned up
+     */
+    suspend fun cleanupExpiredVectorStores(): Int =
+        withContext(Dispatchers.IO) {
+            var cleanedUpCount = 0
+            
+            try {
+                // Get all vector stores
+                val vectorStores = vectorStoreRepository.listVectorStores(Int.MAX_VALUE)
+                
+                // Process each vector store
+                vectorStores.forEach { vectorStore ->
+                    // Check if the vector store is expired
+                    if (vectorStore.isExpired() && vectorStore.status != "expired") {
+                        try {
+                            // Update the vector store status to expired
+                            val updatedVectorStore = vectorStore.copy(status = "expired")
+                            vectorStoreRepository.saveVectorStore(updatedVectorStore)
+                            cleanedUpCount++
+                            log.info("Marked vector store ${vectorStore.id} as expired")
+                        } catch (e: Exception) {
+                            log.error("Error marking vector store ${vectorStore.id} as expired", e)
+                        }
+                    }
+                }
+                
+                log.info("Vector store expiration cleanup completed: marked $cleanedUpCount vector stores as expired")
+            } catch (e: Exception) {
+                log.error("Error during vector store expiration cleanup", e)
+            }
+            
+            cleanedUpCount
         }
 } 

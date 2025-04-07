@@ -13,6 +13,8 @@ import org.springframework.core.io.ByteArrayResource
 import org.springframework.core.io.Resource
 import java.io.InputStream
 import java.time.Instant
+import java.time.temporal.ChronoUnit
+import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -39,6 +41,7 @@ class VectorStoreServiceTest {
                         name = "Test Vector Store",
                         metadata = mapOf("key" to "value"),
                         fileCounts = FileCounts(total = 1, completed = 1, failed = 0),
+                        lastActiveAt = Instant.now().epochSecond,
                     )
 
                 coEvery { listVectorStoreFiles(any(), any(), any(), any(), any(), any()) } returns
@@ -50,19 +53,21 @@ class VectorStoreServiceTest {
                         ),
                     )
 
-                coEvery { listVectorStores(any()) } returns
+                coEvery { listVectorStores(any(), any(), any(), any()) } returns
                     listOf(
                         VectorStore(
                             id = "vs_123",
                             name = "Vector Store 1",
                             metadata = mapOf("key" to "value"),
                             fileCounts = FileCounts(total = 1, completed = 1, failed = 0),
+                            lastActiveAt = Instant.now().epochSecond,
                         ),
                         VectorStore(
                             id = "vs_456",
                             name = "Vector Store 2",
                             metadata = mapOf("key" to "value"),
                             fileCounts = FileCounts(total = 1, completed = 1, failed = 0),
+                            lastActiveAt = Instant.now().epochSecond,
                         ),
                     )
             }
@@ -355,4 +360,174 @@ class VectorStoreServiceTest {
             assertEquals("test.txt", searchResults.data[0].filename)
             assertEquals("This is a test document", searchResults.data[0].content[0].text)
         }
+
+    @Test
+    fun `createVectorStore should set expiration timestamp when expiration policy is provided`() =
+        runTest {
+            // Given
+            val request =
+                CreateVectorStoreRequest(
+                    name = "Test Store",
+                    expiresAfter =
+                        ExpirationPolicy(
+                            anchor = "last_active_at",
+                            days = 7,
+                        ),
+                )
+
+            // Mock the repository to return the vector store with the correct expiration timestamp
+            coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
+                val store = firstArg<VectorStore>()
+                store.copy(
+                    expiresAt = Instant.now().plus(7, ChronoUnit.DAYS).epochSecond,
+                )
+            }
+
+            // When
+            val vectorStore = vectorStoreService.createVectorStore(request)
+
+            // Then
+            assertNotNull(vectorStore.expiresAt)
+            assertEquals("in_progress", vectorStore.status)
+        }
+
+    @Test
+    fun `updateVectorStore should update expiration timestamp when expiration policy is provided`() =
+        runTest {
+            // Given
+            val vectorStore = createTestVectorStore()
+            coEvery { vectorStoreRepository.findVectorStoreById(vectorStore.id) } returns vectorStore
+
+            val request =
+                ModifyVectorStoreRequest(
+                    name = "Updated Store",
+                    expiresAfter =
+                        ExpirationPolicy(
+                            anchor = "last_active_at",
+                            days = 14,
+                        ),
+                )
+
+            // Mock the repository to return the updated vector store with the correct expiration timestamp
+            coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
+                val store = firstArg<VectorStore>()
+                store.copy(
+                    expiresAt = Instant.now().plus(14, ChronoUnit.DAYS).epochSecond,
+                )
+            }
+
+            // When
+            val updatedVectorStore = vectorStoreService.updateVectorStore(vectorStore.id, request)
+
+            // Then
+            assertNotNull(updatedVectorStore.expiresAt)
+            assertEquals("in_progress", updatedVectorStore.status)
+        }
+
+    @Test
+    fun `getVectorStore should mark vector store as expired when expiration time is reached`() =
+        runTest {
+            // Given
+            val vectorStore =
+                createTestVectorStore(
+                    expiresAt = Instant.now().minus(1, ChronoUnit.DAYS).epochSecond,
+                )
+            coEvery { vectorStoreRepository.findVectorStoreById(vectorStore.id) } returns vectorStore
+
+            // Mock the repository to return the updated vector store with expired status
+            coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
+                val store = firstArg<VectorStore>()
+                store.copy(status = "expired")
+            }
+
+            // When
+            val retrievedVectorStore = vectorStoreService.getVectorStore(vectorStore.id)
+
+            // Then
+            assertEquals("expired", retrievedVectorStore.status)
+        }
+
+    @Test
+    fun `listVectorStores should mark expired vector stores`() =
+        runTest {
+            // Given
+            val vectorStore1 =
+                createTestVectorStore(
+                    expiresAt = Instant.now().minus(1, ChronoUnit.DAYS).epochSecond,
+                )
+            val vectorStore2 =
+                createTestVectorStore(
+                    expiresAt = Instant.now().plus(1, ChronoUnit.DAYS).epochSecond,
+                )
+
+            // Mock the repository to return the vector stores
+            coEvery { vectorStoreRepository.listVectorStores(any(), any(), any(), any()) } returns 
+                listOf(vectorStore1, vectorStore2)
+
+            // Mock the repository to return the updated vector stores with correct status
+            coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
+                val store = firstArg<VectorStore>()
+                if (store.expiresAt!! < Instant.now().epochSecond) {
+                    store.copy(status = "expired")
+                } else {
+                    store
+                }
+            }
+
+            // When
+            val response = vectorStoreService.listVectorStores()
+
+            // Then
+            assertEquals(2, response.data.size)
+            assertEquals("expired", response.data.find { it.id == vectorStore1.id }?.status)
+            assertEquals("in_progress", response.data.find { it.id == vectorStore2.id }?.status)
+        }
+
+    @Test
+    fun `cleanupExpiredVectorStores should mark expired vector stores`() =
+        runTest {
+            // Given
+            val vectorStore1 =
+                createTestVectorStore(
+                    expiresAt = Instant.now().minus(1, ChronoUnit.DAYS).epochSecond,
+                )
+            val vectorStore2 =
+                createTestVectorStore(
+                    expiresAt = Instant.now().plus(1, ChronoUnit.DAYS).epochSecond,
+                )
+
+            // Mock the repository to return all vector stores
+            coEvery { vectorStoreRepository.listVectorStores(Int.MAX_VALUE) } returns 
+                listOf(vectorStore1, vectorStore2)
+
+            // Mock the repository to return the updated vector stores with correct status
+            coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
+                val store = firstArg<VectorStore>()
+                if (store.expiresAt!! < Instant.now().epochSecond) {
+                    store.copy(status = "expired")
+                } else {
+                    store
+                }
+            }
+
+            // When
+            val cleanedUpCount = vectorStoreService.cleanupExpiredVectorStores()
+
+            // Then
+            assertEquals(1, cleanedUpCount)
+        }
+
+    // Helper function to create test vector stores
+    private fun createTestVectorStore(
+        id: String = "vs_${UUID.randomUUID()}",
+        name: String = "Test Store",
+        expiresAt: Long? = null,
+    ): VectorStore =
+        VectorStore(
+            id = id,
+            name = name,
+            createdAt = Instant.now().epochSecond,
+            lastActiveAt = Instant.now().epochSecond,
+            expiresAt = expiresAt,
+        )
 } 
