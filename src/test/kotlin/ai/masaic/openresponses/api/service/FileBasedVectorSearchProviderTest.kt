@@ -123,7 +123,7 @@ class FileBasedVectorSearchProviderTest {
         vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt")
         
         // When - search with a filter for fileId1
-        val results = vectorSearchProvider.searchSimilar("document", 10, mapOf("fileId" to fileId1))
+        val results = vectorSearchProvider.searchSimilar("document", 10, mapOf("file_id" to fileId1))
         
         // Then
         assertEquals(1, results.size, "Should return only one result")
@@ -149,7 +149,7 @@ class FileBasedVectorSearchProviderTest {
         assertTrue(!Files.exists(embeddingsFile), "Embeddings file should be deleted from filesystem")
         
         // Verify the file is no longer in the index by searching for it
-        val searchResults = vectorSearchProvider.searchSimilar("Test", 10, mapOf("fileId" to fileId))
+        val searchResults = vectorSearchProvider.searchSimilar("Test", 10, mapOf("file_id" to fileId))
         assertEquals(0, searchResults.size, "No results should be found for the deleted file")
     }
 
@@ -283,7 +283,7 @@ class FileBasedVectorSearchProviderTest {
         
         // Then
         assertNotNull(metadata, "Metadata should not be null for existing file")
-        assertEquals(filename, metadata!!["filename"], "Metadata should contain correct filename")
+        assertEquals(filename, metadata["filename"], "Metadata should contain correct filename")
     }
 
     @Test

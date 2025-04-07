@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
@@ -140,10 +141,11 @@ class QdrantVectorSearchProvider(
                     // Create metadata for this chunk
                     val metadata = 
                         mapOf(
-                            "fileId" to fileId,
+                            "file_id" to fileId,
                             "filename" to filename,
-                            "chunkIndex" to i,
-                            "totalChunks" to chunks.size,
+                            "chunk_index" to i,
+                            "chunk_id" to IdGenerator.generateChunkId(),
+                            "total_chunks" to chunks.size,
                         )
                     
                     // Store the embedding with metadata
@@ -220,7 +222,7 @@ class QdrantVectorSearchProvider(
                     val metadata = segment.metadata().toMap()
                 
                     VectorSearchProvider.SearchResult(
-                        fileId = (metadata["fileId"] ?: "") as String,
+                        fileId = (metadata["file_id"] ?: "") as String,
                         score = match.score(),
                         content = segment.text(),
                         metadata = metadata,
@@ -244,7 +246,7 @@ class QdrantVectorSearchProvider(
     override fun deleteFile(fileId: String): Boolean {
         try {
             // Delete points with matching fileId
-            embeddingStore.removeAll(IsEqualTo("fileId", fileId))
+            embeddingStore.removeAll(IsEqualTo("file_id", fileId))
             log.info("Deleted embeddings for file: {}", fileId)
             return true
         } catch (e: Exception) {
@@ -268,7 +270,7 @@ class QdrantVectorSearchProvider(
             val searchRequest =
                 EmbeddingSearchRequest
                     .builder()
-                    .filter(IsEqualTo("fileId", fileId))
+                    .filter(IsEqualTo("file_id", fileId))
                     .maxResults(1)
                     .queryEmbedding(dummyEmbedding)
                     .build()
@@ -302,10 +304,10 @@ class QdrantVectorSearchProvider(
                     // Handle the fileIds list by creating an OR filter for each fileId
                     val fileIdsList = value.filterIsInstance<String>()
                     if (fileIdsList.isNotEmpty()) {
-                        val firstFilter = IsEqualTo("fileId", fileIdsList.first())
+                        val firstFilter = IsEqualTo("file_id", fileIdsList.first())
                         val fileIdsFilter =
                             fileIdsList.drop(1).fold(firstFilter) { acc, fileId ->
-                                acc.or(IsEqualTo("fileId", fileId)) as IsEqualTo
+                                acc.or(IsEqualTo("file_id", fileId)) as IsEqualTo
                             }
                         
                         filterRef[0] = if (filterRef[0] == null) fileIdsFilter else filterRef[0]!!.and(fileIdsFilter)

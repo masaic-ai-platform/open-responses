@@ -86,12 +86,12 @@ class QdrantVectorSearchProviderTest {
 
         every { embeddingStore.search(any()) } returns
             EmbeddingSearchResult(
-                listOf(EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("fileId" to "test-file-id"))))),
+                listOf(EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("file_id" to "test-file-id"))))),
             )
 
         every { embeddingStore.findRelevant(ofType<Embedding>(), ofType<Int>(), any()) } returns
             listOf(
-                EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("fileId" to "test-file-id")))),
+                EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("file_id" to "test-file-id")))),
             )
         
         // Create configuration
@@ -160,7 +160,7 @@ class QdrantVectorSearchProviderTest {
     fun `searchSimilar should apply filters`() {
         // Given
         val query = "test query"
-        val filters = mapOf("fileId" to "test-file-id")
+        val filters = mapOf("file_id" to "test-file-id")
         
         // When
         val results = vectorSearchProvider.searchSimilar(query, 10, filters)
@@ -178,7 +178,7 @@ class QdrantVectorSearchProviderTest {
         // Setup mock for querying documents to delete
         every { embeddingStore.findRelevant(ofType<Embedding>(), ofType<Int>(), any()) } returns
             listOf(
-                EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("fileId" to "test-file-id")))),
+                EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("file_id" to "test-file-id")))),
             )
         every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
         
@@ -252,7 +252,7 @@ class QdrantVectorSearchProviderTest {
     fun `getFileMetadata should return metadata for existing file`() {
         // Given
         val fileId = "test-file-id"
-        val metadata = mapOf("fileId" to fileId, "filename" to "test.txt")
+        val metadata = mapOf("file_id" to fileId, "filename" to "test.txt")
         
         // Mock embedding store search result
         val segment = TextSegment.from("content", Metadata.from(metadata))
@@ -266,7 +266,7 @@ class QdrantVectorSearchProviderTest {
         
         // Then
         assertNotNull(result, "Should return metadata for existing file")
-        assertEquals(fileId, result["fileId"], "Metadata should contain correct file ID")
+        assertEquals(fileId, result["file_id"], "Metadata should contain correct file ID")
         assertEquals("test.txt", result["filename"], "Metadata should contain filename")
     }
 

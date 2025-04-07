@@ -584,7 +584,7 @@ class MongoVectorStoreRepositoryTest {
                 metadata.toMutableMap() +
                     mapOf(
                         "filename" to filename,
-                        "fileId" to fileId,
+                        "file_id" to fileId,
                     ),
         )
 } 

@@ -129,11 +129,11 @@ class FileBasedVectorSearchProviderPersistenceTest {
         assertEquals(2, results.size, "Should find both documents after restart")
         
         // Verify specific documents by filtering with fileId
-        val firstResults = provider.searchSimilar("document", 10, mapOf("fileId" to fileId1))
+        val firstResults = provider.searchSimilar("document", 10, mapOf("file_id" to fileId1))
         assertEquals(1, firstResults.size, "Should find only first document when filtered")
         assertEquals(fileId1, firstResults[0].fileId, "Should return the first file ID")
         
-        val secondResults = provider.searchSimilar("document", 10, mapOf("fileId" to fileId2))
+        val secondResults = provider.searchSimilar("document", 10, mapOf("file_id" to fileId2))
         assertEquals(1, secondResults.size, "Should find only second document when filtered")
         assertEquals(fileId2, secondResults[0].fileId, "Should return the second file ID")
     }
@@ -189,7 +189,7 @@ class FileBasedVectorSearchProviderPersistenceTest {
         assertEquals(fileId2, results[0].fileId, "Should only return the second file ID")
         
         // Verify there's no trace of the first document after restart by explicitly searching for it
-        val firstResults = provider.searchSimilar("document", 10, mapOf("fileId" to fileId1))
+        val firstResults = provider.searchSimilar("document", 10, mapOf("file_id" to fileId1))
         assertEquals(0, firstResults.size, "Should not find the deleted first document")
     }
 } 

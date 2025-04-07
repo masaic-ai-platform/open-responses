@@ -185,9 +185,11 @@ class FileBasedVectorSearchProvider(
                         embedding = embeddingService.embedText(chunk),
                         chunkMetadata =
                             mapOf(
+                                "file_id" to fileId,
                                 "filename" to filename,
                                 "chunk_id" to chunkId,
                                 "chunk_index" to index,
+                                "total_chunks" to chunks.size,
                             ),
                     )
                 }
@@ -237,7 +239,7 @@ class FileBasedVectorSearchProvider(
                     filters.all { (key, value) ->
                         when {
                             key == "fileIds" && value is List<*> -> (value as List<*>).contains(chunk.fileId)
-                            key == "fileId" -> chunk.fileId == value
+                            key == "file_id" -> chunk.fileId == value
                             chunk.chunkMetadata.containsKey(key) -> chunk.chunkMetadata[key] == value
                             fileMetadataCache[chunk.fileId]?.containsKey(key) == true -> 
                                 fileMetadataCache[chunk.fileId]?.get(key) == value
