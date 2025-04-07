@@ -33,7 +33,7 @@ data class EmbeddingProperties(
     // The OpenAI model name (if using OpenAI embeddings)
     val model: String = "",
     // The OpenAI API base URL (if using OpenAI embeddings)
-    val url: String = ""
+    val url: String = "",
 )
 
 /**
@@ -75,9 +75,7 @@ class EmbeddingConfiguration {
     @Bean
     @Primary
     @ConditionalOnProperty(name = ["open-responses.embeddings.http-enabled"], havingValue = "false", matchIfMissing = true)
-    fun defaultEmbeddingService(embeddingModel: EmbeddingModel): EmbeddingService {
-        return DefaultEmbeddingService(embeddingModel)
-    }
+    fun defaultEmbeddingService(embeddingModel: EmbeddingModel): EmbeddingService = DefaultEmbeddingService(embeddingModel)
 
     /**
      * Creates an OpenAI embedding service when openai.embeddings.enabled is true.
@@ -85,11 +83,10 @@ class EmbeddingConfiguration {
     @Bean
     @Primary
     @ConditionalOnProperty(name = ["open-responses.embeddings.http-enabled"], havingValue = "true")
-    fun openAIEmbeddingService(properties: EmbeddingProperties): EmbeddingService {
-        return OpenAIEmbeddingService(
+    fun openAIEmbeddingService(properties: EmbeddingProperties): EmbeddingService =
+        OpenAIEmbeddingService(
             apiKey = properties.apiKey,
             modelName = properties.model,
-            baseUrl = properties.url
+            baseUrl = properties.url,
         )
-    }
 }

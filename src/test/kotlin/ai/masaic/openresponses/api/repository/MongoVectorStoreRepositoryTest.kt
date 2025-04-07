@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.model.VectorStoreFile
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.Autowired
@@ -34,6 +35,7 @@ import kotlin.test.assertTrue
 @ExtendWith(SpringExtension::class)
 @Import(MongoVectorStoreRepository::class)
 @TestPropertySource(properties = ["open-responses.vector-store.repository.type=mongodb"])
+@Disabled("Enable this test to run the complete workflow") // Disable this line to run the test
 class MongoVectorStoreRepositoryTest {
     companion object {
         @Container

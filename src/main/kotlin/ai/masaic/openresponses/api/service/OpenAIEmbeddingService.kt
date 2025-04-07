@@ -10,24 +10,22 @@ import org.springframework.beans.factory.annotation.Value
  * This service uses the OpenAI API to generate embeddings through Langchain4j's OpenAiEmbeddingModel.
  */
 class OpenAIEmbeddingService(
-
     @Value("\${open-responses.embedding.url}")
     private val baseUrl: String,
-
     @Value("\${open-responses.embedding.api.key}")
     private val apiKey: String,
-
     @Value("\${open-responses.embedding.model}")
-    private val modelName: String
+    private val modelName: String,
 ) : EmbeddingService {
-
-    private val embeddingModel = lazy {
-        OpenAiEmbeddingModel.builder()
-            .baseUrl(baseUrl)
-            .apiKey(apiKey)
-            .modelName(modelName)
-            .build()
-    }
+    private val embeddingModel =
+        lazy {
+            OpenAiEmbeddingModel
+                .builder()
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
+                .modelName(modelName)
+                .build()
+        }
 
     /**
      * Embeds a single text string into a vector representation using OpenAI.
@@ -65,6 +63,8 @@ class OpenAIEmbeddingService(
         val e1 = Embedding.from(embedding1)
         val e2 = Embedding.from(embedding2)
         
-        return dev.langchain4j.store.embedding.CosineSimilarity.between(e1, e2).toFloat()
+        return dev.langchain4j.store.embedding.CosineSimilarity
+            .between(e1, e2)
+            .toFloat()
     }
 } 

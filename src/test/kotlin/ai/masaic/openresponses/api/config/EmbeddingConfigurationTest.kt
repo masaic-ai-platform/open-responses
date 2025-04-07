@@ -3,8 +3,6 @@ package ai.masaic.openresponses.api.config
 import ai.masaic.openresponses.api.service.DefaultEmbeddingService
 import ai.masaic.openresponses.api.service.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
-import dev.langchain4j.model.embedding.onnx.OnnxEmbeddingModel
-import dev.langchain4j.model.embedding.onnx.PoolingMode
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel
 import io.mockk.mockk
 import org.junit.jupiter.api.Test
@@ -31,9 +29,10 @@ class EmbeddingConfigurationTest {
     @Test
     fun `embeddingModel should throw exception for missing ONNX paths`() {
         // Given
-        val properties = EmbeddingProperties(
-            modelType = "onnx"
-        )
+        val properties =
+            EmbeddingProperties(
+                modelType = "onnx",
+            )
         // Then
         assertThrows<IllegalArgumentException> {
             configuration.embeddingModel(properties)
@@ -43,9 +42,10 @@ class EmbeddingConfigurationTest {
     @Test
     fun `embeddingModel should throw exception for unsupported model type`() {
         // Given
-        val properties = EmbeddingProperties(
-            modelType = "unsupported-model"
-        )
+        val properties =
+            EmbeddingProperties(
+                modelType = "unsupported-model",
+            )
 
         // Then
         assertThrows<IllegalArgumentException> {
@@ -68,11 +68,12 @@ class EmbeddingConfigurationTest {
     @Test
     fun `openAIEmbeddingService should create service with provided properties`() {
         // Given
-        val properties = EmbeddingProperties(
-            apiKey = "test-api-key",
-            model = "text-embedding-3-small",
-            url = "https://api.openai.com/v1"
-        )
+        val properties =
+            EmbeddingProperties(
+                apiKey = "test-api-key",
+                model = "text-embedding-3-small",
+                url = "https://api.openai.com/v1",
+            )
 
         // When
         val service = configuration.openAIEmbeddingService(properties)

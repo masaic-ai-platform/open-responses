@@ -4,27 +4,26 @@ import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.slot
 import io.mockk.verify
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertThrows
 import kotlin.test.assertEquals
 
 class OpenAIEmbeddingServiceTest {
     private lateinit var openAiEmbeddingModel: OpenAiEmbeddingModel
     private lateinit var embeddingService: OpenAIEmbeddingService
-    
+
     @BeforeEach
     fun setup() {
         openAiEmbeddingModel = mockk()
         
         // Create the service with test values
-        embeddingService = OpenAIEmbeddingService(
-            baseUrl = "https://api.openai.com/v1",
-            apiKey = "test-api-key",
-            modelName = "text-embedding-3-small"
-        )
+        embeddingService =
+            OpenAIEmbeddingService(
+                baseUrl = "https://api.openai.com/v1",
+                apiKey = "test-api-key",
+                modelName = "text-embedding-3-small",
+            )
         
         // Use reflection to set the mocked model
         val field = OpenAIEmbeddingService::class.java.getDeclaredField("embeddingModel")
@@ -39,15 +38,17 @@ class OpenAIEmbeddingServiceTest {
         // Given
         val text = "Test text"
         val expectedEmbedding = listOf(0.1f, 0.2f, 0.3f)
-        val embeddingResult = mockk<Embedding> {
-            every { vectorAsList() } returns expectedEmbedding
-        }
+        val embeddingResult =
+            mockk<Embedding> {
+                every { vectorAsList() } returns expectedEmbedding
+            }
         
         every { 
             openAiEmbeddingModel.embed(text)
-        } returns mockk {
-            every { content() } returns embeddingResult
-        }
+        } returns
+            mockk {
+                every { content() } returns embeddingResult
+            }
 
         // When
         val result = embeddingService.embedText(text)
@@ -64,24 +65,28 @@ class OpenAIEmbeddingServiceTest {
         val embedding1 = listOf(0.1f, 0.2f, 0.3f)
         val embedding2 = listOf(0.4f, 0.5f, 0.6f)
         
-        val embeddingResult1 = mockk<Embedding> {
-            every { vectorAsList() } returns embedding1
-        }
-        val embeddingResult2 = mockk<Embedding> {
-            every { vectorAsList() } returns embedding2
-        }
+        val embeddingResult1 =
+            mockk<Embedding> {
+                every { vectorAsList() } returns embedding1
+            }
+        val embeddingResult2 =
+            mockk<Embedding> {
+                every { vectorAsList() } returns embedding2
+            }
 
         every { 
             openAiEmbeddingModel.embed("First text")
-        } returns mockk {
-            every { content() } returns embeddingResult1
-        }
+        } returns
+            mockk {
+                every { content() } returns embeddingResult1
+            }
         
         every { 
             openAiEmbeddingModel.embed("Second text")
-        } returns mockk {
-            every { content() } returns embeddingResult2
-        }
+        } returns
+            mockk {
+                every { content() } returns embeddingResult2
+            }
 
         // When
         val result = embeddingService.embedTexts(texts)
@@ -113,15 +118,17 @@ class OpenAIEmbeddingServiceTest {
         // Given
         val text = ""
         val expectedEmbedding = listOf(0.0f, 0.0f, 0.0f)
-        val embeddingResult = mockk<Embedding> {
-            every { vectorAsList() } returns expectedEmbedding
-        }
+        val embeddingResult =
+            mockk<Embedding> {
+                every { vectorAsList() } returns expectedEmbedding
+            }
         
         every { 
             openAiEmbeddingModel.embed(text)
-        } returns mockk {
-            every { content() } returns embeddingResult
-        }
+        } returns
+            mockk {
+                every { content() } returns embeddingResult
+            }
 
         // When
         val result = embeddingService.embedText(text)
