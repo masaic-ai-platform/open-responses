@@ -18,4 +18,13 @@ mcp:
             - name: param1
               type: string
               description: Test parameter
-              required: true 
+              required: true
+
+open-responses:
+  embeddings:
+    model-type: all-minilm-l6-v2
+    http-enabled: false
+    api-key: test-api-key
+    model: text-embedding-3-small
+    url: https://api.openai.com/v1
+    pooling-mode: mean 

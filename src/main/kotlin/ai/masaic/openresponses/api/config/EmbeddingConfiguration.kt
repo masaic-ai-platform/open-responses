@@ -2,13 +2,16 @@ package ai.masaic.openresponses.api.config
 
 import ai.masaic.openresponses.api.service.DefaultEmbeddingService
 import ai.masaic.openresponses.api.service.EmbeddingService
+import ai.masaic.openresponses.api.service.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.embedding.onnx.OnnxEmbeddingModel
 import dev.langchain4j.model.embedding.onnx.PoolingMode
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Primary
 
 /**
  * Configuration properties for embedding models.
@@ -23,6 +26,14 @@ data class EmbeddingProperties(
     val tokenizerPath: String? = null,
     // Pooling mode for custom models (e.g., "mean", "cls", "max")
     val poolingMode: String = "mean",
+    // The OpenAI API key (if using OpenAI embeddings)
+    val apiKey: String = "",
+    // The OpenAI model name (if using OpenAI embeddings)
+    val httpEnabled: Boolean = false,
+    // The OpenAI model name (if using OpenAI embeddings)
+    val model: String = "",
+    // The OpenAI API base URL (if using OpenAI embeddings)
+    val url: String = ""
 )
 
 /**
@@ -37,6 +48,7 @@ class EmbeddingConfiguration {
      * @return An EmbeddingModel instance
      */
     @Bean
+    @ConditionalOnProperty(name = ["open-responses.embeddings.http-enabled"], havingValue = "false", matchIfMissing = true)
     fun embeddingModel(properties: EmbeddingProperties): EmbeddingModel =
         when (properties.modelType) {
             "all-minilm-l6-v2" -> {
@@ -57,11 +69,27 @@ class EmbeddingConfiguration {
         }
 
     /**
-     * Provides an EmbeddingService implementation.
-     * 
-     * @param embeddingModel The embedding model to use
-     * @return An EmbeddingService instance
+     * Creates a default embedding service using the provided embedding model.
+     * This bean is used when openai.embeddings.enabled is set to false or not specified.
      */
     @Bean
-    fun embeddingService(embeddingModel: EmbeddingModel): EmbeddingService = DefaultEmbeddingService(embeddingModel)
+    @Primary
+    @ConditionalOnProperty(name = ["open-responses.embeddings.http-enabled"], havingValue = "false", matchIfMissing = true)
+    fun defaultEmbeddingService(embeddingModel: EmbeddingModel): EmbeddingService {
+        return DefaultEmbeddingService(embeddingModel)
+    }
+
+    /**
+     * Creates an OpenAI embedding service when openai.embeddings.enabled is true.
+     */
+    @Bean
+    @Primary
+    @ConditionalOnProperty(name = ["open-responses.embeddings.http-enabled"], havingValue = "true")
+    fun openAIEmbeddingService(properties: EmbeddingProperties): EmbeddingService {
+        return OpenAIEmbeddingService(
+            apiKey = properties.apiKey,
+            modelName = properties.model,
+            baseUrl = properties.url
+        )
+    }
 }

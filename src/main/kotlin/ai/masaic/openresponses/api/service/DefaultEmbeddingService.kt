@@ -4,14 +4,12 @@ import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.store.embedding.CosineSimilarity
-import org.springframework.stereotype.Service
 
 /**
  * Implementation of EmbeddingService using Langchain4j's embedding models.
  *
  * This service uses a configurable EmbeddingModel for generating embeddings.
  */
-@Service
 class DefaultEmbeddingService(
     private val embeddingModel: EmbeddingModel,
 ) : EmbeddingService {
