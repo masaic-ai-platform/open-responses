@@ -17,7 +17,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test text-based input`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         // Mock your parameter object
         val params = mockk<ResponseCreateParams>(relaxed = true)
@@ -64,7 +64,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test multiple messages input`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -132,7 +132,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test text-based input with instructions`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -183,7 +183,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test system message at non-zero index throws`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -222,7 +222,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test function call message`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -282,7 +282,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test function call output message`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -316,7 +316,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test applyToolConfiguration with function tool`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
 
@@ -369,7 +369,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test applyResponseFormatting with JSON schema`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -416,7 +416,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test applyReasoningEffort`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -442,7 +442,7 @@ class MasaicParameterConverterTest {
      */
     @Test
     fun `test prepareCompletion with unsupported input type`() {
-        val converter = MasaicParameterConverter()
+        val converter = MasaicParameterConverter(mockk())
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)

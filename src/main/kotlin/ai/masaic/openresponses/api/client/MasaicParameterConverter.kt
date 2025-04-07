@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.service.ResponseProcessingException
+import ai.masaic.openresponses.tool.NativeToolDefinition
+import ai.masaic.openresponses.tool.NativeToolRegistry
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
@@ -19,7 +21,9 @@ import org.springframework.stereotype.Component
  * into OpenAI's API format.
  */
 @Component
-class MasaicParameterConverter {
+class MasaicParameterConverter(
+    val nativeToolRegistry: NativeToolRegistry,
+) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper()
 
@@ -402,7 +406,7 @@ class MasaicParameterConverter {
                     )
                 }
                 responseTool.isFileSearch() -> {
-                    val fileSearchTool = responseTool.asFileSearch()
+                    val nativeTool = nativeToolRegistry.findByName("file_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
                     logger.trace { "Converting file search tool" }
                     result.add(
                         ChatCompletionTool
@@ -411,8 +415,14 @@ class MasaicParameterConverter {
                             .function(
                                 FunctionDefinition
                                     .builder()
-                                    .name(fileSearchTool._type())
-                                    .build(),
+                                    .name(nativeTool.name)
+                                    .description(nativeTool.description)
+                                    .parameters(
+                                        objectMapper.readValue(
+                                            objectMapper.writeValueAsString(nativeTool.parameters),
+                                            FunctionParameters::class.java,
+                                        ),
+                                    ).build(),
                             ).build(),
                     )
                 }

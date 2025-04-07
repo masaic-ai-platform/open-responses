@@ -275,6 +275,7 @@ class VectorStoreService(
                                 cancelled = 0,
                                 total = fileCount,
                             ),
+                        status = "completed", // Set to completed if there were errors
                     )
                 vectorStoreRepository.saveVectorStore(updatedVectorStore)
                 return@withContext updatedVectorStore
