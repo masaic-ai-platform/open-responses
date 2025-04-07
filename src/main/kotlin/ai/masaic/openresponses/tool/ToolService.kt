@@ -622,6 +622,7 @@ class NativeToolRegistry {
  * @property name Human-readable name of the tool
  * @property description Detailed description of what the tool does
  */
+@Serializable
 data class ToolMetadata(
     val id: String,
     val name: String,
@@ -633,6 +634,7 @@ data class ToolMetadata(
  *
  * @property models List of AI model information
  */
+@Serializable
 data class AIModelsMetadata(
     val models: List<AIModelInfo>,
 )
@@ -645,6 +647,7 @@ data class AIModelsMetadata(
  * @property description Detailed description of what the model does
  * @property provider Name of the provider of the model
  */
+@Serializable
 data class AIModelInfo(
     val id: String,
     val name: String,
