@@ -780,6 +780,9 @@ class VectorStoreService(
                         // Combine file attributes with chunk-specific metadata
                         val combinedAttributes = mutableMapOf<String, Any>()
                         file?.attributes?.let { combinedAttributes.putAll(it) }
+                        result.metadata.let {
+                            combinedAttributes.putAll(it)
+                        }
                         
                         // Add chunk_id to attributes if available
                         if (chunkId != null) {
