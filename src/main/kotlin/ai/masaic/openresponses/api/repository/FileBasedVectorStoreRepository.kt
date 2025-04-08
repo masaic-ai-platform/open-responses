@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -29,31 +30,19 @@ import java.nio.file.Paths
 class FileBasedVectorStoreRepository(
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
     private val objectMapper: ObjectMapper,
-) : VectorStoreRepository {
-    private val log = LoggerFactory.getLogger(FileBasedVectorStoreRepository::class.java)
+) : AbstractVectorStoreRepository() {
+    override val log: Logger = LoggerFactory.getLogger(FileBasedVectorStoreRepository::class.java)
     
-    private val vectorStoresDir = "$rootDir/vector-stores"
-    private val vectorStoreFilesDir = "$rootDir/vector-store-files"
+    private val vectorStoresDir: String
+        get() = "$rootDir/vector_stores"
+
+    private val vectorStoreFilesDir: String
+        get() = "$rootDir/vector_store_files"
 
     init {
-        try {
-            // Create directories if they don't exist
-            val vectorStoresDirPath = Paths.get(vectorStoresDir)
-            val vectorStoreFilesDirPath = Paths.get(vectorStoreFilesDir)
-            
-            if (!Files.exists(vectorStoresDirPath)) {
-                Files.createDirectories(vectorStoresDirPath)
-                log.info("Created vector stores directory at {}", vectorStoresDirPath.toAbsolutePath())
-            }
-            
-            if (!Files.exists(vectorStoreFilesDirPath)) {
-                Files.createDirectories(vectorStoreFilesDirPath)
-                log.info("Created vector store files directory at {}", vectorStoreFilesDirPath.toAbsolutePath())
-            }
-        } catch (e: Exception) {
-            log.error("Error creating vector store directories", e)
-            throw RuntimeException("Failed to initialize vector store directories: ${e.message}", e)
-        }
+        // Ensure the directories exist
+        Files.createDirectories(Paths.get(vectorStoresDir))
+        Files.createDirectories(Paths.get(vectorStoreFilesDir))
     }
 
     override suspend fun saveVectorStore(vectorStore: VectorStore): VectorStore =
@@ -93,67 +82,6 @@ class FileBasedVectorStoreRepository(
                 log.error("Error reading vector store metadata $vectorStoreId", e)
                 null
             }
-        }
-
-    override suspend fun listVectorStores(
-        limit: Int,
-        order: String,
-        after: String?,
-        before: String?,
-    ): List<VectorStore> =
-        withContext(Dispatchers.IO) {
-            val vectorStoreDir = File(vectorStoresDir)
-            if (!vectorStoreDir.exists() || !vectorStoreDir.isDirectory) {
-                return@withContext emptyList()
-            }
-        
-            // Get all vector store metadata files
-            val vectorStoreFiles = vectorStoreDir.listFiles { file -> file.isFile && file.extension == "json" } ?: return@withContext emptyList()
-        
-            // Parse vector stores from files
-            val allVectorStores =
-                vectorStoreFiles.mapNotNull { file ->
-                    try {
-                        val json = Files.readAllBytes(file.toPath())
-                        objectMapper.readValue<VectorStore>(json)
-                    } catch (e: Exception) {
-                        log.error("Error reading vector store metadata from ${file.name}", e)
-                        null
-                    }
-                }
-        
-            // Apply sorting
-            val sortedVectorStores =
-                if (order.equals("asc", ignoreCase = true)) {
-                    allVectorStores.sortedBy { it.createdAt }
-                } else {
-                    allVectorStores.sortedByDescending { it.createdAt }
-                }
-        
-            // Apply pagination
-            val filteredVectorStores =
-                when {
-                    after != null -> {
-                        val afterIndex = sortedVectorStores.indexOfFirst { it.id == after }
-                        if (afterIndex >= 0 && afterIndex < sortedVectorStores.size - 1) {
-                            sortedVectorStores.subList(afterIndex + 1, sortedVectorStores.size)
-                        } else {
-                            emptyList()
-                        }
-                    }
-                    before != null -> {
-                        val beforeIndex = sortedVectorStores.indexOfFirst { it.id == before }
-                        if (beforeIndex > 0) {
-                            sortedVectorStores.subList(0, beforeIndex)
-                        } else {
-                            emptyList()
-                        }
-                    }
-                    else -> sortedVectorStores
-                }
-        
-            // Apply limit
-            filteredVectorStores.take(limit)
         }
 
     override suspend fun deleteVectorStore(vectorStoreId: String): Boolean =
@@ -229,80 +157,6 @@ class FileBasedVectorStoreRepository(
             }
         }
 
-    override suspend fun listVectorStoreFiles(
-        vectorStoreId: String,
-        limit: Int,
-        order: String,
-        after: String?,
-        before: String?,
-        filter: String?,
-    ): List<VectorStoreFile> =
-        withContext(Dispatchers.IO) {
-            val storeFilesDir = File(vectorStoreFilesDir)
-            if (!storeFilesDir.exists() || !storeFilesDir.isDirectory) {
-                return@withContext emptyList()
-            }
-        
-            // Get all vector store file metadata files for this vector store
-            val vectorStoreFilesList =
-                storeFilesDir.listFiles { file -> 
-                    file.isFile && file.extension == "json" && file.nameWithoutExtension.startsWith("$vectorStoreId-") 
-                } ?: return@withContext emptyList()
-        
-            // Parse vector store files from metadata files
-            val allVectorStoreFiles =
-                vectorStoreFilesList.mapNotNull { file ->
-                    try {
-                        val json = Files.readAllBytes(file.toPath())
-                        objectMapper.readValue<VectorStoreFile>(json)
-                    } catch (e: Exception) {
-                        log.error("Error reading vector store file metadata from ${file.name}", e)
-                        null
-                    }
-                }
-        
-            // Apply filter
-            val filteredByStatus =
-                if (filter != null) {
-                    allVectorStoreFiles.filter { it.status == filter }
-                } else {
-                    allVectorStoreFiles
-                }
-        
-            // Apply sorting
-            val sortedVectorStoreFiles =
-                if (order.equals("asc", ignoreCase = true)) {
-                    filteredByStatus.sortedBy { it.createdAt }
-                } else {
-                    filteredByStatus.sortedByDescending { it.createdAt }
-                }
-        
-            // Apply pagination
-            val filteredVectorStoreFiles =
-                when {
-                    after != null -> {
-                        val afterIndex = sortedVectorStoreFiles.indexOfFirst { it.id == after }
-                        if (afterIndex >= 0 && afterIndex < sortedVectorStoreFiles.size - 1) {
-                            sortedVectorStoreFiles.subList(afterIndex + 1, sortedVectorStoreFiles.size)
-                        } else {
-                            emptyList()
-                        }
-                    }
-                    before != null -> {
-                        val beforeIndex = sortedVectorStoreFiles.indexOfFirst { it.id == before }
-                        if (beforeIndex > 0) {
-                            sortedVectorStoreFiles.subList(0, beforeIndex)
-                        } else {
-                            emptyList()
-                        }
-                    }
-                    else -> sortedVectorStoreFiles
-                }
-        
-            // Apply limit
-            filteredVectorStoreFiles.take(limit)
-        }
-
     override suspend fun deleteVectorStoreFile(
         vectorStoreId: String,
         fileId: String,
@@ -315,14 +169,73 @@ class FileBasedVectorStoreRepository(
             }
         
             try {
-                // Delete the vector store file metadata
                 Files.delete(filePath)
-            
                 log.info("Deleted vector store file metadata $fileId from vector store $vectorStoreId")
                 true
             } catch (e: Exception) {
-                log.error("Error deleting vector store file metadata $fileId from vector store $vectorStoreId", e)
+                log.error("Error deleting vector store file metadata $fileId", e)
                 false
+            }
+        }
+
+    /**
+     * Fetch all vector stores from the file system.
+     */
+    override suspend fun fetchAllVectorStores(): List<VectorStore> =
+        withContext(Dispatchers.IO) {
+            val directory = File(vectorStoresDir)
+            if (!directory.exists() || !directory.isDirectory) {
+                return@withContext emptyList()
+            }
+            
+            try {
+                directory
+                    .listFiles { file -> file.isFile && file.extension == "json" }
+                    ?.mapNotNull { file ->
+                        try {
+                            val json = Files.readAllBytes(file.toPath())
+                            objectMapper.readValue<VectorStore>(json)
+                        } catch (e: Exception) {
+                            log.error("Error reading vector store from file ${file.name}", e)
+                            null
+                        }
+                    }?.sortedByDescending { it.createdAt }
+                    ?: emptyList()
+            } catch (e: Exception) {
+                log.error("Error listing vector stores", e)
+                emptyList()
+            }
+        }
+
+    /**
+     * Fetch all files for a vector store from the file system.
+     */
+    override suspend fun fetchAllVectorStoreFiles(vectorStoreId: String): List<VectorStoreFile> =
+        withContext(Dispatchers.IO) {
+            val directory = File(vectorStoreFilesDir)
+            if (!directory.exists() || !directory.isDirectory) {
+                return@withContext emptyList()
+            }
+            
+            try {
+                directory
+                    .listFiles { file -> 
+                        file.isFile && 
+                            file.extension == "json" && 
+                            file.nameWithoutExtension.startsWith("$vectorStoreId-")
+                    }?.mapNotNull { file ->
+                        try {
+                            val json = Files.readAllBytes(file.toPath())
+                            objectMapper.readValue<VectorStoreFile>(json)
+                        } catch (e: Exception) {
+                            log.error("Error reading vector store file from file ${file.name}", e)
+                            null
+                        }
+                    }?.sortedByDescending { it.createdAt }
+                    ?: emptyList()
+            } catch (e: Exception) {
+                log.error("Error listing vector store files for $vectorStoreId", e)
+                emptyList()
             }
         }
 } 

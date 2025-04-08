@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.service
 
-import ai.masaic.openresponses.api.config.QdrantProperties
-import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.config.QdrantVectorProperties
+import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
@@ -53,8 +53,8 @@ class QdrantVectorSearchProviderIntegrationTest {
     }
 
     private lateinit var embeddingService: EmbeddingService
-    private lateinit var qdrantProperties: QdrantProperties
-    private lateinit var vectorSearchProperties: VectorSearchProperties
+    private lateinit var qdrantProperties: QdrantVectorProperties
+    private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
     private lateinit var qdrantClient: QdrantClient
 
@@ -73,19 +73,19 @@ class QdrantVectorSearchProviderIntegrationTest {
         
         // Configure vector search properties
         qdrantProperties =
-            QdrantProperties(
+            QdrantVectorProperties(
                 host = qdrantContainer.host,
                 port = qdrantContainer.getMappedPort(6334),
                 useTls = false,
-                collectionName = "test-collection-${UUID.randomUUID()}",
-                vectorDimension = 384,
             )
         
         vectorSearchProperties =
-            VectorSearchProperties(
+            VectorSearchConfigProperties(
                 provider = "qdrant",
                 chunkSize = 300,
                 chunkOverlap = 50,
+                collectionName = "test-collection-${UUID.randomUUID()}",
+                vectorDimension = 384,
             )
         
         // Create Qdrant client
@@ -113,7 +113,7 @@ class QdrantVectorSearchProviderIntegrationTest {
     fun cleanup() {
         // Clean up the collection after test
         try {
-            qdrantClient.deleteCollectionAsync(qdrantProperties.collectionName!!).get()
+            qdrantClient.deleteCollectionAsync(vectorSearchProperties.collectionName).get()
         } catch (e: Exception) {
             // Ignore errors during cleanup
         }

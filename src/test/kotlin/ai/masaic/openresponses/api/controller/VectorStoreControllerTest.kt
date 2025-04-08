@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.controller
 
+import ai.masaic.openresponses.api.exception.VectorStoreNotFoundException
 import ai.masaic.openresponses.api.model.*
-import ai.masaic.openresponses.api.service.search.VectorStoreNotFoundException
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.api.service.storage.FileNotFoundException
 import com.ninjasquad.springmockk.MockkBean

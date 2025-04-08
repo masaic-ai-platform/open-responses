@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.service
 
-import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
@@ -28,7 +28,7 @@ class FileBasedVectorSearchProviderTest {
     lateinit var tempDir: Path
     
     private lateinit var embeddingService: EmbeddingService
-    private lateinit var vectorSearchProperties: VectorSearchProperties
+    private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var objectMapper: ObjectMapper
     private lateinit var vectorSearchProvider: FileBasedVectorSearchProvider
 
@@ -43,7 +43,7 @@ class FileBasedVectorSearchProviderTest {
         
         // Create vector search properties with default values
         vectorSearchProperties =
-            VectorSearchProperties(
+            VectorSearchConfigProperties(
                 provider = "file-based",
                 chunkSize = 1000,
                 chunkOverlap = 200,

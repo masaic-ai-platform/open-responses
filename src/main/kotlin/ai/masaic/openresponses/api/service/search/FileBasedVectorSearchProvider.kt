@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.service.search
 
-import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap
 @ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "file", matchIfMissing = true)
 class FileBasedVectorSearchProvider(
     private val embeddingService: EmbeddingService,
-    private val vectorSearchProperties: VectorSearchProperties,
+    private val vectorSearchProperties: VectorSearchConfigProperties,
     private val objectMapper: ObjectMapper,
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
 ) : VectorSearchProvider {
@@ -153,25 +153,9 @@ class FileBasedVectorSearchProvider(
             }
 
             // Determine chunking parameters based on the strategy or fallback to properties
-            val chunks =
-                if (chunkingStrategy != null && chunkingStrategy.type == "static" && chunkingStrategy.static != null) {
-                    log.debug(
-                        "Using provided chunking strategy: type=${chunkingStrategy.type}, " +
-                            "maxChunkSize=${chunkingStrategy.static.maxChunkSizeTokens}, " +
-                            "overlap=${chunkingStrategy.static.chunkOverlapTokens}",
-                    )
-                    TextChunkingUtil.chunkText(
-                        text,
-                        chunkingStrategy.static.maxChunkSizeTokens,
-                        chunkingStrategy.static.chunkOverlapTokens,
-                    )
-                } else {
-                    log.debug(
-                        "Using default chunking parameters: chunkSize=${vectorSearchProperties.chunkSize}, " +
-                            "overlap=${vectorSearchProperties.chunkOverlap}",
-                    )
-                    TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
-                }
+            log.debug("Chunking text for file: $filename")
+            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
+            val chunks = textChunks.map { it.text }
 
             // Generate embeddings for each chunk
             val chunksWithEmbeddings =

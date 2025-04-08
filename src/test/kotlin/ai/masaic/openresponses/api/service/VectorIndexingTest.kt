@@ -25,31 +25,6 @@ import java.io.InputStream
 import java.time.Instant
 import kotlin.test.assertEquals
 
-/**
- * Service for handling vector indexing of files.
- */
-class VectorIndexingService(
-    private val vectorSearchProvider: VectorSearchProvider,
-) {
-    /**
-     * Process a file for vector indexing.
-     * 
-     * @param fileId The ID of the file
-     * @param purpose The purpose of the file
-     */
-    suspend fun processFile(
-        fileId: String,
-        purpose: String,
-    ) {
-        // Only index files with assistants or user_data purpose
-        if (purpose != "assistants" && purpose != "user_data") {
-            return
-        }
-        
-        // Actual implementation would load the file and index it
-    }
-}
-
 class VectorIndexingTest {
     private lateinit var fileService: FileService
     private lateinit var fileStorageService: FileStorageService

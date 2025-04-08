@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.service
 
-import ai.masaic.openresponses.api.config.QdrantProperties
-import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.config.QdrantVectorProperties
+import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
@@ -34,8 +34,8 @@ import kotlin.test.assertTrue
  */
 class QdrantVectorSearchProviderTest {
     private lateinit var embeddingService: EmbeddingService
-    private lateinit var qdrantProperties: QdrantProperties
-    private lateinit var vectorSearchProperties: VectorSearchProperties
+    private lateinit var qdrantProperties: QdrantVectorProperties
+    private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var qdrantClient: QdrantClient
     private lateinit var embeddingStore: QdrantEmbeddingStore
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
@@ -98,19 +98,19 @@ class QdrantVectorSearchProviderTest {
         
         // Create configuration
         qdrantProperties =
-            QdrantProperties(
+            QdrantVectorProperties(
                 host = "localhost",
                 port = 6334,
                 useTls = false,
-                collectionName = "test-collection",
-                vectorDimension = 3,
             )
         
         vectorSearchProperties =
-            VectorSearchProperties(
+            VectorSearchConfigProperties(
                 provider = "qdrant",
                 chunkSize = 100,
                 chunkOverlap = 20,
+                collectionName = "test-collection",
+                vectorDimension = 3,
             )
         
         // Create the provider

@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.service.search
 
-import ai.masaic.openresponses.api.config.QdrantProperties
-import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.config.QdrantVectorProperties
+import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
@@ -31,13 +31,13 @@ import java.io.InputStream
 @ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "qdrant")
 class QdrantVectorSearchProvider(
     private val embeddingService: EmbeddingService,
-    private val qdrantProperties: QdrantProperties,
-    private val vectorSearchProperties: VectorSearchProperties,
+    private val qdrantProperties: QdrantVectorProperties,
+    private val vectorSearchProperties: VectorSearchConfigProperties,
     client: QdrantClient,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
-    private val collectionName = qdrantProperties.collectionName ?: "open-responses-documents"
-    private val vectorDimension: Long = qdrantProperties.vectorDimension.toLong()
+    private val collectionName = vectorSearchProperties.collectionName
+    private val vectorDimension: Long = vectorSearchProperties.vectorDimension.toLong()
     private val embeddingStore: QdrantEmbeddingStore
 
     init {
@@ -104,64 +104,47 @@ class QdrantVectorSearchProvider(
                 return false
             }
 
-            // Create chunks
-            val chunks =
-                if (chunkingStrategy != null && chunkingStrategy.type == "static" && chunkingStrategy.static != null) {
-                    log.debug(
-                        "Using provided chunking strategy: type={}, maxChunkSize={}, overlap={}",
-                        chunkingStrategy.type,
-                        chunkingStrategy.static.maxChunkSizeTokens,
-                        chunkingStrategy.static.chunkOverlapTokens,
-                    )
-                    TextChunkingUtil.chunkText(
-                        text,
-                        chunkingStrategy.static.maxChunkSizeTokens,
-                        chunkingStrategy.static.chunkOverlapTokens,
-                    )
-                } else {
-                    log.debug(
-                        "Using default chunking parameters: chunkSize={}, overlap={}",
-                        vectorSearchProperties.chunkSize,
-                        vectorSearchProperties.chunkOverlap,
-                    )
-                    TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
-                }
-
-            if (chunks.isEmpty()) {
+            // Use the TextChunkingUtil to chunk the text
+            log.debug("Chunking text for file: {}", filename)
+            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
+            
+            if (textChunks.isEmpty()) {
                 log.warn("No chunks created for file: {}", filename)
                 return false
             }
+            
+            log.info("Created {} chunks for file: {}", textChunks.size, filename)
 
             // Generate embeddings and store them
-            for (i in chunks.indices) {
+            var indexingSuccessful = true
+            for (chunk in textChunks) {
                 try {
-                    val chunk = chunks[i]
                     // Generate embedding for the chunk
-                    val embedding = embeddingService.embedText(chunk)
+                    val embedding = embeddingService.embedText(chunk.text)
 
                     // Create metadata for this chunk
                     val metadata =
                         mapOf(
                             "file_id" to fileId,
                             "filename" to filename,
-                            "chunk_index" to i,
+                            "chunk_index" to chunk.index,
                             "chunk_id" to IdGenerator.generateChunkId(),
-                            "total_chunks" to chunks.size,
+                            "total_chunks" to textChunks.size,
                         )
 
                     // Store the embedding with metadata
                     embeddingStore.add(
                         Embedding.from(embedding),
-                        TextSegment.from(chunk, Metadata.from(metadata)),
+                        TextSegment.from(chunk.text, Metadata.from(metadata)),
                     )
                 } catch (e: Exception) {
-                    log.error("Error indexing file {}: {}", filename, e.message, e)
-                    return false
+                    log.error("Error indexing chunk {} for file {}: {}", chunk.index, filename, e.message, e)
+                    indexingSuccessful = false
                 }
             }
 
-            log.info("Successfully indexed file: {}", filename)
-            return true
+            log.info("Successfully indexed file: {} with {} chunks", filename, textChunks.size)
+            return indexingSuccessful
         } catch (e: Exception) {
             log.error("Error indexing file {}: {}", filename, e.message, e)
             return false

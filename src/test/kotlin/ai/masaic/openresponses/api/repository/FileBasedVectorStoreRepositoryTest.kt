@@ -5,6 +5,8 @@ import ai.masaic.openresponses.api.model.VectorStore
 import ai.masaic.openresponses.api.model.VectorStoreFile
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -42,8 +44,8 @@ class FileBasedVectorStoreRepositoryTest {
     @AfterEach
     fun cleanup() {
         // Clean up any files created during tests
-        val vectorStoresDir = tempDir.resolve("vector-stores")
-        val vectorStoreFilesDir = tempDir.resolve("vector-store-files")
+        val vectorStoresDir = tempDir.resolve("vector_stores")
+        val vectorStoreFilesDir = tempDir.resolve("vector_store_files")
         
         if (Files.exists(vectorStoresDir)) {
             Files.list(vectorStoresDir).forEach { Files.deleteIfExists(it) }
@@ -54,21 +56,22 @@ class FileBasedVectorStoreRepositoryTest {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `saveVectorStore should save a vector store`() =
         runTest {
             // Given
             val vectorStore = createTestVectorStore()
-        
+
             // When
             val savedVectorStore = vectorStoreRepository.saveVectorStore(vectorStore)
-        
+
             // Then
             assertNotNull(savedVectorStore)
             assertEquals(vectorStore.id, savedVectorStore.id)
         
             // Verify file exists on disk
-            val filePath = tempDir.resolve("vector-stores/${vectorStore.id}.json")
+            val filePath = tempDir.resolve("vector_stores/${vectorStore.id}.json")
             assertTrue(Files.exists(filePath), "Vector store metadata file should exist")
         }
 
@@ -225,11 +228,11 @@ class FileBasedVectorStoreRepositoryTest {
             assertTrue(result, "Should return true when vector store is deleted")
         
             // Verify vector store file was deleted
-            val vectorStoreFilePath = tempDir.resolve("vector-store-files/${vectorStore.id}-${vectorStoreFile.id}.json")
+            val vectorStoreFilePath = tempDir.resolve("vector_store_files/${vectorStore.id}-${vectorStoreFile.id}.json")
             assertFalse(Files.exists(vectorStoreFilePath), "Vector store file metadata should be deleted")
         
             // Verify vector store was deleted
-            val vectorStorePath = tempDir.resolve("vector-stores/${vectorStore.id}.json")
+            val vectorStorePath = tempDir.resolve("vector_stores/${vectorStore.id}.json")
             assertFalse(Files.exists(vectorStorePath), "Vector store metadata should be deleted")
         }
 
@@ -243,6 +246,7 @@ class FileBasedVectorStoreRepositoryTest {
             assertFalse(result, "Should return false when vector store doesn't exist")
         }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `saveVectorStoreFile should save a vector store file`() =
         runTest {
@@ -254,13 +258,14 @@ class FileBasedVectorStoreRepositoryTest {
         
             // When
             val savedVectorStoreFile = vectorStoreRepository.saveVectorStoreFile(vectorStoreFile)
-        
+
+            advanceUntilIdle()
             // Then
             assertNotNull(savedVectorStoreFile)
             assertEquals(vectorStoreFile.id, savedVectorStoreFile.id)
         
             // Verify file exists on disk
-            val filePath = tempDir.resolve("vector-store-files/${vectorStore.id}-${vectorStoreFile.id}.json")
+            val filePath = tempDir.resolve("vector_store_files/${vectorStore.id}-${vectorStoreFile.id}.json")
             assertTrue(Files.exists(filePath), "Vector store file metadata should exist")
         }
 
@@ -395,7 +400,7 @@ class FileBasedVectorStoreRepositoryTest {
             assertTrue(result, "Should return true when file is deleted")
         
             // Verify file was deleted
-            val filePath = tempDir.resolve("vector-store-files/${vectorStore.id}-${vectorStoreFile.id}.json")
+            val filePath = tempDir.resolve("vector_store_files/${vectorStore.id}-${vectorStoreFile.id}.json")
             assertFalse(Files.exists(filePath), "Vector store file metadata should be deleted")
         }
 

@@ -7,6 +7,7 @@ import com.mongodb.MongoClientSettings
 import com.mongodb.reactivestreams.client.MongoClients
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.ImportAutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -34,6 +35,11 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
 @EnableReactiveMongoAuditing
 @EnableTransactionManagement
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "mongodb", matchIfMissing = false)
+@ImportAutoConfiguration(
+    classes = [
+        org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration::class,
+    ],
+)
 class MongoConfig(
     @Value("\${open-responses.mongodb.uri}")
     private val mongoURI: String,
@@ -55,7 +61,7 @@ class MongoConfig(
     fun mongoMappingContext(): MongoMappingContext = MongoMappingContext()
 
     @Bean
-    fun mappingMongoConverter(
+    fun reactiveMappingMongoConverter(
         factory: ReactiveMongoDatabaseFactory,
         context: MongoMappingContext,
     ): MappingMongoConverter {
