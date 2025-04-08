@@ -3,7 +3,7 @@ package ai.masaic.openresponses.tool
 import ai.masaic.openresponses.api.model.FunctionTool
 import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
-import ai.masaic.openresponses.api.service.VectorStoreService
+import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.mcp.MCPServer
 import ai.masaic.openresponses.tool.mcp.MCPServers
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor

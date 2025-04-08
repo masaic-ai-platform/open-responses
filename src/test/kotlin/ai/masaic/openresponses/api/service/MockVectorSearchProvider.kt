@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.service.search.VectorSearchProvider
 import org.springframework.context.annotation.Primary
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component

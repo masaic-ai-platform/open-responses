@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.storage
 
 import kotlinx.coroutines.flow.Flow
 import org.springframework.core.io.Resource
@@ -84,4 +84,4 @@ interface FileStorageService {
      * @param hook The hook function to register
      */
     fun registerPostProcessHook(hook: suspend (String, String) -> Unit)
-} 
+}

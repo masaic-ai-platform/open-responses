@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.config
 
-import ai.masaic.openresponses.api.service.DefaultEmbeddingService
-import ai.masaic.openresponses.api.service.OpenAIEmbeddingService
+import ai.masaic.openresponses.api.service.embedding.DefaultEmbeddingService
+import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel
 import io.mockk.mockk

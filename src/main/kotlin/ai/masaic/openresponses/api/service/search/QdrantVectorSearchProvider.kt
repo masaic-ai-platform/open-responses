@@ -1,8 +1,9 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
@@ -22,7 +23,7 @@ import java.io.InputStream
 
 /**
  * Qdrant implementation of VectorSearchProvider.
- * 
+ *
  * This class provides a VectorSearchProvider implementation that uses Qdrant
  * vector database for storing and searching vector embeddings.
  */
@@ -59,7 +60,7 @@ class QdrantVectorSearchProvider(
             log.error("Failed to initialize Qdrant collection: {}", e.message, e)
             throw RuntimeException("Failed to initialize Qdrant collection: ${e.message}", e)
         }
-        
+
         // Initialize the embedding store
         embeddingStore =
             QdrantEmbeddingStore
@@ -69,7 +70,7 @@ class QdrantVectorSearchProvider(
                 .useTls(qdrantProperties.useTls)
                 .collectionName(collectionName)
                 .build()
-        
+
         log.info("Initialized Qdrant vector search provider with collection: {}", collectionName)
     }
 
@@ -92,12 +93,12 @@ class QdrantVectorSearchProvider(
             // Extract text content from the document
             val text =
                 try {
-                    DocumentTextExtractor.extractAndCleanText(inputStream, filename)
+                    DocumentTextExtractor.Companion.extractAndCleanText(inputStream, filename)
                 } catch (e: Exception) {
                     log.warn("Extracted text is empty for file: {}", filename)
                     return false
                 }
-            
+
             if (text.isBlank()) {
                 log.warn("Extracted text is empty for file: {}", filename)
                 return false
@@ -107,25 +108,25 @@ class QdrantVectorSearchProvider(
             val chunks =
                 if (chunkingStrategy != null && chunkingStrategy.type == "static" && chunkingStrategy.static != null) {
                     log.debug(
-                        "Using provided chunking strategy: type={}, maxChunkSize={}, overlap={}", 
+                        "Using provided chunking strategy: type={}, maxChunkSize={}, overlap={}",
                         chunkingStrategy.type,
-                        chunkingStrategy.static.maxChunkSizeTokens, 
+                        chunkingStrategy.static.maxChunkSizeTokens,
                         chunkingStrategy.static.chunkOverlapTokens,
                     )
                     TextChunkingUtil.chunkText(
-                        text, 
-                        chunkingStrategy.static.maxChunkSizeTokens, 
+                        text,
+                        chunkingStrategy.static.maxChunkSizeTokens,
                         chunkingStrategy.static.chunkOverlapTokens,
                     )
                 } else {
                     log.debug(
-                        "Using default chunking parameters: chunkSize={}, overlap={}", 
+                        "Using default chunking parameters: chunkSize={}, overlap={}",
                         vectorSearchProperties.chunkSize,
                         vectorSearchProperties.chunkOverlap,
                     )
                     TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
                 }
-            
+
             if (chunks.isEmpty()) {
                 log.warn("No chunks created for file: {}", filename)
                 return false
@@ -137,9 +138,9 @@ class QdrantVectorSearchProvider(
                     val chunk = chunks[i]
                     // Generate embedding for the chunk
                     val embedding = embeddingService.embedText(chunk)
-                    
+
                     // Create metadata for this chunk
-                    val metadata = 
+                    val metadata =
                         mapOf(
                             "file_id" to fileId,
                             "filename" to filename,
@@ -147,7 +148,7 @@ class QdrantVectorSearchProvider(
                             "chunk_id" to IdGenerator.generateChunkId(),
                             "total_chunks" to chunks.size,
                         )
-                    
+
                     // Store the embedding with metadata
                     embeddingStore.add(
                         Embedding.from(embedding),
@@ -158,7 +159,7 @@ class QdrantVectorSearchProvider(
                     return false
                 }
             }
-            
+
             log.info("Successfully indexed file: {}", filename)
             return true
         } catch (e: Exception) {
@@ -186,13 +187,13 @@ class QdrantVectorSearchProvider(
                 log.debug("Empty query provided, returning empty results")
                 return emptyList()
             }
-            
+
             // Generate embedding for the query
             val queryEmbedding = Embedding.from(embeddingService.embedText(query))
-            
+
             // Find relevant documents
             val minScore = qdrantProperties.minScore ?: 0.0f
-            
+
             // Search the store with filter
             val matches =
                 if (filters != null && filters.isNotEmpty()) {
@@ -205,22 +206,22 @@ class QdrantVectorSearchProvider(
                             .minScore(minScore.toDouble())
                             .queryEmbedding(queryEmbedding)
                             .maxResults(maxResults)
-    
+
                     if (qdrantFilter != null) {
                         searchBuilder.filter(qdrantFilter)
                     }
-    
+
                     embeddingStore.search(searchBuilder.build()).matches()
                 } else {
                     embeddingStore.findRelevant(queryEmbedding, maxResults, minScore.toDouble())
                 }
-            
+
             // Convert to search results
             val results =
                 matches.map { match ->
                     val segment = match.embedded()
                     val metadata = segment.metadata().toMap()
-                
+
                     VectorSearchProvider.SearchResult(
                         fileId = (metadata["file_id"] ?: "") as String,
                         score = match.score(),
@@ -228,7 +229,7 @@ class QdrantVectorSearchProvider(
                         metadata = metadata,
                     )
                 }
-            
+
             log.debug("Found {} results for query", results.size)
             return results
         } catch (e: Exception) {
@@ -265,7 +266,7 @@ class QdrantVectorSearchProvider(
         try {
             // Create a dummy embedding for search - we're only using filter but API requires non-null embedding
             val dummyEmbedding = Embedding.from(FloatArray(vectorDimension.toInt()) { 0f })
-            
+
             // Create a search request with fileId filter
             val searchRequest =
                 EmbeddingSearchRequest
@@ -274,11 +275,11 @@ class QdrantVectorSearchProvider(
                     .maxResults(1)
                     .queryEmbedding(dummyEmbedding)
                     .build()
-            
+
             // Search for any segment with this fileId
             val matches = embeddingStore.search(searchRequest).matches()
             if (matches.isEmpty()) return null
-            
+
             // Return metadata from the first segment
             return matches
                 .first()
@@ -297,7 +298,7 @@ class QdrantVectorSearchProvider(
     private fun createQdrantFilter(filters: Map<String, Any>): Filter? {
         // Use a mutable reference to avoid smart cast issues with captured variables
         val filterRef = arrayOfNulls<Filter>(1)
-        
+
         filters.forEach { (key, value) ->
             when {
                 key == "fileIds" && value is List<*> -> {
@@ -309,7 +310,7 @@ class QdrantVectorSearchProvider(
                             fileIdsList.drop(1).fold(firstFilter) { acc, fileId ->
                                 acc.or(IsEqualTo("file_id", fileId)) as IsEqualTo
                             }
-                        
+
                         filterRef[0] = if (filterRef[0] == null) fileIdsFilter else filterRef[0]!!.and(fileIdsFilter)
                     }
                 }
@@ -320,8 +321,8 @@ class QdrantVectorSearchProvider(
                 }
             }
         }
-        
+
         // Return default filter if no valid filters (matches all records)
         return filterRef[0]
     }
-} 
+}

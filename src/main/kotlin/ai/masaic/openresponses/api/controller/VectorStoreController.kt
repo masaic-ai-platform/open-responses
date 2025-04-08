@@ -1,10 +1,10 @@
 package ai.masaic.openresponses.api.controller
 
 import ai.masaic.openresponses.api.model.*
-import ai.masaic.openresponses.api.service.FileNotFoundException
-import ai.masaic.openresponses.api.service.VectorStoreFileNotFoundException
-import ai.masaic.openresponses.api.service.VectorStoreNotFoundException
-import ai.masaic.openresponses.api.service.VectorStoreService
+import ai.masaic.openresponses.api.service.search.VectorStoreFileNotFoundException
+import ai.masaic.openresponses.api.service.search.VectorStoreNotFoundException
+import ai.masaic.openresponses.api.service.search.VectorStoreService
+import ai.masaic.openresponses.api.service.storage.FileNotFoundException
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content

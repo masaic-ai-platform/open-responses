@@ -4,6 +4,10 @@ import ai.masaic.openresponses.api.model.CreateVectorStoreFileRequest
 import ai.masaic.openresponses.api.model.CreateVectorStoreRequest
 import ai.masaic.openresponses.api.model.VectorStore
 import ai.masaic.openresponses.api.model.VectorStoreFile
+import ai.masaic.openresponses.api.service.search.VectorSearchProvider
+import ai.masaic.openresponses.api.service.search.VectorStoreService
+import ai.masaic.openresponses.api.service.storage.FileService
+import ai.masaic.openresponses.api.service.storage.FileStorageService
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*

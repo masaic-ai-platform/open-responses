@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.service.FileService
+import ai.masaic.openresponses.api.service.storage.FileService
 import ai.masaic.openresponses.tool.NativeToolRegistry
 import com.openai.core.JsonValue
 import com.openai.models.ChatModel

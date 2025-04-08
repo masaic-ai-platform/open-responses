@@ -4,8 +4,8 @@ import ai.masaic.openresponses.api.model.File
 import ai.masaic.openresponses.api.model.FileDeleteResponse
 import ai.masaic.openresponses.api.model.FileListResponse
 import ai.masaic.openresponses.api.model.FilePurpose
-import ai.masaic.openresponses.api.service.FileNotFoundException
-import ai.masaic.openresponses.api.service.FileService
+import ai.masaic.openresponses.api.service.storage.FileNotFoundException
+import ai.masaic.openresponses.api.service.storage.FileService
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk

@@ -4,6 +4,8 @@ import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
 import io.mockk.every
 import io.mockk.mockk
 import io.qdrant.client.QdrantClient

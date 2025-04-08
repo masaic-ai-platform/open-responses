@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.search
 
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -31,9 +31,9 @@ class VectorStoreCleanupScheduler(
             log.debug("Vector store cleanup is disabled")
             return
         }
-        
+
         log.info("Starting scheduled vector store cleanup")
-        
+
         runBlocking {
             try {
                 val removedCount = vectorStoreService.cleanupVectorStores()
@@ -43,4 +43,4 @@ class VectorStoreCleanupScheduler(
             }
         }
     }
-} 
+}

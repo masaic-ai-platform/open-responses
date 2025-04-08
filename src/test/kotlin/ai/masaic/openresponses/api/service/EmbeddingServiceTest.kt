@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.service.embedding.DefaultEmbeddingService
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.model.embedding.EmbeddingModel

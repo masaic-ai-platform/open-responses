@@ -1,7 +1,8 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.embedding
 
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
+import dev.langchain4j.store.embedding.CosineSimilarity
 import org.springframework.beans.factory.annotation.Value
 
 /**
@@ -62,9 +63,9 @@ class OpenAIEmbeddingService(
     ): Float {
         val e1 = Embedding.from(embedding1)
         val e2 = Embedding.from(embedding2)
-        
-        return dev.langchain4j.store.embedding.CosineSimilarity
+
+        return CosineSimilarity
             .between(e1, e2)
             .toFloat()
     }
-} 
+}

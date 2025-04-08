@@ -1,8 +1,8 @@
 package ai.masaic.openresponses.api.config
 
-import ai.masaic.openresponses.api.service.DefaultEmbeddingService
-import ai.masaic.openresponses.api.service.EmbeddingService
-import ai.masaic.openresponses.api.service.OpenAIEmbeddingService
+import ai.masaic.openresponses.api.service.embedding.DefaultEmbeddingService
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.embedding.onnx.OnnxEmbeddingModel
 import dev.langchain4j.model.embedding.onnx.PoolingMode

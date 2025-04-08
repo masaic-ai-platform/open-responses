@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.embedding
 
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
@@ -35,7 +35,7 @@ class DefaultEmbeddingService(
             embeddingModel
                 .embedAll(texts.map { TextSegment.from(it) })
                 .content()
-        
+
         return embeddings.map { it.vectorAsList() }
     }
 
@@ -52,7 +52,7 @@ class DefaultEmbeddingService(
     ): Float {
         val e1 = Embedding.from(embedding1)
         val e2 = Embedding.from(embedding2)
-        
+
         return CosineSimilarity.between(e1, e2).toFloat()
     }
-} 
+}

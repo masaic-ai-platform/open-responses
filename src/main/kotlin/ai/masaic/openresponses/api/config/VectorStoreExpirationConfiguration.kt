@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.config
 
-import ai.masaic.openresponses.api.service.VectorStoreService
+import ai.masaic.openresponses.api.service.search.VectorStoreService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob

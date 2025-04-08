@@ -1,8 +1,8 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.embedding
 
 /**
  * Interface for embedding text content into vector representations.
- * 
+ *
  * This interface defines methods for converting text into vector embeddings
  * that can be stored and searched in vector databases.
  */
@@ -34,4 +34,4 @@ interface EmbeddingService {
         embedding1: List<Float>,
         embedding2: List<Float>,
     ): Float
-} 
+}

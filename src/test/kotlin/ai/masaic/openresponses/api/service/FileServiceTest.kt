@@ -1,5 +1,9 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.service.search.VectorSearchProvider
+import ai.masaic.openresponses.api.service.storage.FileNotFoundException
+import ai.masaic.openresponses.api.service.storage.FileService
+import ai.masaic.openresponses.api.service.storage.FileStorageService
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*

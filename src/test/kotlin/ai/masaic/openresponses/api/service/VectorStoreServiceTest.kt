@@ -2,6 +2,10 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.repository.VectorStoreRepository
+import ai.masaic.openresponses.api.service.search.VectorSearchProvider
+import ai.masaic.openresponses.api.service.search.VectorStoreService
+import ai.masaic.openresponses.api.service.storage.FileService
+import ai.masaic.openresponses.api.service.storage.FileStorageService
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -76,7 +80,8 @@ class VectorStoreServiceTest {
         vectorSearchProvider = mockk()
         telemetryService = mockk(relaxed = true)
 
-        vectorStoreService = VectorStoreService(fileStorageService, vectorStoreRepository, vectorSearchProvider, telemetryService)
+        vectorStoreService =
+            VectorStoreService(fileStorageService, vectorStoreRepository, vectorSearchProvider, telemetryService)
         
         // Setup mock resources
         mockResource = mockk<ByteArrayResource>()

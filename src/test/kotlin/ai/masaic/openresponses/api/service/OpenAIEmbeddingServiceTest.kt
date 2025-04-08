@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
 import io.mockk.every

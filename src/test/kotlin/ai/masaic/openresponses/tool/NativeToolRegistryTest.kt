@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.tool
 
-import ai.masaic.openresponses.api.service.VectorStoreService
+import ai.masaic.openresponses.api.service.search.VectorStoreService
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.Tool
 import io.mockk.*

@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.search.FileBasedVectorSearchProvider
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every

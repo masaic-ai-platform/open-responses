@@ -1,11 +1,11 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import java.io.InputStream
 
 /**
  * Interface for vector search providers.
- * 
+ *
  * This interface defines methods for indexing and searching files in a vector database.
  * Implementations can use different vector stores such as Pinecone, Milvus, or others.
  */
@@ -70,4 +70,4 @@ interface VectorSearchProvider {
         val content: String,
         val metadata: Map<String, Any> = emptyMap(),
     )
-} 
+}

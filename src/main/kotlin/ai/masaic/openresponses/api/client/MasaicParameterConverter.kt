@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.service.FileService
 import ai.masaic.openresponses.api.service.ResponseProcessingException
+import ai.masaic.openresponses.api.service.storage.FileService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.NativeToolRegistry

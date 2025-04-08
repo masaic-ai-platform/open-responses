@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.controller
 
 import ai.masaic.openresponses.api.model.File
-import ai.masaic.openresponses.api.service.FileService
+import ai.masaic.openresponses.api.service.storage.FileService
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.coEvery
 import io.mockk.coVerify

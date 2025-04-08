@@ -1,9 +1,10 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.storage
 
 import ai.masaic.openresponses.api.model.File
 import ai.masaic.openresponses.api.model.FileDeleteResponse
 import ai.masaic.openresponses.api.model.FileListResponse
 import ai.masaic.openresponses.api.model.FilePurpose
+import ai.masaic.openresponses.api.service.search.VectorSearchProvider
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.map
@@ -44,20 +45,20 @@ class FileService(
     ): File =
         withContext(Dispatchers.IO) {
             // Validate purpose
-            if (!FilePurpose.isValid(purpose)) {
+            if (!FilePurpose.Companion.isValid(purpose)) {
                 throw IllegalArgumentException("Invalid purpose: $purpose. Valid purposes are: ${FilePurpose.entries.joinToString()}")
             }
-            
+
             // Track the file upload operation with telemetry
             telemetryService.withFileOperation(
                 operationName = "upload",
                 fileId = "temp", // We don't have the ID yet, will be generated during storage
                 fileName = filePart.filename(),
                 purpose = purpose,
-            ) { 
+            ) {
                 // Store the file
                 val fileId = fileStorageService.store(filePart, purpose)
-                
+
                 // Create file object
                 File(
                     id = fileId,
@@ -92,7 +93,7 @@ class FileService(
                 } else {
                     fileStorageService.loadAll().map { pathToFile(it) }.toList()
                 }
-        
+
             // Sort by creation time
             val sortedFiles =
                 if (order.equals("asc", ignoreCase = true)) {
@@ -100,7 +101,7 @@ class FileService(
                 } else {
                     allFiles.sortedByDescending { it.createdAt }
                 }
-        
+
             // Apply pagination
             val filteredFiles =
                 if (after != null) {
@@ -113,10 +114,10 @@ class FileService(
                 } else {
                     sortedFiles
                 }
-        
+
             // Apply limit
             val limitedFiles = filteredFiles.take(limit)
-        
+
             FileListResponse(data = limitedFiles)
         }
 
@@ -131,10 +132,10 @@ class FileService(
             if (!fileStorageService.exists(fileId)) {
                 throw FileNotFoundException("File not found: $fileId")
             }
-        
+
             // Get file metadata from storage
             val metadata = fileStorageService.getFileMetadata(fileId)
-        
+
             File(
                 id = fileId,
                 bytes = metadata["bytes"] as Long,
@@ -166,7 +167,7 @@ class FileService(
             if (!fileStorageService.exists(fileId)) {
                 throw FileNotFoundException("File not found: $fileId")
             }
-        
+
             val deleted = fileStorageService.delete(fileId)
 
             vectorSearchProvider?.let { provider ->
@@ -188,7 +189,7 @@ class FileService(
         withContext(Dispatchers.IO) {
             val fileId = path.fileName.toString()
             val metadata = fileStorageService.getFileMetadata(fileId)
-        
+
             File(
                 id = fileId,
                 bytes = metadata["bytes"] as Long,
@@ -197,4 +198,4 @@ class FileService(
                 createdAt = metadata["created_at"] as Long,
             )
         }
-} 
+}

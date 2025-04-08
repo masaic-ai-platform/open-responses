@@ -1,7 +1,9 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.repository.VectorStoreRepository
+import ai.masaic.openresponses.api.service.storage.FileNotFoundException
+import ai.masaic.openresponses.api.service.storage.FileStorageService
 import ai.masaic.openresponses.api.support.service.OpenResponsesObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.IdGenerator

@@ -1,7 +1,8 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
@@ -18,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * File-based implementation of VectorSearchProvider.
- * 
+ *
  * This class provides a vector search implementation that persists embeddings to disk.
  * It uses the EmbeddingService to generate vector embeddings and stores them in JSON files.
  * This ensures persistence across application restarts.
@@ -32,10 +33,10 @@ class FileBasedVectorSearchProvider(
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(FileBasedVectorSearchProvider::class.java)
-    
+
     // Directory for storing embeddings
     private val embeddingsDir = "$rootDir/embeddings"
-    
+
     // Cache to avoid reading from disk for every search
     private val fileChunksCache = ConcurrentHashMap<String, List<ChunkWithEmbedding>>()
     private val fileMetadataCache = ConcurrentHashMap<String, Map<String, Any>>()
@@ -48,7 +49,7 @@ class FileBasedVectorSearchProvider(
                 Files.createDirectories(embeddingsDirPath)
                 log.info("Created embeddings directory at {}", embeddingsDirPath.toAbsolutePath())
             }
-            
+
             // Load existing embeddings into cache on startup
             loadAllEmbeddings()
         } catch (e: Exception) {
@@ -82,18 +83,18 @@ class FileBasedVectorSearchProvider(
     private fun loadAllEmbeddings() {
         val embeddingsPath = Paths.get(embeddingsDir)
         if (!Files.exists(embeddingsPath)) return
-        
+
         try {
             Files.list(embeddingsPath).forEach { path ->
                 if (Files.isRegularFile(path) && path.toString().endsWith(".json")) {
                     try {
                         val json = Files.readAllBytes(path)
                         val fileEmbeddings = objectMapper.readValue<FileEmbeddings>(json)
-                        
+
                         // Update caches
                         fileChunksCache[fileEmbeddings.fileId] = fileEmbeddings.chunks
                         fileMetadataCache[fileEmbeddings.fileId] = fileEmbeddings.metadata
-                        
+
                         log.info("Loaded embeddings for file: ${fileEmbeddings.fileId}")
                     } catch (e: Exception) {
                         log.error("Error loading embeddings from ${path.fileName}", e)
@@ -111,7 +112,7 @@ class FileBasedVectorSearchProvider(
     private fun saveEmbeddings(fileId: String) {
         val chunks = fileChunksCache[fileId] ?: return
         val metadata = fileMetadataCache[fileId] ?: emptyMap()
-        
+
         try {
             val fileEmbeddings =
                 FileEmbeddings(
@@ -119,7 +120,7 @@ class FileBasedVectorSearchProvider(
                     metadata = metadata,
                     chunks = chunks,
                 )
-            
+
             val json = objectMapper.writeValueAsString(fileEmbeddings)
             Files.write(Paths.get(embeddingsDir, "$fileId.json"), json.toByteArray())
             log.info("Saved embeddings for file: $fileId")
@@ -145,12 +146,12 @@ class FileBasedVectorSearchProvider(
     ): Boolean {
         try {
             // Extract text from the document using Apache Tika
-            val text = DocumentTextExtractor.extractAndCleanText(content, filename)
+            val text = DocumentTextExtractor.Companion.extractAndCleanText(content, filename)
             if (text.isBlank()) {
                 log.warn("Extracted text is empty for file: $filename")
                 return false
             }
-            
+
             // Determine chunking parameters based on the strategy or fallback to properties
             val chunks =
                 if (chunkingStrategy != null && chunkingStrategy.type == "static" && chunkingStrategy.static != null) {
@@ -160,8 +161,8 @@ class FileBasedVectorSearchProvider(
                             "overlap=${chunkingStrategy.static.chunkOverlapTokens}",
                     )
                     TextChunkingUtil.chunkText(
-                        text, 
-                        chunkingStrategy.static.maxChunkSizeTokens, 
+                        text,
+                        chunkingStrategy.static.maxChunkSizeTokens,
                         chunkingStrategy.static.chunkOverlapTokens,
                     )
                 } else {
@@ -171,13 +172,13 @@ class FileBasedVectorSearchProvider(
                     )
                     TextChunkingUtil.chunkText(text, vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
                 }
-            
+
             // Generate embeddings for each chunk
             val chunksWithEmbeddings =
                 chunks.mapIndexed { index, chunk ->
                     // Generate a short unique ID for each chunk
                     val chunkId = IdGenerator.generateChunkId()
-                    
+
                     ChunkWithEmbedding(
                         fileId = fileId,
                         chunkId = chunkId,
@@ -193,14 +194,14 @@ class FileBasedVectorSearchProvider(
                             ),
                     )
                 }
-            
+
             // Store in memory cache
             fileChunksCache[fileId] = chunksWithEmbeddings
             fileMetadataCache[fileId] = mapOf("filename" to filename)
-            
+
             // Persist to disk
             saveEmbeddings(fileId)
-            
+
             return true
         } catch (e: Exception) {
             log.error("Error indexing file: ${e.message}", e)
@@ -228,10 +229,10 @@ class FileBasedVectorSearchProvider(
 
         // Generate embedding for the query
         val queryEmbedding = embeddingService.embedText(query)
-        
+
         // Collect all chunks from cache
         val allChunks = fileChunksCache.values.flatten()
-        
+
         // Apply filters if provided
         val filteredChunks =
             if (filters != null) {
@@ -241,7 +242,7 @@ class FileBasedVectorSearchProvider(
                             key == "fileIds" && value is List<*> -> (value as List<*>).contains(chunk.fileId)
                             key == "file_id" -> chunk.fileId == value
                             chunk.chunkMetadata.containsKey(key) -> chunk.chunkMetadata[key] == value
-                            fileMetadataCache[chunk.fileId]?.containsKey(key) == true -> 
+                            fileMetadataCache[chunk.fileId]?.containsKey(key) == true ->
                                 fileMetadataCache[chunk.fileId]?.get(key) == value
                             else -> false
                         }
@@ -250,14 +251,14 @@ class FileBasedVectorSearchProvider(
             } else {
                 allChunks
             }
-        
+
         // Calculate similarity scores
         val scoredChunks =
             filteredChunks.map { chunk ->
                 val score = embeddingService.calculateSimilarity(queryEmbedding, chunk.embedding)
                 chunk to score
             }
-        
+
         // Sort by score (descending) and take top results
         return scoredChunks
             .sortedByDescending { (_, score) -> score }
@@ -283,14 +284,14 @@ class FileBasedVectorSearchProvider(
             // Remove from memory cache
             fileChunksCache.remove(fileId)
             fileMetadataCache.remove(fileId)
-            
+
             // Delete the file from disk
             val embeddingsFile = Paths.get(embeddingsDir, "$fileId.json")
             if (Files.exists(embeddingsFile)) {
                 Files.delete(embeddingsFile)
                 log.info("Deleted embeddings for file: $fileId")
             }
-            
+
             return true
         } catch (e: Exception) {
             log.error("Error deleting file embeddings: $fileId", e)
@@ -305,4 +306,4 @@ class FileBasedVectorSearchProvider(
      * @return Map of metadata, or null if the file doesn't exist
      */
     override fun getFileMetadata(fileId: String): Map<String, Any>? = fileMetadataCache[fileId]
-} 
+}

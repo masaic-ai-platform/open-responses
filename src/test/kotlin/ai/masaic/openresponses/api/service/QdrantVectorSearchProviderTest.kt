@@ -4,6 +4,8 @@ import ai.masaic.openresponses.api.config.QdrantProperties
 import ai.masaic.openresponses.api.config.VectorSearchProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
+import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dev.langchain4j.data.document.Metadata
