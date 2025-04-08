@@ -135,8 +135,6 @@ services:
       - mongodb_data:/data/db
     environment:
       - MONGO_INITDB_DATABASE=openresponses
-    networks:
-      - observability-network
     profiles:
       - mongodb
       - qdrant-mongodb
