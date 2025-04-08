@@ -16,10 +16,10 @@ import org.springframework.stereotype.Component
  * Stores responses and their input items in memory using fixed-size caches with LRU eviction.
  */
 @Component
-@ConditionalOnProperty(name = ["open-responses.response-store.type"], havingValue = "in-memory", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryResponseStore(
     private val objectMapper: ObjectMapper,
-    @Value("\${open-responses.response-store.cache-size:10000}") private val cacheSize: Long,
+    @Value("\${open-responses.store.cache-size:10000}") private val cacheSize: Long,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
 

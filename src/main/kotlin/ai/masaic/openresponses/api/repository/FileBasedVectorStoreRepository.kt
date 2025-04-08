@@ -25,7 +25,7 @@ import java.nio.file.Paths
  */
 @Repository
 @Primary
-@ConditionalOnProperty(name = ["open-responses.vector-store.repository.type"], havingValue = "file", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.store.vector.repository.type"], havingValue = "file", matchIfMissing = true)
 class FileBasedVectorStoreRepository(
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
     private val objectMapper: ObjectMapper,

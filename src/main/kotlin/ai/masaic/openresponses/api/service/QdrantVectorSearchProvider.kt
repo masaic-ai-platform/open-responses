@@ -27,7 +27,7 @@ import java.io.InputStream
  * vector database for storing and searching vector embeddings.
  */
 @Service
-@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "qdrant")
+@ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "qdrant")
 class QdrantVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val qdrantProperties: QdrantProperties,

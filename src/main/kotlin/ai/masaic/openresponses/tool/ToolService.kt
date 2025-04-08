@@ -536,7 +536,7 @@ class NativeToolRegistry {
                 data =
                     sortedResults.map { result ->
                         // Get chunk index from metadata
-                        val chunkIndex = result.attributes?.get("chunk_index") as? Int ?: 0
+                        val chunkIndex = result.attributes?.get("chunk_index") as? Long ?: 0
                 
                         FileSearchResult(
                             file_id = result.fileId,
@@ -547,7 +547,7 @@ class NativeToolRegistry {
                                 listOf(
                                     FileCitation(
                                         type = "file_citation",
-                                        index = chunkIndex,
+                                        index = chunkIndex.toInt(),
                                         file_id = result.fileId,
                                         filename = result.filename,
                                     ),

@@ -22,12 +22,12 @@ import org.springframework.stereotype.Repository
  * This implementation stores vector store metadata and vector store file metadata in MongoDB.
  * It does not handle the actual file content, which is managed by FileStorageService.
  * 
- * It is only enabled when open-responses.vector-store.repository.type=mongodb
+ * It is only enabled when open-responses.store.vector.repository.type=mongodb
  */
 @Repository
-@ConditionalOnProperty(name = ["open-responses.vector-store.repository.type"], havingValue = "mongodb")
+@ConditionalOnProperty(name = ["open-responses.store.vector.repository.type"], havingValue = "mongodb")
 class MongoVectorStoreRepository(
-    private val mongoTemplate: ReactiveMongoTemplate,
+    private val reactionMongoTemplate: ReactiveMongoTemplate,
 ) : VectorStoreRepository {
     private val log = LoggerFactory.getLogger(MongoVectorStoreRepository::class.java)
 
@@ -38,7 +38,7 @@ class MongoVectorStoreRepository(
 
     override suspend fun saveVectorStore(vectorStore: VectorStore): VectorStore =
         try {
-            mongoTemplate.save(vectorStore, VECTOR_STORE_COLLECTION).awaitFirst().also {
+            reactionMongoTemplate.save(vectorStore, VECTOR_STORE_COLLECTION).awaitFirst().also {
                 log.info("Saved vector store metadata ${vectorStore.id}")
             }
         } catch (e: Exception) {
@@ -48,7 +48,7 @@ class MongoVectorStoreRepository(
 
     override suspend fun findVectorStoreById(vectorStoreId: String): VectorStore? =
         try {
-            mongoTemplate.findById<VectorStore>(vectorStoreId, VECTOR_STORE_COLLECTION).awaitFirstOrNull()
+            reactionMongoTemplate.findById<VectorStore>(vectorStoreId, VECTOR_STORE_COLLECTION).awaitFirstOrNull()
         } catch (e: Exception) {
             log.error("Error reading vector store metadata $vectorStoreId", e)
             null
@@ -65,7 +65,7 @@ class MongoVectorStoreRepository(
             
             // Apply pagination
             if (after != null) {
-                val afterStore = mongoTemplate.findById<VectorStore>(after, VECTOR_STORE_COLLECTION).awaitFirstOrNull()
+                val afterStore = reactionMongoTemplate.findById<VectorStore>(after, VECTOR_STORE_COLLECTION).awaitFirstOrNull()
                 afterStore?.let {
                     if (order.equals("asc", ignoreCase = true)) {
                         query.addCriteria(Criteria.where("createdAt").gt(it.createdAt))
@@ -74,7 +74,7 @@ class MongoVectorStoreRepository(
                     }
                 }
             } else if (before != null) {
-                val beforeStore = mongoTemplate.findById<VectorStore>(before, VECTOR_STORE_COLLECTION).awaitFirstOrNull()
+                val beforeStore = reactionMongoTemplate.findById<VectorStore>(before, VECTOR_STORE_COLLECTION).awaitFirstOrNull()
                 beforeStore?.let {
                     if (order.equals("asc", ignoreCase = true)) {
                         query.addCriteria(Criteria.where("createdAt").lt(it.createdAt))
@@ -91,7 +91,7 @@ class MongoVectorStoreRepository(
             // Apply limit
             query.with(PageRequest.of(0, limit))
             
-            mongoTemplate.find<VectorStore>(query, VECTOR_STORE_COLLECTION).collectList().awaitFirst()
+            reactionMongoTemplate.find<VectorStore>(query, VECTOR_STORE_COLLECTION).collectList().awaitFirst()
         } catch (e: Exception) {
             log.error("Error listing vector stores", e)
             emptyList()
@@ -101,12 +101,12 @@ class MongoVectorStoreRepository(
         try {
             // Delete the vector store
             val vectorStoreQuery = Query.query(Criteria.where("_id").`is`(vectorStoreId))
-            val deletedVectorStore = mongoTemplate.remove<VectorStore>(vectorStoreQuery, VECTOR_STORE_COLLECTION).awaitFirst()
+            val deletedVectorStore = reactionMongoTemplate.remove<VectorStore>(vectorStoreQuery, VECTOR_STORE_COLLECTION).awaitFirst()
             
             if (deletedVectorStore.deletedCount > 0) {
                 // Delete all associated vector store files
                 val vectorStoreFilesQuery = Query.query(Criteria.where("vectorStoreId").`is`(vectorStoreId))
-                mongoTemplate.remove<VectorStoreFile>(vectorStoreFilesQuery, VECTOR_STORE_FILE_COLLECTION).awaitFirst()
+                reactionMongoTemplate.remove<VectorStoreFile>(vectorStoreFilesQuery, VECTOR_STORE_FILE_COLLECTION).awaitFirst()
                 
                 log.info("Deleted vector store metadata $vectorStoreId")
                 true
@@ -120,7 +120,7 @@ class MongoVectorStoreRepository(
 
     override suspend fun saveVectorStoreFile(vectorStoreFile: VectorStoreFile): VectorStoreFile =
         try {
-            mongoTemplate.save(vectorStoreFile, VECTOR_STORE_FILE_COLLECTION).awaitFirst().also {
+            reactionMongoTemplate.save(vectorStoreFile, VECTOR_STORE_FILE_COLLECTION).awaitFirst().also {
                 log.info("Saved vector store file metadata ${vectorStoreFile.id} for vector store ${vectorStoreFile.vectorStoreId}")
             }
         } catch (e: Exception) {
@@ -141,7 +141,7 @@ class MongoVectorStoreRepository(
                         .and("vectorStoreId")
                         .`is`(vectorStoreId),
                 )
-            mongoTemplate.findOne(query, VectorStoreFile::class.java, VECTOR_STORE_FILE_COLLECTION).awaitFirstOrNull()
+            reactionMongoTemplate.findOne(query, VectorStoreFile::class.java, VECTOR_STORE_FILE_COLLECTION).awaitFirstOrNull()
         } catch (e: Exception) {
             log.error("Error reading vector store file metadata $fileId for vector store $vectorStoreId", e)
             null
@@ -187,7 +187,7 @@ class MongoVectorStoreRepository(
             // Apply limit
             query.with(PageRequest.of(0, limit))
             
-            mongoTemplate.find<VectorStoreFile>(query, VECTOR_STORE_FILE_COLLECTION).collectList().awaitFirst()
+            reactionMongoTemplate.find<VectorStoreFile>(query, VECTOR_STORE_FILE_COLLECTION).collectList().awaitFirst()
         } catch (e: Exception) {
             log.error("Error listing vector store files for vector store $vectorStoreId", e)
             emptyList()
@@ -206,7 +206,7 @@ class MongoVectorStoreRepository(
                         .and("vectorStoreId")
                         .`is`(vectorStoreId),
                 )
-            val result = mongoTemplate.remove<VectorStoreFile>(query, VECTOR_STORE_FILE_COLLECTION).awaitFirst()
+            val result = reactionMongoTemplate.remove<VectorStoreFile>(query, VECTOR_STORE_FILE_COLLECTION).awaitFirst()
             val deleted = result.deletedCount > 0
             
             if (deleted) {

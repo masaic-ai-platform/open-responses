@@ -34,7 +34,7 @@ import kotlin.test.assertTrue
 @DataMongoTest
 @ExtendWith(SpringExtension::class)
 @Import(MongoVectorStoreRepository::class)
-@TestPropertySource(properties = ["open-responses.vector-store.repository.type=mongodb"])
+@TestPropertySource(properties = ["open-responses.store.vector.repository.type=mongodb"])
 @Disabled("Enable this test to run the complete workflow") // Disable this line to run the test
 class MongoVectorStoreRepositoryTest {
     companion object {

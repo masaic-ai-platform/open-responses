@@ -1,6 +1,8 @@
 package ai.masaic.openresponses
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.autoconfigure.data.mongo.MongoReactiveDataAutoConfiguration
+import org.springframework.boot.autoconfigure.data.mongo.MongoReactiveRepositoriesAutoConfiguration
 import org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfiguration
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
@@ -17,6 +19,8 @@ import org.springframework.scheduling.annotation.EnableScheduling
 @SpringBootApplication(
     exclude = [
         MongoReactiveAutoConfiguration::class,
+        MongoReactiveDataAutoConfiguration::class,
+        MongoReactiveRepositoriesAutoConfiguration::class,
     ],
 )
 @ConfigurationPropertiesScan

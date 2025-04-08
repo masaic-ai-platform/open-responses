@@ -30,7 +30,7 @@ import kotlin.test.assertTrue
 @SpringBootTest(classes = [MongoConfig::class, MongoVectorStoreRepository::class])
 @Testcontainers
 @ActiveProfiles("test")
-@TestPropertySource(properties = ["open-responses.vector-store.repository.type=mongodb"])
+@TestPropertySource(properties = ["open-responses.store.vector.repository.type=mongodb"])
 @Disabled("Enable this test to run the complete workflow") // Enable this line to run the test
 class MongoVectorStoreRepositoryIntegrationTest {
     companion object {

@@ -2,6 +2,9 @@ package ai.masaic.openresponses.api.config
 
 import ai.masaic.openresponses.api.client.MongoResponseStore
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.mongodb.ConnectionString
+import com.mongodb.MongoClientSettings
+import com.mongodb.reactivestreams.client.MongoClients
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -11,7 +14,10 @@ import org.springframework.data.mongodb.ReactiveMongoDatabaseFactory
 import org.springframework.data.mongodb.ReactiveMongoTransactionManager
 import org.springframework.data.mongodb.config.EnableReactiveMongoAuditing
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
+import org.springframework.data.mongodb.core.SimpleReactiveMongoDatabaseFactory
 import org.springframework.data.mongodb.core.convert.MappingMongoConverter
+import org.springframework.data.mongodb.core.convert.NoOpDbRefResolver
+import org.springframework.data.mongodb.core.mapping.MongoMappingContext
 import org.springframework.data.mongodb.core.mapping.event.ValidatingMongoEventListener
 import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories
 import org.springframework.transaction.annotation.EnableTransactionManagement
@@ -27,7 +33,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
 @EnableReactiveMongoRepositories(basePackages = ["ai.masaic.openresponses.api.repository"])
 @EnableReactiveMongoAuditing
 @EnableTransactionManagement
-@ConditionalOnProperty(name = ["open-responses.response-store.type"], havingValue = "mongodb", matchIfMissing = false)
+@ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "mongodb", matchIfMissing = false)
 class MongoConfig(
     @Value("\${open-responses.mongodb.uri}")
     private val mongoURI: String,
@@ -35,6 +41,32 @@ class MongoConfig(
     private val databaseName: String,
 ) {
     private val logger = KotlinLogging.logger {}
+
+    @Bean
+    fun mongoClient(): com.mongodb.reactivestreams.client.MongoClient =
+        MongoClients.create(
+            MongoClientSettings
+                .builder()
+                .applyConnectionString(ConnectionString(mongoURI))
+                .build(),
+        )
+
+    @Bean
+    fun mongoMappingContext(): MongoMappingContext = MongoMappingContext()
+
+    @Bean
+    fun mappingMongoConverter(
+        factory: ReactiveMongoDatabaseFactory,
+        context: MongoMappingContext,
+    ): MappingMongoConverter {
+        val converter = MappingMongoConverter(NoOpDbRefResolver.INSTANCE, context)
+        converter.setCodecRegistryProvider(factory)
+        converter.afterPropertiesSet()
+        return converter
+    }
+
+    @Bean
+    fun reactiveMongoDatabaseFactory(): ReactiveMongoDatabaseFactory = SimpleReactiveMongoDatabaseFactory(mongoClient(), databaseName)
 
     @Bean
     fun validatingMongoEventListener(validator: LocalValidatorFactoryBean): ValidatingMongoEventListener = ValidatingMongoEventListener(validator)

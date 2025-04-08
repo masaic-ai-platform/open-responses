@@ -15,7 +15,7 @@ import org.springframework.scheduling.annotation.Scheduled
  */
 @Configuration
 @ConditionalOnProperty(
-    prefix = "open-responses.vector-store.expiration",
+    prefix = "open-responses.store.vector.expiration",
     name = ["enabled"],
     havingValue = "true",
     matchIfMissing = true,
@@ -29,7 +29,7 @@ class VectorStoreExpirationConfiguration(
     /**
      * Scheduled task to check for and clean up expired vector stores.
      */
-    @Scheduled(fixedDelayString = "\${open-responses.vector-store.expiration.check-interval:3600000}")
+    @Scheduled(fixedDelayString = "\${open-responses.store.vector.expiration.check-interval:3600000}")
     fun checkExpiredVectorStores() {
         log.info("Starting vector store expiration check")
         backgroundScope.launch {

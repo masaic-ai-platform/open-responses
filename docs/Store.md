@@ -37,7 +37,7 @@ The in-memory store is enabled by default and requires no additional configurati
 To explicitly configure the in-memory store:
 
 ```properties
-open-responses.response-store.type=in-memory
+open-responses.store.type=in-memory
 ```
 
 ### MongoDB Store
@@ -49,7 +49,7 @@ To enable the MongoDB store:
 1. Add the following properties to your configuration:
 
 ```properties
-open-responses.response-store.type=mongodb
+open-responses.store.type=mongodb
 open-response.mongodb.uri=mongodb://localhost:27017
 open-response.mongodb.database=openresponses
 ```

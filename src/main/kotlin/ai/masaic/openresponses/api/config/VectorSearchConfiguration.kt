@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration
 /**
  * Configuration properties for vector search.
  */
-@ConfigurationProperties(prefix = "open-responses.vector-store")
+@ConfigurationProperties(prefix = "open-responses.store.vector")
 data class VectorSearchProperties(
     /**
      * The vector store provider to use.
@@ -31,7 +31,7 @@ data class VectorSearchProperties(
 /**
  * Configuration properties for Qdrant vector database.
  */
-@ConfigurationProperties(prefix = "open-responses.vector-store.qdrant")
+@ConfigurationProperties(prefix = "open-responses.store.vector.qdrant")
 data class QdrantProperties(
     /**
      * Qdrant server hostname.
@@ -48,11 +48,11 @@ data class QdrantProperties(
     /**
      * Name of the collection to use. If null, a random name will be generated.
      */
-    val collectionName: String? = null,
+    val collectionName: String? = "open-responses-collection",
     /**
      * Minimum similarity score threshold for search results.
      */
-    val minScore: Float? = 0.0f,
+    val minScore: Float? = 0.7f,
     /**
      * Vector dimension - depends on the embedding model used.
      * For AllMiniLmL6V2, this is 384.
@@ -66,7 +66,7 @@ data class QdrantProperties(
 @Configuration
 class VectorSearchConfiguration {
     @Bean
-    @ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "qdrant")
+    @ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "qdrant")
     fun qdrantClient(qdrantProperties: QdrantProperties): QdrantClient =
         QdrantClient(
             QdrantGrpcClient

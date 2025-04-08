@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap
  * This ensures persistence across application restarts.
  */
 @Service
-@ConditionalOnProperty(name = ["open-responses.vector-store.provider"], havingValue = "file", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "file", matchIfMissing = true)
 class FileBasedVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val vectorSearchProperties: VectorSearchProperties,
