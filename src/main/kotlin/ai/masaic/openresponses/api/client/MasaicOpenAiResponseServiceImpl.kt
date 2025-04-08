@@ -84,7 +84,7 @@ class MasaicOpenAiResponseServiceImpl(
         val responseOrCompletions =
             telemetryService.withClientObservation("open.responses.create", parentObservation) { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
-                val completionCreateParams = parameterConverter.prepareCompletion(params)
+                val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
                 val chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }

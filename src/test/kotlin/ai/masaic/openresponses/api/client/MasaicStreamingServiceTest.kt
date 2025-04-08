@@ -49,7 +49,6 @@ class MasaicStreamingServiceTest {
     private val mockObservation = mockk<Observation>()
     private val mockSample = mockk<Sample>()
     private val mockResponse = mockk<Response>()
-    private val mockCompletionParams = mockk<ChatCompletionCreateParams>()
     private lateinit var responseStore: ResponseStore
 
     @BeforeEach
@@ -99,7 +98,7 @@ class MasaicStreamingServiceTest {
             // Given
             val params = defaultParamsMock()
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
-            every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
+            coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             // Mock the client’s streaming call -> empty stream
             val mockedSubscription = MockSubscription(emptyList())
@@ -135,7 +134,7 @@ class MasaicStreamingServiceTest {
             // Suppose the user input has 5 function calls, exceeding our limit of 3
             val params = defaultParamsMock()
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
-            every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
+            coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             val inputItems =
                 (1..5).map {
@@ -169,7 +168,7 @@ class MasaicStreamingServiceTest {
         runTest {
             val params = defaultParamsMock()
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
-            every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
+            coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             // Provide a chunk that has a 'stop' finish reason to finalize quickly
             val chunkChoice =
@@ -226,7 +225,7 @@ class MasaicStreamingServiceTest {
         runTest {
             val params = defaultParamsMock(true)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
-            every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
+            coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             // Provide a chunk that has a 'stop' finish reason to finalize quickly
             val chunkChoice =
@@ -396,7 +395,7 @@ class MasaicStreamingServiceTest {
             coEvery { responseStore.storeResponse(any(), any()) } just runs
 
             // The parameterConverter returns a prepared completion for any iteration:
-            every { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
+            coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             // We'll say toolService recognizes \"my_function\"
             every { toolService.getFunctionTool("my_function") } returns FunctionTool(name = "my_function")

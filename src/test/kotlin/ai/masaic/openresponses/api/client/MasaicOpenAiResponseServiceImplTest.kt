@@ -211,7 +211,7 @@ class MasaicOpenAiResponseServiceImplTest {
      */
     private fun defaultParamsMock(store: Boolean = false): ResponseCreateParams {
         val params = mockk<ResponseCreateParams>(relaxed = true)
-        every { params.instructions() } returns Optional.empty()
+        every { params.instructions() } returns Optional.of("Say hello to the world")
         every { params.metadata() } returns Optional.empty()
         every { params.model() } returns ChatModel.of("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
