@@ -2,9 +2,6 @@ package ai.masaic.openresponses.api.config
 
 import ai.masaic.openresponses.api.client.MongoResponseStore
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.mongodb.ConnectionString
-import com.mongodb.MongoClientSettings
-import com.mongodb.reactivestreams.client.MongoClients
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
@@ -13,16 +10,11 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.data.mongodb.ReactiveMongoDatabaseFactory
 import org.springframework.data.mongodb.ReactiveMongoTransactionManager
+import org.springframework.data.mongodb.config.AbstractReactiveMongoConfiguration
 import org.springframework.data.mongodb.config.EnableReactiveMongoAuditing
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
-import org.springframework.data.mongodb.core.SimpleReactiveMongoDatabaseFactory
-import org.springframework.data.mongodb.core.convert.MappingMongoConverter
-import org.springframework.data.mongodb.core.convert.NoOpDbRefResolver
-import org.springframework.data.mongodb.core.mapping.MongoMappingContext
-import org.springframework.data.mongodb.core.mapping.event.ValidatingMongoEventListener
 import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories
 import org.springframework.transaction.annotation.EnableTransactionManagement
-import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean
 
 /**
  * MongoDB configuration class.
@@ -45,48 +37,8 @@ class MongoConfig(
     private val mongoURI: String,
     @Value("\${open-responses.mongodb.database}")
     private val databaseName: String,
-) {
+) : AbstractReactiveMongoConfiguration() {
     private val logger = KotlinLogging.logger {}
-
-    @Bean
-    fun mongoClient(): com.mongodb.reactivestreams.client.MongoClient =
-        MongoClients.create(
-            MongoClientSettings
-                .builder()
-                .applyConnectionString(ConnectionString(mongoURI))
-                .build(),
-        )
-
-    @Bean
-    fun mongoMappingContext(): MongoMappingContext = MongoMappingContext()
-
-    @Bean
-    fun reactiveMappingMongoConverter(
-        factory: ReactiveMongoDatabaseFactory,
-        context: MongoMappingContext,
-    ): MappingMongoConverter {
-        val converter = MappingMongoConverter(NoOpDbRefResolver.INSTANCE, context)
-        converter.setCodecRegistryProvider(factory)
-        converter.afterPropertiesSet()
-        return converter
-    }
-
-    @Bean
-    fun reactiveMongoDatabaseFactory(): ReactiveMongoDatabaseFactory = SimpleReactiveMongoDatabaseFactory(mongoClient(), databaseName)
-
-    @Bean
-    fun validatingMongoEventListener(validator: LocalValidatorFactoryBean): ValidatingMongoEventListener = ValidatingMongoEventListener(validator)
-
-    /**
-     * Configures a ReactiveMongoTemplate with custom type mapping.
-     *
-     * This removes the _class field from MongoDB documents.
-     */
-    @Bean
-    fun reactiveMongoTemplate(
-        factory: ReactiveMongoDatabaseFactory,
-        converter: MappingMongoConverter,
-    ): ReactiveMongoTemplate = ReactiveMongoTemplate(factory, converter)
 
     @Bean
     fun mongoResponseStore(
@@ -102,4 +54,9 @@ class MongoConfig(
      */
     @Bean
     fun transactionManager(factory: ReactiveMongoDatabaseFactory): ReactiveMongoTransactionManager = ReactiveMongoTransactionManager(factory)
+
+    override fun getDatabaseName(): String {
+        logger.debug { "MongoDB database name: $databaseName" }
+        return databaseName
+    }
 }
