@@ -24,6 +24,7 @@ logs/*.log
 *.iws
 *.iml
 *.ipr
+.env
 out/
 !**/src/main/**/out/
 !**/src/test/**/out/
