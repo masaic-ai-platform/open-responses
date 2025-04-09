@@ -1,0 +1,379 @@
+#!/bin/bash
+
+# Vector Store Test Script for OpenResponses API
+# This script tests vector store functionality in OpenResponses
+
+set -e  # Exit on error
+
+# Text formatting
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # No Color
+BOLD='\033[1m'
+
+# Set the default environment file path
+ENV_FILE_PATH=".env"
+
+# Results tracking using simple arrays
+test_names=()
+test_statuses=()
+total_tests=0
+passed_tests=0
+failed_tests=0
+
+# Load environment variables from .env file
+if [ -f "$ENV_FILE_PATH" ]; then
+    echo "Loading API keys from $ENV_FILE_PATH file..."
+    set -a  # Mark all variables for export
+    source "$ENV_FILE_PATH"
+    set +a  # Turn off auto-export
+    echo -e "${GREEN}Successfully loaded environment variables from $ENV_FILE_PATH file${NC}"
+else
+    echo -e "${YELLOW}No $ENV_FILE_PATH file found. Make sure environment variables are set manually.${NC}"
+fi
+
+# Set empty values for variables we don't need to avoid warnings
+export GITHUB_TOKEN=${GITHUB_TOKEN:-""}
+export BRAVE_API_KEY=${BRAVE_API_KEY:-""}
+
+# Store test result
+store_test_result() {
+    local name="$1"
+    local status="$2"
+    
+    test_names+=("$name")
+    test_statuses+=("$status")
+}
+
+# Function to wait for the service to be ready
+wait_for_service() {
+    local max_attempts=30
+    local attempt=1
+    local delay=2
+    
+    echo "Checking if service is ready at http://localhost:8080/v1/models..."
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo "Attempt $attempt of $max_attempts..."
+        
+        # Try to connect to the API
+        if curl --silent --fail --max-time 2 http://localhost:8080/v1/models > /dev/null; then
+            echo -e "${GREEN}Service is ready!${NC}"
+            return 0
+        fi
+        
+        echo "Service not yet ready. Waiting ${delay}s before next attempt..."
+        sleep $delay
+        ((attempt++))
+    done
+    
+    echo -e "${RED}Service did not become ready within the timeout period.${NC}"
+    return 1
+}
+
+# Define a function to start containers
+start_container() {
+    local container_name=$1
+    local docker_compose_command=$2
+    
+    echo -e "\n${BOLD}Starting container: ${container_name}${NC}"
+    eval "$docker_compose_command"
+    
+    # Wait for the service to start
+    echo "Waiting for service to start..."
+    wait_for_service
+    echo -e "${GREEN}Container started${NC}"
+}
+
+# Define a function to run tests
+run_test() {
+    local test_name=$1
+    local curl_command=$2
+    local expected_status_code=${3:-200}
+
+    echo -e "\n${BOLD}Running test: ${test_name}${NC}"
+    
+    # Increment total tests counter
+    ((total_tests++))
+    
+    # Run the curl command and capture the response
+    echo "Testing the API endpoint..."
+    response=$(eval "$curl_command" 2>&1)
+    status_code=$(echo "$response" | grep -oE 'HTTP/[0-9.]+ [0-9]+' | awk '{print $2}')
+    
+    # Check if the status code matches the expected one
+    if [[ "$status_code" == "$expected_status_code" ]]; then
+        echo -e "${GREEN}✓ Test passed! Status code: $status_code${NC}"
+        echo "Response:"
+        echo "$response" | grep -v "HTTP/" | head -n 20  # Show truncated response for readability
+        store_test_result "$test_name" "PASSED"
+        ((passed_tests++))
+        return 0
+    else
+        echo -e "${RED}✗ Test failed! Expected status code $expected_status_code but got $status_code${NC}"
+        echo "Response:"
+        echo "$response"
+        store_test_result "$test_name" "FAILED (Expected: $expected_status_code, Got: $status_code)"
+        ((failed_tests++))
+        return 1
+    fi
+}
+
+# Function to print test results summary
+print_results_summary() {
+    echo -e "\n${BOLD}========== VECTOR STORE TEST RESULTS SUMMARY ==========${NC}"
+    echo -e "Total tests run: $total_tests"
+    echo -e "${GREEN}Passed: $passed_tests${NC}"
+    echo -e "${RED}Failed: $failed_tests${NC}"
+    
+    echo -e "\n${BOLD}Detailed Test Results:${NC}"
+    local i
+    for ((i=0; i<${#test_names[@]}; i++)); do
+        if [[ "${test_statuses[$i]}" == PASSED* ]]; then
+            echo -e "${GREEN}✓ ${test_names[$i]}: ${test_statuses[$i]}${NC}"
+        else
+            echo -e "${RED}✗ ${test_names[$i]}: ${test_statuses[$i]}${NC}"
+        fi
+    done
+}
+
+# Function to cleanup containers on exit
+cleanup() {
+    echo -e "\n${BOLD}Cleaning up...${NC}"
+    docker-compose down -v 2>/dev/null || true
+    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
+    print_results_summary
+}
+
+# Register trap for cleanup on script exit
+trap cleanup EXIT INT TERM
+
+# Main vector store tests function
+run_vector_tests() {
+    # Initialize environment variables
+    echo -e "${YELLOW}Checking GROQ_API_KEY for tests${NC}"
+    if [[ -n "$GROQ_API_KEY" ]]; then
+        echo -e "${YELLOW}Current value: ${GROQ_API_KEY:0:5}...${GROQ_API_KEY: -5}${NC}"
+    else
+        echo -e "${YELLOW}GROQ_API_KEY is not set${NC}"
+    fi
+
+    # Verify GROQ_API_KEY is set
+    if [[ -z "$GROQ_API_KEY" ]]; then
+        echo -e "${RED}Error: GROQ_API_KEY is not set. Please set it in your .env file or export it.${NC}"
+        exit 1
+    fi
+
+    # Stop any running containers
+    echo "Stopping any running containers..."
+    docker-compose down -v 2>/dev/null || true
+    # Kill any existing containers that might be using port 8080
+    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
+    sleep 5
+
+    # Start Qdrant container for vector store tests
+    echo -e "\n${BOLD}STARTING VECTOR STORE TESTS${NC}"
+    start_container "Qdrant Vector Store" "docker-compose --profile qdrant up -d"
+
+    # Test 9: Qdrant Vector Search
+    echo -e "\n${BOLD}Test 1: Qdrant Vector Search${NC}"
+    run_test "Qdrant Vector Search" \
+        "curl --location 'http://localhost:8080/v1/responses' \
+        --header 'Content-Type: application/json' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --header 'x-model-provider: groq' \
+        --data '{
+            \"model\": \"qwen-qwq-32b\",
+            \"stream\": false,
+            \"input\": [
+                {
+                    \"role\": \"user\",
+                    \"content\": \"What is vector search?\"
+                }
+            ]
+        }' -v"
+
+    # Test 2: Create Vector Store
+    echo -e "\n${BOLD}Test 2: Create Vector Store${NC}"
+    run_test "Create Vector Store" \
+        "curl --location 'http://localhost:8080/v1/vector_stores' \
+        --header 'Content-Type: application/json' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --header 'x-model-provider: groq' \
+        --data '{
+            \"name\": \"regression_test_store\",
+            \"description\": \"Test vector store for regression testing\"
+        }' -v"
+
+    # Get the vector store ID
+    vector_store_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
+        --header 'Content-Type: application/json' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --data '{
+            "name": "another_test_store",
+            "description": "Another test vector store for regression testing"
+        }')
+
+    vector_store_id=$(echo $vector_store_data | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+    if [[ -z "$vector_store_id" ]]; then
+        echo -e "${YELLOW}Failed to extract vector store ID, using dummy value for subsequent tests${NC}"
+        vector_store_id="vs_dummy_id"
+        store_test_result "Vector Store ID Extraction" "FAILED (Could not extract vector store ID)"
+        ((failed_tests++))
+    else
+        echo "Created vector store with ID: $vector_store_id"
+        store_test_result "Vector Store ID Extraction" "PASSED"
+        ((passed_tests++))
+    fi
+
+    # Test 3: List Vector Stores
+    echo -e "\n${BOLD}Test 3: List Vector Stores${NC}"
+    run_test "List Vector Stores" \
+        "curl --location 'http://localhost:8080/v1/vector_stores' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+
+    # Test 4: Get Vector Store
+    echo -e "\n${BOLD}Test 4: Get Vector Store${NC}"
+    run_test "Get Vector Store" \
+        "curl --location 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+
+    # Create a file for vector store upload
+    echo "This is some test content for vector store file." > vector_store_file.txt
+
+    # Upload a file first to get ID
+    echo "Uploading a file for the vector store test..."
+    file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --form 'file=@"vector_store_file.txt"' \
+        --form 'purpose="user_data"')
+
+    echo "Response from file upload: $file_data"
+    file_id=$(echo $file_data | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+
+    if [[ -z "$file_id" ]]; then
+        echo -e "${YELLOW}Warning: Failed to upload file for vector store test. Using dummy file ID.${NC}"
+        file_id="file_dummy_id"
+        store_test_result "Vector Store File Upload" "FAILED (Could not extract file ID)"
+        ((failed_tests++))
+    else
+        echo "Uploaded file with ID: $file_id"
+        store_test_result "Vector Store File Upload" "PASSED"
+        ((passed_tests++))
+        
+        # Add a small delay after file upload to ensure it's processed
+        echo "Waiting 2 seconds for file to be processed..."
+        sleep 2
+
+        # First create a vector store with the files
+        echo -e "\n${BOLD}Test 5: Create Vector Store with File${NC}"
+        echo "Creating vector store with file ID: $file_id"
+        
+        vs_with_file_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
+            --header 'Content-Type: application/json' \
+            --header 'Authorization: Bearer $GROQ_API_KEY' \
+            --data "{
+                \"name\": \"test_vector_store_with_file\",
+                \"file_ids\": [\"$file_id\"]
+            }")
+        
+        echo "Vector store with file creation response: $vs_with_file_data"
+        vs_with_file_id=$(echo $vs_with_file_data | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        
+        if [[ -z "$vs_with_file_id" ]]; then
+            echo -e "${RED}Failed to create vector store with file${NC}"
+            store_test_result "Create Vector Store with File" "FAILED (Could not extract vector store ID)"
+            ((failed_tests++))
+        else
+            echo -e "${GREEN}Successfully created vector store with file, ID: $vs_with_file_id${NC}"
+            store_test_result "Create Vector Store with File" "PASSED"
+            ((passed_tests++))
+            
+            # Wait for the vector store to fully process the file
+            echo "Waiting for vector store to process the file..."
+            max_wait_attempts=10
+            wait_attempt=1
+            vs_ready=false
+            
+            while [ $wait_attempt -le $max_wait_attempts ]; do
+                echo "Check attempt $wait_attempt of $max_wait_attempts..."
+                
+                vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vs_with_file_id" \
+                    --header "Authorization: Bearer $GROQ_API_KEY")
+                
+                file_counts=$(echo "$vs_status" | grep -o '"file_counts":{[^}]*}' || echo "")
+                status=$(echo "$vs_status" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "")
+                completed=$(echo "$file_counts" | grep -o '"completed":[0-9]*' | cut -d':' -f2 || echo "0")
+                total=$(echo "$file_counts" | grep -o '"total":[0-9]*' | cut -d':' -f2 || echo "0")
+                
+                echo "Vector store status: $status, Files processed: $completed/$total"
+                
+                if [[ "$status" == "ready" ]] || [[ "$completed" == "$total" && "$total" != "0" ]]; then
+                    echo -e "${GREEN}Vector store is ready for querying!${NC}"
+                    vs_ready=true
+                    break
+                fi
+                
+                echo "Vector store not ready yet. Waiting 5 seconds before next check..."
+                sleep 5
+                ((wait_attempt++))
+            done
+            
+            if [[ "$vs_ready" == false ]]; then
+                echo -e "${YELLOW}Warning: Vector store might not be fully ready after maximum wait time.${NC}"
+                echo "Proceeding with tests anyway, but they might fail if files aren't processed."
+            fi
+            
+            # Test 6: List Files in Vector Store
+            echo -e "\n${BOLD}Test 6: List Files in Vector Store${NC}"
+            run_test "List Files in Vector Store" \
+                "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files' \
+                --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+            
+            # Test 7: Vector Store Query with file
+            echo -e "\n${BOLD}Test 7: Vector Store Query${NC}"
+            
+            # Get the vector store status before querying
+            vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vs_with_file_id" \
+                --header "Authorization: Bearer $GROQ_API_KEY")
+            echo "Current vector store status before query:"
+            echo "$vs_status" | grep -o '"status":"[^"]*"' || echo "Status not found"
+            
+            query_endpoint="http://localhost:8080/v1/vector_stores/$vs_with_file_id/search"
+            echo "Search endpoint: $query_endpoint"
+            
+            run_test "Vector Store Query" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header 'Authorization: Bearer $GROQ_API_KEY' \
+                --header 'x-model-provider: groq' \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3
+                }' -v" \
+                "200"
+            
+            # Test 8: Delete Vector Store with file
+            echo -e "\n${BOLD}Test 8: Delete Vector Store with File${NC}"
+            run_test "Delete Vector Store with File" \
+                "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vs_with_file_id' \
+                --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        fi
+    fi
+
+    # Clean up the vector store file
+    rm -f vector_store_file.txt
+    
+    # Test 9: Delete Original Vector Store
+    echo -e "\n${BOLD}Test 9: Delete Original Vector Store${NC}"
+    run_test "Delete Original Vector Store" \
+        "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
+        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+
+    echo -e "\n${BOLD}VECTOR STORE TESTS COMPLETED${NC}"
+}
+
+# Run the vector store tests
+run_vector_tests 

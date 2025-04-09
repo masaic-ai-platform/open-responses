@@ -96,6 +96,19 @@ Explore our comprehensive [documentation](https://openresponses.masaic.ai/) to l
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+Before submitting a PR, please:
+
+1. Run the regression test suite to ensure your changes don't break existing functionality:
+   ```bash
+   # Run the common regression tests
+   ./regression_common.sh
+   
+   # Run the vector store regression tests
+   ./regression_vector.sh
+   ```
+
+2. Make sure all tests pass successfully before creating your pull request.
+
 > **"Alone we can do so little; together we can do so much."** — Helen Keller
 
 ## 📄 License
