@@ -22,6 +22,7 @@ failed_tests=0
 # Declare variables for user input
 MODEL_PROVIDER=""
 API_KEY=""
+MODEL_NAME=""
 
 # Set empty values for other env variables we might not need, to avoid warnings
 export GITHUB_TOKEN=${GITHUB_TOKEN:-""}
@@ -176,9 +177,16 @@ run_vector_tests() {
     read -sp "> " API_KEY
     echo # Add a newline after the hidden input
     
+    echo -e "${BOLD}Enter the model name to use (e.g., llama3-70b-8192, gpt-4o):${NC}"
+    read -p "> " MODEL_NAME
+    
     # Verify input
     if [[ -z "$MODEL_PROVIDER" ]]; then
         echo -e "${RED}Error: Model provider cannot be empty.${NC}"
+        exit 1
+    fi
+    if [[ -z "$MODEL_NAME" ]]; then
+        echo -e "${RED}Error: Model name cannot be empty.${NC}"
         exit 1
     fi
     if [[ -z "$API_KEY" ]]; then
@@ -187,6 +195,7 @@ run_vector_tests() {
     fi
     
     echo -e "${GREEN}Using model provider: $MODEL_PROVIDER${NC}"
+    echo -e "${GREEN}Using model name: $MODEL_NAME${NC}"
     echo -e "${GREEN}API Key: ****${API_KEY: -4}${NC}" # Show only last 4 chars for confirmation
 
     # Stop any running containers
@@ -208,7 +217,7 @@ run_vector_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"qwen-qwq-32b\",
+            \"model\": \"$MODEL_NAME\",
             \"stream\": false,
             \"input\": [
                 {
