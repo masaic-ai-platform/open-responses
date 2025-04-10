@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.config
 
 import ai.masaic.openresponses.api.client.MongoResponseStore
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.mongodb.reactivestreams.client.MongoClient
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
@@ -58,5 +59,11 @@ class MongoConfig(
     override fun getDatabaseName(): String {
         logger.debug { "MongoDB database name: $databaseName" }
         return databaseName
+    }
+
+    override fun reactiveMongoClient(): MongoClient {
+        logger.debug { "MongoDB URI: $mongoURI" }
+        return com.mongodb.reactivestreams.client.MongoClients
+            .create(mongoURI)
     }
 }

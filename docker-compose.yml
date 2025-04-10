@@ -1,7 +1,7 @@
 version: '3.9'
 
 x-open-responses: &open_responses
-  image: masaicai/open-responses:0.1.0-M1
+  image: masaicai/open-responses:0.1.0-M2
 
 services:
   # Default service

@@ -23,6 +23,7 @@ failed_tests=0
 # Declare variables for user input
 MODEL_PROVIDER=""
 API_KEY=""
+MODEL_NAME=""
 
 # Set empty values for other env variables we might not need, to avoid warnings
 export GITHUB_TOKEN=${GITHUB_TOKEN:-""}
@@ -205,7 +206,7 @@ run_basic_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"qwen-qwq-32b\",
+            \"model\": \"$MODEL_NAME\",
             \"stream\": false,
             \"input\": [
                 {
@@ -223,12 +224,12 @@ run_basic_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"qwen-qwq-32b\",
+            \"model\": \"$MODEL_NAME\",
             \"stream\": true,
             \"input\": [
                 {
                     \"role\": \"user\",
-                    \"content\": \"Tell me a short story about a programmer\"
+                    \"content\": \"Tell me a joke\"
                 }
             ]
         }'"
@@ -324,39 +325,54 @@ run_mongodb_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"qwen-qwq-32b\",
+            \"model\": \"$MODEL_NAME\",
             \"store\": true,
             \"input\": [
                 {
                     \"role\": \"user\",
-                    \"content\": \"Write a short poem about testing\"
+                    \"content\": \"Tell me a joke\"
                 }
             ]
         }'"
 
     # Create a response and extract the ID for subsequent tests
     echo "Creating a stored response for subsequent tests..."
-    response_data=$(curl --silent --location 'http://localhost:8080/v1/responses' \
+    # Use -w '%{http_code}' to get status code and capture output separately
+    # Ensure correct line continuation with single backslashes
+    # Use double quotes for --data to allow variable expansion, escape inner quotes
+    response_info=$(curl --silent --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer $API_KEY" \
         --header "x-model-provider: $MODEL_PROVIDER" \
-        --data '{
-            "model": "qwen-qwq-32b",
-            "store": true,
-            "input": [
-                {
-                    "role": "user",
-                    "content": "Write a short poem about software testing"
-                }
-            ]
-        }')
+        --data "{\
+            \"model\": \"$MODEL_NAME\",\
+            \"store\": true,\
+            \"input\": [\
+                {\
+                    \"role\": \"user\",\
+                    \"content\": \"Tell me a joke\"\
+                }\
+            ]\
+        }" -w "\n%{http_code}")
 
-    response_id=$(echo $response_data | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+    # Extract body and status code
+    response_data=$(echo "$response_info" | sed '$d') # Body is everything except the last line
+    response_status_code=$(echo "$response_info" | tail -n1) # Status code is the last line
+
+    echo "Response creation status code: $response_status_code" # Debugging output
+
+    # Try to extract ID only if status is 200 or 201 (Created)
+    response_id=""
+    if [[ "$response_status_code" == "200" || "$response_status_code" == "201" ]]; then
+        response_id=$(echo "$response_data" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+    fi
 
     if [[ -z "$response_id" ]]; then
-        echo -e "${YELLOW}Failed to extract response ID, using dummy value for subsequent tests${NC}"
+        echo -e "${YELLOW}Failed to extract response ID (Status: $response_status_code). Using dummy value for subsequent tests.${NC}"
+        echo "Response body:" # Print response body on failure
+        echo "$response_data" # Print response body on failure
         response_id="resp_dummy_id"
-        store_test_result "Response ID Extraction" "FAILED (Could not extract response ID)"
+        store_test_result "Response ID Extraction" "FAILED (Status: $response_status_code)"
         ((failed_tests++))
     else
         echo "Created response with ID: $response_id"
@@ -386,13 +402,13 @@ run_mongodb_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"qwen-qwq-32b\",
+            \"model\": \"$MODEL_NAME\",
             \"store\": true,
             \"previous_response_id\": \"$response_id\",
             \"input\": [
                 {
                     \"role\": \"user\",
-                    \"content\": \"Can you explain more about regression testing specifically?\"
+                    \"content\": \"Tell me a joke\"
                 }
             ]
         }'"
@@ -420,6 +436,9 @@ main() {
     read -sp "> " API_KEY
     echo # Add a newline after the hidden input
     
+    echo -e "${BOLD}Enter the model name to use (e.g., llama3-70b-8192, gpt-4o):${NC}"
+    read -p "> " MODEL_NAME
+    
     # Verify input
     if [[ -z "$MODEL_PROVIDER" ]]; then
         echo -e "${RED}Error: Model provider cannot be empty.${NC}"
@@ -429,8 +448,13 @@ main() {
         echo -e "${RED}Error: API key cannot be empty.${NC}"
         exit 1
     fi
+    if [[ -z "$MODEL_NAME" ]]; then
+        echo -e "${RED}Error: Model name cannot be empty.${NC}"
+        exit 1
+    fi
     
     echo -e "${GREEN}Using model provider: $MODEL_PROVIDER${NC}"
+    echo -e "${GREEN}Using model name: $MODEL_NAME${NC}"
     echo -e "${GREEN}API Key: ****${API_KEY: -4}${NC}" # Show only last 4 chars for confirmation
 
     # Stop any running containers at the start
