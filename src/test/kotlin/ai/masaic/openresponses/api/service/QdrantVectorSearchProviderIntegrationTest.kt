@@ -161,6 +161,7 @@ class QdrantVectorSearchProviderIntegrationTest {
                 vectorSearchProvider.searchSimilar(
                     query = "test document vector",
                     maxResults = 5,
+                    rankingOptions = null,
                 )
         
             assertTrue(searchResults1.isNotEmpty(), "Search should return results")
@@ -172,6 +173,7 @@ class QdrantVectorSearchProviderIntegrationTest {
                     query = "test document",
                     maxResults = 5,
                     filters = mapOf("fileIds" to listOf(fileId2)),
+                    rankingOptions = null,
                 )
         
             assertTrue(filteredResults.isNotEmpty(), "Filtered search should return results")
@@ -191,6 +193,7 @@ class QdrantVectorSearchProviderIntegrationTest {
                 vectorSearchProvider.searchSimilar(
                     query = "test document",
                     filters = mapOf("fileIds" to listOf(fileId1)),
+                    rankingOptions = null,
                 )
         
             assertTrue(searchAfterDeletion.isEmpty(), "Search for deleted file should return no results")
@@ -228,7 +231,12 @@ class QdrantVectorSearchProviderIntegrationTest {
             )
         
             // Search with empty query
-            val emptyResults = vectorSearchProvider.searchSimilar(query = "", maxResults = 5)
+            val emptyResults =
+                vectorSearchProvider.searchSimilar(
+                    query = "",
+                    maxResults = 5,
+                    rankingOptions = null,
+                )
         
             assertTrue(emptyResults.isEmpty(), "Empty query should return no results")
         }

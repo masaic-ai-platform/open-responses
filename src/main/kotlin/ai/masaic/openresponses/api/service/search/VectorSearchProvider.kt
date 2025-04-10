@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.RankingOptions
 import java.io.InputStream
 
 /**
@@ -38,6 +39,7 @@ interface VectorSearchProvider {
         query: String,
         maxResults: Int = 10,
         filters: Map<String, Any>? = null,
+        rankingOptions: RankingOptions?,
     ): List<SearchResult>
 
     /**

@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.service.search
 import ai.masaic.openresponses.api.config.QdrantVectorProperties
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.IdGenerator
@@ -163,6 +164,7 @@ class QdrantVectorSearchProvider(
         query: String,
         maxResults: Int,
         filters: Map<String, Any>?,
+        rankingOptions: RankingOptions?,
     ): List<VectorSearchProvider.SearchResult> {
         try {
             // Return empty results for empty query
@@ -175,7 +177,7 @@ class QdrantVectorSearchProvider(
             val queryEmbedding = Embedding.from(embeddingService.embedText(query))
 
             // Find relevant documents
-            val minScore = qdrantProperties.minScore ?: 0.0f
+            val minScore = rankingOptions?.scoreThreshold ?: qdrantProperties.minScore ?: 0.07
 
             // Search the store with filter
             val matches =

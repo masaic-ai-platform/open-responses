@@ -81,7 +81,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename)
         
         // Verify the file was properly indexed
-        val results1 = vectorSearchProvider.searchSimilar("test document", 10, null)
+        val results1 = vectorSearchProvider.searchSimilar("test document", rankingOptions = null)
         assertEquals(1, results1.size, "Should find the indexed document")
         
         // When - simulate application restart by creating a new provider instance
@@ -94,7 +94,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
             )
         
         // Then - the new instance should still have access to the previously indexed data
-        val results2 = restartedProvider.searchSimilar("test document", 10, null)
+        val results2 = restartedProvider.searchSimilar("test document", rankingOptions = null)
         assertEquals(1, results2.size, "Should still find the document after restart")
         assertEquals(fileId, results2[0].fileId, "Should return the same file ID")
         
@@ -121,7 +121,11 @@ class FileBasedVectorSearchProviderIntegrationTest {
             )
         
         // Then - second provider should see the first provider's data
-        val resultsFromSecond = secondProvider.searchSimilar("specific content", 10, null)
+        val resultsFromSecond =
+            secondProvider.searchSimilar(
+                "specific content",
+                rankingOptions = null,
+            )
         assertEquals(1, resultsFromSecond.size, "Second provider should find document from first provider")
         
         // When - second provider adds a document
@@ -130,7 +134,11 @@ class FileBasedVectorSearchProviderIntegrationTest {
         secondProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt")
         
         // Then - first provider should see the second provider's data
-        val resultsFromFirst = vectorSearchProvider.searchSimilar("different content", 10, null)
+        val resultsFromFirst =
+            vectorSearchProvider.searchSimilar(
+                "different content",
+                rankingOptions = null,
+            )
         assertEquals(1, resultsFromFirst.size, "First provider should find document from second provider")
         
         // Both files should be findable by both providers, but we need to reload first provider
@@ -145,12 +153,12 @@ class FileBasedVectorSearchProviderIntegrationTest {
         
         assertEquals(
             2,
-            refreshedProvider.searchSimilar("test document", 10, null).size, 
+            refreshedProvider.searchSimilar("test document", rankingOptions = null).size,
             "Should find both documents in refreshed provider",
         )
         assertEquals(
             2,
-            secondProvider.searchSimilar("test document", 10, null).size, 
+            secondProvider.searchSimilar("test document", rankingOptions = null).size,
             "Should find both documents in second provider",
         )
     }
@@ -174,11 +182,11 @@ class FileBasedVectorSearchProviderIntegrationTest {
         
         // Verify both providers can see the document
         assertTrue(
-            vectorSearchProvider.searchSimilar("document", 10, null).isNotEmpty(),
+            vectorSearchProvider.searchSimilar("document", rankingOptions = null).isNotEmpty(),
             "First provider should find the document",
         )
         assertTrue(
-            secondProvider.searchSimilar("document", 10, null).isNotEmpty(),
+            secondProvider.searchSimilar("document", rankingOptions = null).isNotEmpty(),
             "Second provider should find the document",
         )
         
@@ -187,7 +195,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         
         // Then - document should be gone from first provider immediately
         assertTrue(
-            vectorSearchProvider.searchSimilar("document", 10, null).isEmpty(),
+            vectorSearchProvider.searchSimilar("document", rankingOptions = null).isEmpty(),
             "First provider should not find deleted document",
         )
         
@@ -202,7 +210,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         
         // Document should be gone from refreshed second provider
         assertTrue(
-            refreshedSecondProvider.searchSimilar("document", 10, null).isEmpty(),
+            refreshedSecondProvider.searchSimilar("document", rankingOptions = null).isEmpty(),
             "Refreshed second provider should not find deleted document",
         )
         

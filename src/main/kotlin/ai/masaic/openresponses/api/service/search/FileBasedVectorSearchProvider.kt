@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.IdGenerator
@@ -205,6 +206,7 @@ class FileBasedVectorSearchProvider(
         query: String,
         maxResults: Int,
         filters: Map<String, Any>?,
+        rankingOptions: RankingOptions?,
     ): List<VectorSearchProvider.SearchResult> {
         if (query.isBlank()) {
             log.warn("Query is empty or blank")
@@ -245,6 +247,7 @@ class FileBasedVectorSearchProvider(
 
         // Sort by score (descending) and take top results
         return scoredChunks
+            .filter { it.second > (rankingOptions?.scoreThreshold ?: 0.07) }
             .sortedByDescending { (_, score) -> score }
             .take(maxResults)
             .map { (chunk, score) ->

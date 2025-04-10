@@ -665,7 +665,7 @@ class VectorStoreService(
                 // Execute the vector search
                 val maxResults = request.maxNumResults ?: 10
                 try {
-                    val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters)
+                    val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters, request.rankingOptions)
                     
                     // Update the vector store's last active timestamp
                     val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)

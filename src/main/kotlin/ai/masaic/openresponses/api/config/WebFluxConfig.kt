@@ -14,7 +14,7 @@ import org.springframework.web.reactive.config.WebFluxConfigurer
 @EnableWebFlux
 class WebFluxConfig(
     private val objectMapper: ObjectMapper,
-    @Value("\${spring.codec.max-in-memory-size:50MB}") private val maxInMemorySize: String,
+    @Value("\${spring.codec.max-in-memory-size:32MB}") private val maxInMemorySize: String,
 ) : WebFluxConfigurer {
     override fun configureHttpMessageCodecs(configurer: ServerCodecConfigurer) {
         // Register custom codec for NDJSON

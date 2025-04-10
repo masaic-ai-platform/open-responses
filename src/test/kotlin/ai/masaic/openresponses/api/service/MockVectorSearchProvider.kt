@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.search.VectorSearchProvider
 import org.springframework.context.annotation.Primary
 import org.springframework.context.annotation.Profile
@@ -44,6 +45,7 @@ class MockVectorSearchProvider : VectorSearchProvider {
         query: String,
         maxResults: Int,
         filters: Map<String, Any>?,
+        rankingOptions: RankingOptions?,
     ): List<VectorSearchProvider.SearchResult> {
         // Very simplistic search - just checks if query exists in content
         val results =

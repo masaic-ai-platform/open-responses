@@ -150,7 +150,7 @@ class QdrantVectorSearchProviderTest {
         val query = "test query"
         
         // When
-        val results = vectorSearchProvider.searchSimilar(query, 10, null)
+        val results = vectorSearchProvider.searchSimilar(query, rankingOptions = null)
         
         // Then
         assertEquals(1, results.size, "Should return expected number of results")
@@ -165,7 +165,12 @@ class QdrantVectorSearchProviderTest {
         val filters = mapOf("file_id" to "test-file-id")
         
         // When
-        val results = vectorSearchProvider.searchSimilar(query, 10, filters)
+        val results =
+            vectorSearchProvider.searchSimilar(
+                query,
+                filters = filters,
+                rankingOptions = null,
+            )
         
         // Then
         assertEquals(1, results.size, "Should return filtered results")
@@ -293,7 +298,7 @@ class QdrantVectorSearchProviderTest {
         val query = ""
         
         // When
-        val results = vectorSearchProvider.searchSimilar(query, 10, null)
+        val results = vectorSearchProvider.searchSimilar(query, rankingOptions = null)
         
         // Then
         assertTrue(results.isEmpty(), "Should return empty results for empty query")
@@ -308,7 +313,7 @@ class QdrantVectorSearchProviderTest {
         every { embeddingService.embedText(any()) } throws RuntimeException("Search error")
         
         // When
-        val results = vectorSearchProvider.searchSimilar(query, 10, null)
+        val results = vectorSearchProvider.searchSimilar(query, rankingOptions = null)
         
         // Then
         assertTrue(results.isEmpty(), "Should return empty results when search throws an error")

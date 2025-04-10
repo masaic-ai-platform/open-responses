@@ -104,7 +104,7 @@ class FileBasedVectorSearchProviderTest {
         val query = "test document"
         
         // When
-        val results = vectorSearchProvider.searchSimilar(query, 10, null)
+        val results = vectorSearchProvider.searchSimilar(query, rankingOptions = null)
         
         // Then
         assertEquals(1, results.size, "Should return one result")
@@ -125,7 +125,12 @@ class FileBasedVectorSearchProviderTest {
         vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt")
         
         // When - search with a filter for fileId1
-        val results = vectorSearchProvider.searchSimilar("document", 10, mapOf("file_id" to fileId1))
+        val results =
+            vectorSearchProvider.searchSimilar(
+                "document",
+                filters = mapOf("file_id" to fileId1),
+                rankingOptions = null,
+            )
         
         // Then
         assertEquals(1, results.size, "Should return only one result")
@@ -151,7 +156,12 @@ class FileBasedVectorSearchProviderTest {
         assertTrue(!Files.exists(embeddingsFile), "Embeddings file should be deleted from filesystem")
         
         // Verify the file is no longer in the index by searching for it
-        val searchResults = vectorSearchProvider.searchSimilar("Test", 10, mapOf("file_id" to fileId))
+        val searchResults =
+            vectorSearchProvider.searchSimilar(
+                "Test",
+                filters = mapOf("file_id" to fileId),
+                rankingOptions = null,
+            )
         assertEquals(0, searchResults.size, "No results should be found for the deleted file")
     }
 
@@ -175,7 +185,7 @@ class FileBasedVectorSearchProviderTest {
             )
         
         // Then - the new instance should load the existing embeddings
-        val results = secondProvider.searchSimilar("document persist", 10, null)
+        val results = secondProvider.searchSimilar("document persist", rankingOptions = null)
         
         assertEquals(1, results.size, "Should return one result from the persisted data")
         assertEquals(fileId, results[0].fileId, "Result should contain the persisted file ID")
@@ -203,7 +213,7 @@ class FileBasedVectorSearchProviderTest {
         }
         
         // When - search with a query relevant to all documents
-        val results = vectorSearchProvider.searchSimilar("learning", 10, null)
+        val results = vectorSearchProvider.searchSimilar("learning", rankingOptions = null)
         
         // Then - should find all documents (since we're mocking similarity)
         assertEquals(3, results.size, "Should return all indexed documents")
@@ -311,7 +321,7 @@ class FileBasedVectorSearchProviderTest {
         vectorSearchProvider.indexFile(fileId, inputStream, "test.txt")
         
         // When
-        val results = vectorSearchProvider.searchSimilar("", 10, null)
+        val results = vectorSearchProvider.searchSimilar("", rankingOptions = null)
         
         // Then
         assertTrue(results.isEmpty(), "Should return empty results for empty query")
@@ -340,7 +350,11 @@ class FileBasedVectorSearchProviderTest {
         
         // When - perform a search
         val startTime = System.currentTimeMillis()
-        val results = vectorSearchProvider.searchSimilar("performance test document", 10, null)
+        val results =
+            vectorSearchProvider.searchSimilar(
+                "performance test document",
+                rankingOptions = null,
+            )
         val duration = System.currentTimeMillis() - startTime
         
         // Then
