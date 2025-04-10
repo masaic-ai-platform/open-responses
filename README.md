@@ -96,6 +96,13 @@ Explore our comprehensive [documentation](https://openresponses.masaic.ai/) to l
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
+Before submitting a Pull Request, please ensure all regression tests pass by running:
+
+```bash
+./regression/regression_common.sh
+./regression/regression_vector.sh
+```
+
 > **"Alone we can do so little; together we can do so much."** — Helen Keller
 
 ## 📄 License

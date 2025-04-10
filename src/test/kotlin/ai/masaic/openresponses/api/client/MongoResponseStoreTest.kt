@@ -5,19 +5,22 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.mongodb.client.result.DeleteResult
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
+import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.query.Query
+import reactor.core.publisher.Mono
 
 class MongoResponseStoreTest {
     private lateinit var responseStore: MongoResponseStore
     private lateinit var objectMapper: ObjectMapper
-    private lateinit var mongoTemplate: MongoTemplate
+    private lateinit var mongoTemplate: ReactiveMongoTemplate
 
     @BeforeEach
     fun setup() {
@@ -33,164 +36,174 @@ class MongoResponseStoreTest {
     }
 
     @Test
-    fun `test storeResponse stores document in MongoDB`() {
-        // Setup
-        val responseId = "resp_123456"
-        val mockResponse = mockk<Response>()
-        every { mockResponse.id() } returns responseId
-        every { mockResponse.output() } returns listOf()
+    fun `test storeResponse stores document in MongoDB`() =
+        runTest {
+            // Setup
+            val responseId = "resp_123456"
+            val mockResponse = mockk<Response>()
+            every { mockResponse.id() } returns responseId
+            every { mockResponse.output() } returns listOf()
 
-        val inputItems = listOf(mockk<ResponseInputItem>())
+            val inputItems = listOf(mockk<ResponseInputItem>())
 
-        every {
-            mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
-        } returns null
-        // Mock MongoDB save operation
-        every { 
-            mongoTemplate.save(any<MongoResponseStore.ResponseDocument>(), "responses")
-        } returns
-            MongoResponseStore.ResponseDocument(
-                id = responseId,
-                responseJson = """{"id":"resp_123456"}""",
-                inputItems = listOf(InputMessageItem()),
-                outputInputItems = listOf(),
-            )
-
-        // Act
-        responseStore.storeResponse(mockResponse, inputItems)
-
-        // Assert
-        verify { mongoTemplate.save(any<MongoResponseStore.ResponseDocument>(), "responses") }
-    }
-
-    @Test
-    fun `test getResponse retrieves document from MongoDB`() {
-        // Setup
-        val responseId = "resp_123456"
-        val mockDocument =
-            MongoResponseStore.ResponseDocument(
-                id = responseId,
-                responseJson = """{"id":"resp_123456"}""",
-                inputItems = listOf(InputMessageItem()),
-                outputInputItems = listOf(),
-            )
-
-        // Mock MongoDB findById operation
-        every { 
-            mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
-        } returns mockDocument
-
-        // Act
-        val response = responseStore.getResponse(responseId)
-
-        // Assert
-        assertNotNull(response)
-        verify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
-    }
-
-    @Test
-    fun `test getResponse returns null for nonexistent document`() {
-        // Setup
-        val responseId = "nonexistent_resp"
-
-        // Mock MongoDB findById operation returning null
-        every { 
-            mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
-        } returns null
-
-        // Act
-        val response = responseStore.getResponse(responseId)
-
-        // Assert
-        assertNull(response)
-        verify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
-    }
-
-    @Test
-    fun `test getInputItems retrieves input items from MongoDB`() {
-        // Setup
-        val responseId = "resp_123456"
-        val inputItems = listOf(InputMessageItem(), InputMessageItem())
-        val mockDocument =
-            MongoResponseStore.ResponseDocument(
-                id = responseId,
-                responseJson = """{"id":"resp_123456"}""",
-                inputItems = inputItems,
-                outputInputItems = listOf(),
-            )
-
-        // Mock MongoDB findById operation
-        every { 
-            mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
-        } returns mockDocument
-
-        // Act
-        val retrievedItems = responseStore.getInputItems(responseId)
-
-        // Assert
-        assertEquals(2, retrievedItems.size)
-        verify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
-    }
-
-    @Test
-    fun `test getInputItems returns empty list for nonexistent document`() {
-        // Setup
-        val responseId = "nonexistent_resp"
-
-        // Mock MongoDB findById operation returning null
-        every { 
-            mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
-        } returns null
-
-        // Act
-        val retrievedItems = responseStore.getInputItems(responseId)
-
-        // Assert
-        assertTrue(retrievedItems.isEmpty())
-        verify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
-    }
-
-    @Test
-    fun `test deleteResponse removes document from MongoDB`() {
-        // Setup
-        val responseId = "resp_123456"
+            coEvery {
+                mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.empty()
         
-        // Mock MongoDB remove operation with positive result
-        val result = mockk<DeleteResult>()
-        every { result.deletedCount } returns 1
-        every { 
-            mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
-        } returns result
+            // Mock MongoDB save operation
+            coEvery { 
+                mongoTemplate.save(any<MongoResponseStore.ResponseDocument>(), "responses")
+            } returns
+                Mono.just(
+                    MongoResponseStore.ResponseDocument(
+                        id = responseId,
+                        responseJson = """{"id":"resp_123456"}""",
+                        inputItems = listOf(InputMessageItem()),
+                        outputInputItems = listOf(),
+                    ),
+                )
 
-        // Act
-        val deleted = responseStore.deleteResponse(responseId)
+            // Act
+            responseStore.storeResponse(mockResponse, inputItems)
 
-        // Assert
-        assertTrue(deleted)
-        verify { 
-            mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
+            // Assert
+            coVerify { mongoTemplate.save(any<MongoResponseStore.ResponseDocument>(), "responses") }
         }
-    }
 
     @Test
-    fun `test deleteResponse returns false for nonexistent document`() {
-        // Setup
-        val responseId = "nonexistent_resp"
-        
-        // Mock MongoDB remove operation with negative result
-        val result = mockk<DeleteResult>()
-        every { result.deletedCount } returns 0
-        every { 
-            mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
-        } returns result
+    fun `test getResponse retrieves document from MongoDB`() =
+        runTest {
+            // Setup
+            val responseId = "resp_123456"
+            val mockDocument =
+                MongoResponseStore.ResponseDocument(
+                    id = responseId,
+                    responseJson = """{"id":"resp_123456"}""",
+                    inputItems = listOf(InputMessageItem()),
+                    outputInputItems = listOf(),
+                )
 
-        // Act
-        val deleted = responseStore.deleteResponse(responseId)
+            // Mock MongoDB findById operation
+            coEvery { 
+                mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.just(mockDocument)
 
-        // Assert
-        assertFalse(deleted)
-        verify { 
-            mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
+            // Act
+            val response = responseStore.getResponse(responseId)
+
+            // Assert
+            assertNotNull(response)
+            coVerify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
         }
-    }
+
+    @Test
+    fun `test getResponse returns null for nonexistent document`() =
+        runTest {
+            // Setup
+            val responseId = "nonexistent_resp"
+
+            // Mock MongoDB findById operation returning null
+            coEvery { 
+                mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.empty()
+
+            // Act
+            val response = responseStore.getResponse(responseId)
+
+            // Assert
+            assertNull(response)
+            coVerify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
+        }
+
+    @Test
+    fun `test getInputItems retrieves input items from MongoDB`() =
+        runTest {
+            // Setup
+            val responseId = "resp_123456"
+            val inputItems = listOf(InputMessageItem(), InputMessageItem())
+            val mockDocument =
+                MongoResponseStore.ResponseDocument(
+                    id = responseId,
+                    responseJson = """{"id":"resp_123456"}""",
+                    inputItems = inputItems,
+                    outputInputItems = listOf(),
+                )
+
+            // Mock MongoDB findById operation
+            coEvery { 
+                mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.just(mockDocument)
+
+            // Act
+            val retrievedItems = responseStore.getInputItems(responseId)
+
+            // Assert
+            assertEquals(2, retrievedItems.size)
+            coVerify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
+        }
+
+    @Test
+    fun `test getInputItems returns empty list for nonexistent document`() =
+        runTest {
+            // Setup
+            val responseId = "nonexistent_resp"
+
+            // Mock MongoDB findById operation returning null
+            coEvery { 
+                mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.empty()
+
+            // Act
+            val retrievedItems = responseStore.getInputItems(responseId)
+
+            // Assert
+            assertTrue(retrievedItems.isEmpty())
+            coVerify { mongoTemplate.findById(responseId, MongoResponseStore.ResponseDocument::class.java) }
+        }
+
+    @Test
+    fun `test deleteResponse removes document from MongoDB`() =
+        runTest {
+            // Setup
+            val responseId = "resp_123456"
+        
+            // Mock MongoDB remove operation with positive result
+            val result = mockk<DeleteResult>()
+            every { result.deletedCount } returns 1
+            coEvery { 
+                mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.just(result)
+
+            // Act
+            val deleted = responseStore.deleteResponse(responseId)
+
+            // Assert
+            assertTrue(deleted)
+            coVerify { 
+                mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
+            }
+        }
+
+    @Test
+    fun `test deleteResponse returns false for nonexistent document`() =
+        runTest {
+            // Setup
+            val responseId = "nonexistent_resp"
+        
+            // Mock MongoDB remove operation with negative result
+            val result = mockk<DeleteResult>()
+            every { result.deletedCount } returns 0
+            coEvery { 
+                mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
+            } returns Mono.just(result)
+
+            // Act
+            val deleted = responseStore.deleteResponse(responseId)
+
+            // Assert
+            assertFalse(deleted)
+            coVerify { 
+                mongoTemplate.remove(any<Query>(), MongoResponseStore.ResponseDocument::class.java)
+            }
+        }
 } 

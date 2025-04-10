@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.extensions
 import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.models.responses.EasyInputMessage
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 
@@ -13,7 +14,7 @@ import com.openai.models.responses.ResponseInputItem
  * @param body The request body to copy properties from
  * @return The builder with properties copied from the body
  */
-fun ResponseCreateParams.Builder.fromBody(
+suspend fun ResponseCreateParams.Builder.fromBody(
     body: ResponseCreateParams.Body,
     responseStore: ResponseStore,
     objectMapper: ObjectMapper,
@@ -28,7 +29,21 @@ fun ResponseCreateParams.Builder.fromBody(
                     objectMapper.convertValue(it, ResponseInputItem::class.java)
                 }.toMutableList()
         val previousResponseOutputItems = responseStore.getOutputItems(body.previousResponseId().get())
-        val currentInputItems = body.input().asResponse().toMutableList()
+        val currentInputItems =
+            if (body.input().isResponse()) {
+                body.input().asResponse().toMutableList()
+            } else {
+                mutableListOf(
+                    ResponseInputItem.ofEasyInputMessage(
+                        EasyInputMessage
+                            .builder()
+                            .content(body.input().asText())
+                            .role(
+                                EasyInputMessage.Role.USER,
+                            ).build(),
+                    ),
+                )
+            }
 
         previousInputItems.addAll(previousResponseOutputItems.map { objectMapper.convertValue(it, ResponseInputItem::class.java) })
         previousInputItems.addAll(currentInputItems)

@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.controller
 
+import ai.masaic.openresponses.api.exception.*
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.service.ResponseProcessingException
 import ai.masaic.openresponses.api.service.ResponseStreamingException
@@ -21,11 +22,17 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.context.request.WebRequest
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.server.ServerWebInputException
+import java.time.Instant
 
 private val logger = KotlinLogging.logger {}
 
+/**
+ * Global exception handler for the OpenResponses API.
+ * This centralizes error handling across all controllers.
+ */
 @RestControllerAdvice
 class GlobalExceptionHandler(
     val objectMapper: ObjectMapper,
@@ -172,30 +179,6 @@ class GlobalExceptionHandler(
                     ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Unexpected status code",
-                        param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
-            }
-        } else if (ex is RateLimitException) {
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Rate limit exceeded",
-                        param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Rate limit exceeded",
                         param = ex.body().toString(),
                         code = ex.statusCode().toString(),
                         timestamp = System.currentTimeMillis(),
@@ -352,8 +335,8 @@ class GlobalExceptionHandler(
     }
 
     @ExceptionHandler(MismatchedInputException::class)
-    fun handleGenericException(ex: MismatchedInputException): ResponseEntity<ErrorResponse> {
-        logger.error(ex) { "Unhandled exception: ${ex.message}" }
+    fun handleMismatchedInputException(ex: MismatchedInputException): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "Mismatched input: ${ex.message}" }
 
         val errorResponse =
             ErrorResponse(
@@ -366,15 +349,120 @@ class GlobalExceptionHandler(
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
     }
 
+    /**
+     * Handles ResourceNotFoundException and returns a 404 NOT_FOUND response.
+     */
+    @ExceptionHandler(ResourceNotFoundException::class)
+    fun handleResourceNotFoundException(
+        ex: ResourceNotFoundException,
+        request: WebRequest,
+    ): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "Resource not found: ${ex.message}" }
+        
+        val errorResponse =
+            ErrorResponse(
+                type = "not_found",
+                message = ex.message ?: "Resource not found",
+                param = request.getDescription(false).substringAfter("uri="),
+                code = HttpStatus.NOT_FOUND.value().toString(),
+                timestamp = Instant.now().toEpochMilli(),
+            )
+        
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse)
+    }
+
+    /**
+     * Handles FileStorageException and returns a 500 INTERNAL_SERVER_ERROR response.
+     */
+    @ExceptionHandler(FileStorageException::class)
+    fun handleFileStorageException(
+        ex: FileStorageException,
+        request: WebRequest,
+    ): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "File storage error: ${ex.message}" }
+        
+        val errorResponse =
+            ErrorResponse(
+                type = "storage_error",
+                message = ex.message ?: "File storage error",
+                param = request.getDescription(false).substringAfter("uri="),
+                code = HttpStatus.INTERNAL_SERVER_ERROR.value().toString(),
+                timestamp = Instant.now().toEpochMilli(),
+            )
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+    }
+
+    /**
+     * Handles VectorStoreException and returns a 500 INTERNAL_SERVER_ERROR response.
+     */
+    @ExceptionHandler(VectorStoreException::class)
+    fun handleVectorStoreException(
+        ex: VectorStoreException,
+        request: WebRequest,
+    ): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "Vector store error: ${ex.message}" }
+        
+        val errorResponse =
+            ErrorResponse(
+                type = "vector_store_error",
+                message = ex.message ?: "Vector store error",
+                param = request.getDescription(false).substringAfter("uri="),
+                code = HttpStatus.INTERNAL_SERVER_ERROR.value().toString(),
+                timestamp = Instant.now().toEpochMilli(),
+            )
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+    }
+
+    /**
+     * Handles OpenResponsesException and returns an appropriate response.
+     */
+    @ExceptionHandler(OpenResponsesException::class)
+    fun handleOpenResponsesException(
+        ex: OpenResponsesException,
+        request: WebRequest,
+    ): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "OpenResponses error: ${ex.message}" }
+        
+        // Determine HTTP status from the exception
+        val status =
+            when (ex) {
+                is FileNotFoundException -> HttpStatus.NOT_FOUND
+                is VectorStoreNotFoundException -> HttpStatus.NOT_FOUND
+                is VectorStoreFileNotFoundException -> HttpStatus.NOT_FOUND
+                is VectorIndexingException -> HttpStatus.INTERNAL_SERVER_ERROR
+                is VectorSearchException -> HttpStatus.INTERNAL_SERVER_ERROR
+                else -> HttpStatus.INTERNAL_SERVER_ERROR
+            }
+        
+        val errorResponse =
+            ErrorResponse(
+                type =
+                    ex.javaClass.simpleName
+                        .replace("Exception", "")
+                        .lowercase() + "_error",
+                message = ex.message ?: "An error occurred",
+                param = request.getDescription(false).substringAfter("uri="),
+                code = status.value().toString(),
+                timestamp = Instant.now().toEpochMilli(),
+            )
+        
+        return ResponseEntity.status(status).body(errorResponse)
+    }
+
     @ExceptionHandler(Exception::class)
-    fun handleGenericException(ex: Exception): ResponseEntity<ErrorResponse> {
+    fun handleGenericException(
+        ex: Exception,
+        request: WebRequest? = null,
+    ): ResponseEntity<ErrorResponse> {
         logger.error(ex) { "Unhandled exception: ${ex.message}" }
 
         val errorResponse =
             ErrorResponse(
                 type = "api_error",
                 message = ex.message ?: "An unexpected error occurred",
-                param = null,
+                param = request?.getDescription(false)?.substringAfter("uri="),
                 code = "internal_server_error",
                 timestamp = System.currentTimeMillis(),
             )

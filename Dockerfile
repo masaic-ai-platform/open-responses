@@ -2,9 +2,15 @@
 FROM docker:20.10 as docker-cli
 
 # Stage 2: Build your app image based on amazoncorretto
-FROM amazoncorretto:21
+FROM eclipse-temurin:21-jdk
 
 WORKDIR /app
+
+# Install dependencies required for ONNX runtime
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libc6 libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy the built JAR and configuration file into the image
 COPY build/libs/openresponses-0.1.0-M1.jar /app/openresponses-0.1.0-M1.jar

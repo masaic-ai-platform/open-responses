@@ -4,9 +4,11 @@ import ai.masaic.openresponses.api.model.InputMessageItem
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
+import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.reactive.awaitFirstOrNull
 import mu.KotlinLogging
 import org.springframework.data.annotation.Id
-import org.springframework.data.mongodb.core.MongoTemplate
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
@@ -14,9 +16,10 @@ import org.springframework.data.mongodb.core.query.Query
 /**
  * MongoDB implementation of ResponseStore.
  * Stores responses and their input items in MongoDB collections.
+ * Uses reactive MongoDB with Kotlin coroutines for non-blocking operations.
  */
 class MongoResponseStore(
-    private val mongoTemplate: MongoTemplate,
+    private val mongoTemplate: ReactiveMongoTemplate,
     private val objectMapper: ObjectMapper,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
@@ -32,7 +35,7 @@ class MongoResponseStore(
         val outputInputItems: List<InputMessageItem>,
     )
 
-    override fun storeResponse(
+    override suspend fun storeResponse(
         response: Response,
         inputItems: List<ResponseInputItem>,
     ) {
@@ -56,18 +59,19 @@ class MongoResponseStore(
         // Serialize Response to JSON string for MongoDB storage
         val responseJson = objectMapper.writeValueAsString(response)
 
-        val existingDoc = mongoTemplate.findById(responseId, ResponseDocument::class.java)
+        val existingDoc = mongoTemplate.findById(responseId, ResponseDocument::class.java).awaitFirstOrNull()
 
         if (existingDoc != null) {
             logger.debug { "Response with ID: $responseId already exists in MongoDB. Updating existing document" }
-            mongoTemplate.save(
-                existingDoc.copy(
-                    responseJson = responseJson,
-                    inputItems = existingDoc.inputItems.plus(inputMessageItems),
-                    outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems),
-                ),
-                "responses",
-            )
+            mongoTemplate
+                .save(
+                    existingDoc.copy(
+                        responseJson = responseJson,
+                        inputItems = existingDoc.inputItems.plus(inputMessageItems),
+                        outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems),
+                    ),
+                    "responses",
+                ).awaitFirst()
         } else {
             logger.debug { "Response with ID: $responseId does not exist in MongoDB. Creating new document" }
 
@@ -80,37 +84,37 @@ class MongoResponseStore(
                     outputInputItems = outputMessageItems,
                 )
             // Save to MongoDB
-            mongoTemplate.save(document, "responses")
+            mongoTemplate.save(document, "responses").awaitFirst()
         }
     }
 
-    override fun getResponse(responseId: String): Response? {
+    override suspend fun getResponse(responseId: String): Response? {
         logger.debug { "Retrieving response with ID: $responseId from MongoDB" }
         
-        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java)
+        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java).awaitFirstOrNull()
         return document?.let {
             objectMapper.readValue(it.responseJson, Response::class.java)
         }
     }
 
-    override fun getInputItems(responseId: String): List<InputMessageItem> {
+    override suspend fun getInputItems(responseId: String): List<InputMessageItem> {
         logger.debug { "Retrieving input items for response with ID: $responseId from MongoDB" }
         
-        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java)
+        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java).awaitFirstOrNull()
         return document?.inputItems ?: emptyList()
     }
 
-    override fun deleteResponse(responseId: String): Boolean {
+    override suspend fun deleteResponse(responseId: String): Boolean {
         logger.debug { "Deleting response with ID: $responseId from MongoDB" }
         
         val query = Query(Criteria.where("_id").`is`(responseId))
-        val result = mongoTemplate.remove(query, ResponseDocument::class.java)
+        val result = mongoTemplate.remove(query, ResponseDocument::class.java).awaitFirst()
         
         return result.deletedCount > 0
     }
 
-    override fun getOutputItems(responseId: String): List<InputMessageItem> {
-        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java)
+    override suspend fun getOutputItems(responseId: String): List<InputMessageItem> {
+        val document = mongoTemplate.findById(responseId, ResponseDocument::class.java).awaitFirstOrNull()
         return document?.outputInputItems ?: emptyList()
     }
 }

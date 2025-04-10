@@ -16,10 +16,10 @@ import org.springframework.stereotype.Component
  * Stores responses and their input items in memory using fixed-size caches with LRU eviction.
  */
 @Component
-@ConditionalOnProperty(name = ["open-responses.response-store.type"], havingValue = "in-memory", matchIfMissing = true)
+@ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryResponseStore(
     private val objectMapper: ObjectMapper,
-    @Value("\${open-responses.response-store.cache-size:10000}") private val cacheSize: Long,
+    @Value("\${open-responses.store.cache-size:10000}") private val cacheSize: Long,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
 
@@ -41,7 +41,7 @@ class InMemoryResponseStore(
             .maximumSize(cacheSize)
             .build()
 
-    override fun storeResponse(
+    override suspend fun storeResponse(
         response: Response,
         inputItems: List<ResponseInputItem>,
     ) {
@@ -79,17 +79,17 @@ class InMemoryResponseStore(
         }
     }
 
-    override fun getResponse(responseId: String): Response? {
+    override suspend fun getResponse(responseId: String): Response? {
         logger.debug { "Retrieving response with ID: $responseId" }
         return responses.getIfPresent(responseId)
     }
 
-    override fun getInputItems(responseId: String): List<InputMessageItem> {
+    override suspend fun getInputItems(responseId: String): List<InputMessageItem> {
         logger.debug { "Retrieving input items for response with ID: $responseId" }
         return inputItemsMap.getIfPresent(responseId) ?: emptyList()
     }
 
-    override fun deleteResponse(responseId: String): Boolean {
+    override suspend fun deleteResponse(responseId: String): Boolean {
         logger.debug { "Deleting response with ID: $responseId" }
         val responseExists = responses.getIfPresent(responseId) != null
         if (responseExists) {
@@ -100,5 +100,5 @@ class InMemoryResponseStore(
         return responseExists
     }
 
-    override fun getOutputItems(responseId: String): List<InputMessageItem> = outputInputItemsMap.getIfPresent(responseId) ?: emptyList()
+    override suspend fun getOutputItems(responseId: String): List<InputMessageItem> = outputInputItemsMap.getIfPresent(responseId) ?: emptyList()
 }

@@ -149,7 +149,7 @@ class MasaicOpenAiResponseServiceImplTest {
         every { params.responseId() } returns responseId
 
         val mockResponse = mockk<Response>(relaxed = true)
-        every { responseStore.getResponse(responseId) } returns mockResponse
+        coEvery { responseStore.getResponse(responseId) } returns mockResponse
 
         val options = mockk<RequestOptions>(relaxed = true)
 
@@ -159,7 +159,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Assert
         assertNotNull(result)
         assertEquals(mockResponse, result)
-        verify(exactly = 1) { responseStore.getResponse(responseId) }
+        coVerify(exactly = 1) { responseStore.getResponse(responseId) }
     }
 
     /**
@@ -172,7 +172,9 @@ class MasaicOpenAiResponseServiceImplTest {
         val params = mockk<ResponseRetrieveParams>(relaxed = true)
         every { params.responseId() } returns responseId
 
-        every { responseStore.getResponse(responseId) } returns null
+        coEvery { responseStore.getResponse(responseId) } returns null
+
+        coEvery { responseStore.getResponse(responseId) } returns null
 
         val options = mockk<RequestOptions>(relaxed = true)
 
@@ -180,7 +182,7 @@ class MasaicOpenAiResponseServiceImplTest {
         assertThrows(NoSuchElementException::class.java) {
             serviceImpl.retrieve(params, options)
         }
-        verify(exactly = 1) { responseStore.getResponse(responseId) }
+        coVerify(exactly = 1) { responseStore.getResponse(responseId) }
     }
 
     /**
@@ -192,16 +194,16 @@ class MasaicOpenAiResponseServiceImplTest {
         val responseId = "resp_123456"
         val params = mockk<ResponseDeleteParams>(relaxed = true)
         every { params.responseId() } returns responseId
-
-        every { responseStore.deleteResponse(responseId) } returns true
-
+        
+        coEvery { responseStore.deleteResponse(responseId) } returns true
+        
         val options = mockk<RequestOptions>(relaxed = true)
 
         // Act
         serviceImpl.delete(params, options)
 
         // Assert
-        verify(exactly = 1) { responseStore.deleteResponse(responseId) }
+        coVerify(exactly = 1) { responseStore.deleteResponse(responseId) }
     }
 
     /**
@@ -209,7 +211,7 @@ class MasaicOpenAiResponseServiceImplTest {
      */
     private fun defaultParamsMock(store: Boolean = false): ResponseCreateParams {
         val params = mockk<ResponseCreateParams>(relaxed = true)
-        every { params.instructions() } returns Optional.empty()
+        every { params.instructions() } returns Optional.of("Say hello to the world")
         every { params.metadata() } returns Optional.empty()
         every { params.model() } returns ChatModel.of("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)

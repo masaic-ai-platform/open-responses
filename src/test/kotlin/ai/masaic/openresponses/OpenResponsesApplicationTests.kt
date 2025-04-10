@@ -1,7 +1,7 @@
 package ai.masaic.openresponses
 
-import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.test.context.SpringBootTest
 
 /**
@@ -10,6 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest
  * This test class verifies that the Spring application context loads correctly.
  */
 @SpringBootTest
+@ConfigurationPropertiesScan
 class OpenResponsesApplicationTests {
     /**
      * Tests that the application context loads successfully.
@@ -18,7 +19,6 @@ class OpenResponsesApplicationTests {
      * initialized correctly by the Spring container.
      */
     @Test
-    @Disabled
     fun contextLoads() {
     }
 }

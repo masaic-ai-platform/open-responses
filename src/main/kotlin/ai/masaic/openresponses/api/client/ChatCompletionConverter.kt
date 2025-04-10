@@ -1,5 +1,8 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.tool.FileSearchResponse
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
@@ -14,6 +17,9 @@ import java.util.*
  * compatibility across the platform.
  */
 object ChatCompletionConverter {
+    val objectMapper = jacksonObjectMapper()
+    val log = org.slf4j.LoggerFactory.getLogger(ChatCompletionConverter::class.java)
+
     /**
      * Builds the complete Response object from all components.
      *
@@ -59,8 +65,118 @@ object ChatCompletionConverter {
         id: String,
         outputItems: List<ResponseOutputItem>,
         incompleteDetails: Response.IncompleteDetails? = null,
-    ): Response =
-        Response
+    ): Response {
+        if (outputItems.isNotEmpty() &&
+            outputItems.last().isMessage() &&
+            params.input().isResponse() &&
+            params
+                .input()
+                .asResponse()
+                .last()
+                .isFunctionCallOutput() &&
+            outputItems.last().isMessage() &&
+            outputItems
+                .last()
+                .asMessage()
+                .content()
+                .isNotEmpty() &&
+            outputItems
+                .last()
+                .asMessage()
+                .content()
+                .last()
+                .isOutputText()
+        ) {
+            val functionCallOutput =
+                params
+                    .input()
+                    .asResponse()
+                    .last()
+                    .asFunctionCallOutput()
+            val callId = functionCallOutput.callId()
+            val functionCall =
+                params.input().asResponse().filter {
+                    it.isFunctionCall() &&
+                        it.asFunctionCall().name() == "file_search" &&
+                        it.asFunctionCall().callId() == callId
+                }
+
+            if (functionCall.isNotEmpty()) {
+                try {
+                    val response =
+                        objectMapper.readValue(
+                            functionCallOutput.output().toString(),
+                            FileSearchResponse::class.java,
+                        )
+
+                    val annotations =
+                        response.data.flatMap { it.annotations }.map {
+                            ResponseOutputText.Annotation.ofFileCitation(
+                                ResponseOutputText.Annotation.FileCitation
+                                    .builder()
+                                    .type(JsonValue.from(it.type))
+                                    .index(JsonValue.from(it.index))
+                                    .fileId(it.file_id)
+                                    .putAdditionalProperty("filename", JsonValue.from(it.filename))
+                                    .build(),
+                            )
+                        }
+
+                    val list = outputItems.toMutableList()
+                    val last = list.removeLast()
+                    list.add(
+                        ResponseOutputItem.ofMessage(
+                            ResponseOutputMessage
+                                .builder()
+                                .addContent(
+                                    ResponseOutputMessage.Content.ofOutputText(
+                                        ResponseOutputText
+                                            .builder()
+                                            .text(
+                                                last
+                                                    .asMessage()
+                                                    .content()
+                                                    .last()
+                                                    .asOutputText()
+                                                    .text(),
+                                            ).annotations(annotations)
+                                            .build(),
+                                    ),
+                                ).id(UUID.randomUUID().toString())
+                                .status(ResponseOutputMessage.Status.COMPLETED)
+                                .build(),
+                        ),
+                    )
+
+                    return Response
+                        .builder()
+                        .id(id)
+                        .createdAt(Instant.now().toEpochMilli().toDouble())
+                        .error(null) // Required field, null since we assume no error
+                        .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
+                        .instructions(params.instructions())
+                        .metadata(params.metadata())
+                        .model(params.model())
+                        .object_(JsonValue.from("response")) // Standard value
+                        .temperature(params.temperature())
+                        .parallelToolCalls(params._parallelToolCalls())
+                        .tools(params._tools())
+                        .toolChoice(convertToolChoice(params.toolChoice()))
+                        .topP(params.topP())
+                        .maxOutputTokens(params.maxOutputTokens())
+                        .previousResponseId(params.previousResponseId())
+                        .reasoning(params.reasoning())
+                        .status(status)
+                        .output(list)
+                        .build()
+                } catch (e: JsonProcessingException) {
+                    // did not succeed to parse the function call. Continue without annotation parse
+                    log.warn("Failed to parse function call output: ${e.message}")
+                }
+            }
+        }
+
+        return Response
             .builder()
             .id(id)
             .createdAt(Instant.now().toEpochMilli().toDouble())
@@ -81,6 +197,7 @@ object ChatCompletionConverter {
             .status(status)
             .output(outputItems)
             .build()
+    }
 
     /**
      * Converts a ChatCompletion object to a Response object.
@@ -94,7 +211,7 @@ object ChatCompletionConverter {
         params: ResponseCreateParams,
     ): Response {
         // Process all choices and flatten the resulting output items
-        val outputItems = processChoices(chatCompletion)
+        val outputItems = processChoices(chatCompletion, params)
 
         // Convert created timestamp from epoch seconds to double
         val createdAtDouble = chatCompletion.created().toDouble()
@@ -109,7 +226,10 @@ object ChatCompletionConverter {
      * @param completion The ChatCompletion to process
      * @return A flattened list of ResponseOutputItems
      */
-    private fun processChoices(completion: ChatCompletion): List<ResponseOutputItem> =
+    private fun processChoices(
+        completion: ChatCompletion,
+        params: ResponseCreateParams,
+    ): List<ResponseOutputItem> =
         completion
             .choices()
             .map { choice ->
@@ -125,7 +245,7 @@ object ChatCompletionConverter {
 
                 // Add the main message output
                 if (messageWithoutReasoning.isNotBlank()) {
-                    outputs.add(createMessageOutput(responseOutputTextBuilder, messageWithoutReasoning))
+                    outputs.add(createMessageOutput(responseOutputTextBuilder, messageWithoutReasoning, params))
                 }
 
                 // Add reasoning output if present
@@ -226,8 +346,59 @@ object ChatCompletionConverter {
     private fun createMessageOutput(
         builder: ResponseOutputText.Builder,
         messageText: String,
-    ): ResponseOutputItem =
-        ResponseOutputItem.ofMessage(
+        params: ResponseCreateParams,
+    ): ResponseOutputItem {
+        if (params.input().isResponse()) {
+            val inputResponse = params.input().asResponse()
+            if (inputResponse.last().isFunctionCallOutput()) {
+                val functionCallOutput = inputResponse.last().asFunctionCallOutput()
+                val callId = functionCallOutput.callId()
+                val functionCall =
+                    inputResponse.filter {
+                        it.isFunctionCall() &&
+                            it.asFunctionCall().name() == "file_search" &&
+                            it.asFunctionCall().callId() == callId
+                    }
+
+                if (functionCall.isNotEmpty()) {
+                    try {
+                        val response =
+                            objectMapper.readValue(
+                                functionCallOutput.output().toString(),
+                                FileSearchResponse::class.java,
+                            )
+
+                        val annotations =
+                            response.data.flatMap { it.annotations }.map {
+                                ResponseOutputText.Annotation.ofFileCitation(
+                                    ResponseOutputText.Annotation.FileCitation
+                                        .builder()
+                                        .type(JsonValue.from(it.type))
+                                        .index(JsonValue.from(it.index))
+                                        .fileId(it.file_id)
+                                        .putAdditionalProperty("filename", JsonValue.from(it.filename))
+                                        .build(),
+                                )
+                            }
+
+                        return ResponseOutputItem.ofMessage(
+                            ResponseOutputMessage
+                                .builder()
+                                .addContent(
+                                    builder.text(messageText).annotations(annotations).build(),
+                                ).id(UUID.randomUUID().toString())
+                                .status(ResponseOutputMessage.Status.COMPLETED)
+                                .build(),
+                        )
+                    } catch (e: JsonProcessingException) {
+                        // did not succeed to parse the function call. Continue without annotation parse
+                        log.warn("Failed to parse function call output: ${e.message}")
+                    }
+                }
+            }
+        }
+
+        return ResponseOutputItem.ofMessage(
             ResponseOutputMessage
                 .builder()
                 .addContent(
@@ -236,6 +407,7 @@ object ChatCompletionConverter {
                 .status(ResponseOutputMessage.Status.COMPLETED)
                 .build(),
         )
+    }
 
     /**
      * Creates a reasoning output item from the choice.

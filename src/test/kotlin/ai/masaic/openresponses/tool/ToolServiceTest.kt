@@ -8,6 +8,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import org.junit.jupiter.api.AfterAll
@@ -137,21 +138,23 @@ class ToolServiceTest {
      * Verifies that the tool can be executed and returns a valid result.
      */
     @Test
-    fun `execute browser use tool`() {
-        val execResult =
-            toolService.executeTool(
-                "browser_use",
-                Json.encodeToString(
-                    serializer(),
-                    mapOf(
-                        "url" to "https://preview--telco-service-portal.lovable.app/",
-                        "action" to "navigate to link and search the bill details like due date, bill amount of customer CUS10001",
+    fun `execute browser use tool`() =
+        runTest {
+            val execResult =
+                toolService.executeTool(
+                    "browser_use",
+                    Json.encodeToString(
+                        serializer(),
+                        mapOf(
+                            "url" to "https://preview--telco-service-portal.lovable.app/",
+                            "action" to "navigate to link and search the bill details like due date, bill amount of customer CUS10001",
+                        ),
                     ),
-                ),
-            )
+                    mockk(),
+                )
 
-        // Assert result is not null and not empty
-        assert(execResult != null) { "Tool execution result should not be null" }
-        assert(execResult!!.isNotEmpty()) { "Tool execution result should not be empty" }
-    }
+            // Assert result is not null and not empty
+            assert(execResult != null) { "Tool execution result should not be null" }
+            assert(execResult!!.isNotEmpty()) { "Tool execution result should not be empty" }
+        }
 }

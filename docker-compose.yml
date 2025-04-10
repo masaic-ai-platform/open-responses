@@ -137,6 +137,7 @@ services:
       - MONGO_INITDB_DATABASE=openresponses
     profiles:
       - mongodb
+      - qdrant-mongodb
     restart: unless-stopped
     networks:
       - observability-network
@@ -180,9 +181,74 @@ services:
     profiles:
       - mcp
 
+  # Qdrant vector database service
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT_ALLOW_CREATION_ON_FILE_NOT_FOUND=true
+    networks:
+      - observability-network
+    profiles:
+      - qdrant
+      - qdrant-mongodb
+    restart: unless-stopped
+
+  # Flavor 7: Open Responses with Qdrant vector search (OpenAI embeddings)
+  open-responses-with-qdrant:
+    <<: *open_responses
+    ports:
+      - "8080:8080"
+    environment:
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_PROVIDER=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_PORT=6334
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=false
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME=open-responses-documents
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_MIN_SCORE=0.7
+    networks:
+      - observability-network
+    depends_on:
+      - qdrant
+    profiles:
+      - qdrant
+    restart: unless-stopped
+
+  # Flavor 8: Open Responses with Qdrant vector search and MongoDB storage (OpenAI embeddings)
+  open-responses-with-qdrant-mongodb:
+    <<: *open_responses
+    ports:
+      - "8080:8080"
+    environment:
+      # MongoDB configuration
+      - OPEN_RESPONSES_MONGODB_DATABASE=openresponses
+      - OPEN_RESPONSES_MONGODB_URI=mongodb://mongodb:27017
+      - OPEN_RESPONSES_STORE_TYPE=mongodb
+      - OPEN_RESPONSES_STORE_VECTOR_REPOSITORY_TYPE=mongodb
+      # Qdrant configuration
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_PROVIDER=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_PORT=6334
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=false
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_COLLECTION_NAME=open-responses-documents
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_MIN_SCORE=0.7
+    networks:
+      - observability-network
+    depends_on:
+      - mongodb
+      - qdrant
+    profiles:
+      - qdrant-mongodb
+    restart: unless-stopped
+
 networks:
   observability-network:
     name: observability-network
 
 volumes:
   mongodb_data:
+  qdrant_data:

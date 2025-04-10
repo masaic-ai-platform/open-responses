@@ -14,6 +14,7 @@ import io.micrometer.observation.Observation
 import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.reactor.ReactorContext
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -83,7 +84,7 @@ class MasaicOpenAiResponseServiceImpl(
         val responseOrCompletions =
             telemetryService.withClientObservation("open.responses.create", parentObservation) { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
-                val completionCreateParams = parameterConverter.prepareCompletion(params)
+                val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
                 val chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
@@ -158,7 +159,7 @@ class MasaicOpenAiResponseServiceImpl(
     /**
      * Stores a response and its associated input items in the response store.
      */
-    private fun storeResponseWithInputItems(
+    private suspend fun storeResponseWithInputItems(
         response: Response,
         params: ResponseCreateParams,
     ) {
@@ -209,6 +210,18 @@ class MasaicOpenAiResponseServiceImpl(
         throw UnsupportedOperationException("Not yet implemented")
     }
 
+    override fun retrieve(
+        params: ResponseRetrieveParams,
+        requestOptions: RequestOptions,
+    ): Response = runBlocking { retrieveAsync(params, requestOptions) }
+
+    override fun delete(
+        params: ResponseDeleteParams,
+        requestOptions: RequestOptions,
+    ) {
+        runBlocking { deleteAsync(params, requestOptions) }
+    }
+
     /**
      * Retrieves a specific response by ID.
      *
@@ -216,7 +229,7 @@ class MasaicOpenAiResponseServiceImpl(
      * @param requestOptions Additional request options
      * @return The retrieved response or throws an exception if not found
      */
-    override fun retrieve(
+    suspend fun retrieveAsync(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions,
     ): Response {
@@ -238,7 +251,7 @@ class MasaicOpenAiResponseServiceImpl(
     /**
      * Deletes a response by ID.
      */
-    override fun delete(
+    suspend fun deleteAsync(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions,
     ) {

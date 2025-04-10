@@ -1,6 +1,10 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.service.ResponseProcessingException
+import ai.masaic.openresponses.api.service.storage.FileService
+import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.tool.NativeToolDefinition
+import ai.masaic.openresponses.tool.NativeToolRegistry
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
@@ -19,7 +23,10 @@ import org.springframework.stereotype.Component
  * into OpenAI's API format.
  */
 @Component
-class MasaicParameterConverter {
+class MasaicParameterConverter(
+    val nativeToolRegistry: NativeToolRegistry,
+    val fileService: FileService,
+) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper()
 
@@ -30,7 +37,7 @@ class MasaicParameterConverter {
      * @param params Parameters for creating the response
      * @return ChatCompletionCreateParams object ready to send to OpenAI API
      */
-    fun prepareCompletion(params: ResponseCreateParams): ChatCompletionCreateParams {
+    suspend fun prepareCompletion(params: ResponseCreateParams): ChatCompletionCreateParams {
         logger.debug { "Converting ResponseCreateParams to ChatCompletionCreateParams" }
 
         try {
@@ -55,7 +62,7 @@ class MasaicParameterConverter {
      * @param params The input from response parameters
      * @return Builder for ChatCompletionCreateParams with messages set
      */
-    private fun createBaseCompletionRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
+    private suspend fun createBaseCompletionRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
         val input = params.input()
         return if (input.isText()) {
             logger.debug { "Creating text-based request" }
@@ -99,7 +106,7 @@ class MasaicParameterConverter {
      * @param params The source parameters
      * @return Builder with all messages properly converted and added
      */
-    private fun createMessageBasedRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
+    private suspend fun createMessageBasedRequest(params: ResponseCreateParams): ChatCompletionCreateParams.Builder {
         val input = params.input()
         val inputItems = input.asResponse()
         logger.debug { "Processing ${inputItems.size} input messages" }
@@ -402,7 +409,7 @@ class MasaicParameterConverter {
                     )
                 }
                 responseTool.isFileSearch() -> {
-                    val fileSearchTool = responseTool.asFileSearch()
+                    val nativeTool = nativeToolRegistry.findByName("file_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
                     logger.trace { "Converting file search tool" }
                     result.add(
                         ChatCompletionTool
@@ -411,8 +418,14 @@ class MasaicParameterConverter {
                             .function(
                                 FunctionDefinition
                                     .builder()
-                                    .name(fileSearchTool._type())
-                                    .build(),
+                                    .name(nativeTool.name)
+                                    .description(nativeTool.description)
+                                    .parameters(
+                                        objectMapper.readValue(
+                                            objectMapper.writeValueAsString(nativeTool.parameters),
+                                            FunctionParameters::class.java,
+                                        ),
+                                    ).build(),
                             ).build(),
                     )
                 }
@@ -529,7 +542,7 @@ class MasaicParameterConverter {
      * @param item The input item to convert
      * @param completionBuilder The builder to add the message to
      */
-    private fun convertInputMessages(
+    private suspend fun convertInputMessages(
         item: ResponseInputItem,
         completionBuilder: ChatCompletionCreateParams.Builder,
         params: ResponseCreateParams,
@@ -556,7 +569,7 @@ class MasaicParameterConverter {
      * @param item The user message item
      * @param completionBuilder The builder to add the message to
      */
-    private fun handleUserMessage(
+    private suspend fun handleUserMessage(
         item: ResponseInputItem,
         completionBuilder: ChatCompletionCreateParams.Builder,
     ) {
@@ -816,7 +829,7 @@ class MasaicParameterConverter {
      * @param message The message to extract content from
      * @return List of ChatCompletionContentPart objects
      */
-    private fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> = prepareUserContent(message.content())
+    private suspend fun prepareUserContent(message: ResponseInputItem.Message): List<ChatCompletionContentPart> = prepareUserContent(message.content())
 
     /**
      * Prepares user content from a list of response input content.
@@ -825,12 +838,12 @@ class MasaicParameterConverter {
      * @param contentList List of response input content
      * @return List of ChatCompletionContentPart objects
      */
-    private fun prepareUserContent(contentList: List<ResponseInputContent>): List<ChatCompletionContentPart> =
+    private suspend fun prepareUserContent(contentList: List<ResponseInputContent>): List<ChatCompletionContentPart> =
         contentList.map { content ->
             processionInputContent(content)
         }
 
-    private fun processionInputContent(content: ResponseInputContent): ChatCompletionContentPart =
+    private suspend fun processionInputContent(content: ResponseInputContent): ChatCompletionContentPart =
         when {
             content.isInputText() -> {
                 val inputText = content.asInputText()
@@ -869,17 +882,12 @@ class MasaicParameterConverter {
 
             content.isInputFile() -> {
                 val inputFile = content.asInputFile()
-                ChatCompletionContentPart.ofFile(
-                    ChatCompletionContentPart.File
+                val fileContent = DocumentTextExtractor.extractText(fileService.getFileContent(inputFile._fileId().toString()).inputStream, "")
+                ChatCompletionContentPart.ofText(
+                    ChatCompletionContentPartText
                         .builder()
-                        .type(JsonValue.from("file"))
-                        .file(
-                            ChatCompletionContentPart.File.FileObject
-                                .builder()
-                                .fileData(inputFile._fileData())
-                                .fileId(inputFile._fileId())
-                                .fileName(inputFile._filename())
-                                .build(),
+                        .text(
+                            fileContent,
                         ).build(),
                 )
             }

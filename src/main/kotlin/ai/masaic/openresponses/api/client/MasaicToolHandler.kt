@@ -8,10 +8,12 @@ import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
 import io.micrometer.observation.Observation
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.*
+import kotlin.String
 
 /**
  * Handles tool-related operations for the Masaic OpenAI API integration.
@@ -115,7 +117,7 @@ class MasaicToolHandler(
                         )
 
                         // Execute the tool using the observation API
-                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), parentObservation) { toolResult ->
+                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), parentObservation, params) { toolResult ->
                             if (toolResult != null) {
                                 logger.debug { "Tool execution successful for ${function.name()}" }
                                 responseInputItems.add(
@@ -168,6 +170,7 @@ class MasaicToolHandler(
         arguments: String,
         toolId: String,
         parentObservation: Observation? = null,
+        params: ResponseCreateParams,
         resultHandler: (String?) -> Unit,
     ) {
         telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
@@ -175,7 +178,7 @@ class MasaicToolHandler(
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
-                val toolResult = toolService.executeTool(toolName, arguments)
+                val toolResult = runBlocking { toolService.executeTool(toolName, arguments, params) }
                 resultHandler(toolResult)
             } catch (e: Exception) {
                 observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
@@ -287,7 +290,7 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation) { toolResult ->
+                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation, params) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(
