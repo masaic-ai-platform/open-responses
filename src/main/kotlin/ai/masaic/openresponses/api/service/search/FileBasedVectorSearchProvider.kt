@@ -293,4 +293,37 @@ class FileBasedVectorSearchProvider(
      * @return Map of metadata, or null if the file doesn't exist
      */
     override fun getFileMetadata(fileId: String): Map<String, Any>? = fileMetadataCache[fileId]
+
+    /**
+     * Updates metadata for a file in the vector store.
+     * This is used to sync vectorstorefile attributes with the search provider.
+     *
+     * @param fileId The ID of the file
+     * @param metadata The metadata to update
+     * @return True if the update was successful, false otherwise
+     */
+    fun updateFileMetadata(
+        fileId: String,
+        metadata: Map<String, Any>,
+    ): Boolean {
+        try {
+            if (!fileMetadataCache.containsKey(fileId)) {
+                log.warn("Cannot update metadata for non-existent file: $fileId")
+                return false
+            }
+            
+            // Update the metadata cache with the new values
+            fileMetadataCache[fileId] = metadata
+            
+            // If the file chunks exist, update the disk storage too
+            if (fileChunksCache.containsKey(fileId)) {
+                saveEmbeddings(fileId)
+            }
+            
+            return true
+        } catch (e: Exception) {
+            log.error("Error updating metadata for file: $fileId", e)
+            return false
+        }
+    }
 }

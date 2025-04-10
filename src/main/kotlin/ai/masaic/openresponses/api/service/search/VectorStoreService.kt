@@ -346,7 +346,7 @@ class VectorStoreService(
         }
 
     /**
-     * Creates a file in a vector store.
+     * Creates a new file in a vector store.
      *
      * @param vectorStoreId The ID of the vector store
      * @param request The request to create a file
@@ -525,7 +525,19 @@ class VectorStoreService(
             val updatedFile = file.copy(attributes = request.attributes)
         
             // Save the updated file
-            vectorStoreRepository.saveVectorStoreFile(updatedFile)
+            val savedFile = vectorStoreRepository.saveVectorStoreFile(updatedFile)
+            
+            // Update the metadata in the search provider based on its type
+            when (vectorSearchProvider) {
+                is FileBasedVectorSearchProvider -> {
+                    (vectorSearchProvider as FileBasedVectorSearchProvider).updateFileMetadata(fileId, request.attributes)
+                }
+                is QdrantVectorSearchProvider -> {
+                    (vectorSearchProvider as QdrantVectorSearchProvider).updateFileMetadata(fileId, request.attributes)
+                }
+            }
+            
+            savedFile
         }
 
     /**
@@ -653,45 +665,125 @@ class VectorStoreService(
                     )
                 }
             
-                // Add file filter to the request filters
-                val filters = mutableMapOf<String, Any>()
-                request.filters?.let { filters.putAll(it) }
-                
-                // Add fileIds filter (list of file IDs to search within)
-                // This supports both implementations - newer ones handle 'fileIds' as a list,
-                // while older ones might look for individual 'fileId' matches
-                filters["fileIds"] = fileIds
-                
-                // Execute the vector search
-                val maxResults = request.maxNumResults ?: 10
-                try {
-                    val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters, request.rankingOptions)
+                // Special handling for QdrantVectorSearchProvider
+                if (vectorSearchProvider is QdrantVectorSearchProvider && request.filters != null && request.filters.isNotEmpty()) {
+                    // For Qdrant, we need to separate file attributes filters from search filters
+                    // because Qdrant doesn't index all vectorstorefile attributes
                     
-                    // Update the vector store's last active timestamp
-                    val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
-                    vectorStoreRepository.saveVectorStore(updatedVectorStore)
+                    // Separate filters into file attributes (to filter post-search) and search filters 
+                    val searchFilters = mutableMapOf<String, Any>()
+                    val fileAttributeFilters = mutableMapOf<String, Any>()
                     
-                    // Convert search results to VectorStoreSearchResult objects
-                    val results = mapSearchResultsToVectorStoreSearchResults(searchResults, existingFiles)
+                    request.filters.forEach { (key, value) ->
+                        // Standard filters like "fileIds" go to search filters
+                        // Custom attributes need post-search filtering
+                        when (key) {
+                            "fileIds", "file_id", "filename", "chunk_id", "chunk_index", "total_chunks" -> 
+                                searchFilters[key] = value
+                            else -> 
+                                fileAttributeFilters[key] = value
+                        }
+                    }
                     
-                    // Record search telemetry
-                    telemetryService.stopSearchOperation(
-                        observation,
-                        resultsCount = results.size,
-                        success = true,
-                    )
+                    // Add fileIds to search filters
+                    searchFilters["fileIds"] = fileIds
                     
-                    VectorStoreSearchResults(
-                        searchQuery = request.query,
-                        data = results,
-                    )
-                } catch (e: Exception) {
-                    log.error("Error searching vector store: ${e.message}", e)
-                    telemetryService.stopSearchOperation(
-                        observation,
-                        success = false,
-                    )
-                    throw VectorSearchException("Error searching vector store: ${e.message}", e)
+                    // Execute the vector search with only the search filters
+                    val maxResults =
+                        if (fileAttributeFilters.isEmpty()) {
+                            request.maxNumResults ?: 10
+                        } else {
+                            // If we have post-filtering, request more results from search
+                            (request.maxNumResults ?: 10) * 5
+                        }
+                    
+                    try {
+                        val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, searchFilters, request.rankingOptions)
+                        
+                        // Update the vector store's last active timestamp
+                        val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
+                        vectorStoreRepository.saveVectorStore(updatedVectorStore)
+                        
+                        // Convert search results to VectorStoreSearchResult objects
+                        var results = mapSearchResultsToVectorStoreSearchResults(searchResults, existingFiles)
+                        
+                        // Apply file attribute filters if needed
+                        if (fileAttributeFilters.isNotEmpty()) {
+                            results =
+                                results.filter { result ->
+                                    fileAttributeFilters.all { (key, value) ->
+                                        result.attributes?.get(key) == value
+                                    }
+                                }
+                            
+                            // Limit results to requested number after filtering
+                            if (request.maxNumResults != null && results.size > request.maxNumResults) {
+                                results = results.take(request.maxNumResults)
+                            }
+                        }
+                        
+                        // Record search telemetry
+                        telemetryService.stopSearchOperation(
+                            observation,
+                            resultsCount = results.size,
+                            success = true,
+                        )
+                        
+                        VectorStoreSearchResults(
+                            searchQuery = request.query,
+                            data = results,
+                        )
+                    } catch (e: Exception) {
+                        log.error("Error searching vector store: ${e.message}", e)
+                        telemetryService.stopSearchOperation(
+                            observation,
+                            success = false,
+                        )
+                        throw VectorSearchException("Error searching vector store: ${e.message}", e)
+                    }
+                } else {
+                    // Regular handling for other providers
+                    
+                    // Add file filter to the request filters
+                    val filters = mutableMapOf<String, Any>()
+                    request.filters?.let { filters.putAll(it) }
+                    
+                    // Add fileIds filter (list of file IDs to search within)
+                    // This supports both implementations - newer ones handle 'fileIds' as a list,
+                    // while older ones might look for individual 'fileId' matches
+                    filters["fileIds"] = fileIds
+                    
+                    // Execute the vector search
+                    val maxResults = request.maxNumResults ?: 10
+                    try {
+                        val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters, request.rankingOptions)
+                        
+                        // Update the vector store's last active timestamp
+                        val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
+                        vectorStoreRepository.saveVectorStore(updatedVectorStore)
+                        
+                        // Convert search results to VectorStoreSearchResult objects
+                        val results = mapSearchResultsToVectorStoreSearchResults(searchResults, existingFiles)
+                        
+                        // Record search telemetry
+                        telemetryService.stopSearchOperation(
+                            observation,
+                            resultsCount = results.size,
+                            success = true,
+                        )
+                        
+                        VectorStoreSearchResults(
+                            searchQuery = request.query,
+                            data = results,
+                        )
+                    } catch (e: Exception) {
+                        log.error("Error searching vector store: ${e.message}", e)
+                        telemetryService.stopSearchOperation(
+                            observation,
+                            success = false,
+                        )
+                        throw VectorSearchException("Error searching vector store: ${e.message}", e)
+                    }
                 }
             } catch (e: Exception) {
                 telemetryService.stopSearchOperation(observation, success = false)
@@ -879,13 +971,25 @@ class VectorStoreService(
                 // Get file metadata
                 val fileMetadata = vectorStoreFileManager.getFileMetadata(file.id)
                 val filename = fileMetadata["filename"] as String
-
+                
                 // Index the file in the vector search provider
                 log.info("Indexing file ${file.id} in vector store ${file.vectorStoreId}")
                 try {
                     val resource = vectorStoreFileManager.getFileAsResource(file.id)
                     val effectiveChunkingStrategy = file.chunkingStrategy // Use the file's chunking strategy
                     val success = vectorSearchProvider.indexFile(file.id, resource.inputStream, filename, effectiveChunkingStrategy)
+
+                    // Update the vector search provider with all attributes
+                    if (file.attributes != null) {
+                        when (vectorSearchProvider) {
+                            is FileBasedVectorSearchProvider -> {
+                                (vectorSearchProvider as FileBasedVectorSearchProvider).updateFileMetadata(file.id, file.attributes)
+                            }
+                            is QdrantVectorSearchProvider -> {
+                                (vectorSearchProvider as QdrantVectorSearchProvider).updateFileMetadata(file.id, file.attributes)
+                            }
+                        }
+                    }
 
                     if (success) {
                         // Update the file status
