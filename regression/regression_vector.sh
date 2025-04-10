@@ -12,9 +12,6 @@ YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
 
-# Set the default environment file path
-ENV_FILE_PATH=".env"
-
 # Results tracking using simple arrays
 test_names=()
 test_statuses=()
@@ -22,18 +19,11 @@ total_tests=0
 passed_tests=0
 failed_tests=0
 
-# Load environment variables from .env file
-if [ -f "$ENV_FILE_PATH" ]; then
-    echo "Loading API keys from $ENV_FILE_PATH file..."
-    set -a  # Mark all variables for export
-    source "$ENV_FILE_PATH"
-    set +a  # Turn off auto-export
-    echo -e "${GREEN}Successfully loaded environment variables from $ENV_FILE_PATH file${NC}"
-else
-    echo -e "${YELLOW}No $ENV_FILE_PATH file found. Make sure environment variables are set manually.${NC}"
-fi
+# Declare variables for user input
+MODEL_PROVIDER=""
+API_KEY=""
 
-# Set empty values for variables we don't need to avoid warnings
+# Set empty values for other env variables we might not need, to avoid warnings
 export GITHUB_TOKEN=${GITHUB_TOKEN:-""}
 export BRAVE_API_KEY=${BRAVE_API_KEY:-""}
 
@@ -89,31 +79,58 @@ start_container() {
 # Define a function to run tests
 run_test() {
     local test_name=$1
-    local curl_command=$2
+    local curl_command_base=$2 # Command string *without* -v and output options
     local expected_status_code=${3:-200}
 
     echo -e "\n${BOLD}Running test: ${test_name}${NC}"
-    
+
     # Increment total tests counter
     ((total_tests++))
-    
-    # Run the curl command and capture the response
+
+    # Construct command to get status code
+    # Ensure no literal '-v' exists in curl_command_base passed by caller
+    local curl_status_cmd="$curl_command_base -w '%{http_code}' -o /dev/null -s" # -s for silent, -o /dev/null discards body, -w writes status code
+
+    # Construct command to get full response for logging (if needed)
+    # Note: removes potential -s if user added it, we add it back if needed.
+    local curl_body_cmd="$(echo "$curl_command_base" | sed 's/ -s / /g') -s"
+
     echo "Testing the API endpoint..."
-    response=$(eval "$curl_command" 2>&1)
-    status_code=$(echo "$response" | grep -oE 'HTTP/[0-9.]+ [0-9]+' | awk '{print $2}')
+    # Get status code
+    status_code=$(eval "$curl_status_cmd" 2>&1) # Eval needed if command has shell variables like $API_KEY
     
+    # Check if status_code is a number
+    if ! [[ "$status_code" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}✗ Test failed! Could not get valid HTTP status code.${NC}"
+        # Run the body command here to get more info for debugging
+        echo "Running command to get response body: $curl_body_cmd"
+        response_body=$(eval "$curl_body_cmd" 2>&1)
+        echo "Full command output: $response_body"
+        store_test_result "$test_name" "FAILED (Invalid Status: $status_code)"
+        ((failed_tests++))
+        return 1
+    fi
+
+    # Get response body only if needed (e.g., for logging failure/success)
+    response_body=""
+
     # Check if the status code matches the expected one
     if [[ "$status_code" == "$expected_status_code" ]]; then
         echo -e "${GREEN}✓ Test passed! Status code: $status_code${NC}"
-        echo "Response:"
-        echo "$response" | grep -v "HTTP/" | head -n 20  # Show truncated response for readability
+        # Get body for successful log
+        # response_body=$(eval "$curl_body_cmd" 2>&1)
+        # echo "Response (sample):"
+        # echo "$response_body" | head -n 10 # Show truncated response body
         store_test_result "$test_name" "PASSED"
         ((passed_tests++))
         return 0
     else
         echo -e "${RED}✗ Test failed! Expected status code $expected_status_code but got $status_code${NC}"
+        # Get body for failed log
+        echo "Running command to get response body: $curl_body_cmd"
+        response_body=$(eval "$curl_body_cmd" 2>&1)
         echo "Response:"
-        echo "$response"
+        echo "$response_body"
         store_test_result "$test_name" "FAILED (Expected: $expected_status_code, Got: $status_code)"
         ((failed_tests++))
         return 1
@@ -151,19 +168,26 @@ trap cleanup EXIT INT TERM
 
 # Main vector store tests function
 run_vector_tests() {
-    # Initialize environment variables
-    echo -e "${YELLOW}Checking GROQ_API_KEY for tests${NC}"
-    if [[ -n "$GROQ_API_KEY" ]]; then
-        echo -e "${YELLOW}Current value: ${GROQ_API_KEY:0:5}...${GROQ_API_KEY: -5}${NC}"
-    else
-        echo -e "${YELLOW}GROQ_API_KEY is not set${NC}"
-    fi
-
-    # Verify GROQ_API_KEY is set
-    if [[ -z "$GROQ_API_KEY" ]]; then
-        echo -e "${RED}Error: GROQ_API_KEY is not set. Please set it in your .env file or export it.${NC}"
+    # Prompt user for model provider and API key
+    echo -e "${BOLD}Enter the model provider to use (e.g., groq, openai):${NC}"
+    read -p "> " MODEL_PROVIDER
+    
+    echo -e "${BOLD}Enter the API key for $MODEL_PROVIDER:${NC}"
+    read -sp "> " API_KEY
+    echo # Add a newline after the hidden input
+    
+    # Verify input
+    if [[ -z "$MODEL_PROVIDER" ]]; then
+        echo -e "${RED}Error: Model provider cannot be empty.${NC}"
         exit 1
     fi
+    if [[ -z "$API_KEY" ]]; then
+        echo -e "${RED}Error: API key cannot be empty.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Using model provider: $MODEL_PROVIDER${NC}"
+    echo -e "${GREEN}API Key: ****${API_KEY: -4}${NC}" # Show only last 4 chars for confirmation
 
     # Stop any running containers
     echo "Stopping any running containers..."
@@ -181,8 +205,8 @@ run_vector_tests() {
     run_test "Qdrant Vector Search" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
             \"model\": \"qwen-qwq-32b\",
             \"stream\": false,
@@ -192,24 +216,24 @@ run_vector_tests() {
                     \"content\": \"What is vector search?\"
                 }
             ]
-        }' -v"
+        }'"
 
     # Test 2: Create Vector Store
     echo -e "\n${BOLD}Test 2: Create Vector Store${NC}"
     run_test "Create Vector Store" \
         "curl --location 'http://localhost:8080/v1/vector_stores' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
             \"name\": \"regression_test_store\",
             \"description\": \"Test vector store for regression testing\"
-        }' -v"
+        }'"
 
     # Get the vector store ID
     vector_store_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --header "Authorization: Bearer $API_KEY" \
         --data '{
             "name": "another_test_store",
             "description": "Another test vector store for regression testing"
@@ -232,13 +256,13 @@ run_vector_tests() {
     echo -e "\n${BOLD}Test 3: List Vector Stores${NC}"
     run_test "List Vector Stores" \
         "curl --location 'http://localhost:8080/v1/vector_stores' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     # Test 4: Get Vector Store
     echo -e "\n${BOLD}Test 4: Get Vector Store${NC}"
     run_test "Get Vector Store" \
         "curl --location 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     # Create a file for vector store upload
     echo "This is some test content for vector store file." > vector_store_file.txt
@@ -246,7 +270,7 @@ run_vector_tests() {
     # Upload a file first to get ID
     echo "Uploading a file for the vector store test..."
     file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --header "Authorization: Bearer $API_KEY" \
         --form 'file=@"vector_store_file.txt"' \
         --form 'purpose="user_data"')
 
@@ -273,7 +297,7 @@ run_vector_tests() {
         
         vs_with_file_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
             --header 'Content-Type: application/json' \
-            --header 'Authorization: Bearer $GROQ_API_KEY' \
+            --header "Authorization: Bearer $API_KEY" \
             --data "{
                 \"name\": \"test_vector_store_with_file\",
                 \"file_ids\": [\"$file_id\"]
@@ -301,7 +325,7 @@ run_vector_tests() {
                 echo "Check attempt $wait_attempt of $max_wait_attempts..."
                 
                 vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vs_with_file_id" \
-                    --header "Authorization: Bearer $GROQ_API_KEY")
+                    --header "Authorization: Bearer $API_KEY")
                 
                 file_counts=$(echo "$vs_status" | grep -o '"file_counts":{[^}]*}' || echo "")
                 status=$(echo "$vs_status" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "")
@@ -330,14 +354,14 @@ run_vector_tests() {
             echo -e "\n${BOLD}Test 6: List Files in Vector Store${NC}"
             run_test "List Files in Vector Store" \
                 "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files' \
-                --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+                --header \"Authorization: Bearer $API_KEY\""
             
             # Test 7: Vector Store Query with file
             echo -e "\n${BOLD}Test 7: Vector Store Query${NC}"
             
             # Get the vector store status before querying
             vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vs_with_file_id" \
-                --header "Authorization: Bearer $GROQ_API_KEY")
+                --header "Authorization: Bearer $API_KEY")
             echo "Current vector store status before query:"
             echo "$vs_status" | grep -o '"status":"[^"]*"' || echo "Status not found"
             
@@ -347,19 +371,19 @@ run_vector_tests() {
             run_test "Vector Store Query" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
-                --header 'Authorization: Bearer $GROQ_API_KEY' \
-                --header 'x-model-provider: groq' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
                     \"top_k\": 3
-                }' -v" \
+                }'" \
                 "200"
             
             # Test 8: Delete Vector Store with file
             echo -e "\n${BOLD}Test 8: Delete Vector Store with File${NC}"
             run_test "Delete Vector Store with File" \
                 "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vs_with_file_id' \
-                --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+                --header \"Authorization: Bearer $API_KEY\""
         fi
     fi
 
@@ -370,7 +394,7 @@ run_vector_tests() {
     echo -e "\n${BOLD}Test 9: Delete Original Vector Store${NC}"
     run_test "Delete Original Vector Store" \
         "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     echo -e "\n${BOLD}VECTOR STORE TESTS COMPLETED${NC}"
 }

@@ -13,9 +13,6 @@ YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 BOLD='\033[1m'
 
-# Set the default environment file path
-ENV_FILE_PATH=".env"
-
 # Results tracking using simple arrays
 test_names=()
 test_statuses=()
@@ -23,18 +20,11 @@ total_tests=0
 passed_tests=0
 failed_tests=0
 
-# Load environment variables from .env file
-if [ -f "$ENV_FILE_PATH" ]; then
-    echo "Loading API keys from $ENV_FILE_PATH file..."
-    set -a  # Mark all variables for export
-    source "$ENV_FILE_PATH"
-    set +a  # Turn off auto-export
-    echo -e "${GREEN}Successfully loaded environment variables from $ENV_FILE_PATH file${NC}"
-else
-    echo -e "${YELLOW}No $ENV_FILE_PATH file found. Make sure environment variables are set manually.${NC}"
-fi
+# Declare variables for user input
+MODEL_PROVIDER=""
+API_KEY=""
 
-# Set empty values for variables we don't need to avoid warnings
+# Set empty values for other env variables we might not need, to avoid warnings
 export GITHUB_TOKEN=${GITHUB_TOKEN:-""}
 export BRAVE_API_KEY=${BRAVE_API_KEY:-""}
 
@@ -93,31 +83,58 @@ start_container() {
 # Define a function to run tests
 run_test() {
     local test_name=$1
-    local curl_command=$2
+    local curl_command_base=$2 # Command string *without* -v and output options
     local expected_status_code=${3:-200}
 
     echo -e "\n${BOLD}Running test: ${test_name}${NC}"
-    
+
     # Increment total tests counter
     ((total_tests++))
-    
-    # Run the curl command and capture the response
+
+    # Construct command to get status code
+    # Ensure no literal '-v' exists in curl_command_base passed by caller
+    local curl_status_cmd="$curl_command_base -w '%{http_code}' -o /dev/null -s" # -s for silent, -o /dev/null discards body, -w writes status code
+
+    # Construct command to get full response for logging (if needed)
+    # Note: removes potential -s if user added it, we add it back if needed.
+    local curl_body_cmd="$(echo "$curl_command_base" | sed 's/ -s / /g') -s"
+
     echo "Testing the API endpoint..."
-    response=$(eval "$curl_command" 2>&1)
-    status_code=$(echo "$response" | grep -oE 'HTTP/[0-9.]+ [0-9]+' | awk '{print $2}')
+    # Get status code
+    status_code=$(eval "$curl_status_cmd" 2>&1) # Eval needed if command has shell variables like $API_KEY
     
+    # Check if status_code is a number
+    if ! [[ "$status_code" =~ ^[0-9]+$ ]]; then
+        echo -e "${RED}✗ Test failed! Could not get valid HTTP status code.${NC}"
+        # Run the body command here to get more info for debugging
+        echo "Running command to get response body: $curl_body_cmd"
+        response_body=$(eval "$curl_body_cmd" 2>&1)
+        echo "Full command output: $response_body"
+        store_test_result "$test_name" "FAILED (Invalid Status: $status_code)"
+        ((failed_tests++))
+        return 1
+    fi
+
+    # Get response body only if needed (e.g., for logging failure/success)
+    response_body=""
+
     # Check if the status code matches the expected one
     if [[ "$status_code" == "$expected_status_code" ]]; then
         echo -e "${GREEN}✓ Test passed! Status code: $status_code${NC}"
-        echo "Response:"
-        echo "$response" | grep -v "HTTP/" | head -n 20  # Show truncated response for readability
+        # Get body for successful log
+        # response_body=$(eval "$curl_body_cmd" 2>&1)
+        # echo "Response (sample):"
+        # echo "$response_body" | head -n 10 # Show truncated response body
         store_test_result "$test_name" "PASSED"
         ((passed_tests++))
         return 0
     else
         echo -e "${RED}✗ Test failed! Expected status code $expected_status_code but got $status_code${NC}"
+        # Get body for failed log
+        echo "Running command to get response body: $curl_body_cmd"
+        response_body=$(eval "$curl_body_cmd" 2>&1)
         echo "Response:"
-        echo "$response"
+        echo "$response_body"
         store_test_result "$test_name" "FAILED (Expected: $expected_status_code, Got: $status_code)"
         ((failed_tests++))
         return 1
@@ -185,8 +202,8 @@ run_basic_tests() {
     run_test "Basic Setup - Chat Completion" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
             \"model\": \"qwen-qwq-32b\",
             \"stream\": false,
@@ -196,15 +213,15 @@ run_basic_tests() {
                     \"content\": \"Hello, how are you?\"
                 }
             ]
-        }' -v"
+        }'"
 
     # Test 2: Streaming Response
     echo -e "\n${BOLD}Test 2: Streaming Response${NC}"
     run_test "Streaming Response" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
             \"model\": \"qwen-qwq-32b\",
             \"stream\": true,
@@ -214,14 +231,14 @@ run_basic_tests() {
                     \"content\": \"Tell me a short story about a programmer\"
                 }
             ]
-        }' -v"
+        }'"
 
     # Test 7: Get Available Models
     echo -e "\n${BOLD}Test 7: Get Available Models${NC}"
     run_test "Get Available Models" \
         "curl --location 'http://localhost:8080/v1/models' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' -v"
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\""
 }
 
 # File operations tests section
@@ -234,13 +251,13 @@ run_file_operations_tests() {
     echo -e "\n${BOLD}Test 10: File Upload${NC}"
     run_test "File Upload" \
         "curl --location 'http://localhost:8080/v1/files' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --header \"Authorization: Bearer $API_KEY\" \
         --form 'file=@\"sample_file.txt\"' \
-        --form 'purpose=\"user_data\"' -v"
+        --form 'purpose=\"user_data\"'"
 
     # Get the file ID from the response
     file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
+        --header "Authorization: Bearer $API_KEY" \
         --form 'file=@"sample_file.txt"' \
         --form 'purpose="user_data"')
 
@@ -261,25 +278,25 @@ run_file_operations_tests() {
     echo -e "\n${BOLD}Test 11: List Files${NC}"
     run_test "List Files" \
         "curl --location 'http://localhost:8080/v1/files?limit=10&order=desc' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     # Test 12: Get File
     echo -e "\n${BOLD}Test 12: Get File${NC}"
     run_test "Get File" \
         "curl --location 'http://localhost:8080/v1/files/$file_id' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     # Test 13: Get File Content
     echo -e "\n${BOLD}Test 13: Get File Content${NC}"
     run_test "Get File Content" \
         "curl --location 'http://localhost:8080/v1/files/$file_id/content' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     # Test 14: Delete File
     echo -e "\n${BOLD}Test 14: Delete File${NC}"
     run_test "Delete File" \
         "curl --location --request DELETE 'http://localhost:8080/v1/files/$file_id' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' -v"
+        --header \"Authorization: Bearer $API_KEY\""
 
     # Clean up the sample file
     rm -f sample_file.txt
@@ -304,8 +321,8 @@ run_mongodb_tests() {
     run_test "MongoDB Persistence" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
             \"model\": \"qwen-qwq-32b\",
             \"store\": true,
@@ -315,14 +332,14 @@ run_mongodb_tests() {
                     \"content\": \"Write a short poem about testing\"
                 }
             ]
-        }' -v"
+        }'"
 
     # Create a response and extract the ID for subsequent tests
     echo "Creating a stored response for subsequent tests..."
     response_data=$(curl --silent --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer '$GROQ_API_KEY \
-        --header 'x-model-provider: groq' \
+        --header "Authorization: Bearer $API_KEY" \
+        --header "x-model-provider: $MODEL_PROVIDER" \
         --data '{
             "model": "qwen-qwq-32b",
             "store": true,
@@ -351,23 +368,23 @@ run_mongodb_tests() {
     echo -e "\n${BOLD}Test 4: Get Response by ID${NC}"
     run_test "Get Response by ID" \
         "curl --location 'http://localhost:8080/v1/responses/$response_id' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' -v"
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\""
 
     # Test 6: Get Input Items for Response
     echo -e "\n${BOLD}Test 6: Get Input Items for Response${NC}"
     run_test "Get Input Items for Response" \
         "curl --location 'http://localhost:8080/v1/responses/$response_id/input_items' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' -v"
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\""
 
     # Test 8: Multi-Turn Conversation
     echo -e "\n${BOLD}Test 8: Multi-Turn Conversation${NC}"
     run_test "Multi-Turn Conversation" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
             \"model\": \"qwen-qwq-32b\",
             \"store\": true,
@@ -378,14 +395,14 @@ run_mongodb_tests() {
                     \"content\": \"Can you explain more about regression testing specifically?\"
                 }
             ]
-        }' -v"
+        }'"
 
     # Test 5: Delete Response
     echo -e "\n${BOLD}Test 5: Delete Response${NC}"
     run_test "Delete Response" \
         "curl --location --request DELETE 'http://localhost:8080/v1/responses/$response_id' \
-        --header 'Authorization: Bearer $GROQ_API_KEY' \
-        --header 'x-model-provider: groq' -v"
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\""
 }
 
 # Register different traps for different signals
@@ -395,19 +412,26 @@ trap "cleanup TERM" TERM
 
 # Main test execution
 main() {
-    # Initialize environment variables
-    echo -e "${YELLOW}Checking GROQ_API_KEY for tests${NC}"
-    if [[ -n "$GROQ_API_KEY" ]]; then
-        echo -e "${YELLOW}Current value: ${GROQ_API_KEY:0:5}...${GROQ_API_KEY: -5}${NC}"
-    else
-        echo -e "${YELLOW}GROQ_API_KEY is not set${NC}"
-    fi
-
-    # Verify GROQ_API_KEY is set
-    if [[ -z "$GROQ_API_KEY" ]]; then
-        echo -e "${RED}Error: GROQ_API_KEY is not set. Please set it in your .env file or export it.${NC}"
+    # Prompt user for model provider and API key
+    echo -e "${BOLD}Enter the model provider to use (e.g., groq, openai):${NC}"
+    read -p "> " MODEL_PROVIDER
+    
+    echo -e "${BOLD}Enter the API key for $MODEL_PROVIDER:${NC}"
+    read -sp "> " API_KEY
+    echo # Add a newline after the hidden input
+    
+    # Verify input
+    if [[ -z "$MODEL_PROVIDER" ]]; then
+        echo -e "${RED}Error: Model provider cannot be empty.${NC}"
         exit 1
     fi
+    if [[ -z "$API_KEY" ]]; then
+        echo -e "${RED}Error: API key cannot be empty.${NC}"
+        exit 1
+    fi
+    
+    echo -e "${GREEN}Using model provider: $MODEL_PROVIDER${NC}"
+    echo -e "${GREEN}API Key: ****${API_KEY: -4}${NC}" # Show only last 4 chars for confirmation
 
     # Stop any running containers at the start
     echo "Stopping any running containers..."
