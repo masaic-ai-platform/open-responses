@@ -421,6 +421,198 @@ run_mongodb_tests() {
         --header \"x-model-provider: $MODEL_PROVIDER\""
 }
 
+# Vector Store Integration Tests section
+run_vector_store_integration_tests() {
+    # Stop the MongoDB container before switching to vector store profile
+    echo "Stopping MongoDB container before switching to vector store integration tests..."
+    docker-compose down -v 2>/dev/null || true
+    # Kill any existing containers that might be using port 8080
+    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill
+    # Wait for containers to fully shut down
+    sleep 5
+
+    # Start container with Qdrant for vector store tests
+    echo -e "\n${BOLD}STARTING VECTOR STORE INTEGRATION TESTS${NC}"
+    start_container "Vector Store Integration" "docker-compose --profile qdrant up -d"
+    
+    # Create a test file for vector search
+    echo "Creating a test file for vector search integration..."
+    echo "The quick brown fox jumps over the lazy dog.
+    This is a sample document that contains information about animals.
+    Foxes are quick and agile animals known for their bushy tails.
+    Dogs are domestic animals often kept as pets." > vector_search_test.txt
+    
+    # Upload the file
+    echo "Uploading the vector search test file..."
+    vector_file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+        --header "Authorization: Bearer $API_KEY" \
+        --form 'file=@"vector_search_test.txt"' \
+        --form 'purpose="user_data"')
+    
+    vector_file_id=$(echo $vector_file_data | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+    
+    if [[ -z "$vector_file_id" ]]; then
+        echo -e "${YELLOW}Failed to extract vector file ID, using dummy value for subsequent tests${NC}"
+        vector_file_id="vector_file_dummy_id"
+        store_test_result "Vector File Upload" "FAILED (Could not extract file ID)"
+        ((failed_tests++))
+    else
+        echo "Uploaded vector search test file with ID: $vector_file_id"
+        store_test_result "Vector File Upload" "PASSED"
+        ((passed_tests++))
+        
+        # Create a vector store with the file
+        echo "Creating a vector store with the test file..."
+        vector_store_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer $API_KEY" \
+            --data "{
+                \"name\": \"test_integration_store\",
+                \"file_ids\": [\"$vector_file_id\"]
+            }")
+        
+        vector_store_id=$(echo $vector_store_data | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        
+        if [[ -z "$vector_store_id" ]]; then
+            echo -e "${YELLOW}Failed to create vector store, using dummy value for subsequent tests${NC}"
+            vector_store_id="vs_dummy_id"
+            store_test_result "Create Vector Store for Integration" "FAILED (Could not extract vector store ID)"
+            ((failed_tests++))
+        else
+            echo "Created vector store with ID: $vector_store_id"
+            store_test_result "Create Vector Store for Integration" "PASSED"
+            ((passed_tests++))
+            
+            # Wait for the vector store to fully process the file
+            echo "Waiting for vector store to process the file..."
+            max_wait_attempts=10
+            wait_attempt=1
+            vs_ready=false
+            
+            while [ $wait_attempt -le $max_wait_attempts ]; do
+                echo "Check attempt $wait_attempt of $max_wait_attempts..."
+                
+                vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vector_store_id" \
+                    --header "Authorization: Bearer $API_KEY")
+                
+                file_counts=$(echo "$vs_status" | grep -o '"file_counts":{[^}]*}' || echo "")
+                status=$(echo "$vs_status" | grep -o '"status":"[^"]*"' | cut -d'"' -f4 || echo "")
+                completed=$(echo "$file_counts" | grep -o '"completed":[0-9]*' | cut -d':' -f2 || echo "0")
+                total=$(echo "$file_counts" | grep -o '"total":[0-9]*' | cut -d':' -f2 || echo "0")
+                
+                echo "Vector store status: $status, Files processed: $completed/$total"
+                
+                if [[ "$status" == "ready" ]] || [[ "$completed" == "$total" && "$total" != "0" ]]; then
+                    echo -e "${GREEN}Vector store is ready for querying!${NC}"
+                    vs_ready=true
+                    break
+                fi
+                
+                echo "Vector store not ready yet. Waiting 5 seconds before next check..."
+                sleep 5
+                ((wait_attempt++))
+            done
+            
+            # Test Vector Store Integration with Chat API
+            echo -e "\n${BOLD}Test VS1: Chat with Vector Search Integration${NC}"
+            run_test "Chat with Vector Search Integration" \
+                "curl --location 'http://localhost:8080/v1/responses' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"model\": \"$MODEL_NAME\",
+                    \"stream\": false,
+                    \"input\": [
+                        {
+                            \"role\": \"user\",
+                            \"content\": \"What can you tell me about foxes based on the provided documents?\"
+                        }
+                    ],
+                    \"tools\": [
+                        {
+                            \"type\": \"file_search\",
+                            \"vector_store_ids\": [\"$vector_store_id\"],
+                            \"max_num_results\": 5
+                        }
+                    ]
+                }'"
+                
+            # Test Vector Search with Filters in Chat API
+            echo -e "\n${BOLD}Test VS2: Chat with Vector Search and Filters${NC}"
+            run_test "Chat with Vector Search and Filters" \
+                "curl --location 'http://localhost:8080/v1/responses' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"model\": \"$MODEL_NAME\",
+                    \"stream\": false,
+                    \"input\": [
+                        {
+                            \"role\": \"user\",
+                            \"content\": \"What can you tell me about dogs based on the provided documents?\"
+                        }
+                    ],
+                    \"tools\": [
+                        {
+                            \"type\": \"file_search\",
+                            \"vector_store_ids\": [\"$vector_store_id\"],
+                            \"max_num_results\": 5,
+                            \"filter_object\": {
+                                \"type\": \"and\",
+                                \"filters\": [
+                                    {
+                                        \"type\": \"eq\",
+                                        \"key\": \"file_id\",
+                                        \"value\": \"$vector_file_id\"
+                                    }
+                                ]
+                            },
+                            \"ranking_options\": {
+                                \"score_threshold\": 0.1
+                            }
+                        }
+                    ]
+                }'"
+                
+            # Test Vector Search with Chat Streaming
+            echo -e "\n${BOLD}Test VS3: Chat Streaming with Vector Search${NC}"
+            run_test "Chat Streaming with Vector Search" \
+                "curl --location 'http://localhost:8080/v1/responses' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"model\": \"$MODEL_NAME\",
+                    \"stream\": true,
+                    \"input\": [
+                        {
+                            \"role\": \"user\",
+                            \"content\": \"What animals are mentioned in the documents?\"
+                        }
+                    ],
+                    \"tools\": [
+                        {
+                            \"type\": \"file_search\",
+                            \"vector_store_ids\": [\"$vector_store_id\"],
+                            \"max_num_results\": 5
+                        }
+                    ]
+                }'"
+            
+            # Delete the vector store when done
+            echo -e "\n${BOLD}Test VS4: Delete Vector Store${NC}"
+            run_test "Delete Vector Store" \
+                "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
+                --header \"Authorization: Bearer $API_KEY\""
+        fi
+    fi
+    
+    # Clean up the test file
+    rm -f vector_search_test.txt
+}
+
 # Register different traps for different signals
 trap "cleanup EXIT" EXIT
 trap "cleanup INT" INT
@@ -478,6 +670,10 @@ main() {
     # MONGODB TESTS
     echo -e "\n${BOLD}SECTION 3: MONGODB TESTS${NC}"
     run_section run_mongodb_tests
+    
+    # VECTOR STORE INTEGRATION TESTS
+    echo -e "\n${BOLD}SECTION 4: VECTOR STORE INTEGRATION TESTS${NC}"
+    run_section run_vector_store_integration_tests
     
     echo -e "\n${BOLD}ALL TESTS COMPLETED${NC}"
 }

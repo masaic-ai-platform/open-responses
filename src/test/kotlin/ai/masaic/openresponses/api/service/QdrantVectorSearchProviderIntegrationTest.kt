@@ -168,12 +168,18 @@ class QdrantVectorSearchProviderIntegrationTest {
             assertTrue(searchResults1.any { it.fileId == fileId1 }, "Results should include the first file")
         
             // 4. Search with filters
+            val fileIdFilter =
+                ai.masaic.openresponses.api.model.ComparisonFilter(
+                    key = "file_id",
+                    type = "eq",
+                    value = fileId2,
+                )
             val filteredResults =
                 vectorSearchProvider.searchSimilar(
                     query = "test document",
                     maxResults = 5,
-                    filters = mapOf("fileIds" to listOf(fileId2)),
                     rankingOptions = null,
+                    filter = fileIdFilter,
                 )
         
             assertTrue(filteredResults.isNotEmpty(), "Filtered search should return results")
@@ -189,11 +195,17 @@ class QdrantVectorSearchProviderIntegrationTest {
             assertTrue(deleteResult, "File deletion should succeed")
         
             // 7. Verify file is deleted
+            val searchFileIdFilter =
+                ai.masaic.openresponses.api.model.ComparisonFilter(
+                    key = "file_id",
+                    type = "eq",
+                    value = fileId1,
+                )
             val searchAfterDeletion =
                 vectorSearchProvider.searchSimilar(
                     query = "test document",
-                    filters = mapOf("fileIds" to listOf(fileId1)),
                     rankingOptions = null,
+                    filter = searchFileIdFilter,
                 )
         
             assertTrue(searchAfterDeletion.isEmpty(), "Search for deleted file should return no results")

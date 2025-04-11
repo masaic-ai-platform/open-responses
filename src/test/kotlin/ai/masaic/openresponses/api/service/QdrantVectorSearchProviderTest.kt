@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.config.QdrantVectorProperties
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
@@ -162,14 +163,15 @@ class QdrantVectorSearchProviderTest {
     fun `searchSimilar should apply filters`() {
         // Given
         val query = "test query"
-        val filters = mapOf("file_id" to "test-file-id")
+        val fileId = "test-file-id"
+        val filter = ComparisonFilter(key = "file_id", type = "eq", value = fileId)
         
         // When
         val results =
             vectorSearchProvider.searchSimilar(
-                query,
-                filters = filters,
+                query = query,
                 rankingOptions = null,
+                filter = filter,
             )
         
         // Then

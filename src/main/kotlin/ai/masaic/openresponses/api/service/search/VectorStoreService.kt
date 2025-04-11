@@ -619,37 +619,11 @@ class VectorStoreService(
             
                 // Get all files in the vector store
                 val files = vectorStoreRepository.listVectorStoreFiles(vectorStoreId, Int.MAX_VALUE)
-            
-                // Filter out files that no longer exist in the FileStorageService
-                val existingFiles =
-                    files.filter { file ->
-                        try {
-                            vectorStoreFileManager.fileExists(file.id)
-                        } catch (e: Exception) {
-                            log.warn("File ${file.id} referenced in vector store $vectorStoreId no longer exists in storage")
-                            false
-                        }
-                    }
-            
-                // Check if any files were removed and update the vector store if needed
-                if (existingFiles.size < files.size) {
-                    log.info("Detected ${files.size - existingFiles.size} missing files in vector store $vectorStoreId, updating...")
                 
-                    // Remove the missing files from the vector store
-                    val missingFiles = files.filter { file -> !existingFiles.any { it.id == file.id } }
-                    missingFiles.forEach { file ->
-                        try {
-                            vectorStoreRepository.deleteVectorStoreFile(vectorStoreId, file.id)
-                            vectorSearchProvider.deleteFile(file.id)
-                        } catch (e: Exception) {
-                            log.error("Error removing missing file ${file.id} from vector store $vectorStoreId", e)
-                        }
-                    }
-                
-                    // Update the vector store
-                    updateVectorStoreFileCounts(vectorStoreId)
-                }
+                // Filter out files that are not in completed state
+                val existingFiles = files.filter { it.status == "completed" }
             
+                // Prepare list of file IDs to search
                 val fileIds = existingFiles.map { it.id }
                 if (fileIds.isEmpty()) {
                     // Return empty results if there are no files
@@ -664,131 +638,71 @@ class VectorStoreService(
                         data = emptyList(),
                     )
                 }
-            
-                // Special handling for QdrantVectorSearchProvider
-                if (vectorSearchProvider is QdrantVectorSearchProvider && request.filters != null && request.filters.isNotEmpty()) {
-                    // For Qdrant, we need to separate file attributes filters from search filters
-                    // because Qdrant doesn't index all vectorstorefile attributes
+                
+                // Process the search request
+                try {
+                    // Create a fileIds filter
+                    val fileIdsFilter =
+                        ai.masaic.openresponses.api.model.CompoundFilter(
+                            type = "or",
+                            filters =
+                                fileIds.map { fileId ->
+                                    ai.masaic.openresponses.api.model.ComparisonFilter(
+                                        key = "file_id",
+                                        type = "eq",
+                                        value = fileId,
+                                    )
+                                },
+                        )
                     
-                    // Separate filters into file attributes (to filter post-search) and search filters 
-                    val searchFilters = mutableMapOf<String, Any>()
-                    val fileAttributeFilters = mutableMapOf<String, Any>()
-                    
-                    request.filters.forEach { (key, value) ->
-                        // Standard filters like "fileIds" go to search filters
-                        // Custom attributes need post-search filtering
-                        when (key) {
-                            "fileIds", "file_id", "filename", "chunk_id", "chunk_index", "total_chunks" -> 
-                                searchFilters[key] = value
-                            else -> 
-                                fileAttributeFilters[key] = value
-                        }
-                    }
-                    
-                    // Add fileIds to search filters
-                    searchFilters["fileIds"] = fileIds
-                    
-                    // Execute the vector search with only the search filters
-                    val maxResults =
-                        if (fileAttributeFilters.isEmpty()) {
-                            request.maxNumResults ?: 10
-                        } else {
-                            // If we have post-filtering, request more results from search
-                            (request.maxNumResults ?: 10) * 5
-                        }
-                    
-                    try {
-                        val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, searchFilters, request.rankingOptions)
-                        
-                        // Update the vector store's last active timestamp
-                        val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
-                        vectorStoreRepository.saveVectorStore(updatedVectorStore)
-                        
-                        // Convert search results to VectorStoreSearchResult objects
-                        var results = mapSearchResultsToVectorStoreSearchResults(searchResults, existingFiles)
-                        
-                        // Apply file attribute filters if needed
-                        if (fileAttributeFilters.isNotEmpty()) {
-                            results =
-                                results.filter { result ->
-                                    fileAttributeFilters.all { (key, value) ->
-                                        result.attributes?.get(key) == value
-                                    }
-                                }
-                            
-                            // Limit results to requested number after filtering
-                            if (request.maxNumResults != null && results.size > request.maxNumResults) {
-                                results = results.take(request.maxNumResults)
+                    // Combine with user-provided filter if it exists
+                    val filterObject =
+                        when {
+                            request.filterObject != null -> {
+                                // Combine fileIds filter with user filter using AND
+                                ai.masaic.openresponses.api.model.CompoundFilter(
+                                    type = "and",
+                                    filters = listOf(fileIdsFilter, request.filterObject),
+                                )
                             }
+                            else -> fileIdsFilter
                         }
-                        
-                        // Record search telemetry
-                        telemetryService.stopSearchOperation(
-                            observation,
-                            resultsCount = results.size,
-                            success = true,
-                        )
-                        
-                        VectorStoreSearchResults(
-                            searchQuery = request.query,
-                            data = results,
-                        )
-                    } catch (e: Exception) {
-                        log.error("Error searching vector store: ${e.message}", e)
-                        telemetryService.stopSearchOperation(
-                            observation,
-                            success = false,
-                        )
-                        throw VectorSearchException("Error searching vector store: ${e.message}", e)
-                    }
-                } else {
-                    // Regular handling for other providers
                     
-                    // Add file filter to the request filters
-                    val filters = mutableMapOf<String, Any>()
-                    request.filters?.let { filters.putAll(it) }
+                    // Execute search with structured filters (new approach)
+                    val searchResults =
+                        vectorSearchProvider.searchSimilar(
+                            query = request.query,
+                            maxResults = request.maxNumResults ?: 10,
+                            rankingOptions = request.rankingOptions,
+                            filter = filterObject,
+                        )
                     
-                    // Add fileIds filter (list of file IDs to search within)
-                    // This supports both implementations - newer ones handle 'fileIds' as a list,
-                    // while older ones might look for individual 'fileId' matches
-                    filters["fileIds"] = fileIds
+                    // Update the vector store's last active timestamp
+                    val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
+                    vectorStoreRepository.saveVectorStore(updatedVectorStore)
                     
-                    // Execute the vector search
-                    val maxResults = request.maxNumResults ?: 10
-                    try {
-                        val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters, request.rankingOptions)
-                        
-                        // Update the vector store's last active timestamp
-                        val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
-                        vectorStoreRepository.saveVectorStore(updatedVectorStore)
-                        
-                        // Convert search results to VectorStoreSearchResult objects
-                        val results = mapSearchResultsToVectorStoreSearchResults(searchResults, existingFiles)
-                        
-                        // Record search telemetry
-                        telemetryService.stopSearchOperation(
-                            observation,
-                            resultsCount = results.size,
-                            success = true,
-                        )
-                        
-                        VectorStoreSearchResults(
-                            searchQuery = request.query,
-                            data = results,
-                        )
-                    } catch (e: Exception) {
-                        log.error("Error searching vector store: ${e.message}", e)
-                        telemetryService.stopSearchOperation(
-                            observation,
-                            success = false,
-                        )
-                        throw VectorSearchException("Error searching vector store: ${e.message}", e)
-                    }
+                    // Convert search results to VectorStoreSearchResult objects
+                    val results = mapSearchResultsToVectorStoreSearchResults(searchResults, existingFiles)
+                    
+                    // Record search telemetry
+                    telemetryService.stopSearchOperation(
+                        observation,
+                        resultsCount = results.size,
+                        success = true,
+                    )
+                    
+                    VectorStoreSearchResults(
+                        searchQuery = request.query,
+                        data = results,
+                    )
+                } catch (e: Exception) {
+                    log.error("Error searching vector store: ${e.message}", e)
+                    telemetryService.stopSearchOperation(
+                        observation,
+                        success = false,
+                    )
+                    throw VectorSearchException("Error searching vector store: ${e.message}", e)
                 }
-            } catch (e: Exception) {
-                telemetryService.stopSearchOperation(observation, success = false)
-                observation.error(e)
-                throw e
             } finally {
                 sample.stop(timer)
             }

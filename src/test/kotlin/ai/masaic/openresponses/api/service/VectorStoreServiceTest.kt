@@ -345,7 +345,7 @@ class VectorStoreServiceTest {
             
             // Mock search results
             coEvery { 
-                vectorSearchProvider.searchSimilar(any(), any(), any(), rankingOptions = null)
+                vectorSearchProvider.searchSimilar(any(), any(), rankingOptions = null, filter = any())
             } returns
                 listOf(
                     VectorSearchProvider.SearchResult(

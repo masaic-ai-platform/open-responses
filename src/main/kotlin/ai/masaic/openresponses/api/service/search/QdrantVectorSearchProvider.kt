@@ -3,16 +3,17 @@ package ai.masaic.openresponses.api.service.search
 import ai.masaic.openresponses.api.config.QdrantVectorProperties
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.FilterUtils
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest
-import dev.langchain4j.store.embedding.filter.Filter
 import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore
 import io.qdrant.client.QdrantClient
@@ -157,14 +158,15 @@ class QdrantVectorSearchProvider(
      *
      * @param query The search query
      * @param maxResults Maximum number of results to return
-     * @param filters Optional filters to apply to the search
+     * @param rankingOptions Optional ranking options for search
+     * @param filter Optional structured filter object (new format)
      * @return List of search results
      */
     override fun searchSimilar(
         query: String,
         maxResults: Int,
-        filters: Map<String, Any>?,
         rankingOptions: RankingOptions?,
+        filter: Filter?,
     ): List<VectorSearchProvider.SearchResult> {
         try {
             // Return empty results for empty query
@@ -179,27 +181,24 @@ class QdrantVectorSearchProvider(
             // Find relevant documents
             val minScore = rankingOptions?.scoreThreshold ?: qdrantProperties.minScore ?: 0.07
 
-            // Search the store with filter
-            val matches =
-                if (filters != null && filters.isNotEmpty()) {
-                    log.debug("Searching with filters: {}", filters)
-                    // Convert filter to Qdrant filter format
-                    val qdrantFilter = createQdrantFilter(filters)
-                    val searchBuilder =
-                        EmbeddingSearchRequest
-                            .builder()
-                            .minScore(minScore.toDouble())
-                            .queryEmbedding(queryEmbedding)
-                            .maxResults(maxResults)
+            // Convert filter to Qdrant filter
+            val qdrantFilter = filter?.let { FilterUtils.convertToQdrantFilter(it) }
+            
+            // Create search request
+            val searchBuilder =
+                EmbeddingSearchRequest
+                    .builder()
+                    .minScore(minScore.toDouble())
+                    .queryEmbedding(queryEmbedding)
+                    .maxResults(maxResults)
 
-                    if (qdrantFilter != null) {
-                        searchBuilder.filter(qdrantFilter)
-                    }
+            // Add filter if available
+            if (qdrantFilter != null) {
+                searchBuilder.filter(qdrantFilter)
+            }
 
-                    embeddingStore.search(searchBuilder.build()).matches()
-                } else {
-                    embeddingStore.findRelevant(queryEmbedding, maxResults, minScore.toDouble())
-                }
+            // Execute search
+            val matches = embeddingStore.search(searchBuilder.build()).matches()
 
             // Convert to search results
             val results =
@@ -222,6 +221,15 @@ class QdrantVectorSearchProvider(
             return emptyList()
         }
     }
+
+    /**
+     * Searches for similar content in the vector store using the base interface.
+     */
+    override fun searchSimilar(
+        query: String,
+        maxResults: Int,
+        rankingOptions: RankingOptions?,
+    ): List<VectorSearchProvider.SearchResult> = searchSimilar(query, maxResults, rankingOptions, null)
 
     /**
      * Deletes a file from the vector store.
@@ -275,40 +283,6 @@ class QdrantVectorSearchProvider(
             log.error("Error getting metadata for file {}: {}", fileId, e.message, e)
             return null
         }
-    }
-
-    /**
-     * Helper function to create a Qdrant filter from a map of filters.
-     */
-    private fun createQdrantFilter(filters: Map<String, Any>): Filter? {
-        // Use a mutable reference to avoid smart cast issues with captured variables
-        val filterRef = arrayOfNulls<Filter>(1)
-
-        filters.forEach { (key, value) ->
-            when {
-                key == "fileIds" && value is List<*> -> {
-                    // Handle the fileIds list by creating an OR filter for each fileId
-                    val fileIdsList = value.filterIsInstance<String>()
-                    if (fileIdsList.isNotEmpty()) {
-                        val firstFilter = IsEqualTo("file_id", fileIdsList.first())
-                        val fileIdsFilter =
-                            fileIdsList.drop(1).fold(firstFilter) { acc, fileId ->
-                                acc.or(IsEqualTo("file_id", fileId)) as IsEqualTo
-                            }
-
-                        filterRef[0] = if (filterRef[0] == null) fileIdsFilter else filterRef[0]!!.and(fileIdsFilter)
-                    }
-                }
-                else -> {
-                    // Handle regular key-value filters
-                    val newFilter = IsEqualTo(key, value)
-                    filterRef[0] = if (filterRef[0] == null) newFilter else filterRef[0]!!.and(newFilter)
-                }
-            }
-        }
-
-        // Return default filter if no valid filters (matches all records)
-        return filterRef[0]
     }
 
     /**

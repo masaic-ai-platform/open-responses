@@ -2,6 +2,8 @@ package ai.masaic.openresponses.api.model
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonSubTypes
+import com.fasterxml.jackson.annotation.JsonTypeInfo
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.index.Indexed
 import org.springframework.data.mongodb.core.mapping.Document
@@ -332,9 +334,10 @@ data class VectorStoreSearchRequest(
      */
     val query: String,
     /**
-     * A filter to apply based on file attributes.
+     * A structured filter object to apply based on file attributes.
      */
-    val filters: Map<String, Any>? = null,
+    @JsonProperty("filter_object")
+    val filterObject: Filter? = null,
     /**
      * The maximum number of results to return.
      */
@@ -351,6 +354,45 @@ data class VectorStoreSearchRequest(
     @JsonProperty("ranking_options")
     val rankingOptions: RankingOptions? = null,
 )
+
+/**
+ * Base interface for filter objects
+ */
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "type",
+    visible = true,
+)
+@JsonSubTypes(
+    JsonSubTypes.Type(value = ComparisonFilter::class, names = ["eq", "ne", "gt", "gte", "lt", "lte"]),
+    JsonSubTypes.Type(value = CompoundFilter::class, names = ["and", "or"]),
+)
+interface Filter
+
+/**
+ * A filter used to compare a specified attribute key to a given value using a defined comparison operation.
+ *
+ * @property key The key to compare against the value.
+ * @property type The comparison operator: eq, ne, gt, gte, lt, lte.
+ * @property value The value to compare against the attribute key; supports string, number, or boolean types.
+ */
+data class ComparisonFilter(
+    val key: String,
+    val type: String,
+    val value: Any,
+) : Filter
+
+/**
+ * Combine multiple filters using 'and' or 'or'.
+ *
+ * @property type Type of operation: and or or.
+ * @property filters Array of filters to combine. Items can be ComparisonFilter or CompoundFilter.
+ */
+data class CompoundFilter(
+    val type: String,
+    val filters: List<Filter>,
+) : Filter
 
 /**
  * Vector store search results.

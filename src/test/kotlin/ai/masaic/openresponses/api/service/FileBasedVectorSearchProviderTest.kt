@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.FileBasedVectorSearchProvider
@@ -125,11 +126,12 @@ class FileBasedVectorSearchProviderTest {
         vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt")
         
         // When - search with a filter for fileId1
+        val filter = ComparisonFilter(key = "file_id", type = "eq", value = fileId1)
         val results =
             vectorSearchProvider.searchSimilar(
-                "document",
-                filters = mapOf("file_id" to fileId1),
+                query = "document",
                 rankingOptions = null,
+                filter = filter,
             )
         
         // Then
@@ -156,11 +158,12 @@ class FileBasedVectorSearchProviderTest {
         assertTrue(!Files.exists(embeddingsFile), "Embeddings file should be deleted from filesystem")
         
         // Verify the file is no longer in the index by searching for it
+        val fileIdFilter = ComparisonFilter(key = "file_id", type = "eq", value = fileId)
         val searchResults =
             vectorSearchProvider.searchSimilar(
-                "Test",
-                filters = mapOf("file_id" to fileId),
+                query = "Test",
                 rankingOptions = null,
+                filter = fileIdFilter,
             )
         assertEquals(0, searchResults.size, "No results should be found for the deleted file")
     }

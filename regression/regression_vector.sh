@@ -387,6 +387,243 @@ run_vector_tests() {
                     \"top_k\": 3
                 }'" \
                 "200"
+                
+            # Test 7a: Vector Store Query with Comparison Filter
+            echo -e "\n${BOLD}Test 7a: Vector Store Query with Comparison Filter${NC}"
+            run_test "Vector Store Query with Comparison Filter" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3,
+                    \"filter_object\": {
+                        \"type\": \"eq\",
+                        \"key\": \"filename\",
+                        \"value\": \"vector_store_file.txt\"
+                    }
+                }'" \
+                "200"
+                
+            # Test 7b: Vector Store Query with Compound Filter (AND)
+            echo -e "\n${BOLD}Test 7b: Vector Store Query with Compound Filter (AND)${NC}"
+            run_test "Vector Store Query with Compound Filter (AND)" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3,
+                    \"filter_object\": {
+                        \"type\": \"and\",
+                        \"filters\": [
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"filename\",
+                                \"value\": \"vector_store_file.txt\"
+                            },
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"file_id\",
+                                \"value\": \"$file_id\"
+                            }
+                        ]
+                    }
+                }'" \
+                "200"
+                
+            # Test 7c: Vector Store Query with Compound Filter (OR)
+            echo -e "\n${BOLD}Test 7c: Vector Store Query with Compound Filter (OR)${NC}"
+            run_test "Vector Store Query with Compound Filter (OR)" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3,
+                    \"filter_object\": {
+                        \"type\": \"or\",
+                        \"filters\": [
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"filename\",
+                                \"value\": \"non_existent_file.txt\"
+                            },
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"file_id\",
+                                \"value\": \"$file_id\"
+                            }
+                        ]
+                    }
+                }'" \
+                "200"
+                
+            # Test 7d: Vector Store Query with Numeric Comparison Filter
+            echo -e "\n${BOLD}Test 7d: Vector Store Query with Numeric Comparison Filter${NC}"
+            run_test "Vector Store Query with Numeric Comparison Filter" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3,
+                    \"filter_object\": {
+                        \"type\": \"gte\",
+                        \"key\": \"chunk_index\",
+                        \"value\": 0
+                    }
+                }'" \
+                "200"
+                
+            # Test 7e: Vector Store Query with Nested Compound Filter
+            echo -e "\n${BOLD}Test 7e: Vector Store Query with Nested Compound Filter${NC}"
+            run_test "Vector Store Query with Nested Compound Filter" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3,
+                    \"filter_object\": {
+                        \"type\": \"and\",
+                        \"filters\": [
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"file_id\",
+                                \"value\": \"$file_id\"
+                            },
+                            {
+                                \"type\": \"or\",
+                                \"filters\": [
+                                    {
+                                        \"type\": \"eq\",
+                                        \"key\": \"filename\",
+                                        \"value\": \"vector_store_file.txt\"
+                                    },
+                                    {
+                                        \"type\": \"eq\",
+                                        \"key\": \"chunk_index\",
+                                        \"value\": 0
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }'" \
+                "200"
+            
+            # Test 7f: Vector Store Query with RankingOptions
+            echo -e "\n${BOLD}Test 7f: Vector Store Query with RankingOptions${NC}"
+            run_test "Vector Store Query with RankingOptions" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"test content\",
+                    \"top_k\": 3,
+                    \"ranking_options\": {
+                        \"ranker\": \"auto\",
+                        \"score_threshold\": 0.1
+                    }
+                }'" \
+                "200"
+                
+            # Test 7g: Create Vector Store with Static ChunkingStrategy
+            echo -e "\n${BOLD}Test 7g: Create Vector Store with Static ChunkingStrategy${NC}"
+            
+            # Create another sample file for chunking strategy test
+            echo "This is a larger document with multiple paragraphs for testing chunking strategies.
+            
+            Chunking strategies are important for ensuring that documents are indexed properly
+            in vector stores. Different strategies may be appropriate for different types of content.
+            
+            Static chunking uses fixed sizes with overlap, which works well for most content types.
+            This test verifies that custom chunking settings can be applied during indexing." > chunking_test.txt
+            
+            # Upload the file first
+            echo "Uploading a file for the chunking strategy test..."
+            chunking_file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+                --header "Authorization: Bearer $API_KEY" \
+                --form 'file=@"chunking_test.txt"' \
+                --form 'purpose="user_data"')
+            
+            chunking_file_id=$(echo $chunking_file_data | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
+            
+            if [[ -z "$chunking_file_id" ]]; then
+                echo -e "${YELLOW}Warning: Failed to upload file for chunking test. Using dummy file ID.${NC}"
+                chunking_file_id="chunking_dummy_id"
+                store_test_result "Chunking Test File Upload" "FAILED (Could not extract file ID)"
+                ((failed_tests++))
+            else
+                echo "Uploaded chunking test file with ID: $chunking_file_id"
+                store_test_result "Chunking Test File Upload" "PASSED"
+                ((passed_tests++))
+                
+                # Now create vector store with chunking strategy
+                echo "Creating vector store with chunking strategy..."
+                run_test "Create Vector Store with Static ChunkingStrategy" \
+                    "curl --location 'http://localhost:8080/v1/vector_stores' \
+                    --header 'Content-Type: application/json' \
+                    --header \"Authorization: Bearer $API_KEY\" \
+                    --data '{
+                        \"name\": \"chunking_test_store\",
+                        \"file_ids\": [\"$chunking_file_id\"],
+                        \"chunking_strategy\": {
+                            \"type\": \"static\",
+                            \"static\": {
+                                \"max_chunk_size_tokens\": 100,
+                                \"chunk_overlap_tokens\": 20
+                            }
+                        }
+                    }'" \
+                    "200"
+                
+                # Clean up the chunking test file
+                rm -f chunking_test.txt
+            fi
+            
+            # Test 7h: Modify Vector Store File Attributes
+            echo -e "\n${BOLD}Test 7h: Modify Vector Store File Attributes${NC}"
+            run_test "Modify Vector Store File Attributes" \
+                "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --data '{
+                    \"attributes\": {
+                        \"category\": \"test\",
+                        \"priority\": 1,
+                        \"is_important\": true
+                    }
+                }'" \
+                "200"
+                
+            # Test 7i: Query with Rewriting Enabled
+            echo -e "\n${BOLD}Test 7i: Query with Rewriting Enabled${NC}"
+            run_test "Query with Rewriting Enabled" \
+                "curl --location '$query_endpoint' \
+                --header 'Content-Type: application/json' \
+                --header \"Authorization: Bearer $API_KEY\" \
+                --header \"x-model-provider: $MODEL_PROVIDER\" \
+                --data '{
+                    \"query\": \"what is in the file?\",
+                    \"top_k\": 3,
+                    \"rewrite_query\": true
+                }'" \
+                "200"
+                
+            # Test 7j: Get Vector Store File Content
+            echo -e "\n${BOLD}Test 7j: Get Vector Store File Content${NC}"
+            run_test "Get Vector Store File Content" \
+                "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id/content' \
+                --header \"Authorization: Bearer $API_KEY\"" \
+                "200"
             
             # Test 8: Delete Vector Store with file
             echo -e "\n${BOLD}Test 8: Delete Vector Store with File${NC}"

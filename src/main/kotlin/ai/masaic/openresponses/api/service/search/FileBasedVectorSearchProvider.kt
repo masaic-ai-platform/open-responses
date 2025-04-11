@@ -2,9 +2,11 @@ package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.FilterUtils
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -199,14 +201,15 @@ class FileBasedVectorSearchProvider(
      *
      * @param query The search query
      * @param maxResults Maximum number of results to return
-     * @param filters Optional filters to apply to the search
+     * @param rankingOptions Optional ranking options for search
+     * @param filter Optional structured filter object (new format)
      * @return List of search results
      */
     override fun searchSimilar(
         query: String,
         maxResults: Int,
-        filters: Map<String, Any>?,
         rankingOptions: RankingOptions?,
+        filter: Filter?,
     ): List<VectorSearchProvider.SearchResult> {
         if (query.isBlank()) {
             log.warn("Query is empty or blank")
@@ -219,24 +222,8 @@ class FileBasedVectorSearchProvider(
         // Collect all chunks from cache
         val allChunks = fileChunksCache.values.flatten()
 
-        // Apply filters if provided
-        val filteredChunks =
-            if (filters != null) {
-                allChunks.filter { chunk ->
-                    filters.all { (key, value) ->
-                        when {
-                            key == "fileIds" && value is List<*> -> (value as List<*>).contains(chunk.fileId)
-                            key == "file_id" -> chunk.fileId == value
-                            chunk.chunkMetadata.containsKey(key) -> chunk.chunkMetadata[key] == value
-                            fileMetadataCache[chunk.fileId]?.containsKey(key) == true ->
-                                fileMetadataCache[chunk.fileId]?.get(key) == value
-                            else -> false
-                        }
-                    }
-                }
-            } else {
-                allChunks
-            }
+        // Apply filters to chunks
+        val filteredChunks = applyFilters(allChunks, filter)
 
         // Calculate similarity scores
         val scoredChunks =
@@ -259,6 +246,35 @@ class FileBasedVectorSearchProvider(
                 )
             }
     }
+
+    /**
+     * Apply filters to chunks.
+     */
+    private fun applyFilters(
+        chunks: List<ChunkWithEmbedding>,
+        filter: Filter?,
+    ): List<ChunkWithEmbedding> {
+        // If no filter, return all chunks
+        if (filter == null) {
+            return chunks
+        }
+
+        // Apply the filter to each chunk
+        return chunks.filter { chunk ->
+            // Combine chunk metadata with file metadata
+            val combinedMetadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap())
+            FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
+        }
+    }
+
+    /**
+     * Searches for similar content in the vector store using the base interface.
+     */
+    override fun searchSimilar(
+        query: String,
+        maxResults: Int,
+        rankingOptions: RankingOptions?,
+    ): List<VectorSearchProvider.SearchResult> = searchSimilar(query, maxResults, rankingOptions, null)
 
     /**
      * Deletes a file from the vector store.

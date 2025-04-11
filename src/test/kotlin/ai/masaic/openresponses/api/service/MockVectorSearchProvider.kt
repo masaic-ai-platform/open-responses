@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.search.VectorSearchProvider
 import org.springframework.context.annotation.Primary
@@ -44,14 +45,37 @@ class MockVectorSearchProvider : VectorSearchProvider {
     override fun searchSimilar(
         query: String,
         maxResults: Int,
-        filters: Map<String, Any>?,
         rankingOptions: RankingOptions?,
+    ): List<VectorSearchProvider.SearchResult> = searchSimilar(query, maxResults, rankingOptions, null)
+
+    override fun searchSimilar(
+        query: String,
+        maxResults: Int,
+        rankingOptions: RankingOptions?,
+        filter: Filter?,
     ): List<VectorSearchProvider.SearchResult> {
         // Very simplistic search - just checks if query exists in content
         val results =
             indexedFiles.values
                 .filter { it.content.contains(query, ignoreCase = true) }
-                .map { indexedFile ->
+                .filter { indexedFile ->
+                    // Apply filter if provided
+                    if (filter == null) {
+                        true
+                    } else {
+                        // In this mock, we only support basic equality filter for file_id
+                        when (filter) {
+                            is ai.masaic.openresponses.api.model.ComparisonFilter -> {
+                                if (filter.key == "file_id" && filter.type == "eq") {
+                                    indexedFile.fileId == filter.value
+                                } else {
+                                    true // Ignore other filters
+                                }
+                            }
+                            else -> true // Ignore other filter types
+                        }
+                    }
+                }.map { indexedFile ->
                     VectorSearchProvider.SearchResult(
                         fileId = indexedFile.fileId,
                         score = 0.9, // Mock score

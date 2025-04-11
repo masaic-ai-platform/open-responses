@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import java.io.InputStream
 
@@ -32,15 +33,33 @@ interface VectorSearchProvider {
      *
      * @param query The search query
      * @param maxResults Maximum number of results to return
-     * @param filters Optional filters to apply to the search
+     * @param rankingOptions Optional ranking options for search
      * @return List of search results
      */
     fun searchSimilar(
         query: String,
         maxResults: Int = 10,
-        filters: Map<String, Any>? = null,
         rankingOptions: RankingOptions?,
     ): List<SearchResult>
+
+    /**
+     * Searches for similar content in the vector store with structured filter.
+     *
+     * @param query The search query
+     * @param maxResults Maximum number of results to return
+     * @param rankingOptions Optional ranking options for search
+     * @param filter Optional structured filter (new format)
+     * @return List of search results
+     */
+    fun searchSimilar(
+        query: String,
+        maxResults: Int = 10,
+        rankingOptions: RankingOptions?,
+        filter: Filter?,
+    ): List<SearchResult> {
+        // Default implementation delegates to the legacy method
+        return searchSimilar(query, maxResults, rankingOptions)
+    }
 
     /**
      * Deletes a file from the vector store.
