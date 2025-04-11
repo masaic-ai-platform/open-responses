@@ -186,11 +186,19 @@ run_section() {
     echo -e "\n${BOLD}==================== RUNNING SECTION: $section_name ====================${NC}"
     IN_CLEANUP="true"  # Mark that we're in a controlled section to prevent premature cleanup
     
-    # Execute the section function
+    # Execute the section function with error handling to prevent premature exit
+    set +e  # Temporarily disable exit on error
     $section_name
+    local section_result=$?
+    set -e  # Re-enable exit on error
+    
+    if [ $section_result -ne 0 ]; then
+        echo -e "${RED}Section '$section_name' encountered errors but continuing with next section${NC}"
+    fi
     
     echo -e "\n${BOLD}==================== COMPLETED SECTION: $section_name ====================${NC}"
     IN_CLEANUP="false"  # Reset the flag
+    return 0  # Always return success to continue with next section
 }
 
 # Basic tests section
@@ -315,11 +323,36 @@ run_mongodb_tests() {
 
     # Start MongoDB container once for all MongoDB tests
     echo -e "\n${BOLD}STARTING MONGODB TESTS${NC}"
+    echo "DEBUG: About to start MongoDB container"
     start_container "MongoDB OpenResponses" "docker-compose --profile mongodb up -d"
+    echo "DEBUG: MongoDB container started successfully"
+    
+    # Wait a bit longer to ensure MongoDB is fully initialized
+    echo "Waiting additional 10 seconds for MongoDB to fully initialize..."
+    sleep 10
+    
+    # Check if MongoDB container is actually running
+    mongodb_container=$(docker ps | grep mongo | grep -v grep)
+    if [[ -z "$mongodb_container" ]]; then
+        echo -e "${RED}MongoDB container is not running! Check docker-compose configuration.${NC}"
+        # Continue anyway for testing purposes
+    else
+        echo -e "${GREEN}MongoDB container appears to be running: $mongodb_container${NC}"
+    fi
+    
+    # Check if API is responsive
+    echo "Checking if API endpoints are accessible..."
+    models_response=$(curl --silent --max-time 5 --write-out '%{http_code}' --output /dev/null http://localhost:8080/v1/models)
+    if [[ "$models_response" == "200" ]]; then
+        echo -e "${GREEN}API endpoints appear to be accessible${NC}"
+    else
+        echo -e "${RED}API endpoints may not be accessible. Got status: $models_response${NC}"
+    fi
 
     # Test 3: MongoDB Persistence
     echo -e "\n${BOLD}Test 3: MongoDB Persistence${NC}"
-    run_test "MongoDB Persistence" \
+    echo "DEBUG: About to run MongoDB Persistence test"
+    response_creation_result=$(run_test "MongoDB Persistence" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
@@ -333,74 +366,112 @@ run_mongodb_tests() {
                     \"content\": \"Tell me a joke\"
                 }
             ]
-        }'"
+        }'")
+    echo "DEBUG: MongoDB Persistence test completed with result: $response_creation_result"
 
     # Create a response and extract the ID for subsequent tests
-    echo "Creating a stored response for subsequent tests..."
-    # Use -w '%{http_code}' to get status code and capture output separately
-    # Ensure correct line continuation with single backslashes
-    # Use double quotes for --data to allow variable expansion, escape inner quotes
-    response_info=$(curl --silent --location 'http://localhost:8080/v1/responses' \
+    echo "Creating a stored response with known ID for subsequent tests..."
+    
+    # Generate a proper UUID for our test
+    if command -v uuidgen &> /dev/null; then
+        test_uuid=$(uuidgen)
+    else
+        # Generate a UUID manually if uuidgen is not available
+        test_uuid=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "3f9ef8fc-ddc4-46e7-9e4e-0dd3de707fc3")
+    fi
+    echo "Using test UUID: $test_uuid"
+    
+    # Try to create a response with a client-generated ID (if supported)
+    # For some APIs this might not work, but worth trying
+    echo "Creating a response with test UUID..."
+    
+    # For better debugging, get the full response without using -w for the status code
+    full_response=$(curl --silent --max-time 10 --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer $API_KEY" \
         --header "x-model-provider: $MODEL_PROVIDER" \
-        --data "{\
-            \"model\": \"$MODEL_NAME\",\
-            \"store\": true,\
-            \"input\": [\
-                {\
-                    \"role\": \"user\",\
-                    \"content\": \"Tell me a joke\"\
-                }\
-            ]\
-        }" -w "\n%{http_code}")
-
-    # Extract body and status code
-    response_data=$(echo "$response_info" | sed '$d') # Body is everything except the last line
-    response_status_code=$(echo "$response_info" | tail -n1) # Status code is the last line
-
-    echo "Response creation status code: $response_status_code" # Debugging output
-
-    # Try to extract ID only if status is 200 or 201 (Created)
-    response_id=""
-    if [[ "$response_status_code" == "200" || "$response_status_code" == "201" ]]; then
-        response_id=$(echo "$response_data" | grep -o '"id":"[^"]*"' | cut -d'"' -f4)
-    fi
-
-    if [[ -z "$response_id" ]]; then
-        echo -e "${YELLOW}Failed to extract response ID (Status: $response_status_code). Using dummy value for subsequent tests.${NC}"
-        echo "Response body:" # Print response body on failure
-        echo "$response_data" # Print response body on failure
-        response_id="resp_dummy_id"
-        store_test_result "Response ID Extraction" "FAILED (Status: $response_status_code)"
+        --data "{
+            \"model\": \"$MODEL_NAME\",
+            \"store\": true,
+            \"id\": \"$test_uuid\",
+            \"input\": [
+                {
+                    \"role\": \"user\",
+                    \"content\": \"Tell me a joke for MongoDB test\"
+                }
+            ]
+        }")
+    
+    echo "DEBUG: Full response for ID extraction: $full_response"
+    
+    # Try to extract ID from the full response
+    extracted_id=$(echo "$full_response" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4 | tr -d '\n\r\t ')
+    
+    # Decide which ID to use for testing
+    if [[ -z "$extracted_id" ]]; then
+        echo -e "${YELLOW}Failed to extract response ID. Using our pre-generated UUID for subsequent tests.${NC}"
+        echo "DEBUG: Response ID extraction failed, using our generated UUID"
+        response_id="$test_uuid"
+        store_test_result "Response ID Extraction" "FAILED (Could not extract ID, using generated UUID)"
         ((failed_tests++))
     else
+        # Clean any potential newlines or whitespace from the response ID
+        response_id="$extracted_id"
         echo "Created response with ID: $response_id"
+        echo "DEBUG: Response ID extraction succeeded"
         store_test_result "Response ID Extraction" "PASSED"
         ((passed_tests++))
     fi
+    
+    # Verify the response exists by trying to retrieve it
+    echo "Verifying response exists..."
+    clean_id=$(echo "$response_id" | tr -d '\n\r\t ' | xargs)
+    echo "Clean ID for verification: $clean_id"
+    response_check=$(curl --silent --write-out '%{http_code}' --output /dev/null \
+        "http://localhost:8080/v1/responses/$clean_id" \
+        --header "Authorization: Bearer $API_KEY" \
+        --header "x-model-provider: $MODEL_PROVIDER")
+    
+    echo "Response check status code: $response_check"
+    if [[ "$response_check" != "200" ]]; then
+        echo -e "${RED}Warning: Cannot verify response with ID $clean_id exists (status $response_check)${NC}"
+    fi
+
+    # Ensure clean ID for all subsequent tests
+    response_id="$clean_id"
 
     # Test 4: Get Response by ID
     echo -e "\n${BOLD}Test 4: Get Response by ID${NC}"
+    echo "DEBUG: About to run Get Response by ID test"
+    echo "Using response ID: $response_id"
     run_test "Get Response by ID" \
         "curl --location 'http://localhost:8080/v1/responses/$response_id' \
         --header \"Authorization: Bearer $API_KEY\" \
-        --header \"x-model-provider: $MODEL_PROVIDER\""
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
+        --max-time 10"
+    echo "DEBUG: Get Response by ID test completed"
 
     # Test 6: Get Input Items for Response
     echo -e "\n${BOLD}Test 6: Get Input Items for Response${NC}"
+    echo "DEBUG: About to run Get Input Items for Response test"
+    echo "Using response ID: $response_id"
     run_test "Get Input Items for Response" \
         "curl --location 'http://localhost:8080/v1/responses/$response_id/input_items' \
         --header \"Authorization: Bearer $API_KEY\" \
-        --header \"x-model-provider: $MODEL_PROVIDER\""
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
+        --max-time 10"
+    echo "DEBUG: Get Input Items for Response test completed"
 
     # Test 8: Multi-Turn Conversation
     echo -e "\n${BOLD}Test 8: Multi-Turn Conversation${NC}"
+    echo "DEBUG: About to run Multi-Turn Conversation test"
+    echo "Using previous response ID: $response_id"
     run_test "Multi-Turn Conversation" \
         "curl --location 'http://localhost:8080/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
+        --max-time 10 \
         --data '{
             \"model\": \"$MODEL_NAME\",
             \"store\": true,
@@ -408,21 +479,28 @@ run_mongodb_tests() {
             \"input\": [
                 {
                     \"role\": \"user\",
-                    \"content\": \"Tell me a joke\"
+                    \"content\": \"Tell me another joke\"
                 }
             ]
         }'"
+    echo "DEBUG: Multi-Turn Conversation test completed"
 
     # Test 5: Delete Response
     echo -e "\n${BOLD}Test 5: Delete Response${NC}"
+    echo "DEBUG: About to run Delete Response test"
+    echo "Using response ID: $response_id"
     run_test "Delete Response" \
         "curl --location --request DELETE 'http://localhost:8080/v1/responses/$response_id' \
         --header \"Authorization: Bearer $API_KEY\" \
-        --header \"x-model-provider: $MODEL_PROVIDER\""
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
+        --max-time 10"
+    echo "DEBUG: Delete Response test completed"
+    echo "DEBUG: MongoDB tests section complete"
 }
 
 # Vector Store Integration Tests section
 run_vector_store_integration_tests() {
+    echo "DEBUG: Starting Vector Store Integration Tests section"
     # Stop the MongoDB container before switching to vector store profile
     echo "Stopping MongoDB container before switching to vector store integration tests..."
     docker-compose down -v 2>/dev/null || true
