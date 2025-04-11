@@ -69,6 +69,7 @@ class LocalFileStorageService(
                 Files
                     .walk(rootLocation, 2)
                     .filter { path -> Files.isRegularFile(path) && !Files.isHidden(path) && path.fileName.name.contains("open-responses-file") } // Hidden files are ignored
+                    .filter { !it.name.endsWith(".metadata") } // Exclude metadata files
                     .asSequence()
                     .forEach { 
                         emit(it) 
@@ -86,6 +87,7 @@ class LocalFileStorageService(
                     Files
                         .walk(purposeDir, 1)
                         .filter { path -> Files.isRegularFile(path) && !Files.isHidden(path) && path.fileName.name.contains("open-responses-file") }
+                        .filter { !it.name.endsWith(".metadata") } // Exclude metadata files
                         .asSequence()
                         .forEach { 
                             emit(it) 

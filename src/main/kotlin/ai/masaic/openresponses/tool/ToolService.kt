@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.tool
 
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.FunctionTool
 import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
@@ -500,6 +501,13 @@ class NativeToolRegistry {
                 ?.map { it.asFileSearch() } ?: return json.encodeToString(FileSearchResponse.serializer(), FileSearchResponse(emptyList()))
 
         val vectorStoreIds = function.first().vectorStoreIds()
+        val filters =
+            if (function.first().filters().isPresent) {
+                val filterJson = function.first().filters().get()
+                filterJson._json().get().convert(Filter::class.java)
+            } else {
+                null
+            }
 
         val maxResults =
             function
@@ -516,6 +524,7 @@ class NativeToolRegistry {
                     VectorStoreSearchRequest(
                         query = params.query,
                         maxNumResults = maxResults,
+                        filters = filters,
                     )
                 val results = vectorStoreService.searchVectorStore(vectorStoreId, searchRequest)
                 allResults.addAll(results.data)

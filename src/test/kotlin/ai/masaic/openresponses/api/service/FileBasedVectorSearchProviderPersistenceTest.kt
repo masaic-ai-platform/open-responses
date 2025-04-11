@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
+import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.FileBasedVectorSearchProvider
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -88,7 +89,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -121,7 +121,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -131,20 +130,22 @@ class FileBasedVectorSearchProviderPersistenceTest {
         assertEquals(2, results.size, "Should find both documents after restart")
         
         // Verify specific documents by filtering with fileId
+        val filter1 = ComparisonFilter(key = "file_id", type = "eq", value = fileId1)
         val firstResults =
             provider.searchSimilar(
-                "document",
-                filters = mapOf("file_id" to fileId1),
+                query = "document",
                 rankingOptions = null,
+                filter = filter1,
             )
         assertEquals(1, firstResults.size, "Should find only first document when filtered")
         assertEquals(fileId1, firstResults[0].fileId, "Should return the first file ID")
         
+        val filter2 = ComparisonFilter(key = "file_id", type = "eq", value = fileId2)
         val secondResults =
             provider.searchSimilar(
-                "document",
-                filters = mapOf("file_id" to fileId2),
+                query = "document",
                 rankingOptions = null,
+                filter = filter2,
             )
         assertEquals(1, secondResults.size, "Should find only second document when filtered")
         assertEquals(fileId2, secondResults[0].fileId, "Should return the second file ID")
@@ -160,7 +161,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -190,7 +190,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -201,11 +200,12 @@ class FileBasedVectorSearchProviderPersistenceTest {
         assertEquals(fileId2, results[0].fileId, "Should only return the second file ID")
         
         // Verify there's no trace of the first document after restart by explicitly searching for it
+        val filter1 = ComparisonFilter(key = "file_id", type = "eq", value = fileId1)
         val firstResults =
             provider.searchSimilar(
-                "document",
-                filters = mapOf("file_id" to fileId1),
+                query = "document",
                 rankingOptions = null,
+                filter = filter1,
             )
         assertEquals(0, firstResults.size, "Should not find the deleted first document")
     }

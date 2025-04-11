@@ -3,16 +3,17 @@ package ai.masaic.openresponses.api.service.search
 import ai.masaic.openresponses.api.config.QdrantVectorProperties
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
+import ai.masaic.openresponses.api.utils.FilterUtils
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest
-import dev.langchain4j.store.embedding.filter.Filter
 import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo
 import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore
 import io.qdrant.client.QdrantClient
@@ -82,6 +83,8 @@ class QdrantVectorSearchProvider(
      * @param inputStream The file content as an InputStream
      * @param filename The name of the file
      * @param chunkingStrategy Optional chunking strategy for the file
+     * @param preDeleteIfExists Whether to check and delete existing vectors for this file before indexing (default: true)
+     * @param attributes Additional metadata attributes to include with each vector (default: null)
      * @return True if indexing was successful, false otherwise
      */
     override fun indexFile(
@@ -89,8 +92,20 @@ class QdrantVectorSearchProvider(
         inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
+        preDeleteIfExists: Boolean,
+        attributes: Map<String, Any>?,
     ): Boolean {
         try {
+            // Check if we need to delete existing file vectors
+            if (preDeleteIfExists) {
+                // Let's see if this file exists by trying to find metadata
+                val existingMetadata = getFileMetadata(fileId)
+                if (existingMetadata != null) {
+                    log.info("File $fileId already exists in the vector store, deleting it for re-indexing")
+                    deleteFile(fileId)
+                }
+            }
+            
             // Extract text content from the document
             val text =
                 try {
@@ -125,13 +140,18 @@ class QdrantVectorSearchProvider(
 
                     // Create metadata for this chunk
                     val metadata =
-                        mapOf(
+                        mutableMapOf<String, Any>(
                             "file_id" to fileId,
                             "filename" to filename,
                             "chunk_index" to chunk.index,
                             "chunk_id" to IdGenerator.generateChunkId(),
                             "total_chunks" to textChunks.size,
                         )
+                    
+                    // Add any additional user-provided attributes to the metadata
+                    if (attributes != null) {
+                        metadata.putAll(attributes)
+                    }
 
                     // Store the embedding with metadata
                     embeddingStore.add(
@@ -153,18 +173,40 @@ class QdrantVectorSearchProvider(
     }
 
     /**
+     * Indexes a file with attributes.
+     */
+    override fun indexFile(
+        fileId: String,
+        inputStream: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy?,
+        attributes: Map<String, Any>?,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes)
+
+    /**
+     * Indexes a file using the base interface method.
+     */
+    override fun indexFile(
+        fileId: String,
+        inputStream: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy?,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null)
+
+    /**
      * Searches for similar content in the vector store.
      *
      * @param query The search query
      * @param maxResults Maximum number of results to return
-     * @param filters Optional filters to apply to the search
+     * @param rankingOptions Optional ranking options for search
+     * @param filter Optional structured filter object (new format)
      * @return List of search results
      */
     override fun searchSimilar(
         query: String,
         maxResults: Int,
-        filters: Map<String, Any>?,
         rankingOptions: RankingOptions?,
+        filter: Filter?,
     ): List<VectorSearchProvider.SearchResult> {
         try {
             // Return empty results for empty query
@@ -179,27 +221,24 @@ class QdrantVectorSearchProvider(
             // Find relevant documents
             val minScore = rankingOptions?.scoreThreshold ?: qdrantProperties.minScore ?: 0.07
 
-            // Search the store with filter
-            val matches =
-                if (filters != null && filters.isNotEmpty()) {
-                    log.debug("Searching with filters: {}", filters)
-                    // Convert filter to Qdrant filter format
-                    val qdrantFilter = createQdrantFilter(filters)
-                    val searchBuilder =
-                        EmbeddingSearchRequest
-                            .builder()
-                            .minScore(minScore.toDouble())
-                            .queryEmbedding(queryEmbedding)
-                            .maxResults(maxResults)
+            // Convert filter to Qdrant filter
+            val qdrantFilter = filter?.let { FilterUtils.convertToQdrantFilter(it) }
+            
+            // Create search request
+            val searchBuilder =
+                EmbeddingSearchRequest
+                    .builder()
+                    .minScore(minScore.toDouble())
+                    .queryEmbedding(queryEmbedding)
+                    .maxResults(maxResults)
 
-                    if (qdrantFilter != null) {
-                        searchBuilder.filter(qdrantFilter)
-                    }
+            // Add filter if available
+            if (qdrantFilter != null) {
+                searchBuilder.filter(qdrantFilter)
+            }
 
-                    embeddingStore.search(searchBuilder.build()).matches()
-                } else {
-                    embeddingStore.findRelevant(queryEmbedding, maxResults, minScore.toDouble())
-                }
+            // Execute search
+            val matches = embeddingStore.search(searchBuilder.build()).matches()
 
             // Convert to search results
             val results =
@@ -222,6 +261,15 @@ class QdrantVectorSearchProvider(
             return emptyList()
         }
     }
+
+    /**
+     * Searches for similar content in the vector store using the base interface.
+     */
+    override fun searchSimilar(
+        query: String,
+        maxResults: Int,
+        rankingOptions: RankingOptions?,
+    ): List<VectorSearchProvider.SearchResult> = searchSimilar(query, maxResults, rankingOptions, null)
 
     /**
      * Deletes a file from the vector store.
@@ -275,39 +323,5 @@ class QdrantVectorSearchProvider(
             log.error("Error getting metadata for file {}: {}", fileId, e.message, e)
             return null
         }
-    }
-
-    /**
-     * Helper function to create a Qdrant filter from a map of filters.
-     */
-    private fun createQdrantFilter(filters: Map<String, Any>): Filter? {
-        // Use a mutable reference to avoid smart cast issues with captured variables
-        val filterRef = arrayOfNulls<Filter>(1)
-
-        filters.forEach { (key, value) ->
-            when {
-                key == "fileIds" && value is List<*> -> {
-                    // Handle the fileIds list by creating an OR filter for each fileId
-                    val fileIdsList = value.filterIsInstance<String>()
-                    if (fileIdsList.isNotEmpty()) {
-                        val firstFilter = IsEqualTo("file_id", fileIdsList.first())
-                        val fileIdsFilter =
-                            fileIdsList.drop(1).fold(firstFilter) { acc, fileId ->
-                                acc.or(IsEqualTo("file_id", fileId)) as IsEqualTo
-                            }
-
-                        filterRef[0] = if (filterRef[0] == null) fileIdsFilter else filterRef[0]!!.and(fileIdsFilter)
-                    }
-                }
-                else -> {
-                    // Handle regular key-value filters
-                    val newFilter = IsEqualTo(key, value)
-                    filterRef[0] = if (filterRef[0] == null) newFilter else filterRef[0]!!.and(newFilter)
-                }
-            }
-        }
-
-        // Return default filter if no valid filters (matches all records)
-        return filterRef[0]
     }
 }

@@ -302,6 +302,7 @@ class VectorStoreControllerTest {
                 VectorStoreSearchRequest(
                     query = "test document",
                     maxNumResults = 5,
+                    filters = ComparisonFilter(key = "key1", type = "eq", value = "value5"),
                 )
             
             val searchResult =

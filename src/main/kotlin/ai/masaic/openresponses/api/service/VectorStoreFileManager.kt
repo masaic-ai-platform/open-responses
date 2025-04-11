@@ -160,11 +160,6 @@ class VectorStoreFileManager(
             log.info("Indexing file ${file.id} in vector store $vectorStoreId")
             try {
                 val resource = fileStorageService.loadAsResource(file.id)
-                
-                if (vectorSearchProvider == null) {
-                    throw VectorIndexingException("No vector search provider available")
-                }
-                
                 val success = vectorSearchProvider.indexFile(file.id, resource.inputStream, filename, chunkingStrategy)
                 
                 val updatedFile =

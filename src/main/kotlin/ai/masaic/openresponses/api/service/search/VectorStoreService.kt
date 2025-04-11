@@ -346,7 +346,7 @@ class VectorStoreService(
         }
 
     /**
-     * Creates a file in a vector store.
+     * Creates a new file in a vector store.
      *
      * @param vectorStoreId The ID of the vector store
      * @param request The request to create a file
@@ -485,15 +485,15 @@ class VectorStoreService(
         }
 
     /**
-     * Updates a vector store file's attributes.
+     * Updates attributes on a vector store file.
      *
      * @param vectorStoreId The ID of the vector store
-     * @param fileId The ID of the file
-     * @param request The request to update the file's attributes
+     * @param fileId The ID of the file to update
+     * @param request The request containing the new attributes
      * @return The updated vector store file
      * @throws VectorStoreNotFoundException if the vector store is not found
      * @throws VectorStoreFileNotFoundException if the file is not found in the vector store
-     * @throws FileNotFoundException if the file no longer exists in storage
+     * @throws FileNotFoundException if the file referenced in the vector store no longer exists in storage
      */
     suspend fun updateVectorStoreFileAttributes(
         vectorStoreId: String,
@@ -525,7 +525,48 @@ class VectorStoreService(
             val updatedFile = file.copy(attributes = request.attributes)
         
             // Save the updated file
-            vectorStoreRepository.saveVectorStoreFile(updatedFile)
+            val savedFile = vectorStoreRepository.saveVectorStoreFile(updatedFile)
+            
+            // Get file metadata and prepare for re-indexing
+            val fileMetadata = vectorStoreFileManager.getFileMetadata(fileId)
+            val filename = fileMetadata["filename"] as String
+            
+            // Update file status to in_progress during reindexing
+            val processingFile = savedFile.copy(status = "in_progress")
+            vectorStoreRepository.saveVectorStoreFile(processingFile)
+            updateVectorStoreFileCounts(vectorStoreId)
+            
+            // Get the file resource
+            val resource = vectorStoreFileManager.getFileAsResource(fileId)
+            
+            // Re-index the file with the new attributes in a single operation
+            val success =
+                vectorSearchProvider.indexFile(
+                    fileId = fileId,
+                    content = resource.inputStream,
+                    filename = filename,
+                    chunkingStrategy = file.chunkingStrategy,
+                    preDeleteIfExists = true, // Always delete existing embeddings first
+                    attributes = request.attributes,
+                )
+            
+            // Update the file status based on indexing result
+            val finalFile =
+                if (success) {
+                    // Success - mark as completed
+                    processingFile.copy(status = "completed")
+                } else {
+                    // Failed - mark as failed
+                    log.error("Failed to re-index file $fileId with updated attributes")
+                    processingFile.copy(status = "failed")
+                }
+            
+            // Save the final file status
+            val result = vectorStoreRepository.saveVectorStoreFile(finalFile)
+            updateVectorStoreFileCounts(vectorStoreId)
+            
+            log.info("Updated attributes for file $fileId in vector store $vectorStoreId")
+            result
         }
 
     /**
@@ -607,37 +648,11 @@ class VectorStoreService(
             
                 // Get all files in the vector store
                 val files = vectorStoreRepository.listVectorStoreFiles(vectorStoreId, Int.MAX_VALUE)
-            
-                // Filter out files that no longer exist in the FileStorageService
-                val existingFiles =
-                    files.filter { file ->
-                        try {
-                            vectorStoreFileManager.fileExists(file.id)
-                        } catch (e: Exception) {
-                            log.warn("File ${file.id} referenced in vector store $vectorStoreId no longer exists in storage")
-                            false
-                        }
-                    }
-            
-                // Check if any files were removed and update the vector store if needed
-                if (existingFiles.size < files.size) {
-                    log.info("Detected ${files.size - existingFiles.size} missing files in vector store $vectorStoreId, updating...")
                 
-                    // Remove the missing files from the vector store
-                    val missingFiles = files.filter { file -> !existingFiles.any { it.id == file.id } }
-                    missingFiles.forEach { file ->
-                        try {
-                            vectorStoreRepository.deleteVectorStoreFile(vectorStoreId, file.id)
-                            vectorSearchProvider.deleteFile(file.id)
-                        } catch (e: Exception) {
-                            log.error("Error removing missing file ${file.id} from vector store $vectorStoreId", e)
-                        }
-                    }
-                
-                    // Update the vector store
-                    updateVectorStoreFileCounts(vectorStoreId)
-                }
+                // Filter out files that are not in completed state
+                val existingFiles = files.filter { it.status == "completed" }
             
+                // Prepare list of file IDs to search
                 val fileIds = existingFiles.map { it.id }
                 if (fileIds.isEmpty()) {
                     // Return empty results if there are no files
@@ -652,20 +667,52 @@ class VectorStoreService(
                         data = emptyList(),
                     )
                 }
-            
-                // Add file filter to the request filters
-                val filters = mutableMapOf<String, Any>()
-                request.filters?.let { filters.putAll(it) }
                 
-                // Add fileIds filter (list of file IDs to search within)
-                // This supports both implementations - newer ones handle 'fileIds' as a list,
-                // while older ones might look for individual 'fileId' matches
-                filters["fileIds"] = fileIds
-                
-                // Execute the vector search
-                val maxResults = request.maxNumResults ?: 10
+                // Process the search request
                 try {
-                    val searchResults = vectorSearchProvider.searchSimilar(request.query, maxResults, filters, request.rankingOptions)
+                    // Create a fileIds filter
+                    val fileIdsFilter =
+                        ai.masaic.openresponses.api.model.CompoundFilter(
+                            type = "or",
+                            filters =
+                                fileIds.map { fileId ->
+                                    ai.masaic.openresponses.api.model.ComparisonFilter(
+                                        key = "file_id",
+                                        type = "eq",
+                                        value = fileId,
+                                    )
+                                },
+                        )
+                    
+                    // Log user filter for debugging
+                    if (request.filters != null) {
+                        log.debug("Applied user filter: ${request.filters}")
+                    }
+                    
+                    // Combine with user-provided filter if it exists
+                    val filterObject =
+                        when {
+                            request.filters != null -> {
+                                // Combine fileIds filter with user filter using AND
+                                val combinedFilter =
+                                    ai.masaic.openresponses.api.model.CompoundFilter(
+                                        type = "and",
+                                        filters = listOf(fileIdsFilter, request.filters),
+                                    )
+                                log.debug("Combined filter with AND: $combinedFilter")
+                                combinedFilter
+                            }
+                            else -> fileIdsFilter
+                        }
+                    
+                    // Execute search with structured filters (new approach)
+                    val searchResults =
+                        vectorSearchProvider.searchSimilar(
+                            query = request.query,
+                            maxResults = request.maxNumResults ?: 10,
+                            rankingOptions = request.rankingOptions,
+                            filter = filterObject,
+                        )
                     
                     // Update the vector store's last active timestamp
                     val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
@@ -693,10 +740,6 @@ class VectorStoreService(
                     )
                     throw VectorSearchException("Error searching vector store: ${e.message}", e)
                 }
-            } catch (e: Exception) {
-                telemetryService.stopSearchOperation(observation, success = false)
-                observation.error(e)
-                throw e
             } finally {
                 sample.stop(timer)
             }
@@ -879,13 +922,25 @@ class VectorStoreService(
                 // Get file metadata
                 val fileMetadata = vectorStoreFileManager.getFileMetadata(file.id)
                 val filename = fileMetadata["filename"] as String
-
+                
                 // Index the file in the vector search provider
                 log.info("Indexing file ${file.id} in vector store ${file.vectorStoreId}")
                 try {
                     val resource = vectorStoreFileManager.getFileAsResource(file.id)
                     val effectiveChunkingStrategy = file.chunkingStrategy // Use the file's chunking strategy
-                    val success = vectorSearchProvider.indexFile(file.id, resource.inputStream, filename, effectiveChunkingStrategy)
+                    
+                    // Check if this is a re-index (existing file being processed again)
+                    val isReindex = vectorSearchProvider.getFileMetadata(file.id) != null
+                    
+                    // Process with a single indexing operation that includes attributes
+                    val success =
+                        vectorSearchProvider.indexFile(
+                            fileId = file.id, 
+                            content = resource.inputStream, 
+                            filename = filename, 
+                            chunkingStrategy = effectiveChunkingStrategy,
+                            attributes = file.attributes,
+                        )
 
                     if (success) {
                         // Update the file status

@@ -55,7 +55,6 @@ class FileBasedVectorSearchProviderIntegrationTest {
         vectorSearchProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )
@@ -88,7 +87,6 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val restartedProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )
@@ -115,7 +113,6 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val secondProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )
@@ -146,7 +143,6 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val refreshedProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )
@@ -175,7 +171,6 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val secondProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )
@@ -203,7 +198,6 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val refreshedSecondProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )

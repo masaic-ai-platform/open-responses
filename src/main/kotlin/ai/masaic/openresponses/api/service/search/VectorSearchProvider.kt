@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service.search
 
 import ai.masaic.openresponses.api.model.ChunkingStrategy
+import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import java.io.InputStream
 
@@ -12,7 +13,47 @@ import java.io.InputStream
  */
 interface VectorSearchProvider {
     /**
-     * Indexes a file in the vector store.
+     * Indexes a file for vector search.
+     *
+     * @param fileId The ID of the file
+     * @param content The file content as an InputStream
+     * @param filename The name of the file
+     * @param chunkingStrategy Optional chunking strategy to use when splitting the text
+     * @param preDeleteIfExists Whether to check and delete existing vectors for this file ID before indexing
+     * @param attributes Additional metadata attributes to include with each vector
+     * @return True if indexing was successful, false otherwise
+     */
+    fun indexFile(
+        fileId: String,
+        content: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy? = null,
+        preDeleteIfExists: Boolean = true,
+        attributes: Map<String, Any>? = null,
+    ): Boolean
+
+    /**
+     * Indexes a file for vector search with attributes.
+     * Default implementation to maintain backward compatibility.
+     *
+     * @param fileId The ID of the file
+     * @param content The file content as an InputStream
+     * @param filename The name of the file
+     * @param chunkingStrategy Optional chunking strategy to use when splitting the text
+     * @param attributes Additional metadata attributes to include with each vector
+     * @return True if indexing was successful, false otherwise
+     */
+    fun indexFile(
+        fileId: String,
+        content: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy? = null,
+        attributes: Map<String, Any>? = null,
+    ): Boolean = indexFile(fileId, content, filename, chunkingStrategy, true, attributes)
+
+    /**
+     * Indexes a file for vector search.
+     * Default implementation to maintain backward compatibility.
      *
      * @param fileId The ID of the file
      * @param content The file content as an InputStream
@@ -25,22 +66,40 @@ interface VectorSearchProvider {
         content: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy? = null,
-    ): Boolean
+    ): Boolean = indexFile(fileId, content, filename, chunkingStrategy, true, null)
 
     /**
      * Searches for similar content in the vector store.
      *
      * @param query The search query
      * @param maxResults Maximum number of results to return
-     * @param filters Optional filters to apply to the search
+     * @param rankingOptions Optional ranking options for search
      * @return List of search results
      */
     fun searchSimilar(
         query: String,
         maxResults: Int = 10,
-        filters: Map<String, Any>? = null,
         rankingOptions: RankingOptions?,
     ): List<SearchResult>
+
+    /**
+     * Searches for similar content in the vector store with structured filter.
+     *
+     * @param query The search query
+     * @param maxResults Maximum number of results to return
+     * @param rankingOptions Optional ranking options for search
+     * @param filter Optional structured filter (new format)
+     * @return List of search results
+     */
+    fun searchSimilar(
+        query: String,
+        maxResults: Int = 10,
+        rankingOptions: RankingOptions?,
+        filter: Filter?,
+    ): List<SearchResult> {
+        // Default implementation delegates to the legacy method
+        return searchSimilar(query, maxResults, rankingOptions)
+    }
 
     /**
      * Deletes a file from the vector store.
