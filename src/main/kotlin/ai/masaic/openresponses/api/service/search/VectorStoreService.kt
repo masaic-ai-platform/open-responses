@@ -485,15 +485,15 @@ class VectorStoreService(
         }
 
     /**
-     * Updates a vector store file's attributes.
+     * Updates attributes on a vector store file.
      *
      * @param vectorStoreId The ID of the vector store
-     * @param fileId The ID of the file
-     * @param request The request to update the file's attributes
+     * @param fileId The ID of the file to update
+     * @param request The request containing the new attributes
      * @return The updated vector store file
      * @throws VectorStoreNotFoundException if the vector store is not found
      * @throws VectorStoreFileNotFoundException if the file is not found in the vector store
-     * @throws FileNotFoundException if the file no longer exists in storage
+     * @throws FileNotFoundException if the file referenced in the vector store no longer exists in storage
      */
     suspend fun updateVectorStoreFileAttributes(
         vectorStoreId: String,
@@ -527,17 +527,46 @@ class VectorStoreService(
             // Save the updated file
             val savedFile = vectorStoreRepository.saveVectorStoreFile(updatedFile)
             
-            // Update the metadata in the search provider based on its type
-            when (vectorSearchProvider) {
-                is FileBasedVectorSearchProvider -> {
-                    (vectorSearchProvider as FileBasedVectorSearchProvider).updateFileMetadata(fileId, request.attributes)
-                }
-                is QdrantVectorSearchProvider -> {
-                    (vectorSearchProvider as QdrantVectorSearchProvider).updateFileMetadata(fileId, request.attributes)
-                }
-            }
+            // Get file metadata and prepare for re-indexing
+            val fileMetadata = vectorStoreFileManager.getFileMetadata(fileId)
+            val filename = fileMetadata["filename"] as String
             
-            savedFile
+            // Update file status to in_progress during reindexing
+            val processingFile = savedFile.copy(status = "in_progress")
+            vectorStoreRepository.saveVectorStoreFile(processingFile)
+            updateVectorStoreFileCounts(vectorStoreId)
+            
+            // Get the file resource
+            val resource = vectorStoreFileManager.getFileAsResource(fileId)
+            
+            // Re-index the file with the new attributes in a single operation
+            val success =
+                vectorSearchProvider.indexFile(
+                    fileId = fileId,
+                    content = resource.inputStream,
+                    filename = filename,
+                    chunkingStrategy = file.chunkingStrategy,
+                    preDeleteIfExists = true, // Always delete existing embeddings first
+                    attributes = request.attributes,
+                )
+            
+            // Update the file status based on indexing result
+            val finalFile =
+                if (success) {
+                    // Success - mark as completed
+                    processingFile.copy(status = "completed")
+                } else {
+                    // Failed - mark as failed
+                    log.error("Failed to re-index file $fileId with updated attributes")
+                    processingFile.copy(status = "failed")
+                }
+            
+            // Save the final file status
+            val result = vectorStoreRepository.saveVectorStoreFile(finalFile)
+            updateVectorStoreFileCounts(vectorStoreId)
+            
+            log.info("Updated attributes for file $fileId in vector store $vectorStoreId")
+            result
         }
 
     /**
@@ -655,15 +684,23 @@ class VectorStoreService(
                                 },
                         )
                     
+                    // Log user filter for debugging
+                    if (request.filters != null) {
+                        log.debug("Applied user filter: ${request.filters}")
+                    }
+                    
                     // Combine with user-provided filter if it exists
                     val filterObject =
                         when {
-                            request.filterObject != null -> {
+                            request.filters != null -> {
                                 // Combine fileIds filter with user filter using AND
-                                ai.masaic.openresponses.api.model.CompoundFilter(
-                                    type = "and",
-                                    filters = listOf(fileIdsFilter, request.filterObject),
-                                )
+                                val combinedFilter =
+                                    ai.masaic.openresponses.api.model.CompoundFilter(
+                                        type = "and",
+                                        filters = listOf(fileIdsFilter, request.filters),
+                                    )
+                                log.debug("Combined filter with AND: $combinedFilter")
+                                combinedFilter
                             }
                             else -> fileIdsFilter
                         }
@@ -891,19 +928,19 @@ class VectorStoreService(
                 try {
                     val resource = vectorStoreFileManager.getFileAsResource(file.id)
                     val effectiveChunkingStrategy = file.chunkingStrategy // Use the file's chunking strategy
-                    val success = vectorSearchProvider.indexFile(file.id, resource.inputStream, filename, effectiveChunkingStrategy)
-
-                    // Update the vector search provider with all attributes
-                    if (file.attributes != null) {
-                        when (vectorSearchProvider) {
-                            is FileBasedVectorSearchProvider -> {
-                                (vectorSearchProvider as FileBasedVectorSearchProvider).updateFileMetadata(file.id, file.attributes)
-                            }
-                            is QdrantVectorSearchProvider -> {
-                                (vectorSearchProvider as QdrantVectorSearchProvider).updateFileMetadata(file.id, file.attributes)
-                            }
-                        }
-                    }
+                    
+                    // Check if this is a re-index (existing file being processed again)
+                    val isReindex = vectorSearchProvider.getFileMetadata(file.id) != null
+                    
+                    // Process with a single indexing operation that includes attributes
+                    val success =
+                        vectorSearchProvider.indexFile(
+                            fileId = file.id, 
+                            content = resource.inputStream, 
+                            filename = filename, 
+                            chunkingStrategy = effectiveChunkingStrategy,
+                            attributes = file.attributes,
+                        )
 
                     if (success) {
                         // Update the file status

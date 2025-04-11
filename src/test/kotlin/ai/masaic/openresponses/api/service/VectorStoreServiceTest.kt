@@ -115,8 +115,9 @@ class VectorStoreServiceTest {
                 )
             coEvery { fileManager.getFileContent(fileId) } returns listOf()
             coEvery { fileManager.getFileAsResource(fileId) } returns mockResource
-            coEvery { vectorSearchProvider.indexFile(eq(fileId), any(), any(), any()) } returns true
-            
+            coEvery { vectorSearchProvider.indexFile(eq(fileId), any(), any(), any(), ofType<Map<String, Any>>()) } returns true
+            coEvery { vectorSearchProvider.getFileMetadata(any()) } returns mapOf()
+
             // Mock repository to return the vector store with correct initial counts
             coEvery { vectorStoreRepository.saveVectorStore(any()) } answers { 
                 val store = firstArg<VectorStore>()
@@ -154,8 +155,8 @@ class VectorStoreServiceTest {
             
             // Allow some time for the indexing to happen in background tasks
             // Use relaxed verification that doesn't care about exact parameter matching
-            coVerify(timeout = 5000) { 
-                vectorSearchProvider.indexFile(any(), any(), any(), any())
+            coVerify(timeout = 5000) {
+                vectorSearchProvider.indexFile(eq(fileId), any(), any(), any(), ofType<Map<String, Any>>())
             }
         }
 
@@ -362,6 +363,7 @@ class VectorStoreServiceTest {
                 VectorStoreSearchRequest(
                     query = "test document",
                     maxNumResults = 5,
+                    filters = ComparisonFilter(key = "key1", type = "eq", value = "value5"),
                 )
             
             // When
@@ -529,6 +531,120 @@ class VectorStoreServiceTest {
 
             // Then
             assertEquals(1, cleanedUpCount)
+        }
+
+    @Test
+    fun `searchVectorStore should apply filters correctly`() =
+        runTest {
+            // Given
+            val fileId = "file-123"
+            val request =
+                CreateVectorStoreRequest(
+                    name = "Test Vector Store",
+                    fileIds = listOf(fileId),
+                )
+            
+            coEvery { fileManager.fileExists(fileId) } returns true
+            coEvery { fileManager.getFileMetadata(fileId) } returns
+                mapOf(
+                    "id" to fileId,
+                    "filename" to "test.txt",
+                    "purpose" to "assistants",
+                    "bytes" to 100L,
+                    "created_at" to Instant.now().epochSecond,
+                )
+            coEvery { fileManager.getFileContent(fileId) } returns listOf()
+            coEvery { fileManager.getFileAsResource(fileId) } returns mockResource
+            
+            // Define custom attributes
+            val customAttributes = mapOf("key1" to "value5", "category" to "test")
+            
+            // Mock the indexing to succeed and include our custom attributes
+            coEvery { 
+                vectorSearchProvider.indexFile(
+                    fileId = fileId, 
+                    content = any(), 
+                    filename = any(), 
+                    chunkingStrategy = any(),
+                    attributes = any(),
+                ) 
+            } returns true
+            
+            // Create the vector store
+            val vectorStore = vectorStoreService.createVectorStore(request)
+            
+            // Define a filter
+            val filter = ComparisonFilter(key = "key1", type = "eq", value = "value5")
+            
+            // Mock search results to include our custom attributes
+            coEvery { 
+                vectorSearchProvider.searchSimilar(
+                    query = "test document",
+                    maxResults = 5,
+                    rankingOptions = null,
+                    filter = any(), // This will capture the combined filter
+                )
+            } returns
+                listOf(
+                    VectorSearchProvider.SearchResult(
+                        fileId = fileId,
+                        score = 0.95,
+                        content = "This is a test document",
+                        metadata =
+                            mapOf(
+                                "filename" to "test.txt", 
+                                "key1" to "value5", 
+                                "category" to "test",
+                            ),
+                    ),
+                )
+            
+            // Create search request with filter
+            val searchRequest =
+                VectorStoreSearchRequest(
+                    query = "test document",
+                    maxNumResults = 5,
+                    filters = filter,
+                )
+            
+            // When
+            val searchResults = vectorStoreService.searchVectorStore(vectorStore.id, searchRequest)
+            
+            // Then
+            assertEquals(1, searchResults.data.size)
+            assertEquals(fileId, searchResults.data[0].fileId)
+            assertEquals(0.95, searchResults.data[0].score)
+            assertEquals("value5", searchResults.data[0].attributes?.get("key1"))
+            assertEquals("test", searchResults.data[0].attributes?.get("category"))
+            
+            // Verify the filter was applied in the call to searchSimilar
+            coVerify { 
+                vectorSearchProvider.searchSimilar(
+                    query = "test document", 
+                    maxResults = 5,
+                    rankingOptions = null,
+                    filter =
+                        withArg { combinedFilter ->
+                            // Verify the combined filter is an AND filter
+                            assertTrue(combinedFilter is CompoundFilter)
+                            val compoundFilter = combinedFilter as CompoundFilter
+                            assertEquals("and", compoundFilter.type)
+                        
+                            // Should contain two filters: the fileIds filter and the user filter
+                            assertEquals(2, compoundFilter.filters.size)
+                        
+                            // One of the filters should be our original filter
+                            val hasUserFilter =
+                                compoundFilter.filters.any { 
+                                    it is ComparisonFilter && 
+                                        it.key == "key1" && 
+                                        it.type == "eq" && 
+                                        it.value == "value5"
+                                }
+                            assertTrue(hasUserFilter, "Combined filter should contain the user's filter")
+                        },
+                )
+            }
         }
 
     // Helper function to create test vector stores

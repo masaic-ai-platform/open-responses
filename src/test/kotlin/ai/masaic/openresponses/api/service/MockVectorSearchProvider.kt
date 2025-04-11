@@ -32,6 +32,8 @@ class MockVectorSearchProvider : VectorSearchProvider {
         content: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
+        preDeleteIfExists: Boolean,
+        attributes: Map<String, Any>?,
     ): Boolean {
         try {
             val contentString = content.readAllBytes().toString(Charsets.UTF_8)

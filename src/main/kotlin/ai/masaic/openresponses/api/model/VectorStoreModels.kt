@@ -334,10 +334,10 @@ data class VectorStoreSearchRequest(
      */
     val query: String,
     /**
-     * A structured filter object to apply based on file attributes.
+     * Filter to apply to search results.
+     * This should be a direct Filter object, not wrapped in any additional container.
      */
-    @JsonProperty("filter_object")
-    val filterObject: Filter? = null,
+    val filters: Filter? = null,
     /**
      * The maximum number of results to return.
      */
@@ -381,7 +381,9 @@ data class ComparisonFilter(
     val key: String,
     val type: String,
     val value: Any,
-) : Filter
+) : Filter {
+    override fun toString(): String = "{$type: $key=$value}"
+}
 
 /**
  * Combine multiple filters using 'and' or 'or'.
@@ -392,7 +394,9 @@ data class ComparisonFilter(
 data class CompoundFilter(
     val type: String,
     val filters: List<Filter>,
-) : Filter
+) : Filter {
+    override fun toString(): String = "{$type: [${filters.joinToString(", ")}]}"
+}
 
 /**
  * Vector store search results.

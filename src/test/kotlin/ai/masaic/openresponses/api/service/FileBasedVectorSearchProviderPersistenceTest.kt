@@ -89,7 +89,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -122,7 +121,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -163,7 +161,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )
@@ -193,7 +190,6 @@ class FileBasedVectorSearchProviderPersistenceTest {
         val provider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDirPath.toString(),
             )

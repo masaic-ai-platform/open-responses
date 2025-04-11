@@ -32,14 +32,25 @@ object FilterUtils {
     ): Boolean {
         if (filter == null) return true
         
-        return when (filter) {
-            is ComparisonFilter -> evaluateComparisonFilter(filter, attributes, fileId)
-            is CompoundFilter -> evaluateCompoundFilter(filter, attributes, fileId)
-            else -> {
-                log.warn("Unknown filter type: ${filter.javaClass.name}")
-                false
+        val result =
+            when (filter) {
+                is ComparisonFilter -> {
+                    val matches = evaluateComparisonFilter(filter, attributes, fileId)
+                    log.debug("Comparison filter $filter result: $matches")
+                    matches
+                }
+                is CompoundFilter -> {
+                    val matches = evaluateCompoundFilter(filter, attributes, fileId)
+                    log.debug("Compound filter $filter result: $matches")
+                    matches
+                }
+                else -> {
+                    log.warn("Unknown filter type: ${filter.javaClass.name}")
+                    false
+                }
             }
-        }
+        
+        return result
     }
 
     /**
@@ -55,15 +66,21 @@ object FilterUtils {
         
         // Special handling for file_id
         if (key == "file_id" && fileId != null) {
-            return evaluateComparison(filter.type, fileId, value)
+            val matches = evaluateComparison(filter.type, fileId, value)
+            log.debug("file_id filter $filter with value=$fileId, result: $matches")
+            return matches
         }
         
         // Check if the attribute exists
         if (!attributes.containsKey(key)) {
+            log.debug("Key $key not found in attributes: $attributes")
             return false
         }
         
-        return evaluateComparison(filter.type, attributes[key], value)
+        val attrValue = attributes[key]
+        val matches = evaluateComparison(filter.type, attrValue, value)
+        log.debug("Attribute filter $filter with attr value=$attrValue, result: $matches")
+        return matches
     }
 
     /**
@@ -73,15 +90,37 @@ object FilterUtils {
         filter: CompoundFilter,
         attributes: Map<String, Any>,
         fileId: String?,
-    ): Boolean =
-        when (filter.type.lowercase()) {
-            "and" -> filter.filters.all { matchesFilter(it, attributes, fileId) }
-            "or" -> filter.filters.any { matchesFilter(it, attributes, fileId) }
-            else -> {
-                log.warn("Unknown compound filter type: ${filter.type}")
-                false
+    ): Boolean {
+        val results =
+            when (filter.type.lowercase()) {
+                "and" -> {
+                    val matches =
+                        filter.filters.all { 
+                            val result = matchesFilter(it, attributes, fileId)
+                            log.debug("AND filter component $it result: $result")
+                            result
+                        }
+                    log.debug("AND filter overall result: $matches")
+                    matches
+                }
+                "or" -> {
+                    val matches =
+                        filter.filters.any { 
+                            val result = matchesFilter(it, attributes, fileId)
+                            log.debug("OR filter component $it result: $result")
+                            result
+                        }
+                    log.debug("OR filter overall result: $matches")
+                    matches
+                }
+                else -> {
+                    log.warn("Unknown compound filter type: ${filter.type}")
+                    false
+                }
             }
-        }
+        
+        return results
+    }
 
     /**
      * Evaluates a comparison operation between two values.
@@ -133,6 +172,8 @@ object FilterUtils {
     fun convertToQdrantFilter(filter: Filter?): dev.langchain4j.store.embedding.filter.Filter? {
         if (filter == null) return null
         
+        log.debug("Converting filter to Qdrant filter: $filter")
+        
         return when (filter) {
             is ComparisonFilter -> convertComparisonToQdrantFilter(filter)
             is CompoundFilter -> convertCompoundToQdrantFilter(filter)
@@ -149,6 +190,8 @@ object FilterUtils {
     private fun convertComparisonToQdrantFilter(filter: ComparisonFilter): dev.langchain4j.store.embedding.filter.Filter? {
         val key = filter.key
         val value = filter.value
+        
+        log.debug("Converting comparison filter: $filter with value type: ${value.javaClass.name}")
         
         return when (filter.type.lowercase()) {
             "eq" -> IsEqualTo(key, value)
@@ -202,17 +245,27 @@ object FilterUtils {
     private fun convertCompoundToQdrantFilter(filter: CompoundFilter): dev.langchain4j.store.embedding.filter.Filter? {
         if (filter.filters.isEmpty()) return null
         
+        log.debug("Converting compound filter: $filter with ${filter.filters.size} inner filters")
+        
         // Convert all child filters
         val convertedFilters = filter.filters.mapNotNull { convertToQdrantFilter(it) }
         if (convertedFilters.isEmpty()) return null
+        
+        log.debug("After conversion, ${convertedFilters.size} valid filters remain")
         
         // Apply the compound operation
         var result = convertedFilters.first()
         for (i in 1 until convertedFilters.size) {
             result =
                 when (filter.type.lowercase()) {
-                    "and" -> result.and(convertedFilters[i])
-                    "or" -> result.or(convertedFilters[i])
+                    "and" -> {
+                        log.debug("Applying AND filter at index $i")
+                        result.and(convertedFilters[i])
+                    }
+                    "or" -> {
+                        log.debug("Applying OR filter at index $i")
+                        result.or(convertedFilters[i])
+                    }
                     else -> {
                         log.warn("Unsupported compound filter type for Qdrant: ${filter.type}")
                         return null

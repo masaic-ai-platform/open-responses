@@ -197,7 +197,9 @@ class VectorStoreController(
     @PostMapping("/vector_stores/{vector_store_id}/search")
     @Operation(
         summary = "Search a vector store",
-        description = "Search a vector store for relevant chunks based on a query and file attributes filter.",
+        description =
+            "Search a vector store for relevant chunks based on a query and file attributes filter. " +
+                "Use the 'filters' field for specifying filter criteria.",
         responses = [
             ApiResponse(
                 responseCode = "200",

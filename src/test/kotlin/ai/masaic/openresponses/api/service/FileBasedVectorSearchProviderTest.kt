@@ -57,7 +57,6 @@ class FileBasedVectorSearchProviderTest {
         vectorSearchProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )
@@ -182,7 +181,6 @@ class FileBasedVectorSearchProviderTest {
         val secondProvider =
             FileBasedVectorSearchProvider(
                 embeddingService,
-                vectorSearchProperties,
                 objectMapper,
                 tempDir.toString(),
             )

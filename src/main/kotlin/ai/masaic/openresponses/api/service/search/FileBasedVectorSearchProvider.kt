@@ -1,6 +1,5 @@
 package ai.masaic.openresponses.api.service.search
 
-import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
@@ -31,7 +30,6 @@ import java.util.concurrent.ConcurrentHashMap
 @ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "file", matchIfMissing = true)
 class FileBasedVectorSearchProvider(
     private val embeddingService: EmbeddingService,
-    private val vectorSearchProperties: VectorSearchConfigProperties,
     private val objectMapper: ObjectMapper,
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
 ) : VectorSearchProvider {
@@ -133,32 +131,48 @@ class FileBasedVectorSearchProvider(
     }
 
     /**
-     * Indexes a file in the vector store by chunking its content and computing embeddings.
+     * Indexes a file in the vector store.
      *
      * @param fileId The ID of the file
-     * @param content The file content as an InputStream
+     * @param inputStream The file content as an InputStream
      * @param filename The name of the file
-     * @param chunkingStrategy Optional chunking strategy to use when splitting the text
+     * @param chunkingStrategy Optional chunking strategy for the file
+     * @param preDeleteIfExists Whether to check and delete existing vectors for this file before indexing
+     * @param attributes Additional metadata attributes to include with each vector
      * @return True if indexing was successful, false otherwise
      */
     override fun indexFile(
         fileId: String,
-        content: InputStream,
+        inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
+        preDeleteIfExists: Boolean,
+        attributes: Map<String, Any>?,
     ): Boolean {
         try {
-            // Extract text from the document using Apache Tika
-            val text = DocumentTextExtractor.Companion.extractAndCleanText(content, filename)
+            if (preDeleteIfExists && fileMetadataCache.containsKey(fileId)) {
+                // Delete existing embeddings for this file
+                deleteFile(fileId)
+            }
+
+            // Extract text content from the file
+            val text = DocumentTextExtractor.extractAndCleanText(inputStream, filename)
+
             if (text.isBlank()) {
                 log.warn("Extracted text is empty for file: $filename")
                 return false
             }
 
-            // Determine chunking parameters based on the strategy or fallback to properties
+            // Use the TextChunkingUtil to chunk the text
             log.debug("Chunking text for file: $filename")
-            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
-            val chunks = textChunks.map { it.text }
+            val chunks = TextChunkingUtil.chunkText(text, chunkingStrategy).map { it.text }
+
+            if (chunks.isEmpty()) {
+                log.warn("No chunks created for file: $filename")
+                return false
+            }
+
+            log.info("Created ${chunks.size} chunks for file: $filename")
 
             // Generate embeddings for each chunk
             val chunksWithEmbeddings =
@@ -166,25 +180,42 @@ class FileBasedVectorSearchProvider(
                     // Generate a short unique ID for each chunk
                     val chunkId = IdGenerator.generateChunkId()
 
+                    // Create base metadata
+                    val chunkMetadata =
+                        mutableMapOf<String, Any>(
+                            "file_id" to fileId,
+                            "filename" to filename,
+                            "chunk_id" to chunkId,
+                            "chunk_index" to index,
+                            "total_chunks" to chunks.size,
+                        )
+                    
+                    // Add any additional attributes
+                    if (attributes != null) {
+                        chunkMetadata.putAll(attributes)
+                    }
+
                     ChunkWithEmbedding(
                         fileId = fileId,
                         chunkId = chunkId,
                         content = chunk,
                         embedding = embeddingService.embedText(chunk),
-                        chunkMetadata =
-                            mapOf(
-                                "file_id" to fileId,
-                                "filename" to filename,
-                                "chunk_id" to chunkId,
-                                "chunk_index" to index,
-                                "total_chunks" to chunks.size,
-                            ),
+                        chunkMetadata = chunkMetadata,
                     )
                 }
 
             // Store in memory cache
             fileChunksCache[fileId] = chunksWithEmbeddings
-            fileMetadataCache[fileId] = mapOf("filename" to filename)
+            
+            // Initialize metadata
+            val initialMetadata = mutableMapOf<String, Any>("filename" to filename)
+            
+            // Add any additional attributes to the file metadata
+            if (attributes != null) {
+                initialMetadata.putAll(attributes)
+            }
+            
+            fileMetadataCache[fileId] = initialMetadata
 
             // Persist to disk
             saveEmbeddings(fileId)
@@ -195,6 +226,27 @@ class FileBasedVectorSearchProvider(
             return false
         }
     }
+
+    /**
+     * Indexes a file with attributes.
+     */
+    override fun indexFile(
+        fileId: String,
+        inputStream: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy?,
+        attributes: Map<String, Any>?,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes)
+
+    /**
+     * Indexes a file without attributes.
+     */
+    override fun indexFile(
+        fileId: String,
+        inputStream: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy?,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null)
 
     /**
      * Searches for similar content in the vector store.
@@ -259,12 +311,20 @@ class FileBasedVectorSearchProvider(
             return chunks
         }
 
+        log.debug("Applying filter: $filter to ${chunks.size} chunks")
+        
         // Apply the filter to each chunk
-        return chunks.filter { chunk ->
-            // Combine chunk metadata with file metadata
-            val combinedMetadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap())
-            FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
-        }
+        val filteredChunks =
+            chunks.filter { chunk ->
+                // Combine chunk metadata with file metadata
+                val combinedMetadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap())
+                val matches = FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
+                matches
+            }
+        
+        log.debug("After filtering: ${filteredChunks.size} chunks remain")
+        
+        return filteredChunks
     }
 
     /**

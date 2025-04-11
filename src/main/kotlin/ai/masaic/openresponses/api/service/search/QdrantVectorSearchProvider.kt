@@ -83,6 +83,8 @@ class QdrantVectorSearchProvider(
      * @param inputStream The file content as an InputStream
      * @param filename The name of the file
      * @param chunkingStrategy Optional chunking strategy for the file
+     * @param preDeleteIfExists Whether to check and delete existing vectors for this file before indexing (default: true)
+     * @param attributes Additional metadata attributes to include with each vector (default: null)
      * @return True if indexing was successful, false otherwise
      */
     override fun indexFile(
@@ -90,8 +92,20 @@ class QdrantVectorSearchProvider(
         inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
+        preDeleteIfExists: Boolean,
+        attributes: Map<String, Any>?,
     ): Boolean {
         try {
+            // Check if we need to delete existing file vectors
+            if (preDeleteIfExists) {
+                // Let's see if this file exists by trying to find metadata
+                val existingMetadata = getFileMetadata(fileId)
+                if (existingMetadata != null) {
+                    log.info("File $fileId already exists in the vector store, deleting it for re-indexing")
+                    deleteFile(fileId)
+                }
+            }
+            
             // Extract text content from the document
             val text =
                 try {
@@ -126,13 +140,18 @@ class QdrantVectorSearchProvider(
 
                     // Create metadata for this chunk
                     val metadata =
-                        mapOf(
+                        mutableMapOf<String, Any>(
                             "file_id" to fileId,
                             "filename" to filename,
                             "chunk_index" to chunk.index,
                             "chunk_id" to IdGenerator.generateChunkId(),
                             "total_chunks" to textChunks.size,
                         )
+                    
+                    // Add any additional user-provided attributes to the metadata
+                    if (attributes != null) {
+                        metadata.putAll(attributes)
+                    }
 
                     // Store the embedding with metadata
                     embeddingStore.add(
@@ -152,6 +171,27 @@ class QdrantVectorSearchProvider(
             return false
         }
     }
+
+    /**
+     * Indexes a file with attributes.
+     */
+    override fun indexFile(
+        fileId: String,
+        inputStream: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy?,
+        attributes: Map<String, Any>?,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes)
+
+    /**
+     * Indexes a file using the base interface method.
+     */
+    override fun indexFile(
+        fileId: String,
+        inputStream: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy?,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null)
 
     /**
      * Searches for similar content in the vector store.
@@ -283,27 +323,5 @@ class QdrantVectorSearchProvider(
             log.error("Error getting metadata for file {}: {}", fileId, e.message, e)
             return null
         }
-    }
-
-    /**
-     * Updates metadata for a file in the vector store.
-     * This is used to sync vectorstorefile attributes with the search provider.
-     * 
-     * Note: For Qdrant, we can't directly update metadata for existing vectors.
-     * Instead, we need to use this information during searches to enhance results.
-     *
-     * @param fileId The ID of the file
-     * @param metadata The metadata to update
-     * @return True if operation is acknowledged (always true for Qdrant implementation)
-     */
-    fun updateFileMetadata(
-        fileId: String,
-        metadata: Map<String, Any>,
-    ): Boolean {
-        // For Qdrant, we can't easily update metadata for existing vectors
-        // Instead, we'll use the VectorStoreFile's attributes directly during search result mapping
-        // This method is here to maintain API compatibility with other providers
-        log.info("Metadata update for file $fileId acknowledged (note: for Qdrant implementation, metadata is applied at query time)")
-        return true
     }
 }

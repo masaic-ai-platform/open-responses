@@ -159,8 +159,15 @@ print_results_summary() {
 # Function to cleanup containers on exit
 cleanup() {
     echo -e "\n${BOLD}Cleaning up...${NC}"
+    # Stop and remove containers
     docker-compose down -v 2>/dev/null || true
     docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
+    
+    # Clean up all temporary files
+    echo -e "\n${BOLD}Cleaning up temporary files...${NC}"
+    rm -f vector_store_file.txt chunking_test.txt
+    
+    # Print test results
     print_results_summary
 }
 
@@ -384,12 +391,49 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3
+                    \"max_num_results\": 3
                 }'" \
                 "200"
                 
             # Test 7a: Vector Store Query with Comparison Filter
             echo -e "\n${BOLD}Test 7a: Vector Store Query with Comparison Filter${NC}"
+            filter_test_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data '{
+                    "query": "test content",
+                    "max_num_results": 10,
+                    "filters": {
+                        "type": "eq",
+                        "key": "filename",
+                        "value": "vector_store_file.txt"
+                    }
+                }')
+            
+            # Validate filter response contains results and filename matches
+            result_count=$(echo "$filter_test_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            if [[ $result_count -gt 0 ]]; then
+                filenames=$(echo "$filter_test_response" | grep -o '"filename":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                echo "Filter results count: $result_count, Filenames: $filenames"
+                
+                # Check that all filenames match the filter
+                if echo "$filenames" | grep -q "vector_store_file.txt"; then
+                    echo -e "${GREEN}✓ Filename filter working correctly${NC}"
+                    store_test_result "Filename Filter Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${RED}✗ Filename filter not working - results don't match filter${NC}"
+                    store_test_result "Filename Filter Validation" "FAILED (Results don't match filter)"
+                    ((failed_tests++))
+                fi
+            else
+                echo -e "${YELLOW}Warning: No results returned for filename filter test${NC}"
+                store_test_result "Filename Filter Validation" "FAILED (No results)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Vector Store Query with Comparison Filter" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -397,8 +441,8 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3,
-                    \"filter_object\": {
+                    \"max_num_results\": 3,
+                    \"filters\": {
                         \"type\": \"eq\",
                         \"key\": \"filename\",
                         \"value\": \"vector_store_file.txt\"
@@ -408,6 +452,58 @@ run_vector_tests() {
                 
             # Test 7b: Vector Store Query with Compound Filter (AND)
             echo -e "\n${BOLD}Test 7b: Vector Store Query with Compound Filter (AND)${NC}"
+            and_filter_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data "{
+                    \"query\": \"test content\",
+                    \"max_num_results\": 10,
+                    \"filters\": {
+                        \"type\": \"and\",
+                        \"filters\": [
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"filename\",
+                                \"value\": \"vector_store_file.txt\"
+                            },
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"file_id\",
+                                \"value\": \"$file_id\"
+                            }
+                        ]
+                    }
+                }")
+            
+            # Validate AND filter response
+            and_result_count=$(echo "$and_filter_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            if [[ $and_result_count -gt 0 ]]; then
+                # Check file_id and filename
+                and_filenames=$(echo "$and_filter_response" | grep -o '"filename":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                and_file_ids=$(echo "$and_filter_response" | grep -o '"file_id":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                echo "AND filter results count: $and_result_count"
+                echo "Filenames: $and_filenames"
+                echo "File IDs: $and_file_ids"
+                
+                # Check that all results match both filter conditions
+                if echo "$and_filenames" | grep -q "vector_store_file.txt" && \
+                   echo "$and_file_ids" | grep -q "$file_id"; then
+                    echo -e "${GREEN}✓ AND filter working correctly${NC}"
+                    store_test_result "AND Filter Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${RED}✗ AND filter not working - results don't match both conditions${NC}"
+                    store_test_result "AND Filter Validation" "FAILED (Results don't match both conditions)"
+                    ((failed_tests++))
+                fi
+            else
+                echo -e "${YELLOW}Warning: No results returned for AND filter test${NC}"
+                store_test_result "AND Filter Validation" "FAILED (No results)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Vector Store Query with Compound Filter (AND)" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -415,8 +511,8 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3,
-                    \"filter_object\": {
+                    \"max_num_results\": 3,
+                    \"filters\": {
                         \"type\": \"and\",
                         \"filters\": [
                             {
@@ -436,6 +532,55 @@ run_vector_tests() {
                 
             # Test 7c: Vector Store Query with Compound Filter (OR)
             echo -e "\n${BOLD}Test 7c: Vector Store Query with Compound Filter (OR)${NC}"
+            or_filter_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data "{
+                    \"query\": \"test content\",
+                    \"max_num_results\": 10,
+                    \"filters\": {
+                        \"type\": \"or\",
+                        \"filters\": [
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"filename\",
+                                \"value\": \"non_existent_file.txt\"
+                            },
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"file_id\",
+                                \"value\": \"$file_id\"
+                            }
+                        ]
+                    }
+                }")
+            
+            # Validate OR filter response
+            or_result_count=$(echo "$or_filter_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            if [[ $or_result_count -gt 0 ]]; then
+                # Check file_id - we expect this to match but not the non-existent filename
+                or_file_ids=$(echo "$or_filter_response" | grep -o '"file_id":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                echo "OR filter results count: $or_result_count"
+                echo "File IDs: $or_file_ids"
+                
+                # Check that file_id matches in at least one result (the OR condition)
+                if echo "$or_file_ids" | grep -q "$file_id"; then
+                    echo -e "${GREEN}✓ OR filter working correctly${NC}"
+                    store_test_result "OR Filter Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${RED}✗ OR filter not working - results don't match any condition${NC}"
+                    store_test_result "OR Filter Validation" "FAILED (Results don't match any condition)"
+                    ((failed_tests++))
+                fi
+            else
+                echo -e "${YELLOW}Warning: No results returned for OR filter test${NC}"
+                store_test_result "OR Filter Validation" "FAILED (No results)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Vector Store Query with Compound Filter (OR)" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -443,8 +588,8 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3,
-                    \"filter_object\": {
+                    \"max_num_results\": 3,
+                    \"filters\": {
                         \"type\": \"or\",
                         \"filters\": [
                             {
@@ -464,6 +609,46 @@ run_vector_tests() {
                 
             # Test 7d: Vector Store Query with Numeric Comparison Filter
             echo -e "\n${BOLD}Test 7d: Vector Store Query with Numeric Comparison Filter${NC}"
+            numeric_filter_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data '{
+                    "query": "test content",
+                    "max_num_results": 10,
+                    "filters": {
+                        "type": "gte",
+                        "key": "chunk_index",
+                        "value": 0
+                    }
+                }')
+            
+            # Validate numeric filter response
+            numeric_result_count=$(echo "$numeric_filter_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            if [[ $numeric_result_count -gt 0 ]]; then
+                # Extract chunk indices to verify they're all >= 0
+                chunk_indices=$(echo "$numeric_filter_response" | grep -o '"chunk_index":[0-9]*' | cut -d':' -f2)
+                echo "Numeric filter results count: $numeric_result_count"
+                echo "Chunk indices: $chunk_indices"
+                
+                # Check if any chunk indices are negative (should be none)
+                invalid_indices=$(echo "$chunk_indices" | grep -c '^-')
+                if [[ $invalid_indices -eq 0 ]]; then
+                    echo -e "${GREEN}✓ Numeric comparison filter working correctly${NC}"
+                    store_test_result "Numeric Filter Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${RED}✗ Numeric comparison filter not working - found negative indices${NC}"
+                    store_test_result "Numeric Filter Validation" "FAILED (Invalid values found)"
+                    ((failed_tests++))
+                fi
+            else
+                echo -e "${YELLOW}Warning: No results returned for numeric filter test${NC}"
+                store_test_result "Numeric Filter Validation" "FAILED (No results)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Vector Store Query with Numeric Comparison Filter" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -471,17 +656,82 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3,
-                    \"filter_object\": {
+                    \"max_num_results\": 3,
+                    \"filters\": {
                         \"type\": \"gte\",
                         \"key\": \"chunk_index\",
                         \"value\": 0
                     }
                 }'" \
                 "200"
-                
+            
             # Test 7e: Vector Store Query with Nested Compound Filter
             echo -e "\n${BOLD}Test 7e: Vector Store Query with Nested Compound Filter${NC}"
+            nested_filter_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data "{
+                    \"query\": \"test content\",
+                    \"max_num_results\": 10,
+                    \"filters\": {
+                        \"type\": \"and\",
+                        \"filters\": [
+                            {
+                                \"type\": \"eq\",
+                                \"key\": \"file_id\",
+                                \"value\": \"$file_id\"
+                            },
+                            {
+                                \"type\": \"or\",
+                                \"filters\": [
+                                    {
+                                        \"type\": \"eq\",
+                                        \"key\": \"filename\",
+                                        \"value\": \"vector_store_file.txt\"
+                                    },
+                                    {
+                                        \"type\": \"eq\",
+                                        \"key\": \"chunk_index\",
+                                        \"value\": 0
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }")
+            
+            # Validate nested filter response
+            nested_result_count=$(echo "$nested_filter_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            if [[ $nested_result_count -gt 0 ]]; then
+                # Check conditions
+                nested_file_ids=$(echo "$nested_filter_response" | grep -o '"file_id":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                nested_filenames=$(echo "$nested_filter_response" | grep -o '"filename":"[^"]*"' | cut -d'"' -f4 | sort -u)
+                nested_chunks=$(echo "$nested_filter_response" | grep -o '"chunk_index":[0-9]*' | cut -d':' -f2 | sort -u)
+                
+                echo "Nested filter results count: $nested_result_count"
+                echo "File IDs: $nested_file_ids"
+                echo "Filenames: $nested_filenames"
+                echo "Chunk indices: $nested_chunks"
+                
+                # Check that all file_ids match (AND part) and at least one OR condition is true
+                if echo "$nested_file_ids" | grep -q "$file_id" && \
+                   (echo "$nested_filenames" | grep -q "vector_store_file.txt" || echo "$nested_chunks" | grep -q "^0$"); then
+                    echo -e "${GREEN}✓ Nested compound filter working correctly${NC}"
+                    store_test_result "Nested Filter Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${RED}✗ Nested compound filter not working correctly${NC}"
+                    store_test_result "Nested Filter Validation" "FAILED (Condition not met)"
+                    ((failed_tests++))
+                fi
+            else
+                echo -e "${YELLOW}Warning: No results returned for nested filter test${NC}"
+                store_test_result "Nested Filter Validation" "FAILED (No results)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Vector Store Query with Nested Compound Filter" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -489,8 +739,8 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3,
-                    \"filter_object\": {
+                    \"max_num_results\": 3,
+                    \"filters\": {
                         \"type\": \"and\",
                         \"filters\": [
                             {
@@ -520,6 +770,45 @@ run_vector_tests() {
             
             # Test 7f: Vector Store Query with RankingOptions
             echo -e "\n${BOLD}Test 7f: Vector Store Query with RankingOptions${NC}"
+            ranking_filter_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data '{
+                    "query": "test content",
+                    "max_num_results": 10,
+                    "ranking_options": {
+                        "ranker": "auto",
+                        "score_threshold": 0.1
+                    }
+                }')
+            
+            # Validate ranking response
+            ranking_result_count=$(echo "$ranking_filter_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            if [[ $ranking_result_count -gt 0 ]]; then
+                # Extract scores to verify they're all >= threshold
+                scores=$(echo "$ranking_filter_response" | grep -o '"score":[0-9.]*' | cut -d':' -f2)
+                echo "Ranking results count: $ranking_result_count"
+                echo "Scores: $scores"
+                
+                # Check if any scores are below threshold (should be none)
+                below_threshold=$(echo "$scores" | awk '{ if ($1 < 0.1) print $1 }' | wc -l)
+                if [[ $below_threshold -eq 0 ]]; then
+                    echo -e "${GREEN}✓ Ranking options working correctly - all scores above threshold${NC}"
+                    store_test_result "Ranking Options Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${RED}✗ Ranking options not working - found scores below threshold${NC}"
+                    store_test_result "Ranking Options Validation" "FAILED (Scores below threshold)"
+                    ((failed_tests++))
+                fi
+            else
+                echo -e "${YELLOW}Warning: No results returned for ranking options test${NC}"
+                store_test_result "Ranking Options Validation" "FAILED (No results)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Vector Store Query with RankingOptions" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -527,14 +816,14 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"test content\",
-                    \"top_k\": 3,
+                    \"max_num_results\": 3,
                     \"ranking_options\": {
                         \"ranker\": \"auto\",
                         \"score_threshold\": 0.1
                     }
                 }'" \
                 "200"
-                
+            
             # Test 7g: Create Vector Store with Static ChunkingStrategy
             echo -e "\n${BOLD}Test 7g: Create Vector Store with Static ChunkingStrategy${NC}"
             
@@ -561,6 +850,9 @@ run_vector_tests() {
                 chunking_file_id="chunking_dummy_id"
                 store_test_result "Chunking Test File Upload" "FAILED (Could not extract file ID)"
                 ((failed_tests++))
+                
+                # Clean up the chunking test file even when upload fails
+                rm -f chunking_test.txt
             else
                 echo "Uploaded chunking test file with ID: $chunking_file_id"
                 store_test_result "Chunking Test File Upload" "PASSED"
@@ -591,6 +883,65 @@ run_vector_tests() {
             
             # Test 7h: Modify Vector Store File Attributes
             echo -e "\n${BOLD}Test 7h: Modify Vector Store File Attributes${NC}"
+            attributes_update_response=$(curl --silent --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id' \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --data '{
+                    "attributes": {
+                        "category": "test",
+                        "priority": 1,
+                        "is_important": true
+                    }
+                }')
+                
+            # Validate that the attributes update works
+            updated_attributes=$(echo "$attributes_update_response" | grep -o '"attributes":{[^}]*}' | cut -d'{' -f2 | cut -d'}' -f1)
+            echo "Updated attributes: $updated_attributes"
+            
+            if echo "$updated_attributes" | grep -q "category" && echo "$updated_attributes" | grep -q "priority" && echo "$updated_attributes" | grep -q "is_important"; then
+                echo -e "${GREEN}✓ Vector store file attributes updated successfully${NC}"
+                store_test_result "Vector Store File Attributes Update" "PASSED"
+                ((passed_tests++))
+            else
+                echo -e "${RED}✗ Vector store file attributes update failed${NC}"
+                store_test_result "Vector Store File Attributes Update" "FAILED"
+                ((failed_tests++))
+            fi
+            
+            # Now wait a moment for attributes to apply to vector store before testing query
+            echo "Waiting 5 seconds for attributes to be applied in the vector database..."
+            sleep 5
+            
+            # Perform a query that uses the new attributes
+            echo "Testing query with the new attributes..."
+            attributes_query_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data '{
+                    "query": "test content",
+                    "max_num_results": 3,
+                    "filters": {
+                        "type": "eq",
+                        "key": "category",
+                        "value": "test"
+                    }
+                }')
+                
+            # Validate that the query returns results with our updated attributes
+            attributes_query_results=$(echo "$attributes_query_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            
+            if [[ $attributes_query_results -gt 0 ]]; then
+                echo -e "${GREEN}✓ Query with new attributes returned $attributes_query_results results${NC}"
+                store_test_result "Query with New Attributes" "PASSED"
+                ((passed_tests++))
+            else
+                echo -e "${RED}✗ Query with new attributes failed to return results${NC}"
+                store_test_result "Query with New Attributes" "FAILED"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular API call test
             run_test "Modify Vector Store File Attributes" \
                 "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id' \
                 --header 'Content-Type: application/json' \
@@ -603,9 +954,48 @@ run_vector_tests() {
                     }
                 }'" \
                 "200"
-                
+            
             # Test 7i: Query with Rewriting Enabled
             echo -e "\n${BOLD}Test 7i: Query with Rewriting Enabled${NC}"
+            rewrite_query_response=$(curl --silent --location "$query_endpoint" \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data '{
+                    "query": "what is in the file?",
+                    "max_num_results": 10,
+                    "rewrite_query": true
+                }')
+            
+            # Validate rewrite query response
+            rewrite_result_count=$(echo "$rewrite_query_response" | grep -o '"data":\[.*\]' | grep -o '\[.*\]' | grep -o '{' | wc -l)
+            has_rewritten_query=$(echo "$rewrite_query_response" | grep -o '"rewritten_query":"[^"]*"' | wc -l)
+            
+            echo "Rewrite query results count: $rewrite_result_count"
+            echo "Has rewritten query: $has_rewritten_query"
+            
+            if [[ $rewrite_result_count -gt 0 && $has_rewritten_query -gt 0 ]]; then
+                # Extract the rewritten query for inspection
+                rewritten_query=$(echo "$rewrite_query_response" | grep -o '"rewritten_query":"[^"]*"' | cut -d'"' -f4)
+                echo "Original query: \"what is in the file?\""
+                echo "Rewritten query: \"$rewritten_query\""
+                
+                # Check if rewritten query is different from original
+                if [[ "$rewritten_query" != "what is in the file?" && ! -z "$rewritten_query" ]]; then
+                    echo -e "${GREEN}✓ Query rewriting working correctly${NC}"
+                    store_test_result "Query Rewriting Validation" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${YELLOW}Warning: Query rewriting didn't modify the query or returned empty rewrite${NC}"
+                    store_test_result "Query Rewriting Validation" "WARNING (Minimal change)"
+                fi
+            else
+                echo -e "${RED}✗ Query rewriting not working - no results or no rewritten query${NC}"
+                store_test_result "Query Rewriting Validation" "FAILED (No rewritten query)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Query with Rewriting Enabled" \
                 "curl --location '$query_endpoint' \
                 --header 'Content-Type: application/json' \
@@ -613,11 +1003,11 @@ run_vector_tests() {
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
                     \"query\": \"what is in the file?\",
-                    \"top_k\": 3,
+                    \"max_num_results\": 3,
                     \"rewrite_query\": true
                 }'" \
                 "200"
-                
+            
             # Test 7j: Get Vector Store File Content
             echo -e "\n${BOLD}Test 7j: Get Vector Store File Content${NC}"
             run_test "Get Vector Store File Content" \
@@ -633,11 +1023,42 @@ run_vector_tests() {
         fi
     fi
 
-    # Clean up the vector store file
-    rm -f vector_store_file.txt
+    # Clean up all temporary files
+    echo -e "\n${BOLD}Cleaning up temporary files...${NC}"
+    rm -f vector_store_file.txt chunking_test.txt
     
-    # Test 9: Delete Original Vector Store
-    echo -e "\n${BOLD}Test 9: Delete Original Vector Store${NC}"
+    # Test 9: Test Chat API with Vector Store and correct filters format
+    echo -e "\n${BOLD}Test 9: Chat API with Vector Store and Correct Filters Format${NC}"
+    run_test "Chat API with Vector Store and Correct Filters Format" \
+        "curl --location 'http://localhost:8080/v1/responses' \
+        --header 'Content-Type: application/json' \
+        --header \"Authorization: Bearer $API_KEY\" \
+        --header \"x-model-provider: $MODEL_PROVIDER\" \
+        --data '{
+            \"model\": \"$MODEL_NAME\",
+            \"stream\": false,
+            \"input\": [
+                {
+                    \"role\": \"user\",
+                    \"content\": \"What is in the vector store?\"
+                }
+            ],
+            \"tools\": [
+                {
+                    \"type\": \"file_search\",
+                    \"vector_store_ids\": [\"$vector_store_id\"],
+                    \"max_num_results\": 5,
+                    \"filters\": {
+                        \"type\": \"eq\",
+                        \"key\": \"file_id\",
+                        \"value\": \"$file_id\"
+                    }
+                }
+            ]
+        }'"
+    
+    # Test 10: Delete Original Vector Store
+    echo -e "\n${BOLD}Test 10: Delete Original Vector Store${NC}"
     run_test "Delete Original Vector Store" \
         "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
         --header \"Authorization: Bearer $API_KEY\""
@@ -646,4 +1067,4 @@ run_vector_tests() {
 }
 
 # Run the vector store tests
-run_vector_tests 
+run_vector_tests

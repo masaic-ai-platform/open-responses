@@ -593,6 +593,54 @@ run_vector_store_integration_tests() {
             
             # Test Vector Store Integration with Chat API
             echo -e "\n${BOLD}Test VS1: Chat with Vector Search Integration${NC}"
+            vs_chat_response=$(curl --silent --location 'http://localhost:8080/v1/responses' \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data "{
+                    \"model\": \"$MODEL_NAME\",
+                    \"stream\": false,
+                    \"input\": [
+                        {
+                            \"role\": \"user\",
+                            \"content\": \"What can you tell me about foxes based on the provided documents?\"
+                        }
+                    ],
+                    \"tools\": [
+                        {
+                            \"type\": \"file_search\",
+                            \"vector_store_ids\": [\"$vector_store_id\"],
+                            \"max_num_results\": 5
+                        }
+                    ]
+                }")
+            
+            # Validate vector search integration
+            # Look for evidence that vector results were used
+            if echo "$vs_chat_response" | grep -q "fox"; then
+                echo -e "${GREEN}✓ Vector store integration appears to be working${NC}"
+                store_test_result "Vector Store Chat Integration" "PASSED"
+                ((passed_tests++))
+                
+                # Check for file_citations in the response
+                file_citations=$(echo "$vs_chat_response" | grep -o '"file_citations":\[.*\]' || echo "")
+                annotations=$(echo "$vs_chat_response" | grep -o '"annotations":\[.*\]' || echo "")
+                
+                if [[ ! -z "$file_citations" ]] || [[ ! -z "$annotations" ]]; then
+                    echo -e "${GREEN}✓ File citations or annotations found in response${NC}"
+                    store_test_result "File Citations Check" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${YELLOW}Warning: No file citations or annotations found in response${NC}"
+                    store_test_result "File Citations Check" "WARNING (No citations)"
+                fi
+            else
+                echo -e "${RED}✗ Vector store integration may not be working - response doesn't contain expected content${NC}"
+                store_test_result "Vector Store Chat Integration" "FAILED (No relevant content)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Chat with Vector Search Integration" \
                 "curl --location 'http://localhost:8080/v1/responses' \
                 --header 'Content-Type: application/json' \
@@ -618,6 +666,56 @@ run_vector_store_integration_tests() {
                 
             # Test Vector Search with Filters in Chat API
             echo -e "\n${BOLD}Test VS2: Chat with Vector Search and Filters${NC}"
+            vs_filters_chat_response=$(curl --silent --location 'http://localhost:8080/v1/responses' \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data "{
+                    \"model\": \"$MODEL_NAME\",
+                    \"stream\": false,
+                    \"input\": [
+                        {
+                            \"role\": \"user\",
+                            \"content\": \"What can you tell me about dogs based on the provided documents?\"
+                        }
+                    ],
+                    \"tools\": [
+                        {
+                            \"type\": \"file_search\",
+                            \"vector_store_ids\": [\"$vector_store_id\"],
+                            \"max_num_results\": 5,
+                            \"filters\": {
+                                \"type\": \"and\",
+                                \"filters\": [
+                                    {
+                                        \"type\": \"eq\",
+                                        \"key\": \"file_id\",
+                                        \"value\": \"$vector_file_id\"
+                                    }
+                                ]
+                            },
+                            \"ranking_options\": {
+                                \"score_threshold\": 0.1
+                            }
+                        }
+                    ]
+                }" -w "%{http_code}")
+            
+            # Extract the status code (last 3 characters)
+            status_code=${vs_filters_chat_response: -3}
+            
+            # Check for 200 status code
+            if [[ "$status_code" == "200" ]]; then
+                echo -e "${GREEN}✓ Vector store filter test passed with 200 status code${NC}"
+                store_test_result "Vector Store Filter Test" "PASSED"
+                ((passed_tests++))
+            else
+                echo -e "${RED}✗ Vector store filter test failed - got status code $status_code${NC}"
+                store_test_result "Vector Store Filter Test" "FAILED (Status code: $status_code)"
+                ((failed_tests++))
+            fi
+            
+            # Also run the regular status check
             run_test "Chat with Vector Search and Filters" \
                 "curl --location 'http://localhost:8080/v1/responses' \
                 --header 'Content-Type: application/json' \
@@ -637,7 +735,7 @@ run_vector_store_integration_tests() {
                             \"type\": \"file_search\",
                             \"vector_store_ids\": [\"$vector_store_id\"],
                             \"max_num_results\": 5,
-                            \"filter_object\": {
+                            \"filters\": {
                                 \"type\": \"and\",
                                 \"filters\": [
                                     {
@@ -653,9 +751,65 @@ run_vector_store_integration_tests() {
                         }
                     ]
                 }'"
-                
+            
             # Test Vector Search with Chat Streaming
             echo -e "\n${BOLD}Test VS3: Chat Streaming with Vector Search${NC}"
+            
+            # For streaming response, we need to capture it differently
+            streaming_output_file="vector_stream_output.tmp"
+            
+            # Execute the streaming request and save output
+            curl --silent --location 'http://localhost:8080/v1/responses' \
+                --header 'Content-Type: application/json' \
+                --header "Authorization: Bearer $API_KEY" \
+                --header "x-model-provider: $MODEL_PROVIDER" \
+                --data "{
+                    \"model\": \"$MODEL_NAME\",
+                    \"stream\": true,
+                    \"input\": [
+                        {
+                            \"role\": \"user\",
+                            \"content\": \"What animals are mentioned in the documents?\"
+                        }
+                    ],
+                    \"tools\": [
+                        {
+                            \"type\": \"file_search\",
+                            \"vector_store_ids\": [\"$vector_store_id\"],
+                            \"max_num_results\": 5
+                        }
+                    ]
+                }" > "$streaming_output_file"
+            
+            # Check if the streaming output contains SSE data format
+            if grep -q "data:" "$streaming_output_file"; then
+                echo -e "${GREEN}✓ Streaming format looks correct (contains SSE data markers)${NC}"
+                store_test_result "Vector Search Streaming Format" "PASSED"
+                ((passed_tests++))
+                
+                # Check if the streaming output mentions relevant content
+                if grep -q "fox\|dog\|animal" "$streaming_output_file"; then
+                    echo -e "${GREEN}✓ Streaming vector search appears to be working${NC}"
+                    store_test_result "Vector Search Streaming Content" "PASSED"
+                    ((passed_tests++))
+                else
+                    echo -e "${YELLOW}Warning: Streaming response doesn't contain expected content${NC}"
+                    store_test_result "Vector Search Streaming Content" "WARNING (No relevant content)"
+                fi
+            else
+                echo -e "${RED}✗ Streaming format incorrect or empty response${NC}"
+                store_test_result "Vector Search Streaming" "FAILED (No streaming data)"
+                ((failed_tests++))
+                
+                # Print some debug info
+                echo "First 100 bytes of streaming response:"
+                head -c 100 "$streaming_output_file" | xxd
+            fi
+            
+            # Clean up the temp file
+            rm -f "$streaming_output_file"
+            
+            # Also run the regular status check
             run_test "Chat Streaming with Vector Search" \
                 "curl --location 'http://localhost:8080/v1/responses' \
                 --header 'Content-Type: application/json' \
