@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonSubTypes
@@ -378,6 +379,7 @@ interface Filter
  * @property value The value to compare against the attribute key; supports string, number, or boolean types.
  */
 data class ComparisonFilter(
+    @JsonAlias("property")
     val key: String,
     val type: String,
     val value: Any,
