@@ -66,6 +66,7 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     temperature(body.temperature())
     topP(body.topP())
     truncation(body.truncation())
+    previousResponseId(body.previousResponseId())
 
     // Set additional properties
     additionalBodyProperties(body._additionalProperties())

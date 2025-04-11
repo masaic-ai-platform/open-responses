@@ -152,6 +152,7 @@ class ExtensionsTest {
                     every { temperature() } returns Optional.of(1.0)
                     every { topP() } returns Optional.of(1.0)
                     every { truncation() } returns Optional.empty()
+                    every { previousResponseId() } returns Optional.of(previousResponseId)
                     every { _additionalProperties() } returns emptyMap()
                     every { text() } returns Optional.empty()
                     every { user() } returns Optional.empty()
@@ -174,6 +175,7 @@ class ExtensionsTest {
                     every { store(ofType<Optional<Boolean>>()) } returns this
                     every { temperature(ofType<Optional<Double>>()) } returns this
                     every { topP(ofType<Optional<Double>>()) } returns this
+                    every { previousResponseId(ofType<Optional<String>>()) } returns this
                     every { truncation(Optional.empty()) } returns this
                     every { additionalBodyProperties(any()) } returns this
                 }
