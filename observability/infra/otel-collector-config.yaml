@@ -28,7 +28,11 @@ exporters:
     const_labels:
       label1: value1
     send_timestamps: true
-
+  otlphttp/langfuse:
+    endpoint: "https://cloud.langfuse.com/api/public/otel" # EU data region
+    # endpoint: "https://us.cloud.langfuse.com/api/public/otel" # US data region
+    headers:
+      Authorization: "Basic cGstbGYtMDgyN2MxMzItNWEwOS00YzgwLTgyMjYtNTI1OTI2Zjg5NGI3OnNrLWxmLWJlYzdjMzcyLTk4OTctNDA3ZS04ODcwLWNmY2IwNDVkMDFhYw==" # Previously encoded API keys
 extensions:
   health_check:
   pprof:
@@ -47,7 +51,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp]
+      exporters: [otlp, otlphttp/langfuse]
     metrics:
       receivers: [otlp]
       processors: [batch]

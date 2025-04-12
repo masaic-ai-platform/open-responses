@@ -18,14 +18,14 @@ import mu.KotlinLogging
 import org.springframework.stereotype.Service
 import kotlin.coroutines.coroutineContext
 
-@Service
-class TelemetryService(
+//@Service
+open class TelemetryService(
     private val observationRegistry: ObservationRegistry,
     private val meterRegistry: MeterRegistry,
 ) {
     private val logger = KotlinLogging.logger {}
 
-    fun emitModelInputEvents(
+    open fun emitModelInputEvents(
         observation: Observation,
         inputParams: ChatCompletionCreateParams,
         metadata: CreateResponseMetadataInput,
@@ -87,7 +87,7 @@ class TelemetryService(
         }
     }
 
-    fun emitModelOutputEvents(
+    open fun emitModelOutputEvents(
         observation: Observation,
         response: Response,
         metadata: CreateResponseMetadataInput,
@@ -138,7 +138,7 @@ class TelemetryService(
         }
     }
 
-    fun emitModelOutputEvents(
+    open fun emitModelOutputEvents(
         observation: Observation,
         chatCompletion: ChatCompletion,
         metadata: CreateResponseMetadataInput,
