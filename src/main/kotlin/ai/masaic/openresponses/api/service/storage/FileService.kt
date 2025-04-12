@@ -190,6 +190,15 @@ class FileService(
             val fileId = path.fileName.toString()
             val metadata = fileStorageService.getFileMetadata(fileId)
 
+            if (metadata.isEmpty()) {
+                return@withContext File(
+                    id = fileId,
+                    bytes = 0,
+                    filename = "",
+                    purpose = "",
+                    createdAt = Instant.now().epochSecond,
+                )
+            }
             File(
                 id = fileId,
                 bytes = metadata["bytes"] as Long,
