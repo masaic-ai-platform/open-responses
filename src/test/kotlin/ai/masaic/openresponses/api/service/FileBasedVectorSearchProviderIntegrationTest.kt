@@ -97,7 +97,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         assertEquals(fileId, results2[0].fileId, "Should return the same file ID")
         
         // Verify the embeddings file exists on disk
-        val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
+        val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
         assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist on disk")
     }
 
@@ -209,7 +209,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         )
         
         // Verify the file is gone from disk
-        val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
+        val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
         assertTrue(!Files.exists(embeddingsFile), "Embeddings file should be deleted from disk")
     }
 } 

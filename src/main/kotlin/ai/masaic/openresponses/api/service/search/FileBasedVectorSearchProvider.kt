@@ -87,7 +87,7 @@ class FileBasedVectorSearchProvider(
 
         try {
             Files.list(embeddingsPath).forEach { path ->
-                if (Files.isRegularFile(path) && path.toString().endsWith(".json")) {
+                if (Files.isRegularFile(path) && path.toString().endsWith(".json") && path.fileName.toString().startsWith("embeddings-")) {
                     try {
                         val json = Files.readAllBytes(path)
                         val fileEmbeddings = objectMapper.readValue<FileEmbeddings>(json)
@@ -123,7 +123,7 @@ class FileBasedVectorSearchProvider(
                 )
 
             val json = objectMapper.writeValueAsString(fileEmbeddings)
-            Files.write(Paths.get(embeddingsDir, "$fileId.json"), json.toByteArray())
+            Files.write(Paths.get(embeddingsDir, "embeddings-$fileId.json"), json.toByteArray())
             log.info("Saved embeddings for file: $fileId")
         } catch (e: Exception) {
             log.error("Error saving embeddings for file: $fileId", e)
@@ -349,7 +349,7 @@ class FileBasedVectorSearchProvider(
             fileMetadataCache.remove(fileId)
 
             // Delete the file from disk
-            val embeddingsFile = Paths.get(embeddingsDir, "$fileId.json")
+            val embeddingsFile = Paths.get(embeddingsDir, "embeddings-$fileId.json")
             if (Files.exists(embeddingsFile)) {
                 Files.delete(embeddingsFile)
                 log.info("Deleted embeddings for file: $fileId")

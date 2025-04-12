@@ -86,7 +86,7 @@ class FileBasedVectorSearchProviderTest {
         verify { embeddingService.embedText(any()) }
         
         // Check that the embeddings file was created
-        val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
+        val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
         assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist")
     }
 
@@ -146,7 +146,7 @@ class FileBasedVectorSearchProviderTest {
         vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "test.txt")
         
         // Verify file exists before deletion
-        val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
+        val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
         assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist before deletion")
         
         // When
@@ -221,7 +221,7 @@ class FileBasedVectorSearchProviderTest {
         
         // All embeddings files should exist
         fileIds.forEach { fileId ->
-            val embeddingsFile = tempDir.resolve("embeddings").resolve("$fileId.json")
+            val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
             assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist for $fileId")
         }
     }
