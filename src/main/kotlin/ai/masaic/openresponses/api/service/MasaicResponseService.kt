@@ -130,7 +130,7 @@ class MasaicResponseService(
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
-        val client = createClient(headers)
+        val client = createClient(headers, request)
 
         return try {
             val timeoutMillis = Duration.ofSeconds(requestTimeoutSeconds).toMillis()
@@ -142,7 +142,7 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
-                    responseMetadataInput(headers),
+                    responseMetadataInput(headers, request),
                 )
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -193,7 +193,7 @@ class MasaicResponseService(
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
-        val client = createClient(headers)
+        val client = createClient(headers, request)
 
         return try {
             openAIResponseService
@@ -204,7 +204,7 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
-                    responseMetadataInput(headers),
+                    responseMetadataInput(headers, request),
                 )
                 // Add error handling to the flow
                 .catch { error ->
@@ -407,7 +407,10 @@ class MasaicResponseService(
      * @return An OpenAI client
      * @throws IllegalArgumentException If the API key is missing
      */
-    private fun createClient(headers: MultiValueMap<String, String>): OpenAIClient {
+    private fun createClient(
+        headers: MultiValueMap<String, String>,
+        request: ResponseCreateParams.Body,
+    ): OpenAIClient {
         val authHeader =
             headers.getFirst("Authorization")
                 ?: throw IllegalArgumentException("api-key is missing.")
@@ -417,30 +420,66 @@ class MasaicResponseService(
                 authHeader.split(" ").getOrNull(1) ?: throw IllegalArgumentException("api-key is missing.")
             }
 
+        // Extract model name for base URL determination
+        val modelName =
+            try {
+                request.javaClass.getDeclaredField("model").let {
+                    it.isAccessible = true
+                    it.get(request)?.toString()
+                }
+            } catch (e: Exception) {
+                null
+            }
+
         return OpenAIOkHttpClient
             .builder()
             .credential(credential)
-            .baseUrl(getApiBaseUri(headers).toURL().toString())
+            .baseUrl(getApiBaseUri(headers, modelName).toURL().toString())
             .build()
     }
 
-    private fun responseMetadataInput(headers: MultiValueMap<String, String>): CreateResponseMetadataInput = CreateResponseMetadataInput("openai", getApiBaseUri(headers).host)
+    private fun responseMetadataInput(
+        headers: MultiValueMap<String, String>,
+        request: ResponseCreateParams.Body,
+    ): CreateResponseMetadataInput {
+        val modelName =
+            try {
+                request.javaClass.getDeclaredField("model").let {
+                    it.isAccessible = true
+                    it.get(request)?.toString()
+                }
+            } catch (e: Exception) {
+                null
+            }
+        return CreateResponseMetadataInput("openai", getApiBaseUri(headers, modelName).host)
+    }
 
     /**
      * Gets the API base URL to use for requests.
+     * Supports both x-model-provider header and url@model format in the model field
      *
      * @return The API base URL
      */
-    private fun getApiBaseUri(headers: MultiValueMap<String, String>): URI =
-        if (headers.getFirst("x-model-provider")?.lowercase() == "claude") {
-            URI("https://api.anthropic.com/v1")
-        } else if (headers.getFirst("x-model-provider")?.lowercase() == "openai") {
-            URI("https://api.openai.com/v1")
-        } else if (headers.getFirst("x-model-provider") == "groq") {
-            URI("https://api.groq.com/openai/v1")
-        } else {
-            URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
+    private fun getApiBaseUri(
+        headers: MultiValueMap<String, String>,
+        modelName: String?,
+    ): URI {
+        // First check if the model contains url@model format
+        if (modelName?.contains("@") == true) {
+            val parts = modelName.split("@", limit = 2)
+            if (parts.size == 2 && parts[0].isNotBlank()) {
+                return URI(parts[0])
+            }
         }
+
+        // Fall back to x-model-provider header based logic
+        return when (headers.getFirst("x-model-provider")?.lowercase()) {
+            "claude" -> URI("https://api.anthropic.com/v1")
+            "openai" -> URI("https://api.openai.com/v1")
+            "groq" -> URI("https://api.groq.com/openai/v1")
+            else -> URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
+        }
+    }
 }
 
 /**
