@@ -40,25 +40,41 @@ enum class EvalRunStatus {
     @JsonProperty("queued")
     QUEUED,
     
-    @JsonProperty("running")
-    RUNNING,
+    @JsonProperty("in_progress")
+    IN_PROGRESS,
+    
+    @JsonProperty("failed")
+    FAILED,
     
     @JsonProperty("completed")
     COMPLETED,
     
-    @JsonProperty("errored")
-    ERRORED;
+    @JsonProperty("canceled")
+    CANCELED;
     
     @JsonValue
     fun getValue(): String {
-        return name.lowercase()
+        return when (this) {
+            QUEUED -> "queued"
+            IN_PROGRESS -> "in_progress"
+            FAILED -> "failed"
+            COMPLETED -> "completed"
+            CANCELED -> "canceled"
+        }
     }
     
     companion object {
         @JsonCreator
         @JvmStatic
         fun fromValue(value: String): EvalRunStatus {
-            return EvalRunStatus.valueOf(value.uppercase())
+            return when (value) {
+                "queued" -> QUEUED
+                "in_progress" -> IN_PROGRESS
+                "failed" -> FAILED
+                "completed" -> COMPLETED
+                "canceled" -> CANCELED
+                else -> throw IllegalArgumentException("Unknown status: $value")
+            }
         }
     }
 }

@@ -105,6 +105,30 @@ class EvalRunService(
     }
     
     /**
+     * List evaluation runs for a specific eval with pagination, ordering, and status filtering.
+     *
+     * @param evalId The ID of the eval
+     * @param after Identifier for the last run from the previous pagination request
+     * @param limit Number of runs to retrieve
+     * @param order Sort order for runs by timestamp (asc or desc)
+     * @param status Optional status filter
+     * @return A list of evaluation runs for the specified eval
+     */
+    fun listEvalRunsByEvalId(
+        evalId: String,
+        after: String?,
+        limit: Int,
+        order: String,
+        status: EvalRunStatus?
+    ): List<EvalRun> {
+        // Verify that the eval exists
+        evalRepository.getEval(evalId) ?: 
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+            
+        return evalRunRepository.listEvalRunsByEvalId(evalId, after, limit, order, status)
+    }
+    
+    /**
      * Delete an evaluation run.
      *
      * @param evalRunId The ID of the evaluation run to delete

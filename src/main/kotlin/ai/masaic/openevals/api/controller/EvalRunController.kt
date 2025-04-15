@@ -2,6 +2,7 @@ package ai.masaic.openevals.api.controller
 
 import ai.masaic.openevals.api.model.CreateEvalRunRequest
 import ai.masaic.openevals.api.model.EvalRun
+import ai.masaic.openevals.api.model.EvalRunStatus
 import ai.masaic.openevals.api.service.EvalRunService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -60,11 +61,36 @@ class EvalRunController(private val evalRunService: EvalRunService) {
      * List evaluation runs for a specific eval.
      *
      * @param evalId The ID of the eval
+     * @param after Identifier for the last run from the previous pagination request
+     * @param limit Number of runs to retrieve (defaults to 20)
+     * @param order Sort order for runs by timestamp (asc or desc, defaults to asc)
+     * @param status Filter runs by status
      * @return A list of evaluation runs for the specified eval
      */
     @GetMapping("/{evalId}/runs")
-    fun listEvalRuns(@PathVariable evalId: String): ResponseEntity<List<EvalRun>> {
-        val runs = evalRunService.listEvalRunsByEvalId(evalId)
+    fun listEvalRuns(
+        @PathVariable evalId: String,
+        @RequestParam(required = false) after: String?,
+        @RequestParam(required = false, defaultValue = "20") limit: Int,
+        @RequestParam(required = false, defaultValue = "asc") order: String,
+        @RequestParam(required = false) status: String?
+    ): ResponseEntity<List<EvalRun>> {
+        // Validate order parameter
+        if (order != "asc" && order != "desc") {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be either 'asc' or 'desc'")
+        }
+        
+        // Convert status string to EvalRunStatus enum if provided
+        val statusEnum = status?.let {
+            try {
+                EvalRunStatus.fromValue(it)
+            } catch (e: IllegalArgumentException) {
+                throw ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                    "Status must be one of: 'queued', 'in_progress', 'failed', 'completed', 'canceled'")
+            }
+        }
+        
+        val runs = evalRunService.listEvalRunsByEvalId(evalId, after, limit, order, statusEnum)
         return ResponseEntity.ok(runs)
     }
     

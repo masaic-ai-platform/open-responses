@@ -1,6 +1,7 @@
 package ai.masaic.openevals.api.repository
 
 import ai.masaic.openevals.api.model.EvalRun
+import ai.masaic.openevals.api.model.EvalRunStatus
 import org.springframework.stereotype.Repository
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -39,6 +40,24 @@ interface EvalRunRepository {
      * @return A list of evaluation runs for the specified eval
      */
     fun listEvalRunsByEvalId(evalId: String): List<EvalRun>
+
+    /**
+     * List evaluation runs for a specific eval with pagination, ordering, and status filtering.
+     *
+     * @param evalId The ID of the eval
+     * @param after Identifier for the last run from the previous pagination request
+     * @param limit Number of runs to retrieve
+     * @param order Sort order for runs by timestamp (asc or desc)
+     * @param status Optional status filter
+     * @return A list of evaluation runs for the specified eval
+     */
+    fun listEvalRunsByEvalId(
+        evalId: String,
+        after: String?,
+        limit: Int,
+        order: String,
+        status: EvalRunStatus?
+    ): List<EvalRun>
 
     /**
      * Update an evaluation run.
@@ -81,6 +100,41 @@ class InMemoryEvalRunRepository : EvalRunRepository {
     
     override fun listEvalRunsByEvalId(evalId: String): List<EvalRun> {
         return evalRuns.values.filter { it.evalId == evalId }
+    }
+
+    override fun listEvalRunsByEvalId(
+        evalId: String,
+        after: String?,
+        limit: Int,
+        order: String,
+        status: EvalRunStatus?
+    ): List<EvalRun> {
+        // Filter runs by evalId and status if provided
+        var filteredRuns = evalRuns.values.filter { it.evalId == evalId }
+        
+        if (status != null) {
+            filteredRuns = filteredRuns.filter { it.status == status }
+        }
+        
+        // If after parameter is provided, filter runs created after that run
+        if (after != null) {
+            val afterRun = evalRuns[after]
+            if (afterRun != null) {
+                filteredRuns = filteredRuns.filter { 
+                    it.createdAt > afterRun.createdAt 
+                }
+            }
+        }
+        
+        // Sort runs by creation timestamp
+        val sortedRuns = if (order == "asc") {
+            filteredRuns.sortedBy { it.createdAt }
+        } else {
+            filteredRuns.sortedByDescending { it.createdAt }
+        }
+        
+        // Apply limit
+        return sortedRuns.take(limit)
     }
 
     override fun updateEvalRun(evalRun: EvalRun): EvalRun {
