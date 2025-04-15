@@ -1,6 +1,6 @@
-package ai.masaic.openresponses.api.repository
+package ai.masaic.openevals.api.repository
 
-import ai.masaic.openresponses.api.model.EvalRun
+import ai.masaic.openevals.api.model.EvalRun
 import org.springframework.stereotype.Repository
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap

@@ -1,8 +1,8 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openevals.api.service
 
-import ai.masaic.openresponses.api.model.*
-import ai.masaic.openresponses.api.repository.EvalRepository
-import ai.masaic.openresponses.api.utils.SampleSchemaUtils
+import ai.masaic.openevals.api.model.*
+import ai.masaic.openevals.api.repository.EvalRepository
+import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -155,5 +155,26 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      */
     fun deleteEval(evalId: String): Boolean {
         return evalRepository.deleteEval(evalId)
+    }
+    
+    /**
+     * Update an evaluation.
+     *
+     * @param evalId The ID of the evaluation to update
+     * @param request The update request containing fields to update
+     * @return The updated evaluation, or null if not found
+     */
+    fun updateEval(evalId: String, request: UpdateEvalRequest): Eval? {
+        // Get the existing eval
+        val existingEval = evalRepository.getEval(evalId) ?: return null
+        
+        // Update only the fields that are provided in the request
+        val updatedEval = existingEval.copy(
+            name = request.name ?: existingEval.name,
+            metadata = request.metadata ?: existingEval.metadata
+        )
+        
+        // Save the updated eval
+        return evalRepository.updateEval(updatedEval)
     }
 } 

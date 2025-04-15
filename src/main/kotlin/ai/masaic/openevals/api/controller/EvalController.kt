@@ -1,10 +1,11 @@
-package ai.masaic.openresponses.api.controller
+package ai.masaic.openevals.api.controller
 
-import ai.masaic.openresponses.api.model.CreateEvalRequest
-import ai.masaic.openresponses.api.model.Eval
-import ai.masaic.openresponses.api.model.EvalListResponse
-import ai.masaic.openresponses.api.model.ListEvalsParams
-import ai.masaic.openresponses.api.service.EvalService
+import ai.masaic.openevals.api.model.CreateEvalRequest
+import ai.masaic.openevals.api.model.Eval
+import ai.masaic.openevals.api.model.EvalListResponse
+import ai.masaic.openevals.api.model.ListEvalsParams
+import ai.masaic.openevals.api.model.UpdateEvalRequest
+import ai.masaic.openevals.api.service.EvalService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -94,5 +95,23 @@ class EvalController(private val evalService: EvalService) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
         }
         return ResponseEntity.noContent().build()
+    }
+    
+    /**
+     * Update an evaluation.
+     *
+     * @param evalId The ID of the evaluation to update
+     * @param request The evaluation update request
+     * @return The updated evaluation
+     */
+    @PostMapping("/{evalId}")
+    fun updateEval(
+        @PathVariable evalId: String,
+        @RequestBody request: UpdateEvalRequest
+    ): ResponseEntity<Eval> {
+        val updatedEval = evalService.updateEval(evalId, request) ?: 
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+        
+        return ResponseEntity.ok(updatedEval)
     }
 } 

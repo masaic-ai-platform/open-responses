@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.utils
+package ai.masaic.openevals.api.utils
 
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -138,4 +138,4 @@ class SampleSchemaUtils {
                 } 
         """)
     }
-}
+} 

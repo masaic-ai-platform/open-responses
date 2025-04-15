@@ -1,7 +1,7 @@
-package ai.masaic.openresponses.api.controller
+package ai.masaic.openevals.api.controller
 
-import ai.masaic.openresponses.api.model.*
-import ai.masaic.openresponses.api.service.EvalService
+import ai.masaic.openevals.api.model.*
+import ai.masaic.openevals.api.service.EvalService
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
@@ -262,6 +262,59 @@ class EvalControllerTest {
         
         // When & Then
         mockMvc.perform(delete("/v1/evals/$evalId"))
+            .andExpect(status().isNotFound)
+    }
+    
+    @Test
+    fun `update evaluation returns updated eval when successful`() {
+        // Given
+        val evalId = "eval_12345"
+        val updateRequest = UpdateEvalRequest(
+            name = "Updated Eval",
+            metadata = mapOf("description" to "Updated description")
+        )
+        
+        val updatedEval = Eval(
+            id = evalId,
+            objectType = "eval",
+            name = "Updated Eval",
+            createdAt = Instant.now().epochSecond,
+            dataSourceConfig = StoredCompletionsDataSourceConfig(
+                metadata = mapOf("test" to "value")
+            ),
+            testingCriteria = emptyList(),
+            metadata = mapOf("description" to "Updated description"),
+            shareWithOpenAI = false
+        )
+        
+        `when`(evalService.updateEval(evalId, updateRequest)).thenReturn(updatedEval)
+        
+        // When & Then
+        mockMvc.perform(
+            post("/v1/evals/$evalId")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateRequest))
+        )
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.id").value(evalId))
+            .andExpect(jsonPath("$.name").value("Updated Eval"))
+            .andExpect(jsonPath("$.metadata.description").value("Updated description"))
+    }
+    
+    @Test
+    fun `update evaluation returns 404 when not found`() {
+        // Given
+        val evalId = "eval_nonexistent"
+        val updateRequest = UpdateEvalRequest(name = "Updated Eval")
+        
+        `when`(evalService.updateEval(evalId, updateRequest)).thenReturn(null)
+        
+        // When & Then
+        mockMvc.perform(
+            post("/v1/evals/$evalId")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(updateRequest))
+        )
             .andExpect(status().isNotFound)
     }
 } 

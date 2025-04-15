@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.model
+package ai.masaic.openevals.api.model
 
 import com.fasterxml.jackson.annotation.*
 import java.time.Instant
@@ -188,3 +188,9 @@ data class ListEvalsParams(
     val before: String? = null,
     val metadata: Map<String, String>? = null
 )
+
+// Request class for updating an eval
+data class UpdateEvalRequest(
+    val name: String? = null,
+    val metadata: Map<String, String>? = null
+) 

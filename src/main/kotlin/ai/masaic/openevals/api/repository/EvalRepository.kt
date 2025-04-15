@@ -1,7 +1,7 @@
-package ai.masaic.openresponses.api.repository
+package ai.masaic.openevals.api.repository
 
-import ai.masaic.openresponses.api.model.Eval
-import ai.masaic.openresponses.api.model.ListEvalsParams
+import ai.masaic.openevals.api.model.Eval
+import ai.masaic.openevals.api.model.ListEvalsParams
 import org.springframework.stereotype.Repository
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -48,6 +48,14 @@ interface EvalRepository {
      * @return True if the evaluation was deleted, false otherwise
      */
     fun deleteEval(evalId: String): Boolean
+
+    /**
+     * Update an evaluation.
+     *
+     * @param eval The evaluation to update
+     * @return The updated evaluation, or null if not found
+     */
+    fun updateEval(eval: Eval): Eval?
 }
 
 /**
@@ -120,5 +128,17 @@ class InMemoryEvalRepository : EvalRepository {
 
     override fun deleteEval(evalId: String): Boolean {
         return evaluations.remove(evalId) != null
+    }
+    
+    override fun updateEval(eval: Eval): Eval? {
+        // Check if the eval exists
+        if (!evaluations.containsKey(eval.id)) {
+            return null
+        }
+        
+        // Update the eval
+        evaluations[eval.id] = eval
+        
+        return eval
     }
 } 

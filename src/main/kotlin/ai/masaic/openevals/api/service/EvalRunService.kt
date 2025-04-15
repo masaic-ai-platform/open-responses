@@ -1,10 +1,11 @@
-package ai.masaic.openresponses.api.service
+package ai.masaic.openevals.api.service
 
-import ai.masaic.openresponses.api.model.CreateEvalRunRequest
-import ai.masaic.openresponses.api.model.EvalRun
-import ai.masaic.openresponses.api.model.EvalRunStatus
-import ai.masaic.openresponses.api.repository.EvalRepository
-import ai.masaic.openresponses.api.repository.EvalRunRepository
+import ai.masaic.openevals.api.model.CreateEvalRunRequest
+import ai.masaic.openevals.api.model.EvalRun
+import ai.masaic.openevals.api.model.EvalRunStatus
+import ai.masaic.openevals.api.model.CompletionsRunDataSource
+import ai.masaic.openevals.api.repository.EvalRepository
+import ai.masaic.openevals.api.repository.EvalRunRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,7 +40,7 @@ class EvalRunService(
         
         // Extract model from data source if it's a completions run
         val model = when (request.dataSource) {
-            is ai.masaic.openresponses.api.model.CompletionsRunDataSource -> request.dataSource.model
+            is CompletionsRunDataSource -> request.dataSource.model
             else -> null
         }
 

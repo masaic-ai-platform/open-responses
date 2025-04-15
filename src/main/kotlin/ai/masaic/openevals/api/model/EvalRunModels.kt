@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.model
+package ai.masaic.openevals.api.model
 
 import com.fasterxml.jackson.annotation.*
 import java.time.Instant
@@ -198,19 +198,25 @@ data class SamplingParams(
     val maxCompletionTokens: Int? = null,
     @JsonProperty("top_p")
     val topP: Double = 1.0,
-    val seed: Int = 42
+    @JsonProperty("frequency_penalty")
+    val frequencyPenalty: Double = 0.0,
+    @JsonProperty("presence_penalty")
+    val presencePenalty: Double = 0.0,
+    @JsonProperty("seed")
+    val seed: Int? = null
 )
 
-// Request classes
+// Create Eval Run Request
 data class CreateEvalRunRequest(
     val name: String? = null,
     @JsonProperty("data_source")
     val dataSource: RunDataSource,
-    val metadata: Map<String, String>? = null
+    val metadata: Map<String, String>? = null,
 )
 
-// File Content Data Source
-data class FileContentDataSource(
-    val type: String = "file_content",
-    val content: List<Map<String, Any>>
+// Completion results
+data class CompletionResult(
+    @JsonProperty("content_json")
+    val contentJson: String,
+    val error: String? = null
 ) 

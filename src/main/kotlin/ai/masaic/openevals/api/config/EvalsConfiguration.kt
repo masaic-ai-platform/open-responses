@@ -1,4 +1,4 @@
-package ai.masaic.openresponses.api.config
+package ai.masaic.openevals.api.config
 
 import com.mitchellbosecke.pebble.PebbleEngine
 import org.springframework.context.annotation.Bean
@@ -14,4 +14,4 @@ class EvalsConfiguration {
             .build()
         return engine
     }
-}
+} 

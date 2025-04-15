@@ -1,8 +1,8 @@
-package ai.masaic.openresponses.api.controller
+package ai.masaic.openevals.api.controller
 
-import ai.masaic.openresponses.api.model.CreateEvalRunRequest
-import ai.masaic.openresponses.api.model.EvalRun
-import ai.masaic.openresponses.api.service.EvalRunService
+import ai.masaic.openevals.api.model.CreateEvalRunRequest
+import ai.masaic.openevals.api.model.EvalRun
+import ai.masaic.openevals.api.service.EvalRunService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.util.MultiValueMap
