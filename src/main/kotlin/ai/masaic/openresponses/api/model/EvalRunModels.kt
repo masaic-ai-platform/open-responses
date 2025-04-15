@@ -1,0 +1,216 @@
+package ai.masaic.openresponses.api.model
+
+import com.fasterxml.jackson.annotation.*
+import java.time.Instant
+
+/**
+ * Main EvalRun object representing an evaluation run.
+ */
+data class EvalRun(
+    @JsonIgnore
+    val apiKey: String,
+    val id: String,
+    @JsonProperty("object")
+    val objectType: String = "eval.run",
+    @JsonProperty("eval_id")
+    val evalId: String,
+    val name: String?,
+    @JsonProperty("created_at")
+    val createdAt: Long = Instant.now().epochSecond,
+    @JsonProperty("data_source")
+    val dataSource: RunDataSource,
+    val model: String?,
+    val status: EvalRunStatus = EvalRunStatus.QUEUED,
+    @JsonProperty("result_counts")
+    val resultCounts: ResultCounts? = null,
+    @JsonProperty("per_testing_criteria_results")
+    val perTestingCriteriaResults: List<TestingCriteriaResult>? = null,
+    @JsonProperty("per_model_usage")
+    val perModelUsage: List<ModelUsage>? = null,
+    @JsonProperty("report_url")
+    val reportUrl: String? = "Coming soon with Masaic.AI dashboard",
+    val metadata: Map<String, String>? = null,
+    val error: EvalRunError? = null
+)
+
+/**
+ * Enum representing the status of an evaluation run.
+ */
+enum class EvalRunStatus {
+    @JsonProperty("queued")
+    QUEUED,
+    
+    @JsonProperty("running")
+    RUNNING,
+    
+    @JsonProperty("completed")
+    COMPLETED,
+    
+    @JsonProperty("errored")
+    ERRORED;
+    
+    @JsonValue
+    fun getValue(): String {
+        return name.lowercase()
+    }
+    
+    companion object {
+        @JsonCreator
+        @JvmStatic
+        fun fromValue(value: String): EvalRunStatus {
+            return EvalRunStatus.valueOf(value.uppercase())
+        }
+    }
+}
+
+/**
+ * Error details for an eval run.
+ */
+data class EvalRunError(
+    val code: String,
+    val message: String
+)
+
+/**
+ * Result counts for an eval run.
+ */
+data class ResultCounts(
+    val passed: Int = 0,
+    val failed: Int = 0,
+    val errored: Int = 0,
+    val total: Int = 0
+)
+
+/**
+ * Testing criteria results for an eval run.
+ */
+data class TestingCriteriaResult(
+    @JsonProperty("testing_criteria")
+    val testingCriteria: String,
+    val passed: Int = 0,
+    val failed: Int = 0
+)
+
+/**
+ * Model usage stats for an eval run.
+ */
+data class ModelUsage(
+    @JsonProperty("model_name")
+    val modelName: String,
+    @JsonProperty("invocation_count")
+    val invocationCount: Int = 0,
+    @JsonProperty("prompt_tokens")
+    val promptTokens: Int = 0,
+    @JsonProperty("completion_tokens")
+    val completionTokens: Int = 0,
+    @JsonProperty("cached_tokens")
+    val cachedTokens: Int = 0,
+    @JsonProperty("total_tokens")
+    val totalTokens: Int = 0
+)
+
+// Run Data Source
+
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "type"
+)
+@JsonSubTypes(
+//    JsonSubTypes.Type(value = JsonlRunDataSource::class, name = "jsonl"),
+    JsonSubTypes.Type(value = CompletionsRunDataSource::class, name = "completions")
+)
+@JsonIgnoreProperties(ignoreUnknown = true)
+interface RunDataSource {
+    val source: DataSource
+}
+
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "type"
+)
+@JsonSubTypes(
+    JsonSubTypes.Type(value = FileDataSource::class, name = "file_id"),
+//    JsonSubTypes.Type(value = CSVFileDataSource::class, name = "csv")
+)
+interface DataSource
+
+data class FileDataSource(
+    @JsonProperty("file_id")
+    val fileId: String
+) : DataSource
+
+//data class CSVFileDataSource(
+//    @JsonProperty("file_id")
+//    val fileId: String
+//) : DataSource {
+//    override val type: String = "csv"
+//}
+
+// Jsonl Run Data Source
+//data class JsonlRunDataSource(
+//    override val source: JsonlFileDataSource
+//) : RunDataSource
+
+// Completions Run Data Source
+data class CompletionsRunDataSource(
+    @JsonProperty("input_messages")
+    val inputMessages: InputMessages,
+    @JsonProperty("sampling_params")
+    val samplingParams: SamplingParams? = null,
+    val model: String,
+    override val source: DataSource
+) : RunDataSource
+
+// Input Messages
+@JsonTypeInfo(
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "type"
+)
+@JsonSubTypes(
+    JsonSubTypes.Type(value = TemplateInputMessages::class, name = "template"),
+    JsonSubTypes.Type(value = ItemReferenceInputMessages::class, name = "item_reference")
+)
+interface InputMessages
+
+data class TemplateInputMessages(
+    val type: String = "template",
+    val template: List<ChatMessage>
+) : InputMessages
+
+data class ItemReferenceInputMessages( //TODO: JB revisit ... can be used for stored completions
+    val type: String = "item_reference",
+    @JsonProperty("item_reference")
+    val itemReference: String
+) : InputMessages
+
+data class ChatMessage(
+    val role: String,
+    val content: String
+)
+
+// Sampling Parameters
+data class SamplingParams(
+    val temperature: Double = 1.0,
+    @JsonProperty("max_completion_tokens")
+    val maxCompletionTokens: Int? = null,
+    @JsonProperty("top_p")
+    val topP: Double = 1.0,
+    val seed: Int = 42
+)
+
+// Request classes
+data class CreateEvalRunRequest(
+    val name: String? = null,
+    @JsonProperty("data_source")
+    val dataSource: RunDataSource,
+    val metadata: Map<String, String>? = null
+)
+
+// File Content Data Source
+data class FileContentDataSource(
+    val type: String = "file_content",
+    val content: List<Map<String, Any>>
+) 

@@ -1,0 +1,17 @@
+package ai.masaic.openresponses.api.config
+
+import com.mitchellbosecke.pebble.PebbleEngine
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
+
+@Configuration
+class EvalsConfiguration {
+
+    @Bean
+    fun pebbleEngine(): PebbleEngine {
+        val engine: PebbleEngine = PebbleEngine.Builder()
+            .autoEscaping(false)
+            .build()
+        return engine
+    }
+}

@@ -31,6 +31,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.module:jackson-module-jsonSchema")
+    implementation("io.pebbletemplates:pebble:3.1.5")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")
     implementation("org.springframework.boot:spring-boot-starter-aop")
     implementation("io.projectreactor.kotlin:reactor-kotlin-extensions")

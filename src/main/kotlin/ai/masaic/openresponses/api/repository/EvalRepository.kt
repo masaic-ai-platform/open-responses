@@ -1,0 +1,124 @@
+package ai.masaic.openresponses.api.repository
+
+import ai.masaic.openresponses.api.model.Eval
+import ai.masaic.openresponses.api.model.ListEvalsParams
+import org.springframework.stereotype.Repository
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+/**
+ * Repository interface for managing evaluations.
+ */
+interface EvalRepository {
+    /**
+     * Create a new evaluation.
+     *
+     * @param eval The evaluation to create
+     * @return The created evaluation
+     */
+    fun createEval(eval: Eval): Eval
+
+    /**
+     * Get an evaluation by ID.
+     *
+     * @param evalId The ID of the evaluation to retrieve
+     * @return The evaluation, or null if not found
+     */
+    fun getEval(evalId: String): Eval?
+
+    /**
+     * List all evaluations.
+     *
+     * @return A list of all evaluations
+     */
+    fun listEvals(): List<Eval>
+    
+    /**
+     * List evaluations with pagination and filtering.
+     *
+     * @param params The parameters for listing evaluations
+     * @return A list of evaluations that match the criteria
+     */
+    fun listEvals(params: ListEvalsParams): List<Eval>
+
+    /**
+     * Delete an evaluation.
+     *
+     * @param evalId The ID of the evaluation to delete
+     * @return True if the evaluation was deleted, false otherwise
+     */
+    fun deleteEval(evalId: String): Boolean
+}
+
+/**
+ * In-memory implementation of the EvalRepository interface.
+ */
+@Repository
+class InMemoryEvalRepository : EvalRepository {
+    private val evaluations = ConcurrentHashMap<String, Eval>()
+
+    override fun createEval(eval: Eval): Eval {
+        val evalId = "eval_${UUID.randomUUID().toString().replace("-", "")}"
+        val newEval = eval.copy(id = evalId)
+        evaluations[evalId] = newEval
+        return newEval
+    }
+
+    override fun getEval(evalId: String): Eval? {
+        return evaluations[evalId]
+    }
+
+    override fun listEvals(): List<Eval> {
+        return evaluations.values.toList()
+    }
+    
+    override fun listEvals(params: ListEvalsParams): List<Eval> {
+        var result = evaluations.values.toList()
+        
+        // Filter by metadata if provided
+        if (params.metadata != null && params.metadata.isNotEmpty()) {
+            result = result.filter { eval ->
+                params.metadata.all { (key, value) ->
+                    eval.metadata?.get(key) == value
+                }
+            }
+        }
+        
+        // Sort by createdAt
+        result = if (params.order.equals("asc", ignoreCase = true)) {
+            result.sortedBy { it.createdAt }
+        } else {
+            result.sortedByDescending { it.createdAt }
+        }
+        
+        // Apply cursor-based pagination
+        if (params.after != null) {
+            val afterEval = evaluations[params.after]
+            if (afterEval != null) {
+                result = if (params.order.equals("asc", ignoreCase = true)) {
+                    result.filter { it.createdAt > afterEval.createdAt }
+                } else {
+                    result.filter { it.createdAt < afterEval.createdAt }
+                }
+            }
+        }
+        
+        if (params.before != null) {
+            val beforeEval = evaluations[params.before]
+            if (beforeEval != null) {
+                result = if (params.order.equals("asc", ignoreCase = true)) {
+                    result.filter { it.createdAt < beforeEval.createdAt }
+                } else {
+                    result.filter { it.createdAt > beforeEval.createdAt }
+                }
+            }
+        }
+        
+        // Apply limit
+        return result.take(params.limit)
+    }
+
+    override fun deleteEval(evalId: String): Boolean {
+        return evaluations.remove(evalId) != null
+    }
+} 
