@@ -17,6 +17,7 @@ import java.util.*
 
 /**
  * Service for managing evaluations.
+ * Uses suspend functions for non-blocking operations.
  */
 @Service
 class EvalService(private val evalRepository: EvalRepository, private val objectMapper: ObjectMapper) {
@@ -29,7 +30,7 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      * @param request The evaluation creation request
      * @return The created evaluation
      */
-    fun createEval(request: CreateEvalRequest): Eval {
+    suspend fun createEval(request: CreateEvalRequest): Eval {
         val dataSourceConfigRequest = request.dataSourceConfig
 
         val dataSourceConfig = when {
@@ -109,7 +110,7 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      * @param evalId The ID of the evaluation to retrieve
      * @return The evaluation, or null if not found
      */
-    fun getEval(evalId: String): Eval? {
+    suspend fun getEval(evalId: String): Eval? {
         return evalRepository.getEval(evalId)
     }
     
@@ -118,7 +119,7 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      *
      * @return A list of all evaluations
      */
-    fun listEvals(): List<Eval> {
+    suspend fun listEvals(): List<Eval> {
         return evalRepository.listEvals()
     }
     
@@ -128,7 +129,7 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      * @param params The parameters for listing evaluations
      * @return A paginated list of evaluations that match the criteria
      */
-    fun listEvals(params: ListEvalsParams): EvalListResponse {
+    suspend fun listEvals(params: ListEvalsParams): EvalListResponse {
         val evals = evalRepository.listEvals(params)
         
         // Check if there are more results after the current page
@@ -153,7 +154,7 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      * @param evalId The ID of the evaluation to delete
      * @return True if the evaluation was deleted, false otherwise
      */
-    fun deleteEval(evalId: String): Boolean {
+    suspend fun deleteEval(evalId: String): Boolean {
         return evalRepository.deleteEval(evalId)
     }
     
@@ -164,7 +165,7 @@ class EvalService(private val evalRepository: EvalRepository, private val object
      * @param request The update request containing fields to update
      * @return The updated evaluation, or null if not found
      */
-    fun updateEval(evalId: String, request: UpdateEvalRequest): Eval? {
+    suspend fun updateEval(evalId: String, request: UpdateEvalRequest): Eval? {
         // Get the existing eval
         val existingEval = evalRepository.getEval(evalId) ?: return null
         

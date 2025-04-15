@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException
 
 /**
  * Controller for handling evaluation API requests.
+ * Uses coroutines with suspend functions for non-blocking operations.
  */
 @RestController
 @RequestMapping("/v1/evals")
@@ -25,7 +26,7 @@ class EvalController(private val evalService: EvalService) {
      * @return The created evaluation
      */
     @PostMapping
-    fun createEval(@RequestBody request: CreateEvalRequest): ResponseEntity<Eval> {
+    suspend fun createEval(@RequestBody request: CreateEvalRequest): ResponseEntity<Eval> {
         val eval = evalService.createEval(request)
         return ResponseEntity.status(HttpStatus.CREATED).body(eval)
     }
@@ -37,7 +38,7 @@ class EvalController(private val evalService: EvalService) {
      * @return The evaluation
      */
     @GetMapping("/{evalId}")
-    fun getEval(@PathVariable evalId: String): ResponseEntity<Eval> {
+    suspend fun getEval(@PathVariable evalId: String): ResponseEntity<Eval> {
         val eval = evalService.getEval(evalId) ?: 
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
         return ResponseEntity.ok(eval)
@@ -54,7 +55,7 @@ class EvalController(private val evalService: EvalService) {
      * @return A paginated list of evaluations that match the criteria
      */
     @GetMapping
-    fun listEvals(
+    suspend fun listEvals(
         @RequestParam(required = false, defaultValue = "20") limit: Int,
         @RequestParam(required = false, defaultValue = "desc") order: String,
         @RequestParam(required = false) after: String?,
@@ -89,7 +90,7 @@ class EvalController(private val evalService: EvalService) {
      * @return No content response
      */
     @DeleteMapping("/{evalId}")
-    fun deleteEval(@PathVariable evalId: String): ResponseEntity<Void> {
+    suspend fun deleteEval(@PathVariable evalId: String): ResponseEntity<Void> {
         val deleted = evalService.deleteEval(evalId)
         if (!deleted) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
@@ -105,7 +106,7 @@ class EvalController(private val evalService: EvalService) {
      * @return The updated evaluation
      */
     @PostMapping("/{evalId}")
-    fun updateEval(
+    suspend fun updateEval(
         @PathVariable evalId: String,
         @RequestBody request: UpdateEvalRequest
     ): ResponseEntity<Eval> {

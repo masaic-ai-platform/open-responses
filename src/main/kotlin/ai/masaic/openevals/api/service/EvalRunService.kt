@@ -18,6 +18,7 @@ import java.time.Instant
 
 /**
  * Service for managing evaluation runs.
+ * Uses suspend functions for non-blocking operations.
  */
 @Service
 class EvalRunService(
@@ -34,7 +35,7 @@ class EvalRunService(
      * @param request The evaluation run creation request
      * @return The created evaluation run
      */
-    fun createEvalRun(headers: MultiValueMap<String, String>, evalId: String, request: CreateEvalRunRequest): EvalRun {
+    suspend fun createEvalRun(headers: MultiValueMap<String, String>, evalId: String, request: CreateEvalRunRequest): EvalRun {
         // Verify that the eval exists
         val eval = evalRepository.getEval(evalId) ?: 
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
@@ -87,7 +88,7 @@ class EvalRunService(
      * @param evalRunId The ID of the evaluation run to retrieve
      * @return The evaluation run, or null if not found
      */
-    fun getEvalRun(evalRunId: String): EvalRun? {
+    suspend fun getEvalRun(evalRunId: String): EvalRun? {
         return evalRunRepository.getEvalRun(evalRunId)
     }
     
@@ -97,7 +98,7 @@ class EvalRunService(
      * @param evalId The ID of the eval
      * @return A list of evaluation runs for the specified eval
      */
-    fun listEvalRunsByEvalId(evalId: String): List<EvalRun> {
+    suspend fun listEvalRunsByEvalId(evalId: String): List<EvalRun> {
         // Verify that the eval exists
         evalRepository.getEval(evalId) ?: 
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
@@ -115,7 +116,7 @@ class EvalRunService(
      * @param status Optional status filter
      * @return A list of evaluation runs for the specified eval
      */
-    fun listEvalRunsByEvalId(
+    suspend fun listEvalRunsByEvalId(
         evalId: String,
         after: String?,
         limit: Int,
@@ -135,7 +136,7 @@ class EvalRunService(
      * @param evalRunId The ID of the evaluation run to delete
      * @return True if the evaluation run was deleted, false otherwise
      */
-    fun deleteEvalRun(evalRunId: String): Boolean {
+    suspend fun deleteEvalRun(evalRunId: String): Boolean {
         return evalRunRepository.deleteEvalRun(evalRunId)
     }
 } 

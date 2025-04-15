@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException
 
 /**
  * Controller for handling evaluation run API requests.
+ * Uses coroutines with suspend functions for non-blocking operations.
  */
 @RestController
 @RequestMapping("/v1/evals")
@@ -25,7 +26,7 @@ class EvalRunController(private val evalRunService: EvalRunService) {
      * @return The created evaluation run
      */
     @PostMapping("/{evalId}/runs")
-    fun createEvalRun(
+    suspend fun createEvalRun(
         @RequestHeader headers: MultiValueMap<String, String>,
         @PathVariable evalId: String,
         @RequestBody request: CreateEvalRunRequest
@@ -42,7 +43,7 @@ class EvalRunController(private val evalRunService: EvalRunService) {
      * @return The evaluation run
      */
     @GetMapping("/{evalId}/runs/{runId}")
-    fun getEvalRun(
+    suspend fun getEvalRun(
         @PathVariable evalId: String,
         @PathVariable runId: String
     ): ResponseEntity<EvalRun> {
@@ -68,7 +69,7 @@ class EvalRunController(private val evalRunService: EvalRunService) {
      * @return A list of evaluation runs for the specified eval
      */
     @GetMapping("/{evalId}/runs")
-    fun listEvalRuns(
+    suspend fun listEvalRuns(
         @PathVariable evalId: String,
         @RequestParam(required = false) after: String?,
         @RequestParam(required = false, defaultValue = "20") limit: Int,
@@ -102,7 +103,7 @@ class EvalRunController(private val evalRunService: EvalRunService) {
      * @return No content response
      */
     @DeleteMapping("/{evalId}/runs/{runId}")
-    fun deleteEvalRun(
+    suspend fun deleteEvalRun(
         @PathVariable evalId: String,
         @PathVariable runId: String
     ): ResponseEntity<Void> {

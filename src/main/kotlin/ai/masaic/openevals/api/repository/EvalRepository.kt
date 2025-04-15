@@ -2,12 +2,14 @@ package ai.masaic.openevals.api.repository
 
 import ai.masaic.openevals.api.model.Eval
 import ai.masaic.openevals.api.model.ListEvalsParams
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Repository
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Repository interface for managing evaluations.
+ * Uses suspend functions for non-blocking operations.
  */
 interface EvalRepository {
     /**
@@ -16,7 +18,7 @@ interface EvalRepository {
      * @param eval The evaluation to create
      * @return The created evaluation
      */
-    fun createEval(eval: Eval): Eval
+    suspend fun createEval(eval: Eval): Eval
 
     /**
      * Get an evaluation by ID.
@@ -24,14 +26,14 @@ interface EvalRepository {
      * @param evalId The ID of the evaluation to retrieve
      * @return The evaluation, or null if not found
      */
-    fun getEval(evalId: String): Eval?
+    suspend fun getEval(evalId: String): Eval?
 
     /**
      * List all evaluations.
      *
      * @return A list of all evaluations
      */
-    fun listEvals(): List<Eval>
+    suspend fun listEvals(): List<Eval>
     
     /**
      * List evaluations with pagination and filtering.
@@ -39,7 +41,7 @@ interface EvalRepository {
      * @param params The parameters for listing evaluations
      * @return A list of evaluations that match the criteria
      */
-    fun listEvals(params: ListEvalsParams): List<Eval>
+    suspend fun listEvals(params: ListEvalsParams): List<Eval>
 
     /**
      * Delete an evaluation.
@@ -47,7 +49,7 @@ interface EvalRepository {
      * @param evalId The ID of the evaluation to delete
      * @return True if the evaluation was deleted, false otherwise
      */
-    fun deleteEval(evalId: String): Boolean
+    suspend fun deleteEval(evalId: String): Boolean
 
     /**
      * Update an evaluation.
@@ -55,32 +57,33 @@ interface EvalRepository {
      * @param eval The evaluation to update
      * @return The updated evaluation, or null if not found
      */
-    fun updateEval(eval: Eval): Eval?
+    suspend fun updateEval(eval: Eval): Eval?
 }
 
 /**
  * In-memory implementation of the EvalRepository interface.
  */
 @Repository
+@ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryEvalRepository : EvalRepository {
     private val evaluations = ConcurrentHashMap<String, Eval>()
 
-    override fun createEval(eval: Eval): Eval {
+    override suspend fun createEval(eval: Eval): Eval {
         val evalId = "eval_${UUID.randomUUID().toString().replace("-", "")}"
         val newEval = eval.copy(id = evalId)
         evaluations[evalId] = newEval
         return newEval
     }
 
-    override fun getEval(evalId: String): Eval? {
+    override suspend fun getEval(evalId: String): Eval? {
         return evaluations[evalId]
     }
 
-    override fun listEvals(): List<Eval> {
+    override suspend fun listEvals(): List<Eval> {
         return evaluations.values.toList()
     }
     
-    override fun listEvals(params: ListEvalsParams): List<Eval> {
+    override suspend fun listEvals(params: ListEvalsParams): List<Eval> {
         var result = evaluations.values.toList()
         
         // Filter by metadata if provided
@@ -126,11 +129,11 @@ class InMemoryEvalRepository : EvalRepository {
         return result.take(params.limit)
     }
 
-    override fun deleteEval(evalId: String): Boolean {
+    override suspend fun deleteEval(evalId: String): Boolean {
         return evaluations.remove(evalId) != null
     }
     
-    override fun updateEval(eval: Eval): Eval? {
+    override suspend fun updateEval(eval: Eval): Eval? {
         // Check if the eval exists
         if (!evaluations.containsKey(eval.id)) {
             return null
