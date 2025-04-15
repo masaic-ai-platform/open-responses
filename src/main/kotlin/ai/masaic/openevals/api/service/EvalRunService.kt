@@ -6,6 +6,7 @@ import ai.masaic.openevals.api.model.EvalRunStatus
 import ai.masaic.openevals.api.model.CompletionsRunDataSource
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.repository.EvalRunRepository
+import ai.masaic.openevals.api.service.runner.EvalRunner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
