@@ -357,4 +357,169 @@ class MasaicResponseServiceTest {
         coVerify(exactly = 1) { responseStore.getResponse(responseId) }
         coVerify(exactly = 0) { responseStore.getInputItems(any()) }
     }
+
+    @Test
+    fun `getApiBaseUri should handle full URL in model name`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        val modelName = "https://custom-api.example.com/v1@gpt-4"
+
+        // When
+        val result = MasaicResponseService.getApiBaseUri(headers, modelName)
+
+        // Then
+        assertEquals("https://custom-api.example.com/v1", result.toString())
+    }
+
+    @Test
+    fun `getApiBaseUri should handle provider name in model`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        val testCases =
+            mapOf(
+                "openai@gpt-4" to "https://api.openai.com/v1",
+                "claude@claude-3" to "https://api.anthropic.com/v1",
+                "groq@mixtral-8x7b" to "https://api.groq.com/openai/v1",
+                "anthropic@claude-3" to "https://api.anthropic.com/v1",
+            )
+
+        for ((modelName, expectedUrl) in testCases) {
+            // When
+            val result = MasaicResponseService.getApiBaseUri(headers, modelName)
+
+            // Then
+            assertEquals(expectedUrl, result.toString(), "Failed for model: $modelName")
+        }
+    }
+
+    @Test
+    fun `getApiBaseUri should handle unknown provider in model`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        val modelName = "unknown-provider@model-name"
+
+        // When
+        val result = MasaicResponseService.getApiBaseUri(headers, modelName)
+
+        // Then
+        assertEquals(MasaicResponseService.MODEL_DEFAULT_BASE_URL, result.toString())
+    }
+
+    @Test
+    fun `getApiBaseUri should handle null model name`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+
+        // When
+        val result = MasaicResponseService.getApiBaseUri(headers, null)
+
+        // Then
+        assertEquals(MasaicResponseService.MODEL_DEFAULT_BASE_URL, result.toString())
+    }
+
+    @Test
+    fun `getApiBaseUri should handle empty model prefix`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        val modelName = "@gpt-4"
+
+        // When
+        val result = MasaicResponseService.getApiBaseUri(headers, modelName)
+
+        // Then
+        assertEquals(MasaicResponseService.MODEL_DEFAULT_BASE_URL, result.toString())
+    }
+
+    @Test
+    fun `getApiBaseUri should prioritize model prefix over x-model-provider header`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        headers.add("x-model-provider", "openai")
+        val modelName = "claude@claude-3"
+
+        // When
+        val result = MasaicResponseService.getApiBaseUri(headers, modelName)
+
+        // Then
+        assertEquals("https://api.anthropic.com/v1", result.toString())
+    }
+
+    @Test
+    fun `getDefaultApiUri should handle known providers in header`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        val testCases =
+            mapOf(
+                "openai" to "https://api.openai.com/v1",
+                "claude" to "https://api.anthropic.com/v1",
+                "groq" to "https://api.groq.com/openai/v1",
+                "anthropic" to "https://api.anthropic.com/v1",
+            )
+
+        for ((provider, expectedUrl) in testCases) {
+            // When
+            headers.set("x-model-provider", provider)
+            val result = MasaicResponseService.getDefaultApiUri(headers)
+
+            // Then
+            assertEquals(expectedUrl, result.toString(), "Failed for provider: $provider")
+        }
+    }
+
+    @Test
+    fun `getDefaultApiUri should handle unknown provider in header`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        headers.add("x-model-provider", "unknown-provider")
+
+        // When
+        val result = MasaicResponseService.getDefaultApiUri(headers)
+
+        // Then
+        assertEquals(MasaicResponseService.MODEL_DEFAULT_BASE_URL, result.toString())
+    }
+
+    @Test
+    fun `getDefaultApiUri should handle missing x-model-provider header`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+
+        // When
+        val result = MasaicResponseService.getDefaultApiUri(headers)
+
+        // Then
+        assertEquals(MasaicResponseService.MODEL_DEFAULT_BASE_URL, result.toString())
+    }
+
+    @Test
+    fun `getDefaultApiUri should handle case insensitive provider names`() {
+        // Given
+        val headers = LinkedMultiValueMap<String, String>()
+        val testCases =
+            listOf(
+                "OPENAI",
+                "OpenAI",
+                "openAI",
+                "CLAUDE",
+                "Claude",
+                "GROQ",
+                "Groq",
+            )
+
+        for (provider in testCases) {
+            // When
+            headers.set("x-model-provider", provider)
+            val result = MasaicResponseService.getDefaultApiUri(headers)
+
+            // Then
+            val expectedUrl =
+                when (provider.lowercase()) {
+                    "openai" -> "https://api.openai.com/v1"
+                    "claude" -> "https://api.anthropic.com/v1"
+                    "groq" -> "https://api.groq.com/openai/v1"
+                    else -> MasaicResponseService.MODEL_DEFAULT_BASE_URL
+                }
+            assertEquals(expectedUrl, result.toString(), "Failed for provider: $provider")
+        }
+    }
 }

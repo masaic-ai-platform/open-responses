@@ -57,6 +57,20 @@ class MasaicResponseService(
         const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
 
+        private val PROVIDER_BASE_URLS =
+            mapOf(
+                "openai" to "https://api.openai.com/v1",
+                "claude" to "https://api.anthropic.com/v1",
+                "groq" to "https://api.groq.com/openai/v1",
+                "anthropic" to "https://api.anthropic.com/v1",
+                "togetherai" to "https://api.together.xyz/v1",
+                "gemini" to "https://generativelanguage.googleapis.com/v1beta/openai/",
+                "google" to "https://generativelanguage.googleapis.com/v1beta/openai/",
+                "deepseek" to "https://api.deepseek.com",
+                "ollama" to "http://localhost:11434/v1",
+                "xai" to "https://api.x.ai/v1",
+            )
+
         /**
          * Gets an environment variable - extracted for testability
          *
@@ -64,6 +78,58 @@ class MasaicResponseService(
          * @return The value of the environment variable or null if not found
          */
         fun getEnvVar(name: String): String? = System.getenv(name)
+
+        /**
+         * Gets the API base URL to use for requests.
+         * Supports both x-model-provider header and url@model or provider@model format in the model field
+         *
+         * @param headers HTTP headers containing potential x-model-provider
+         * @param modelName The model name which may contain url@model or provider@model format
+         * @return The API base URL as URI
+         */
+        @JvmStatic
+        fun getApiBaseUri(
+            headers: MultiValueMap<String, String>,
+            modelName: String?,
+        ): URI {
+            // First check if the model contains url@model or provider@model format
+            if (modelName?.contains("@") == true) {
+                val parts = modelName.split("@", limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank()) {
+                    // Check if the first part is a URL
+                    return if (parts[0].startsWith("http://") || parts[0].startsWith("https://")) {
+                        URI(parts[0])
+                    } else {
+                        // Check if it's a known provider name
+                        val providerUrl = PROVIDER_BASE_URLS[parts[0].lowercase()]
+                        if (providerUrl != null) {
+                            URI(providerUrl)
+                        } else {
+                            // If provider not recognized, fall back to default behavior
+                            getDefaultApiUri(headers)
+                        }
+                    }
+                }
+            }
+
+            // Fall back to x-model-provider header based logic
+            return getDefaultApiUri(headers)
+        }
+
+        /**
+         * Gets the default API URI based on x-model-provider header or environment variable
+         *
+         * @param headers HTTP headers containing potential x-model-provider
+         * @return The default API URI
+         */
+        @JvmStatic
+        fun getDefaultApiUri(headers: MultiValueMap<String, String>): URI {
+            val provider = headers.getFirst("x-model-provider")?.lowercase()
+            return when {
+                provider != null -> URI(PROVIDER_BASE_URLS[provider] ?: MODEL_DEFAULT_BASE_URL)
+                else -> URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
+            }
+        }
     }
 
     @Value("\${api.request.timeout:30}")
@@ -452,33 +518,6 @@ class MasaicResponseService(
                 null
             }
         return CreateResponseMetadataInput("openai", getApiBaseUri(headers, modelName).host)
-    }
-
-    /**
-     * Gets the API base URL to use for requests.
-     * Supports both x-model-provider header and url@model format in the model field
-     *
-     * @return The API base URL
-     */
-    private fun getApiBaseUri(
-        headers: MultiValueMap<String, String>,
-        modelName: String?,
-    ): URI {
-        // First check if the model contains url@model format
-        if (modelName?.contains("@") == true) {
-            val parts = modelName.split("@", limit = 2)
-            if (parts.size == 2 && parts[0].isNotBlank()) {
-                return URI(parts[0])
-            }
-        }
-
-        // Fall back to x-model-provider header based logic
-        return when (headers.getFirst("x-model-provider")?.lowercase()) {
-            "claude" -> URI("https://api.anthropic.com/v1")
-            "openai" -> URI("https://api.openai.com/v1")
-            "groq" -> URI("https://api.groq.com/openai/v1")
-            else -> URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
-        }
     }
 }
 
