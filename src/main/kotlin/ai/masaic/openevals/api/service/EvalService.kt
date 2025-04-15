@@ -3,27 +3,17 @@ package ai.masaic.openevals.api.service
 import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.utils.SampleSchemaUtils
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.JsonNode
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.jsonSchema.JsonSchema
-import com.fasterxml.jackson.module.jsonSchema.JsonSchemaGenerator
-import com.fasterxml.jackson.module.jsonSchema.factories.SchemaFactoryWrapper
 import com.openai.core.JsonValue
 import org.springframework.stereotype.Service
-import java.lang.UnsupportedOperationException
 import java.time.Instant
 import java.util.*
 
 /**
- * Service for managing evaluations.
+ * Service for mana ging evaluations.
  * Uses suspend functions for non-blocking operations.
  */
 @Service
-class EvalService(private val evalRepository: EvalRepository, private val objectMapper: ObjectMapper) {
-    // Initialize the schema generator
-    private val schemaGenerator: JsonSchemaGenerator = JsonSchemaGenerator(objectMapper)
-
+class EvalService(private val evalRepository: EvalRepository) {
     /**
      * Create a new evaluation.
      *
