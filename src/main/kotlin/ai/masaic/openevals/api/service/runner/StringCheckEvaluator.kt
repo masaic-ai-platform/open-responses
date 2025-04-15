@@ -2,12 +2,10 @@ package ai.masaic.openevals.api.service.runner
 
 import ai.masaic.openevals.api.model.StringCheckGrader
 import ai.masaic.openevals.api.model.TestingCriterion
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import com.fasterxml.jackson.module.kotlin.readValue
+import ai.masaic.openevals.api.utils.TemplateUtils
 import com.mitchellbosecke.pebble.PebbleEngine
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.io.StringWriter
 
 /**
  * Implementation of CriterionEvaluator for string check testing criteria.
@@ -50,8 +48,8 @@ class StringCheckEvaluator(
         
         try {
             // Use Pebble to resolve the values directly from the JSON strings
-            val inputValue = resolveTemplateValue(criterion.input, actualJson)
-            val referenceValue = resolveTemplateValue(criterion.reference, referenceJson)
+            val inputValue = TemplateUtils.resolveTemplateValue(criterion.input, actualJson, pebbleEngine)
+            val referenceValue = TemplateUtils.resolveTemplateValue(criterion.reference, referenceJson, pebbleEngine)
 
             logger.debug("String check: comparing '$inputValue' to '$referenceValue' with operation ${criterion.operation}")
 
@@ -88,44 +86,6 @@ class StringCheckEvaluator(
                 passed = false,
                 message = "Error: ${e.message}"
             )
-        }
-    }
-
-    /**
-     * Resolve a template value using Pebble.
-     *
-     * @param template The template string (e.g., "{{item.correct_label}}")
-     * @param jsonStr The JSON string containing the context
-     * @return The resolved value
-     */
-    private fun resolveTemplateValue(template: String, jsonStr: String): String {
-        try {
-            // If the JSON is an empty string, return an empty result
-            if (jsonStr.isBlank()) {
-                return ""
-            }
-            
-            // Parse the JSON into a Map
-            val contextMap = mutableMapOf<String, Any>()
-            try {
-                // Try to parse as JSON object first
-                val jsonMap: Map<String, Any> = jacksonObjectMapper().readValue(jsonStr)
-                contextMap.putAll(jsonMap)
-            } catch (e: Exception) {
-                logger.warn("JSON parsing failed, using as plain text: ${e.message}")
-                // If JSON parsing fails, treat the entire string as a value
-                contextMap["content"] = jsonStr
-            }
-
-            // Compile and evaluate the template
-            val compiledTemplate = pebbleEngine.getLiteralTemplate(template)
-            val writer = StringWriter()
-            compiledTemplate.evaluate(writer, contextMap)
-
-            return writer.toString().trim()
-        } catch (e: Exception) {
-            logger.warn("Error resolving template '$template': ${e.message}")
-            return ""
         }
     }
 } 
