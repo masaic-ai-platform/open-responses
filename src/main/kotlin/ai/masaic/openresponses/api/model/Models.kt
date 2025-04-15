@@ -47,6 +47,23 @@ data class FileSearchTool(
 ) : Tool
 
 /**
+ * Tool implementation for agentic search operations.
+ *
+ * @property type The type identifier for this tool, should be "agentic_search"
+ * @property filters Optional filters to apply to the search
+ * @property maxNumResults Maximum number of results to return
+ * @property vectorStoreIds List of vector store IDs to search in
+ */
+data class AgenticSeachTool(
+    override val type: String,
+    val filters: Any? = null,
+    @JsonProperty("max_num_results")
+    val maxNumResults: Int = 20,
+    @JsonProperty("vector_store_ids")
+    val vectorStoreIds: List<String>? = null,
+) : Tool
+
+/**
  * Configuration for ranking search results.
  *
  * @property ranker The ranking algorithm to use
@@ -74,6 +91,7 @@ data class RankingOptions(
     JsonSubTypes.Type(value = WebSearchTool::class, name = "web_search_preview"),
     JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search"),
     JsonSubTypes.Type(value = FunctionTool::class, name = "function"),
+    JsonSubTypes.Type(value = AgenticSeachTool::class, name = "agentic_search"),
 )
 interface Tool {
     val type: String

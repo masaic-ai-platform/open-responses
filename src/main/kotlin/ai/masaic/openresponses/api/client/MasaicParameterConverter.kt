@@ -394,19 +394,46 @@ class MasaicParameterConverter(
                     )
                 }
                 responseTool.isWebSearch() -> {
-                    val webSearchTool = responseTool.asWebSearch()
-                    logger.trace { "Converting web search tool" }
-                    result.add(
-                        ChatCompletionTool
-                            .builder()
-                            .type(JsonValue.from("function"))
-                            .function(
-                                FunctionDefinition
-                                    .builder()
-                                    .name(webSearchTool.type().asString())
-                                    .build(),
-                            ).build(),
-                    )
+
+                    if(responseTool.asWebSearch().type().toString() == "agentic_search"){
+                        val nativeTool = nativeToolRegistry.findByName("agentic_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
+                        logger.trace { "Converting file search tool" }
+                        result.add(
+                            ChatCompletionTool
+                                .builder()
+                                .type(JsonValue.from("function"))
+                                .function(
+                                    FunctionDefinition
+                                        .builder()
+                                        .name(nativeTool.name)
+                                        .description(nativeTool.description)
+                                        .parameters(
+                                            objectMapper.readValue(
+                                                objectMapper.writeValueAsString(nativeTool.parameters),
+                                                FunctionParameters::class.java,
+                                            ),
+                                        )
+                                        .additionalProperties(responseTool.asWebSearch()._additionalProperties())
+                                        .build(),
+                                ).build(),
+                        )
+                    }
+                    else {
+                        val webSearchTool = responseTool.asWebSearch()
+                        logger.trace { "Converting web search tool" }
+                        result.add(
+                            ChatCompletionTool
+                                .builder()
+                                .type(JsonValue.from("function"))
+                                .function(
+                                    FunctionDefinition
+                                        .builder()
+                                        .name(webSearchTool.type().asString())
+                                        .additionalProperties(webSearchTool._additionalProperties())
+                                        .build(),
+                                ).build(),
+                        )
+                    }
                 }
                 responseTool.isFileSearch() -> {
                     val nativeTool = nativeToolRegistry.findByName("file_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
