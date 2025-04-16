@@ -1,37 +1,23 @@
 package ai.masaic.openresponses.tool
 
-import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.FunctionTool
-import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
-import ai.masaic.openresponses.api.model.VectorStoreSearchResult
-import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.mcp.MCPServer
 import ai.masaic.openresponses.tool.mcp.MCPServers
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
-import com.fasterxml.jackson.core.type.TypeReference
 import com.openai.client.OpenAIClient
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionMessageParam
-import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import com.openai.models.responses.ResponseCreateParams
 import dev.langchain4j.mcp.client.McpClient
 import dev.langchain4j.model.chat.request.json.*
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.serializer
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ResourceLoader
-import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import java.nio.charset.Charset
-import kotlin.jvm.optionals.getOrDefault
-import kotlin.jvm.optionals.getOrNull
 
 /**
  * Service responsible for managing tool operations including loading, listing, and executing MCP tools.
@@ -130,7 +116,7 @@ class ToolService(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
-        openAIClient: OpenAIClient
+        openAIClient: OpenAIClient,
     ): String? {
         try {
             val tool = findToolByName(name) ?: return null
@@ -162,7 +148,7 @@ class ToolService(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
-        openAIClient: OpenAIClient
+        openAIClient: OpenAIClient,
     ): String? {
         val toolResult =
             when (tool.protocol) {

@@ -19,7 +19,7 @@ import kotlin.jvm.optionals.getOrNull
 
 @Component
 class NativeToolRegistry(
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(NativeToolRegistry::class.java)
     private val toolRepository = mutableMapOf<String, ToolDefinition>()
@@ -41,7 +41,7 @@ class NativeToolRegistry(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
-        client: OpenAIClient
+        client: OpenAIClient,
     ): String? {
         toolRepository[name] ?: return null
         log.debug("Executing tool $name with arguments: $arguments")
@@ -147,9 +147,9 @@ class NativeToolRegistry(
      */
     private fun createSearchFilter(
         userSecurityFilter: Filter?,
-        currentFilters: Map<String, Any>
-    ): Filter? {
-        return if (userSecurityFilter != null) {
+        currentFilters: Map<String, Any>,
+    ): Filter? =
+        if (userSecurityFilter != null) {
             if (currentFilters.isEmpty()) {
                 // Just use user security filter
                 userSecurityFilter
@@ -157,7 +157,8 @@ class NativeToolRegistry(
                 // Create compound filter combining user security filters AND LLM filters
                 val llmFilter = createFilterFromMap(currentFilters)
                 if (llmFilter != null) {
-                    ai.masaic.openresponses.api.model.CompoundFilter("and", listOf(userSecurityFilter, llmFilter))
+                    ai.masaic.openresponses.api.model
+                        .CompoundFilter("and", listOf(userSecurityFilter, llmFilter))
                 } else {
                     userSecurityFilter
                 }
@@ -168,7 +169,6 @@ class NativeToolRegistry(
         } else {
             null
         }
-    }
 
     /**
      * Executes an agentic search operation.
@@ -180,7 +180,7 @@ class NativeToolRegistry(
     private suspend fun executeAgenticSearch(
         arguments: String,
         requestParams: ResponseCreateParams,
-        openAIClient: OpenAIClient
+        openAIClient: OpenAIClient,
     ): String {
         val params = objectMapper.readValue(arguments, AgenticSearchParams::class.java)
         log.info("Starting agentic search for question: '${params.question}' with max_iterations: ${params.max_iterations}")
@@ -195,8 +195,9 @@ class NativeToolRegistry(
                     it.asWebSearch()
                 } ?: return objectMapper.writeValueAsString(AgenticSearchResponse(emptyList(), emptyList()))
 
-        val vectorStoreIds = function.first()._additionalProperties()["vector_store_ids"]
-            ?: return objectMapper.writeValueAsString(AgenticSearchResponse(emptyList(), emptyList()))
+        val vectorStoreIds =
+            function.first()._additionalProperties()["vector_store_ids"]
+                ?: return objectMapper.writeValueAsString(AgenticSearchResponse(emptyList(), emptyList()))
         
         log.info("Using vector store IDs: $vectorStoreIds")
         
@@ -207,7 +208,8 @@ class NativeToolRegistry(
         val maxResults =
             function
                 .first()
-                ._additionalProperties()["max_num_results"].toString()
+                ._additionalProperties()["max_num_results"]
+                .toString()
                 .toInt()
         log.debug("Max results per search: $maxResults")
 
@@ -240,14 +242,15 @@ class NativeToolRegistry(
                     VectorStoreSearchRequest(
                         query = currentQuery,
                         maxNumResults = maxResults,
-                        filters = initialSearchFilter
+                        filters = initialSearchFilter,
                     )
                 val results = vectorStoreService.searchVectorStore(vectorStoreId, searchRequest)
                 
                 // Add initial results to buffer
-                val initialResults = results.data
-                    .sortedByDescending { it.score }
-                    .take(maxResults)
+                val initialResults =
+                    results.data
+                        .sortedByDescending { it.score }
+                        .take(maxResults)
                 
                 log.info("Found ${initialResults.size} initial results from vectorStoreId: $vectorStoreId")
                 if (initialResults.isNotEmpty()) {
@@ -273,16 +276,17 @@ class NativeToolRegistry(
         if (searchBuffer.isNotEmpty()) {
             log.info("Initial search found ${searchBuffer.size} results, asking LLM for next steps")
             
-            val initialDecision = callLlmForDecision(
-                originalQuestion = params.question,
-                searchBuffer = searchBuffer,
-                previousIterations = searchIterations,
-                isInitialResults = true,
-                openAIClient,
-                requestParams = requestParams,
-                iterationNumber = 0,
-                maxIterations = params.max_iterations
-            )
+            val initialDecision =
+                callLlmForDecision(
+                    originalQuestion = params.question,
+                    searchBuffer = searchBuffer,
+                    previousIterations = searchIterations,
+                    isInitialResults = true,
+                    openAIClient,
+                    requestParams = requestParams,
+                    iterationNumber = 0,
+                    maxIterations = params.max_iterations,
+                )
             
             log.info("LLM initial decision: $initialDecision")
             
@@ -295,27 +299,30 @@ class NativeToolRegistry(
                 val knowledgeAcquired = buildKnowledgeMemory(searchIterations)
                 log.info("Knowledge acquired from initial results: $knowledgeAcquired")
                 
-                val response = AgenticSearchResponse(
-                    data = searchBuffer.map { result ->
-                        val chunkIndex = result.attributes?.get("chunk_index") as? Long ?: 0
-                        AgenticSearchResult(
-                            file_id = result.fileId,
-                            filename = result.filename,
-                            score = result.score,
-                            content = result.content.firstOrNull()?.text ?: "",
-                            annotations = listOf(
-                                FileCitation(
-                                    type = "file_citation",
-                                    index = chunkIndex.toInt(),
+                val response =
+                    AgenticSearchResponse(
+                        data =
+                            searchBuffer.map { result ->
+                                val chunkIndex = result.attributes?.get("chunk_index") as? Long ?: 0
+                                AgenticSearchResult(
                                     file_id = result.fileId,
                                     filename = result.filename,
+                                    score = result.score,
+                                    content = result.content.firstOrNull()?.text ?: "",
+                                    annotations =
+                                        listOf(
+                                            FileCitation(
+                                                type = "file_citation",
+                                                index = chunkIndex.toInt(),
+                                                file_id = result.fileId,
+                                                filename = result.filename,
+                                            ),
+                                        ),
                                 )
-                            )
-                        )
-                    },
-                    search_iterations = searchIterations,
-                    knowledge_acquired = knowledgeAcquired + initialDecision.substringAfter("TERMINATE").trim(),
-                )
+                            },
+                        search_iterations = searchIterations,
+                        knowledge_acquired = knowledgeAcquired + initialDecision.substringAfter("TERMINATE").trim(),
+                    )
                 log.info("Returning response with ${searchBuffer.size} results after LLM decided to terminate early")
                 return objectMapper.writeValueAsString(response)
             }
@@ -389,7 +396,7 @@ class NativeToolRegistry(
                         VectorStoreSearchRequest(
                             query = currentQuery,
                             maxNumResults = maxResults,
-                            filters = searchFilter
+                            filters = searchFilter,
                         )
                     val results = vectorStoreService.searchVectorStore(vectorStoreId, searchRequest)
                     log.debug("Iteration $iterationCount: Found ${results.data.size} results from $vectorStoreId")
@@ -441,15 +448,16 @@ class NativeToolRegistry(
             
             // Retry loop for getting a valid decision with properly formatted JSON
             while (!decisionParsed && retryCount < 3) {
-                llmDecision = callLlmForDecision(
-                    originalQuestion = params.question, 
-                    searchBuffer = searchBuffer, 
-                    previousIterations = searchIterations,
-                    client = openAIClient,
-                    requestParams = requestParams,
-                    iterationNumber = iterationCount,
-                    maxIterations = params.max_iterations
-                )
+                llmDecision =
+                    callLlmForDecision(
+                        originalQuestion = params.question, 
+                        searchBuffer = searchBuffer, 
+                        previousIterations = searchIterations,
+                        client = openAIClient,
+                        requestParams = requestParams,
+                        iterationNumber = iterationCount,
+                        maxIterations = params.max_iterations,
+                    )
                 
                 log.info("Iteration $iterationCount" + (if (retryCount > 0) ", retry $retryCount" else "") + ": LLM decision: $llmDecision")
                 
@@ -551,12 +559,12 @@ class NativeToolRegistry(
                         )
                     },
                 search_iterations = searchIterations,
-                knowledge_acquired = knowledgeAcquired
+                knowledge_acquired = knowledgeAcquired,
             )
 
         return objectMapper.writeValueAsString(response)
     }
-    
+
     /**
      * Parse the LLM decision string into query and filters.
      * 
@@ -576,30 +584,31 @@ class NativeToolRegistry(
         val nextQueryMatch = nextQueryPattern.find(originalDecisionString)
         
         // Get the actual decision line
-        val decisionString = when {
-            terminateMatch != null -> terminateMatch.value
-            nextQueryMatch != null -> nextQueryMatch.value
-            originalDecisionString.contains("TERMINATE", ignoreCase = true) -> "TERMINATE"
-            originalDecisionString.contains("NEXT_QUERY:", ignoreCase = true) -> {
-                // Extract whatever follows NEXT_QUERY: if found anywhere in text
-                val nextQueryText = "NEXT_QUERY:"
-                val nextQueryIndex = originalDecisionString.indexOf(nextQueryText, ignoreCase = true)
-                if (nextQueryIndex >= 0) {
-                    originalDecisionString.substring(nextQueryIndex)
-                } else {
-                    // Fallback for case-insensitive search
-                    val lowerCaseDecision = originalDecisionString.lowercase()
-                    val lowerCaseText = nextQueryText.lowercase()
-                    val lowerCaseIndex = lowerCaseDecision.indexOf(lowerCaseText)
-                    if (lowerCaseIndex >= 0) {
-                        originalDecisionString.substring(lowerCaseIndex)
+        val decisionString =
+            when {
+                terminateMatch != null -> terminateMatch.value
+                nextQueryMatch != null -> nextQueryMatch.value
+                originalDecisionString.contains("TERMINATE", ignoreCase = true) -> "TERMINATE"
+                originalDecisionString.contains("NEXT_QUERY:", ignoreCase = true) -> {
+                    // Extract whatever follows NEXT_QUERY: if found anywhere in text
+                    val nextQueryText = "NEXT_QUERY:"
+                    val nextQueryIndex = originalDecisionString.indexOf(nextQueryText, ignoreCase = true)
+                    if (nextQueryIndex >= 0) {
+                        originalDecisionString.substring(nextQueryIndex)
                     } else {
-                        originalDecisionString
+                        // Fallback for case-insensitive search
+                        val lowerCaseDecision = originalDecisionString.lowercase()
+                        val lowerCaseText = nextQueryText.lowercase()
+                        val lowerCaseIndex = lowerCaseDecision.indexOf(lowerCaseText)
+                        if (lowerCaseIndex >= 0) {
+                            originalDecisionString.substring(lowerCaseIndex)
+                        } else {
+                            originalDecisionString
+                        }
                     }
                 }
+                else -> originalDecisionString // Use original as fallback
             }
-            else -> originalDecisionString // Use original as fallback
-        }
         
         log.debug("Extracted decision line: $decisionString")
         
@@ -644,8 +653,11 @@ class NativeToolRegistry(
                 
                 // Use Jackson to parse the JSON directly to Map<String, Any>
                 try {
-                    val filters = objectMapper.readValue(filterJson, 
-                        object : TypeReference<Map<String, Any>>() {})
+                    val filters =
+                        objectMapper.readValue(
+                            filterJson, 
+                            object : TypeReference<Map<String, Any>>() {},
+                        )
                     log.debug("Successfully parsed filters: $filters")
                     
                     return LlmDecision(query, filters)
@@ -666,15 +678,15 @@ class NativeToolRegistry(
         log.warn("Unrecognized decision format: $decisionString")
         throw IllegalArgumentException("Unrecognized decision format")
     }
-    
+
     /**
      * Data class to hold LLM decision components
      */
     private data class LlmDecision(
         val query: String,
-        val filters: Map<String, Any>?
+        val filters: Map<String, Any>?,
     )
-    
+
     private fun createFilterFromMap(filterMap: Map<String, Any>): Filter? {
         if (filterMap.isEmpty()) {
             return null
@@ -694,7 +706,10 @@ class NativeToolRegistry(
                         val typeStr = value["type"] as? String ?: "eq"
                         val filterValue = value["value"]
                         if (filterValue != null) {
-                            filters.add(ai.masaic.openresponses.api.model.ComparisonFilter(key, typeStr, filterValue))
+                            filters.add(
+                                ai.masaic.openresponses.api.model
+                                    .ComparisonFilter(key, typeStr, filterValue),
+                            )
                         }
                     } else {
                         // Convert nested map to a set of AND conditions
@@ -707,16 +722,28 @@ class NativeToolRegistry(
                 }
                 value is List<*> -> {
                     // Handle list values as OR conditions
-                    val orFilters = value.mapNotNull { listItem -> 
-                        if (listItem != null) ai.masaic.openresponses.api.model.ComparisonFilter(key, "eq", listItem) else null 
-                    }
+                    val orFilters =
+                        value.mapNotNull { listItem -> 
+                            if (listItem != null) {
+                                ai.masaic.openresponses.api.model
+                                    .ComparisonFilter(key, "eq", listItem)
+                            } else {
+                                null
+                            } 
+                        }
                     if (orFilters.isNotEmpty()) {
-                        filters.add(ai.masaic.openresponses.api.model.CompoundFilter("or", orFilters))
+                        filters.add(
+                            ai.masaic.openresponses.api.model
+                                .CompoundFilter("or", orFilters),
+                        )
                     }
                 }
                 else -> {
                     // Handle simple key-value pairs
-                    filters.add(ai.masaic.openresponses.api.model.ComparisonFilter(key, "eq", value))
+                    filters.add(
+                        ai.masaic.openresponses.api.model
+                            .ComparisonFilter(key, "eq", value),
+                    )
                 }
             }
         }
@@ -724,16 +751,20 @@ class NativeToolRegistry(
         return if (filters.size == 1) {
             filters.first()
         } else if (filters.size > 1) {
-            ai.masaic.openresponses.api.model.CompoundFilter("and", filters)
+            ai.masaic.openresponses.api.model
+                .CompoundFilter("and", filters)
         } else {
             null
         }
     }
-    
+
     /**
      * Creates nested filters from a nested map structure
      */
-    private fun createNestedFilters(parentKey: String, nestedMap: Map<String, Any>): Filter? {
+    private fun createNestedFilters(
+        parentKey: String,
+        nestedMap: Map<String, Any>,
+    ): Filter? {
         val filters = mutableListOf<Filter>()
         
         nestedMap.forEach { entry ->
@@ -750,15 +781,27 @@ class NativeToolRegistry(
                     }
                 }
                 is List<*> -> {
-                    val orFilters = value.mapNotNull { listItem -> 
-                        if (listItem != null) ai.masaic.openresponses.api.model.ComparisonFilter(fullKey, "eq", listItem) else null 
-                    }
+                    val orFilters =
+                        value.mapNotNull { listItem -> 
+                            if (listItem != null) {
+                                ai.masaic.openresponses.api.model
+                                    .ComparisonFilter(fullKey, "eq", listItem)
+                            } else {
+                                null
+                            } 
+                        }
                     if (orFilters.isNotEmpty()) {
-                        filters.add(ai.masaic.openresponses.api.model.CompoundFilter("or", orFilters))
+                        filters.add(
+                            ai.masaic.openresponses.api.model
+                                .CompoundFilter("or", orFilters),
+                        )
                     }
                 }
                 else -> {
-                    filters.add(ai.masaic.openresponses.api.model.ComparisonFilter(fullKey, "eq", value))
+                    filters.add(
+                        ai.masaic.openresponses.api.model
+                            .ComparisonFilter(fullKey, "eq", value),
+                    )
                 }
             }
         }
@@ -766,7 +809,8 @@ class NativeToolRegistry(
         return if (filters.size == 1) {
             filters.first()
         } else if (filters.size > 1) {
-            ai.masaic.openresponses.api.model.CompoundFilter("and", filters)
+            ai.masaic.openresponses.api.model
+                .CompoundFilter("and", filters)
         } else {
             null
         }
@@ -789,7 +833,7 @@ class NativeToolRegistry(
         client: OpenAIClient,
         requestParams: ResponseCreateParams,
         iterationNumber: Int = 0,
-        maxIterations: Int = 5
+        maxIterations: Int = 5,
     ): String {
         // Prepare prompt for LLM
         val promptBuilder = StringBuilder()
@@ -828,16 +872,18 @@ class NativeToolRegistry(
         promptBuilder.append("\nPrevious search iterations:\n")
         
         previousIterations.forEachIndexed { index, iteration ->
-            val filterInfo = if (iteration.applied_filters != null && iteration.applied_filters.isNotEmpty()) {
-                " with filters: ${iteration.applied_filters}"
-            } else {
-                ""
-            }
+            val filterInfo =
+                if (iteration.applied_filters != null && iteration.applied_filters.isNotEmpty()) {
+                    " with filters: ${iteration.applied_filters}"
+                } else {
+                    ""
+                }
             
             // Check if this query was used before
-            val isDuplicate = previousIterations.take(index).any { 
-                it.query == iteration.query && it.applied_filters == iteration.applied_filters 
-            }
+            val isDuplicate =
+                previousIterations.take(index).any { 
+                    it.query == iteration.query && it.applied_filters == iteration.applied_filters 
+                }
             
             val duplicateWarning = if (isDuplicate) " ⚠️ DUPLICATE" else ""
             val iterationStatus = if (iteration.is_final) " (FINAL)" else ""
@@ -869,7 +915,7 @@ class NativeToolRegistry(
         
         // Add iteration countdown information
         val iterationsLeft = maxIterations - iterationNumber
-        promptBuilder.append("\n\nYou are on search attempt ${iterationNumber}/${maxIterations} (${iterationsLeft} search attempts left). Use your remaining search attempts wisely to maximize information discovery.")
+        promptBuilder.append("\n\nYou are on search attempt $iterationNumber/$maxIterations ($iterationsLeft search attempts left). Use your remaining search attempts wisely to maximize information discovery.")
         
         // Additional context if these are initial results
         if (isInitialResults) {
@@ -971,18 +1017,27 @@ class NativeToolRegistry(
         promptBuilder.append("\n\n- IMPORTANT: Avoid querying same chunk_index with different wording. This won't yield new results. Once you receive a chunk, save your learning in memory and avoid filtering the same chunk again.")
 
         // Call LLM with this prompt
-        val messageWithContent = ChatCompletionMessageParam.ofUser(
-            ChatCompletionUserMessageParam.builder().content(promptBuilder.toString()).build()
-        )
+        val messageWithContent =
+            ChatCompletionMessageParam.ofUser(
+                ChatCompletionUserMessageParam.builder().content(promptBuilder.toString()).build(),
+            )
 
-        val chatCompletionRequest = ChatCompletionCreateParams.builder()
-            .messages(listOf(messageWithContent))
-            .model(requestParams.model().toString())
-            .build()
+        val chatCompletionRequest =
+            ChatCompletionCreateParams
+                .builder()
+                .messages(listOf(messageWithContent))
+                .model(requestParams.model().toString())
+                .build()
 
         try {
             val response = client.chat().completions().create(chatCompletionRequest)
-            val content = response.choices().firstOrNull()?.message()?.content()?.get() ?: "TERMINATE"
+            val content =
+                response
+                    .choices()
+                    .firstOrNull()
+                    ?.message()
+                    ?.content()
+                    ?.get() ?: "TERMINATE"
             
             // Log full LLM response for debugging
             log.debug("Full LLM response: $content")
@@ -993,7 +1048,7 @@ class NativeToolRegistry(
             return "TERMINATE"
         }
     }
-    
+
     /**
      * Builds a knowledge memory from previous iterations and search results.
      * This extracts any memory updates the LLM has provided and uses the latest one.
@@ -1002,27 +1057,28 @@ class NativeToolRegistry(
      * @return A string containing the most recent knowledge summary
      */
     private fun buildKnowledgeMemory(
-        previousIterations: List<AgenticSearchIteration>
+        previousIterations: List<AgenticSearchIteration>,
     ): String {
         val memoryBuilder = StringBuilder()
 
         log.debug("Building knowledge memory from previous iterations, using most recent summary")
 
         // Find the most recent memory update
-        val latestMemoryUpdate = previousIterations.reversed()
-            .find { iteration ->
-                val query = iteration.query
-                query.contains("##MEMORY##")
-            }
-            ?.let { iteration ->
-                val query = iteration.query
-                val memoryIndex = query.indexOf("##MEMORY##")
-                if (memoryIndex != -1) {
-                    query.substring(memoryIndex + 10).trim()
-                } else {
-                    null
+        val latestMemoryUpdate =
+            previousIterations
+                .reversed()
+                .find { iteration ->
+                    val query = iteration.query
+                    query.contains("##MEMORY##")
+                }?.let { iteration ->
+                    val query = iteration.query
+                    val memoryIndex = query.indexOf("##MEMORY##")
+                    if (memoryIndex != -1) {
+                        query.substring(memoryIndex + 10).trim()
+                    } else {
+                        null
+                    }
                 }
-            }
         
         // Add the latest memory update to the memory builder
         if (latestMemoryUpdate != null && latestMemoryUpdate.isNotEmpty()) {
@@ -1070,13 +1126,13 @@ class NativeToolRegistry(
             mutableMapOf(
                 "type" to "object",
                 "properties" to
-                        mapOf(
-                            "query" to
-                                    mapOf(
-                                        "type" to "string",
-                                        "description" to "The search query",
-                                    ),
-                        ),
+                    mapOf(
+                        "query" to
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The search query",
+                            ),
+                    ),
                 "required" to listOf("query"),
                 "additionalProperties" to false,
             )
@@ -1101,22 +1157,23 @@ class NativeToolRegistry(
             mutableMapOf(
                 "type" to "object",
                 "properties" to
-                        mapOf(
-                            "question" to
-                                    mapOf(
-                                        "type" to "string",
-                                        "description" to "The question to find information for",
-                                    ),
-                        ),
+                    mapOf(
+                        "question" to
+                            mapOf(
+                                "type" to "string",
+                                "description" to "The question to find information for",
+                            ),
+                    ),
                 "required" to listOf("question"),
                 "additionalProperties" to false,
             )
 
         return NativeToolDefinition(
             name = "agentic_search",
-            description = """
+            description =
+                """
                 Perform an AI-guided iterative search through vector stores that refines queries and filters until finding the best results for your questions.
-            """.trimIndent(),
+                """.trimIndent(),
             parameters = parameters,
         )
     }

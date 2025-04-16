@@ -204,7 +204,7 @@ class MasaicToolHandler(
         response: Response,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
         parentObservation: Observation? = null,
-        openAIClient: OpenAIClient
+        openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
         val responseInputItems =
@@ -294,7 +294,7 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation, params,openAIClient) { toolResult ->
+                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation, params, openAIClient) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

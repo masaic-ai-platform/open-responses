@@ -394,8 +394,7 @@ class MasaicParameterConverter(
                     )
                 }
                 responseTool.isWebSearch() -> {
-
-                    if(responseTool.asWebSearch().type().toString() == "agentic_search"){
+                    if (responseTool.asWebSearch().type().toString() == "agentic_search") {
                         val nativeTool = nativeToolRegistry.findByName("agentic_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
                         logger.trace { "Converting file search tool" }
                         result.add(
@@ -412,13 +411,11 @@ class MasaicParameterConverter(
                                                 objectMapper.writeValueAsString(nativeTool.parameters),
                                                 FunctionParameters::class.java,
                                             ),
-                                        )
-                                        .additionalProperties(responseTool.asWebSearch()._additionalProperties())
+                                        ).additionalProperties(responseTool.asWebSearch()._additionalProperties())
                                         .build(),
                                 ).build(),
                         )
-                    }
-                    else {
+                    } else {
                         val webSearchTool = responseTool.asWebSearch()
                         logger.trace { "Converting web search tool" }
                         result.add(

@@ -3,6 +3,7 @@ package ai.masaic.openresponses.tool
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
+import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
@@ -21,6 +22,7 @@ class FileSearchToolTest {
     private lateinit var resourceLoader: ResourceLoader
     private lateinit var nativeToolRegistry: NativeToolRegistry
     private lateinit var vectorStoreService: VectorStoreService
+    private val openAIClient = mockk<OpenAIClient>()
     private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
@@ -72,16 +74,16 @@ class FileSearchToolTest {
         }"""
         
             coEvery { 
-                nativeToolRegistry.executeTool(toolName, arguments, params) 
+                nativeToolRegistry.executeTool(toolName, arguments, params, ofType())
             } returns responseJson
         
             // When
-            val result = toolService.executeTool(toolName, arguments, params)
+            val result = toolService.executeTool(toolName, arguments, params, openAIClient)
         
             // Then
             assertNotNull(result)
             assertEquals(responseJson, result)
-            coVerify { nativeToolRegistry.executeTool(toolName, arguments, params) }
+            coVerify { nativeToolRegistry.executeTool(toolName, arguments, params, openAIClient) }
         }
 
     @Test

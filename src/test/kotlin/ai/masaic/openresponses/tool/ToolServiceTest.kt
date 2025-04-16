@@ -151,6 +151,7 @@ class ToolServiceTest {
                         ),
                     ),
                     mockk(),
+                    mockk(),
                 )
 
             // Assert result is not null and not empty

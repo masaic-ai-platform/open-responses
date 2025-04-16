@@ -1,8 +1,9 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonProperty
+import kotlinx.serialization.Serializable
 
 /**
  * Data class representing metadata about a tool.
@@ -11,6 +12,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore
  * @property name Human-readable name of the tool
  * @property description Detailed description of what the tool does
  */
+@Serializable
 data class ToolMetadata(
     val id: String,
     val name: String,
@@ -22,6 +24,7 @@ data class ToolMetadata(
  *
  * @property models List of AI model information
  */
+@Serializable
 data class AIModelsMetadata(
     val models: List<AIModelInfo>,
 )
@@ -34,6 +37,7 @@ data class AIModelsMetadata(
  * @property description Detailed description of what the model does
  * @property provider Name of the provider of the model
  */
+@Serializable
 data class AIModelInfo(
     val id: String,
     val name: String,
@@ -44,6 +48,7 @@ data class AIModelInfo(
 /**
  * Parameters for file search operation.
  */
+@Serializable
 data class FileSearchParams(
     val query: String,
 )
@@ -51,6 +56,7 @@ data class FileSearchParams(
 /**
  * Response from file search operation.
  */
+@Serializable
 data class FileSearchResponse(
     val data: List<FileSearchResult>,
 )
@@ -58,6 +64,7 @@ data class FileSearchResponse(
 /**
  * Individual file search result.
  */
+@Serializable
 data class FileSearchResult(
     @JsonProperty("file_id")
     val file_id: String,
@@ -70,6 +77,7 @@ data class FileSearchResult(
 /**
  * File citation annotation.
  */
+@Serializable
 data class FileCitation(
     val type: String,
     val index: Int,
@@ -81,10 +89,11 @@ data class FileCitation(
 /**
  * Parameters for agentic search operation.
  */
+@Serializable
 data class AgenticSearchParams(
     val question: String,
     val max_iterations: Int = 5,
-    val confidence_threshold: Float = 0.8f
+    val confidence_threshold: Float = 0.8f,
 )
 
 /**
@@ -95,7 +104,7 @@ data class AgenticSearchResponse(
     @JsonProperty("search_iterations")
     val search_iterations: List<AgenticSearchIteration>,
     @JsonProperty("knowledge_acquired")
-    val knowledge_acquired: String? = null
+    val knowledge_acquired: String? = null,
 )
 
 /**
@@ -107,7 +116,7 @@ data class AgenticSearchResult(
     val filename: String,
     val score: Double,
     val content: String,
-    val annotations: List<FileCitation>
+    val annotations: List<FileCitation>,
 )
 
 /**
@@ -121,6 +130,6 @@ data class AgenticSearchIteration(
     val applied_filters: Map<String, Any>? = null,
     @JsonProperty("termination_reason")
     var termination_reason: String? = null,
-    @JsonIgnore  // Don't include in the final response JSON
-    val results: MutableList<VectorStoreSearchResult> = mutableListOf()
+    @JsonIgnore
+    val results: MutableList<VectorStoreSearchResult> = mutableListOf(),
 )
