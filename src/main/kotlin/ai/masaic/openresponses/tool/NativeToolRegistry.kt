@@ -218,22 +218,21 @@ class NativeToolRegistry(
         var currentQuery = params.question
         var shouldTerminate = false
         var iterationCount = 0
-        var firstIterationRecorded = false
-        
+
         // Initial filters - start with empty map, the LLM will generate filters
         var currentFilters = emptyMap<String, Any>()
-        
-        // Add the initial query to iterations
-        searchIterations.add(AgenticSearchIteration(currentQuery, false, currentFilters))
-        log.info("Initial query: '$currentQuery' with no filters")
-        firstIterationRecorded = true
-        
+
         // Pre-populate search buffer with initial results based on the original question
         log.info("Pre-populating search buffer with initial query: '$currentQuery'")
         val initialSearchFilter = createSearchFilter(userSecurityFilter, currentFilters)
         log.debug("Initial search filter: $initialSearchFilter")
         val typeReference = object : TypeReference<List<String>>() {}
-        
+
+        // Record the initial search *before* executing it
+        val initialQueryRecord = AgenticSearchIteration(currentQuery, false, currentFilters)
+        searchIterations.add(initialQueryRecord)
+        log.debug("Recorded initial pre-population search iteration for query: '${initialQueryRecord.query}'")
+
         // Perform initial search across all vector stores
         for (vectorStoreId in vectorStoreIds.convert(typeReference)!!) {
             try {
@@ -256,6 +255,9 @@ class NativeToolRegistry(
                     log.debug("Top initial result: ${initialResults.first().filename} with score ${initialResults.first().score}")
                 }
                 searchBuffer.addAll(initialResults)
+                
+                // Store results with the iteration record
+                initialQueryRecord.results.addAll(initialResults)
             } catch (e: Exception) {
                 log.error("Error searching vector store $vectorStoreId for initial results", e)
             }
@@ -272,7 +274,6 @@ class NativeToolRegistry(
         if (searchBuffer.isNotEmpty()) {
             log.info("Initial search found ${searchBuffer.size} results, asking LLM for next steps")
             
-            // Call LLM to decide next action based on initial results
             val initialDecision = callLlmForDecision(
                 originalQuestion = params.question,
                 searchBuffer = searchBuffer,
@@ -282,12 +283,15 @@ class NativeToolRegistry(
             
             log.info("LLM initial decision: $initialDecision")
             
-            // Check if LLM wants to terminate immediately with initial results
             if (initialDecision.startsWith("TERMINATE")) {
                 log.info("LLM decided to terminate with initial results")
-                searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters))
+                initialQueryRecord.is_final = true
+                initialQueryRecord.termination_reason = "Terminated after initial results."
+                log.debug("Updated initial iteration record to mark termination.")
+
+                val knowledgeAcquired = buildKnowledgeMemory(searchIterations)
+                log.info("Knowledge acquired from initial results: $knowledgeAcquired")
                 
-                // Return initial results
                 val response = AgenticSearchResponse(
                     data = searchBuffer.map { result ->
                         val chunkIndex = result.attributes?.get("chunk_index") as? Long ?: 0
@@ -306,13 +310,13 @@ class NativeToolRegistry(
                             )
                         )
                     },
-                    search_iterations = searchIterations
+                    search_iterations = searchIterations,
+                    knowledge_acquired = knowledgeAcquired + initialDecision.substringAfter("TERMINATE").trim(),
                 )
                 log.info("Returning response with ${searchBuffer.size} results after LLM decided to terminate early")
                 return objectMapper.writeValueAsString(response)
             }
             
-            // If LLM suggested a query refinement, use it for the first iteration
             if (initialDecision.startsWith("NEXT_QUERY:")) {
                 try {
                     log.debug("Parsing initial decision for NEXT_QUERY format: $initialDecision")
@@ -328,17 +332,8 @@ class NativeToolRegistry(
                     } else {
                         log.debug("No filters provided in initial LLM decision")
                     }
-                    
-                    // Record this as the first iteration
-                    searchIterations.add(AgenticSearchIteration(currentQuery, false, currentFilters))
-                    log.debug("Added first iteration from initial decision: '$currentQuery' with filters $currentFilters, total iterations: ${searchIterations.size}")
-                    firstIterationRecorded = true
                 } catch (e: Exception) {
                     log.error("Failed to parse initial decision: ${e.message}", e)
-                    // Continue with original query if parsing fails
-                    searchIterations.add(AgenticSearchIteration(currentQuery, false, currentFilters))
-                    log.debug("Added fallback first iteration: '$currentQuery' with filters $currentFilters, total iterations: ${searchIterations.size}")
-                    firstIterationRecorded = true
                 }
             }
         }
@@ -347,10 +342,14 @@ class NativeToolRegistry(
         while (!shouldTerminate && iterationCount < params.max_iterations) {
             iterationCount++
             
-            log.info("==== Iteration $iterationCount: Searching with query: '$currentQuery' and filters: $currentFilters ====")
+            // Record the query/filters *before* executing the search for this iteration
+            val currentIterationRecord = AgenticSearchIteration(currentQuery, false, currentFilters)
+            searchIterations.add(currentIterationRecord)
+            log.info("==== Iteration $iterationCount: Starting search with query: '$currentQuery' and filters: $currentFilters ====")
+            log.debug("Added iteration record ${searchIterations.size} for current search.")
             
             // Check for repeated queries with same or similar filters
-            if (iterationCount > 1 || !firstIterationRecorded) {
+            if (iterationCount > 1) {
                 // Detailed debugging of query comparison
                 log.debug("Checking for duplicates. Current query: '$currentQuery', filters: $currentFilters")
                 
@@ -362,15 +361,14 @@ class NativeToolRegistry(
                 // Find any exact matches
                 val exactMatch = searchIterations.find { it.query == currentQuery && it.applied_filters == currentFilters }
 
-                //TODO Fix it
-//                if (exactMatch != null) {
-//                    log.warn("Detected repeated query with identical filters: '$currentQuery' with $currentFilters. Forcing termination to prevent redundant search.")
-//                    shouldTerminate = true
-//                    searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated due to exact query repetition."))
-//                    break
-//                } else {
-//                    log.debug("No duplicate found, proceeding with search.")
-//                }
+                if (exactMatch != null) {
+                    log.warn("Detected repeated query with identical filters: '$currentQuery' with $currentFilters. Forcing termination to prevent redundant search.")
+                    shouldTerminate = true
+                    searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated due to exact query repetition."))
+                    break
+                } else {
+                    log.debug("No duplicate found, proceeding with search.")
+                }
             } else {
                 log.debug("Skipping duplicate check for initial iteration as it's already recorded")
             }
@@ -409,6 +407,9 @@ class NativeToolRegistry(
                 log.debug("Iteration $iterationCount: Top result: ${sortedResults.first().filename} with score ${sortedResults.first().score}")
             }
 
+            // Add results to current iteration record
+            currentIterationRecord.results.addAll(sortedResults)
+            
             // Add unique results to buffer
             var newResultCount = 0
             sortedResults.forEach { result ->
@@ -465,14 +466,14 @@ class NativeToolRegistry(
                             @Suppress("UNCHECKED_CAST")
                             currentFilters = decision.filters as Map<String, Any>
                             log.info("Iteration $iterationCount: LLM suggested filters: $currentFilters")
-                            decisionParsed = true
                         } else {
                             // If no filters were found but the nextQueryMatch exists, we can still use the query
                             log.debug("Iteration $iterationCount: No filters found in LLM response, but query parsed successfully")
-                            decisionParsed = true
+                            currentFilters = emptyMap() // Reset filters if none provided
                         }
                         
                         log.info("Iteration $iterationCount: LLM suggested next query: '$currentQuery'")
+                        decisionParsed = true
                     } catch (e: Exception) {
                         log.warn("Iteration $iterationCount: Failed to parse LLM decision: ${e.message}")
                         retryCount++
@@ -495,28 +496,28 @@ class NativeToolRegistry(
             }
             
             // After retries, determine the action
-            if (decisionParsed) {
-                if (shouldTerminate) {
-                    searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters))
-                } else if (iterationCount == 1 && firstIterationRecorded) {
-                    // Skip adding the iteration if it's the first one and already recorded
-                    log.debug("Skipping adding first iteration as it was already recorded")
-                } else {
-                    searchIterations.add(AgenticSearchIteration(currentQuery, false, currentFilters))
-                }
-            } else {
+            if (!decisionParsed) {
                 // Default to termination if we couldn't parse a valid decision after retries
                 log.warn("Iteration $iterationCount: Failed to parse a valid LLM decision after $retryCount retries. Defaulting to TERMINATE.")
                 shouldTerminate = true
-                searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters))
+                searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Default termination after LLM decision parse failures."))
+                log.info("Iteration $iterationCount: Recorded termination iteration due to parse failure.")
+            } else if (shouldTerminate) {
+                searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "LLM decided to TERMINATE."))
+                log.info("Iteration $iterationCount: Recorded termination iteration based on LLM decision.")
             }
         }
 
-        // If we reached max iterations without terminating, add a final iteration
+        // If we reached max iterations without terminating, add a final termination iteration record
         if (iterationCount >= params.max_iterations && !shouldTerminate) {
             log.info("Reached max iterations ($iterationCount) without LLM explicitly terminating. Forcing termination.")
-            searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters))
+            searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Reached max iterations (${params.max_iterations})."))
+            log.info("Recorded termination iteration due to max iterations.")
         }
+
+        // Generate knowledge summary from search iterations
+        val knowledgeAcquired = buildKnowledgeMemory(searchIterations)
+        log.info("Knowledge acquired: $knowledgeAcquired")
 
         // Convert results to response format
         log.info("Search completed after $iterationCount iterations. Returning ${searchBuffer.size} results and ${searchIterations.size} iterations")
@@ -543,7 +544,8 @@ class NativeToolRegistry(
                                 ),
                         )
                     },
-                search_iterations = searchIterations
+                search_iterations = searchIterations,
+                knowledge_acquired = knowledgeAcquired
             )
 
         return objectMapper.writeValueAsString(response)
@@ -814,8 +816,9 @@ class NativeToolRegistry(
             promptBuilder.append("\n")
         }
 
-        // Add previous queries and filters
+        // Add previous queries and filters with their results
         promptBuilder.append("\nPrevious search iterations:\n")
+        
         previousIterations.forEachIndexed { index, iteration ->
             val filterInfo = if (iteration.applied_filters != null && iteration.applied_filters.isNotEmpty()) {
                 " with filters: ${iteration.applied_filters}"
@@ -829,13 +832,31 @@ class NativeToolRegistry(
             }
             
             val duplicateWarning = if (isDuplicate) " ⚠️ DUPLICATE" else ""
-            val resultCount = if (index < previousIterations.size - 1) {
-                " → yielded ${if (searchBuffer.isNotEmpty()) "some" else "no"} results"
-            } else {
-                ""
-            }
+            val iterationStatus = if (iteration.is_final) " (FINAL)" else ""
             
-            promptBuilder.append("${index + 1}. Query: \"${iteration.query}\"$filterInfo$resultCount$duplicateWarning\n")
+            promptBuilder.append("${index + 1}. Query: \"${iteration.query}\"$filterInfo$duplicateWarning$iterationStatus\n")
+            
+            // Add the actual results for this iteration
+            if (iteration.results.isNotEmpty()) {
+                promptBuilder.append("   Results (${iteration.results.size}):\n")
+                iteration.results.take(3).forEachIndexed { resultIndex, result ->
+                    promptBuilder.append("   ${resultIndex + 1}. ${result.filename}: ${result.content.firstOrNull()?.text}\n")
+                    
+                    // Include key attributes
+                    if (result.attributes != null && result.attributes.isNotEmpty()) {
+                        promptBuilder.append("      Attributes: ")
+                        result.attributes.entries.joinTo(promptBuilder, ", ") { "${it.key}=${it.value}" }
+                        promptBuilder.append("\n")
+                    }
+                }
+                
+                // If there are more than 3 results, add a note
+                if (iteration.results.size > 3) {
+                    promptBuilder.append("   ... and ${iteration.results.size - 3} more results\n")
+                }
+            } else {
+                promptBuilder.append("   No results found for this query.\n")
+            }
         }
         
         // If there are filter suggestions and this is the first iteration, add them to the prompt
@@ -865,7 +886,7 @@ class NativeToolRegistry(
         
         // Generate examples using actual attributes where possible
         if (availableAttributes.isNotEmpty()) {
-            val exampleAttrs = availableAttributes.take(3).toList()
+            val exampleAttrs = availableAttributes.toList()
             
             // Prioritize chunk_index if available
             if (availableAttributes.contains("chunk_index")) {
@@ -882,12 +903,6 @@ class NativeToolRegistry(
                     }
                 }
             }
-        } else {
-            // Default examples if no attributes found
-            promptBuilder.append("\n- NEXT_QUERY:kotlin file structure {\"language\": \"kotlin\"}")
-            promptBuilder.append("\n- NEXT_QUERY:openai authentication {\"document_type\": \"technical\", \"department\": \"engineering\"}")
-            promptBuilder.append("\n- NEXT_QUERY:financial report 2023 {\"category\": [\"finance\", \"reporting\"], \"created_after\": \"2023-01-01\"}")
-            promptBuilder.append("\n- NEXT_QUERY:sequential document exploration {\"chunk_index\": 1} ##MEMORY## Found introduction in chunk 1")
         }
 
         promptBuilder.append("\n\nRespond with EXACTLY ONE of these formats. Nothing else.")
@@ -906,6 +921,7 @@ class NativeToolRegistry(
         promptBuilder.append("\n   - Search for adjacent concepts or prerequisite information")
         promptBuilder.append("\n   - Use more specific technical terms found in previous results")
         promptBuilder.append("\n   - Explore chronologically (older/newer documents if date attributes exist)")
+        promptBuilder.append("\n   - Use context of previous iterations in your query(for example domain specific keywords)")
         promptBuilder.append("\n3. Recognize when you have sufficient information and TERMINATE rather than continuing with marginally different queries")
 
         // Add guidance for chunk-by-chunk searching and memory interface
@@ -919,7 +935,7 @@ class NativeToolRegistry(
         promptBuilder.append("\n\n## Your Knowledge Memory:")
         
         // Generate memory summary from previous iterations
-        val knowledgeGained = buildKnowledgeMemory(previousIterations, searchBuffer)
+        val knowledgeGained = buildKnowledgeMemory(previousIterations)
         if (knowledgeGained.isNotEmpty()) {
             promptBuilder.append("\n$knowledgeGained")
         } else {
@@ -929,7 +945,9 @@ class NativeToolRegistry(
         // Add structured memory format guidance
         promptBuilder.append("\n\nWhen suggesting a new query, you can include a knowledge update in this format:")
         promptBuilder.append("\nNEXT_QUERY:your query {filters} ##MEMORY## New facts learned: 1) First fact 2) Second fact")
-        
+
+        promptBuilder.append("\n\nMake sure you only capture knowledge that is relevant to the current search context. Avoid including irrelevant or unrelated information.")
+
         // Add strict formatting guidelines for JSON
         promptBuilder.append("\n\n## IMPORTANT: Response Format")
         promptBuilder.append("\nYour response MUST contain exactly one of these prefixes on its own line:")
@@ -945,7 +963,9 @@ class NativeToolRegistry(
         promptBuilder.append("\n- Arrays and objects must use proper JSON syntax")
         promptBuilder.append("\n- Example: NEXT_QUERY:search query {\"filename\": \"document.pdf\", \"chunk_index\": [1, 2, 3]}")
         promptBuilder.append("\n- DO NOT use: {filename: \"document.pdf\"} or {chunk_index: [1, 2, 3]}")
-        
+
+        promptBuilder.append("\n\n- IMPORTANT: Avoid querying same chunk_index with different wording. This won't yield new results. Once you receive a chunk, save your learning in memory and avoid filtering the same chunk again.")
+
         // Call LLM with this prompt
         val messageWithContent = ChatCompletionMessageParam.ofUser(
             ChatCompletionUserMessageParam.builder().content(promptBuilder.toString()).build()
@@ -953,7 +973,7 @@ class NativeToolRegistry(
 
         val chatCompletionRequest = ChatCompletionCreateParams.builder()
             .messages(listOf(messageWithContent))
-            .model("gpt-4o")
+            .model("gpt-4.1-mini")
             .build()
 
         try {
@@ -975,12 +995,10 @@ class NativeToolRegistry(
      * This extracts any memory updates the LLM has provided and summarizes knowledge gained.
      *
      * @param previousIterations List of previous search iterations
-     * @param searchBuffer Current search results buffer
      * @return A string containing the accumulated knowledge
      */
     private fun buildKnowledgeMemory(
-        previousIterations: List<AgenticSearchIteration>,
-        searchBuffer: List<VectorStoreSearchResult>
+        previousIterations: List<AgenticSearchIteration>
     ): String {
         val memoryBuilder = StringBuilder()
 
@@ -995,7 +1013,7 @@ class NativeToolRegistry(
                 val memoryIndex = query.indexOf("##MEMORY##")
                 if (memoryIndex != -1) {
                     val memoryPart = query.substring(memoryIndex + 10).trim()
-                    if (memoryPart.isNotEmpty()) {
+                    if (memoryPart.isNotEmpty() && !memoryUpdates.contains(memoryPart)) {
                         memoryUpdates.add(memoryPart)
                     }
                 }
@@ -1007,19 +1025,6 @@ class NativeToolRegistry(
             memoryBuilder.append("Knowledge accumulated so far:\n")
             memoryUpdates.forEachIndexed { index, update ->
                 memoryBuilder.append("${index + 1}. $update\n")
-            }
-        }
-        
-        // Summarize key facts from the current search buffer if no memory updates
-        if (memoryUpdates.isEmpty() && searchBuffer.isNotEmpty()) {
-            memoryBuilder.append("Key facts from search results so far:\n")
-            
-            // Get up to 3 most relevant results based on score
-            val topResults = searchBuffer.sortedByDescending { it.score }.take(3)
-            topResults.forEachIndexed { index, result ->
-                val content = result.content.firstOrNull()?.text ?: ""
-                val shortContent = if (content.length > 150) content.take(150) + "..." else content
-                memoryBuilder.append("${index + 1}. From ${result.filename}: $shortContent\n")
             }
         }
         
@@ -1100,18 +1105,6 @@ class NativeToolRegistry(
                                         "type" to "string",
                                         "description" to "The question to find information for",
                                     ),
-                            "max_iterations" to
-                                    mapOf(
-                                        "type" to "integer",
-                                        "description" to "Maximum number of search iterations to perform",
-                                        "default" to 5,
-                                    ),
-                            "confidence_threshold" to
-                                    mapOf(
-                                        "type" to "number",
-                                        "description" to "Confidence threshold for early termination (0.0-1.0)",
-                                        "default" to 0.8,
-                                    )
                         ),
                 "required" to listOf("question"),
                 "additionalProperties" to false,

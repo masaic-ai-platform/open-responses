@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.tool
 
+import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.fasterxml.jackson.annotation.JsonIgnore
 
 /**
  * Data class representing metadata about a tool.
@@ -91,7 +93,9 @@ data class AgenticSearchParams(
 data class AgenticSearchResponse(
     val data: List<AgenticSearchResult>,
     @JsonProperty("search_iterations")
-    val search_iterations: List<AgenticSearchIteration>
+    val search_iterations: List<AgenticSearchIteration>,
+    @JsonProperty("knowledge_acquired")
+    val knowledge_acquired: String? = null
 )
 
 /**
@@ -112,9 +116,11 @@ data class AgenticSearchResult(
 data class AgenticSearchIteration(
     val query: String,
     @JsonProperty("is_final")
-    val is_final: Boolean,
+    var is_final: Boolean,
     @JsonProperty("applied_filters")
     val applied_filters: Map<String, Any>? = null,
     @JsonProperty("termination_reason")
-    val termination_reason: String? = null
+    var termination_reason: String? = null,
+    @JsonIgnore  // Don't include in the final response JSON
+    val results: MutableList<VectorStoreSearchResult> = mutableListOf()
 )
