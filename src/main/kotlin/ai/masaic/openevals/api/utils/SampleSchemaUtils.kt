@@ -11,7 +11,9 @@ class SampleSchemaUtils {
          * Generates a JSON schema for the ChatCompletion class structure
          * to exactly match the expected format
          */
-        fun sampleSchemaForEvals() = mapper.readValue<Map<String, Any>>("""
+        fun sampleSchemaForEvals() =
+            mapper.readValue<Map<String, Any>>(
+                """
            {
                     "type": "object",
                     "properties": {
@@ -136,6 +138,7 @@ class SampleSchemaUtils {
                         "choices"
                     ]
                 } 
-        """)
+        """,
+            )
     }
 } 

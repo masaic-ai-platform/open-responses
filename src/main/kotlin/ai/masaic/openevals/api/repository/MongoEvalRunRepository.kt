@@ -30,7 +30,7 @@ class MongoEvalRunRepository(
     private val reactiveMongoTemplate: ReactiveMongoTemplate,
 ) : EvalRunRepository {
     private val logger = KotlinLogging.logger {}
-    
+
     companion object {
         const val EVAL_RUN_COLLECTION = "eval_runs"
     }
@@ -44,11 +44,12 @@ class MongoEvalRunRepository(
     override suspend fun createEvalRun(evalRun: EvalRun): EvalRun {
         try {
             // Generate a run_id if it's not provided or empty
-            val evalRunWithId = if (evalRun.id.isBlank()) {
-                evalRun.copy(id = "run_${java.util.UUID.randomUUID().toString().replace("-", "")}")
-            } else {
-                evalRun
-            }
+            val evalRunWithId =
+                if (evalRun.id.isBlank()) {
+                    evalRun.copy(id = "run_${java.util.UUID.randomUUID().toString().replace("-", "")}")
+                } else {
+                    evalRun
+                }
             
             return reactiveMongoTemplate.save(evalRunWithId, EVAL_RUN_COLLECTION).awaitFirst().also {
                 logger.info { "Saved eval run with ID: ${it.id} for eval ${it.evalId}" }
@@ -65,29 +66,27 @@ class MongoEvalRunRepository(
      * @param evalRunId The ID of the evaluation run to retrieve
      * @return The evaluation run, or null if not found
      */
-    override suspend fun getEvalRun(evalRunId: String): EvalRun? {
-        return try {
+    override suspend fun getEvalRun(evalRunId: String): EvalRun? =
+        try {
             reactiveMongoTemplate.findById<EvalRun>(evalRunId, EVAL_RUN_COLLECTION).awaitFirstOrNull()
         } catch (e: Exception) {
             logger.error(e) { "Error getting eval run with ID: $evalRunId" }
             null
         }
-    }
 
     /**
      * List all evaluation runs.
      *
      * @return A list of all evaluation runs
      */
-    override suspend fun listEvalRuns(): List<EvalRun> {
-        return try {
+    override suspend fun listEvalRuns(): List<EvalRun> =
+        try {
             val query = Query().with(Sort.by(Sort.Direction.DESC, "createdAt"))
             reactiveMongoTemplate.find<EvalRun>(query, EVAL_RUN_COLLECTION).collectList().awaitSingle()
         } catch (e: Exception) {
             logger.error(e) { "Error listing eval runs" }
             emptyList()
         }
-    }
 
     /**
      * List evaluation runs for a specific eval.
@@ -95,16 +94,16 @@ class MongoEvalRunRepository(
      * @param evalId The ID of the eval
      * @return A list of evaluation runs for the specified eval
      */
-    override suspend fun listEvalRunsByEvalId(evalId: String): List<EvalRun> {
-        return try {
-            val query = Query(Criteria.where("evalId").`is`(evalId))
-                .with(Sort.by(Sort.Direction.DESC, "createdAt"))
+    override suspend fun listEvalRunsByEvalId(evalId: String): List<EvalRun> =
+        try {
+            val query =
+                Query(Criteria.where("evalId").`is`(evalId))
+                    .with(Sort.by(Sort.Direction.DESC, "createdAt"))
             reactiveMongoTemplate.find<EvalRun>(query, EVAL_RUN_COLLECTION).collectList().awaitSingle()
         } catch (e: Exception) {
             logger.error(e) { "Error listing eval runs for eval ID: $evalId" }
             emptyList()
         }
-    }
 
     /**
      * List evaluation runs for a specific eval with pagination, ordering, and status filtering.
@@ -121,9 +120,9 @@ class MongoEvalRunRepository(
         after: String?,
         limit: Int,
         order: String,
-        status: EvalRunStatus?
-    ): List<EvalRun> {
-        return try {
+        status: EvalRunStatus?,
+    ): List<EvalRun> =
+        try {
             // Start with a base query that filters by evalId
             val criteria = Criteria.where("evalId").`is`(evalId)
             
@@ -139,21 +138,23 @@ class MongoEvalRunRepository(
             if (after != null) {
                 val afterRun = getEvalRun(after)
                 if (afterRun != null) {
-                    val createdAtCriteria = if (order.equals("asc", ignoreCase = true)) {
-                        Criteria.where("createdAt").gt(afterRun.createdAt)
-                    } else {
-                        Criteria.where("createdAt").lt(afterRun.createdAt)
-                    }
+                    val createdAtCriteria =
+                        if (order.equals("asc", ignoreCase = true)) {
+                            Criteria.where("createdAt").gt(afterRun.createdAt)
+                        } else {
+                            Criteria.where("createdAt").lt(afterRun.createdAt)
+                        }
                     query.addCriteria(createdAtCriteria)
                 }
             }
             
             // Set sort order
-            val sort = if (order.equals("asc", ignoreCase = true)) {
-                Sort.by(Sort.Direction.ASC, "createdAt")
-            } else {
-                Sort.by(Sort.Direction.DESC, "createdAt")
-            }
+            val sort =
+                if (order.equals("asc", ignoreCase = true)) {
+                    Sort.by(Sort.Direction.ASC, "createdAt")
+                } else {
+                    Sort.by(Sort.Direction.DESC, "createdAt")
+                }
             query = query.with(sort)
             
             // Set limit
@@ -165,7 +166,6 @@ class MongoEvalRunRepository(
             logger.error(e) { "Error listing eval runs for eval ID: $evalId with filters" }
             emptyList()
         }
-    }
 
     /**
      * Update an evaluation run.
@@ -196,8 +196,8 @@ class MongoEvalRunRepository(
      * @param evalRunId The ID of the evaluation run to delete
      * @return True if the evaluation run was deleted, false otherwise
      */
-    override suspend fun deleteEvalRun(evalRunId: String): Boolean {
-        return try {
+    override suspend fun deleteEvalRun(evalRunId: String): Boolean =
+        try {
             val query = Query(Criteria.where("_id").`is`(evalRunId))
             val result = reactiveMongoTemplate.remove<EvalRun>(query, EVAL_RUN_COLLECTION).awaitFirst()
             val deleted = result.deletedCount > 0
@@ -213,5 +213,4 @@ class MongoEvalRunRepository(
             logger.error(e) { "Error deleting eval run with ID: $evalRunId" }
             false
         }
-    }
 } 

@@ -17,7 +17,7 @@ class ResultProcessor {
      * @return Overall result counts
      */
     fun calculateResultCounts(
-        results: Map<Int, Map<String, CriterionEvaluator.CriterionResult>>
+        results: Map<Int, Map<String, CriterionEvaluator.CriterionResult>>,
     ): ResultCounts {
         var passed = 0
         var failed = 0
@@ -39,7 +39,7 @@ class ResultProcessor {
             passed = passed,
             failed = failed,
             errored = errored,
-            total = results.size
+            total = results.size,
         )
     }
 
@@ -52,9 +52,9 @@ class ResultProcessor {
      */
     fun calculatePerCriteriaResults(
         results: Map<Int, Map<String, CriterionEvaluator.CriterionResult>>,
-        testingCriteria: List<TestingCriterion>
-    ): List<TestingCriteriaResult> {
-        return testingCriteria.map { criterion ->
+        testingCriteria: List<TestingCriterion>,
+    ): List<TestingCriteriaResult> =
+        testingCriteria.map { criterion ->
             var passed = 0
             var failed = 0
 
@@ -67,8 +67,7 @@ class ResultProcessor {
             TestingCriteriaResult(
                 testingCriteria = criterion.name,
                 passed = passed,
-                failed = failed
+                failed = failed,
             )
         }
-    }
 } 

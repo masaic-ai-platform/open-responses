@@ -21,7 +21,11 @@ object TemplateUtils {
      * @param pebbleEngine The PebbleEngine instance to use for template resolution
      * @return The resolved value
      */
-    fun resolveTemplateValue(template: String, jsonStr: String, pebbleEngine: PebbleEngine): String {
+    fun resolveTemplateValue(
+        template: String,
+        jsonStr: String,
+        pebbleEngine: PebbleEngine,
+    ): String {
         try {
             // If the JSON is an empty string, return an empty result
             if (jsonStr.isBlank()) {

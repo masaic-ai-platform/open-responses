@@ -15,31 +15,30 @@ data class Eval(
     val dataSourceConfig: DataSourceConfig,
     @JsonProperty("testing_criteria")
     val testingCriteria: List<TestingCriterion>,
-    val metadata: Map<String, String>? = null //TODO: JB to revisit for constraints of 16 key value pair... etc
+    val metadata: Map<String, String>? = null, // TODO: JB to revisit for constraints of 16 key value pair... etc
 )
 
 // Data Source Config
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    property = "type",
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = CustomDataSourceConfigRequest::class, name = "custom"),
 //    JsonSubTypes.Type(value = CustomDataSourceConfig::class, name = "custom"),
-    JsonSubTypes.Type(value = StoredCompletionsDataSourceConfig::class, name = "stored_completions")
+    JsonSubTypes.Type(value = StoredCompletionsDataSourceConfig::class, name = "stored_completions"),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
-interface DataSourceConfig {
-}
+interface DataSourceConfig
 
 // Custom Data Source Config
 data class CustomDataSourceConfigRequest(
     @JsonProperty("item_schema")
     val schema: Map<String, Any>,
-
-    @JsonProperty("include_sample_schema") //TODO: JB to revisit
-    val includeSampleSchema: Boolean = false
+    // TODO: JB to revisit
+    @JsonProperty("include_sample_schema")
+    val includeSampleSchema: Boolean = false,
 ) : DataSourceConfig
 
 @JsonTypeName("custom")
@@ -49,19 +48,19 @@ data class CustomDataSourceConfig(
 
 // Stored Completions Data Source Config
 data class StoredCompletionsDataSourceConfig(
-    val metadata: Map<String, String>
-): DataSourceConfig
+    val metadata: Map<String, String>,
+) : DataSourceConfig
 
 // Testing Criterion
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    property = "type",
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = LabelModelGrader::class, name = "label_model"),
     JsonSubTypes.Type(value = StringCheckGrader::class, name = "string_check"),
-    JsonSubTypes.Type(value = TextSimilarityGrader::class, name = "text_similarity")
+    JsonSubTypes.Type(value = TextSimilarityGrader::class, name = "text_similarity"),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 interface TestingCriterion {
@@ -77,8 +76,8 @@ data class LabelModelGrader(
     val input: List<Any>,
     val labels: List<String>,
     @JsonProperty("passing_labels")
-    val passingLabels: List<String>
-): TestingCriterion
+    val passingLabels: List<String>,
+) : TestingCriterion
 
 // String Check Grader
 data class StringCheckGrader(
@@ -86,8 +85,8 @@ data class StringCheckGrader(
     override val id: String = "", // Default empty to be filled by service
     val input: String,
     val reference: String,
-    val operation: Operation
-): TestingCriterion {
+    val operation: Operation,
+) : TestingCriterion {
     /**
      * The string check operation to perform.
      */
@@ -114,30 +113,30 @@ data class StringCheckGrader(
          * Case-insensitive like comparison
          */
         @JsonProperty("ilike")
-        ILIKE;
+        ILIKE,
+
+        ;
 
         @JsonValue
-        fun getValue(): String {
-            return when (this) {
+        fun getValue(): String =
+            when (this) {
                 EQUAL -> "eq"
                 NOT_EQUAL -> "ne"
                 LIKE -> "like"
                 ILIKE -> "ilike"
             }
-        }
 
         companion object {
             @JsonCreator
             @JvmStatic
-            fun fromValue(value: String): Operation {
-                return when (value.lowercase()) {
+            fun fromValue(value: String): Operation =
+                when (value.lowercase()) {
                     "eq" -> EQUAL
                     "ne" -> NOT_EQUAL
                     "like" -> LIKE
                     "ilike" -> ILIKE
                     else -> throw IllegalArgumentException("Unknown operation: $value. Allowed values are: eq, ne, like, ilike")
                 }
-            }
         }
     }
 }
@@ -151,8 +150,8 @@ data class TextSimilarityGrader(
     @JsonProperty("evaluation_metric")
     val evaluationMetric: String,
     @JsonProperty("pass_threshold")
-    val passThreshold: Double
-): TestingCriterion
+    val passThreshold: Double,
+) : TestingCriterion
 
 // Request classes
 data class CreateEvalRequest(
@@ -161,7 +160,7 @@ data class CreateEvalRequest(
     val dataSourceConfig: DataSourceConfig,
     @JsonProperty("testing_criteria")
     val testingCriteria: List<TestingCriterion>,
-    val metadata: Map<String, String>? = null, //TODO: JB to revisit for constraints of 16 key value pair... etc
+    val metadata: Map<String, String>? = null, // TODO: JB to revisit for constraints of 16 key value pair... etc
 )
 
 // Response classes for pagination
@@ -175,7 +174,7 @@ data class EvalListResponse(
     val firstId: String?,
     @JsonProperty("last_id")
     val lastId: String?,
-    val limit: Int
+    val limit: Int,
 )
 
 // Parameters for listing evaluations
@@ -186,11 +185,11 @@ data class ListEvalsParams(
     val after: String? = null,
     @JsonProperty("before")
     val before: String? = null,
-    val metadata: Map<String, String>? = null
+    val metadata: Map<String, String>? = null,
 )
 
 // Request class for updating an eval
 data class UpdateEvalRequest(
     val name: String? = null,
-    val metadata: Map<String, String>? = null
+    val metadata: Map<String, String>? = null,
 ) 

@@ -30,7 +30,7 @@ class MongoEvalRepository(
     private val reactiveMongoTemplate: ReactiveMongoTemplate,
 ) : EvalRepository {
     private val logger = KotlinLogging.logger {}
-    
+
     companion object {
         const val EVAL_COLLECTION = "evals"
     }
@@ -44,11 +44,12 @@ class MongoEvalRepository(
     override suspend fun createEval(eval: Eval): Eval {
         try {
             // Generate an eval_id if it's not provided or empty
-            val evalWithId = if (eval.id.isBlank()) {
-                eval.copy(id = "eval_${java.util.UUID.randomUUID().toString().replace("-", "")}")
-            } else {
-                eval
-            }
+            val evalWithId =
+                if (eval.id.isBlank()) {
+                    eval.copy(id = "eval_${java.util.UUID.randomUUID().toString().replace("-", "")}")
+                } else {
+                    eval
+                }
             
             return reactiveMongoTemplate.save(evalWithId, EVAL_COLLECTION).awaitFirst().also {
                 logger.info { "Saved eval with ID: ${it.id}" }
@@ -65,29 +66,27 @@ class MongoEvalRepository(
      * @param evalId The ID of the evaluation to retrieve
      * @return The evaluation, or null if not found
      */
-    override suspend fun getEval(evalId: String): Eval? {
-        return try {
+    override suspend fun getEval(evalId: String): Eval? =
+        try {
             reactiveMongoTemplate.findById<Eval>(evalId, EVAL_COLLECTION).awaitFirstOrNull()
         } catch (e: Exception) {
             logger.error(e) { "Error getting eval with ID: $evalId" }
             null
         }
-    }
 
     /**
      * List all evaluations.
      *
      * @return A list of all evaluations
      */
-    override suspend fun listEvals(): List<Eval> {
-        return try {
+    override suspend fun listEvals(): List<Eval> =
+        try {
             val query = Query().with(Sort.by(Sort.Direction.DESC, "createdAt"))
             reactiveMongoTemplate.find<Eval>(query, EVAL_COLLECTION).collectList().awaitSingle()
         } catch (e: Exception) {
             logger.error(e) { "Error listing evals" }
             emptyList()
         }
-    }
 
     /**
      * List evaluations with pagination and filtering.
@@ -113,11 +112,12 @@ class MongoEvalRepository(
             if (params.after != null) {
                 val afterEval = getEval(params.after)
                 if (afterEval != null) {
-                    val createdAtCriteria = if (params.order.equals("asc", ignoreCase = true)) {
-                        Criteria.where("createdAt").gt(afterEval.createdAt)
-                    } else {
-                        Criteria.where("createdAt").lt(afterEval.createdAt)
-                    }
+                    val createdAtCriteria =
+                        if (params.order.equals("asc", ignoreCase = true)) {
+                            Criteria.where("createdAt").gt(afterEval.createdAt)
+                        } else {
+                            Criteria.where("createdAt").lt(afterEval.createdAt)
+                        }
                     query.addCriteria(createdAtCriteria)
                 }
             }
@@ -125,21 +125,23 @@ class MongoEvalRepository(
             if (params.before != null) {
                 val beforeEval = getEval(params.before)
                 if (beforeEval != null) {
-                    val createdAtCriteria = if (params.order.equals("asc", ignoreCase = true)) {
-                        Criteria.where("createdAt").lt(beforeEval.createdAt)
-                    } else {
-                        Criteria.where("createdAt").gt(beforeEval.createdAt)
-                    }
+                    val createdAtCriteria =
+                        if (params.order.equals("asc", ignoreCase = true)) {
+                            Criteria.where("createdAt").lt(beforeEval.createdAt)
+                        } else {
+                            Criteria.where("createdAt").gt(beforeEval.createdAt)
+                        }
                     query.addCriteria(createdAtCriteria)
                 }
             }
             
             // Set sort order
-            val sort = if (params.order.equals("asc", ignoreCase = true)) {
-                Sort.by(Sort.Direction.ASC, "createdAt")
-            } else {
-                Sort.by(Sort.Direction.DESC, "createdAt")
-            }
+            val sort =
+                if (params.order.equals("asc", ignoreCase = true)) {
+                    Sort.by(Sort.Direction.ASC, "createdAt")
+                } else {
+                    Sort.by(Sort.Direction.DESC, "createdAt")
+                }
             query.with(sort)
             
             // Set limit
@@ -159,8 +161,8 @@ class MongoEvalRepository(
      * @param evalId The ID of the evaluation to delete
      * @return True if the evaluation was deleted, false otherwise
      */
-    override suspend fun deleteEval(evalId: String): Boolean {
-        return try {
+    override suspend fun deleteEval(evalId: String): Boolean =
+        try {
             val query = Query(Criteria.where("_id").`is`(evalId))
             val result = reactiveMongoTemplate.remove<Eval>(query, EVAL_COLLECTION).awaitFirst()
             val deleted = result.deletedCount > 0
@@ -176,7 +178,6 @@ class MongoEvalRepository(
             logger.error(e) { "Error deleting eval with ID: $evalId" }
             false
         }
-    }
 
     /**
      * Update an evaluation.

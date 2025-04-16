@@ -16,8 +16,9 @@ import org.springframework.web.server.ResponseStatusException
  */
 @RestController
 @RequestMapping("/v1/evals")
-class EvalRunController(private val evalRunService: EvalRunService) {
-    
+class EvalRunController(
+    private val evalRunService: EvalRunService,
+) {
     /**
      * Create a new evaluation run.
      *
@@ -29,12 +30,12 @@ class EvalRunController(private val evalRunService: EvalRunService) {
     suspend fun createEvalRun(
         @RequestHeader headers: MultiValueMap<String, String>,
         @PathVariable evalId: String,
-        @RequestBody request: CreateEvalRunRequest
+        @RequestBody request: CreateEvalRunRequest,
     ): ResponseEntity<EvalRun> {
         val evalRun = evalRunService.createEvalRun(headers, evalId, request)
         return ResponseEntity.status(HttpStatus.CREATED).body(evalRun)
     }
-    
+
     /**
      * Get an evaluation run by ID.
      *
@@ -45,10 +46,11 @@ class EvalRunController(private val evalRunService: EvalRunService) {
     @GetMapping("/{evalId}/runs/{runId}")
     suspend fun getEvalRun(
         @PathVariable evalId: String,
-        @PathVariable runId: String
+        @PathVariable runId: String,
     ): ResponseEntity<EvalRun> {
-        val evalRun = evalRunService.getEvalRun(runId) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation run not found with ID: $runId")
+        val evalRun =
+            evalRunService.getEvalRun(runId)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation run not found with ID: $runId")
             
         // Verify that the run belongs to the specified eval
         if (evalRun.evalId != evalId) {
@@ -57,7 +59,7 @@ class EvalRunController(private val evalRunService: EvalRunService) {
         
         return ResponseEntity.ok(evalRun)
     }
-    
+
     /**
      * List evaluation runs for a specific eval.
      *
@@ -74,7 +76,7 @@ class EvalRunController(private val evalRunService: EvalRunService) {
         @RequestParam(required = false) after: String?,
         @RequestParam(required = false, defaultValue = "20") limit: Int,
         @RequestParam(required = false, defaultValue = "asc") order: String,
-        @RequestParam(required = false) status: String?
+        @RequestParam(required = false) status: String?,
     ): ResponseEntity<List<EvalRun>> {
         // Validate order parameter
         if (order != "asc" && order != "desc") {
@@ -82,19 +84,22 @@ class EvalRunController(private val evalRunService: EvalRunService) {
         }
         
         // Convert status string to EvalRunStatus enum if provided
-        val statusEnum = status?.let {
-            try {
-                EvalRunStatus.fromValue(it)
-            } catch (e: IllegalArgumentException) {
-                throw ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                    "Status must be one of: 'queued', 'in_progress', 'failed', 'completed', 'canceled'")
+        val statusEnum =
+            status?.let {
+                try {
+                    EvalRunStatus.fromValue(it)
+                } catch (e: IllegalArgumentException) {
+                    throw ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, 
+                        "Status must be one of: 'queued', 'in_progress', 'failed', 'completed', 'canceled'",
+                    )
+                }
             }
-        }
         
         val runs = evalRunService.listEvalRunsByEvalId(evalId, after, limit, order, statusEnum)
         return ResponseEntity.ok(runs)
     }
-    
+
     /**
      * Delete an evaluation run.
      *
@@ -105,10 +110,11 @@ class EvalRunController(private val evalRunService: EvalRunService) {
     @DeleteMapping("/{evalId}/runs/{runId}")
     suspend fun deleteEvalRun(
         @PathVariable evalId: String,
-        @PathVariable runId: String
+        @PathVariable runId: String,
     ): ResponseEntity<Void> {
-        val evalRun = evalRunService.getEvalRun(runId) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation run not found with ID: $runId")
+        val evalRun =
+            evalRunService.getEvalRun(runId)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation run not found with ID: $runId")
             
         // Verify that the run belongs to the specified eval
         if (evalRun.evalId != evalId) {

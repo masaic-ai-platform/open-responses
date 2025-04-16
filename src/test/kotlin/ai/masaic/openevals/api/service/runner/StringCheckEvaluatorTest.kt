@@ -15,7 +15,6 @@ import kotlin.test.assertTrue
 
 @ExtendWith(MockitoExtension::class)
 class StringCheckEvaluatorTest {
-
     private lateinit var pebbleEngine: PebbleEngine
     private lateinit var evaluator: StringCheckEvaluator
 
@@ -28,13 +27,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `canEvaluate should return true for StringCheckGrader criterion`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Test String Check",
-            id = "test-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Test String Check",
+                id = "test-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
 
         // Act
         val result = evaluator.canEvaluate(criterion)
@@ -71,13 +71,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return passed result for EQUAL operation with matching values`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Equal Check",
-            id = "equal-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Equal Check",
+                id = "equal-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
 
         val actualJson = """{"response": {"answer": "test value"}}"""
         val referenceJson = """{"expected": {"answer": "test value"}}"""
@@ -103,13 +104,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return failed result for EQUAL operation with non-matching values`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Equal Check",
-            id = "equal-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Equal Check",
+                id = "equal-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
 
         val actualJson = """{"response": {"answer": "test value"}}"""
         val referenceJson = """{"expected": {"answer": "different value"}}"""
@@ -135,13 +137,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return passed result for NOT_EQUAL operation with different values`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Not Equal Check",
-            id = "not-equal-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.NOT_EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Not Equal Check",
+                id = "not-equal-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.NOT_EQUAL,
+            )
 
         val actualJson = """{"response": {"answer": "test value"}}"""
         val referenceJson = """{"expected": {"answer": "different value"}}"""
@@ -167,13 +170,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return passed result for LIKE operation with substring match`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Like Check",
-            id = "like-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.LIKE
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Like Check",
+                id = "like-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.LIKE,
+            )
 
         val actualJson = """{"response": {"answer": "this is a test value"}}"""
         val referenceJson = """{"expected": {"answer": "test"}}"""
@@ -199,13 +203,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return passed result for ILIKE operation with case-insensitive match`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "ILike Check",
-            id = "ilike-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.ILIKE
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "ILike Check",
+                id = "ilike-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.ILIKE,
+            )
 
         val actualJson = """{"response": {"answer": "This is a TEST value"}}"""
         val referenceJson = """{"expected": {"answer": "test"}}"""
@@ -231,13 +236,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return failed result when input value is empty`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Equal Check",
-            id = "equal-id",
-            input = "{{response.missing}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Equal Check",
+                id = "equal-id",
+                input = "{{response.missing}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
 
         val actualJson = """{"response": {"answer": "test value"}}"""
         val referenceJson = """{"expected": {"answer": "test value"}}"""
@@ -262,13 +268,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return failed result when reference value is empty`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Equal Check",
-            id = "equal-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.missing}}",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Equal Check",
+                id = "equal-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.missing}}",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
 
         val actualJson = """{"response": {"answer": "test value"}}"""
         val referenceJson = """{"expected": {"answer": "test value"}}"""
@@ -294,13 +301,14 @@ class StringCheckEvaluatorTest {
     @Test
     fun `evaluate should return failed result when TemplateUtils throws exception`() {
         // Arrange
-        val criterion = StringCheckGrader(
-            name = "Equal Check",
-            id = "equal-id",
-            input = "{{response.answer}}",
-            reference = "{{expected.answer}}",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val criterion =
+            StringCheckGrader(
+                name = "Equal Check",
+                id = "equal-id",
+                input = "{{response.answer}}",
+                reference = "{{expected.answer}}",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
 
         val actualJson = """{"response": {"answer": "test value"}}"""
         val referenceJson = """{"expected": {"answer": "test value"}}"""

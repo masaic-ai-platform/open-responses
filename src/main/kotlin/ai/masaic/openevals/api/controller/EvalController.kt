@@ -17,8 +17,9 @@ import org.springframework.web.server.ResponseStatusException
  */
 @RestController
 @RequestMapping("/v1/evals")
-class EvalController(private val evalService: EvalService) {
-    
+class EvalController(
+    private val evalService: EvalService,
+) {
     /**
      * Create a new evaluation.
      *
@@ -26,11 +27,13 @@ class EvalController(private val evalService: EvalService) {
      * @return The created evaluation
      */
     @PostMapping
-    suspend fun createEval(@RequestBody request: CreateEvalRequest): ResponseEntity<Eval> {
+    suspend fun createEval(
+        @RequestBody request: CreateEvalRequest,
+    ): ResponseEntity<Eval> {
         val eval = evalService.createEval(request)
         return ResponseEntity.status(HttpStatus.CREATED).body(eval)
     }
-    
+
     /**
      * Get an evaluation by ID.
      *
@@ -38,12 +41,15 @@ class EvalController(private val evalService: EvalService) {
      * @return The evaluation
      */
     @GetMapping("/{evalId}")
-    suspend fun getEval(@PathVariable evalId: String): ResponseEntity<Eval> {
-        val eval = evalService.getEval(evalId) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+    suspend fun getEval(
+        @PathVariable evalId: String,
+    ): ResponseEntity<Eval> {
+        val eval =
+            evalService.getEval(evalId)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
         return ResponseEntity.ok(eval)
     }
-    
+
     /**
      * List evaluations with optional pagination and filtering.
      *
@@ -60,7 +66,7 @@ class EvalController(private val evalService: EvalService) {
         @RequestParam(required = false, defaultValue = "desc") order: String,
         @RequestParam(required = false) after: String?,
         @RequestParam(required = false) before: String?,
-        @RequestParam(required = false) metadata: Map<String, String>?
+        @RequestParam(required = false) metadata: Map<String, String>?,
     ): ResponseEntity<EvalListResponse> {
         // Validate parameters
         if (limit < 1 || limit > 100) {
@@ -71,18 +77,19 @@ class EvalController(private val evalService: EvalService) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Order must be 'asc' or 'desc'")
         }
         
-        val params = ListEvalsParams(
-            limit = limit,
-            order = order,
-            after = after,
-            before = before,
-            metadata = metadata
-        )
+        val params =
+            ListEvalsParams(
+                limit = limit,
+                order = order,
+                after = after,
+                before = before,
+                metadata = metadata,
+            )
         
         val response = evalService.listEvals(params)
         return ResponseEntity.ok(response)
     }
-    
+
     /**
      * Delete an evaluation.
      *
@@ -90,14 +97,16 @@ class EvalController(private val evalService: EvalService) {
      * @return No content response
      */
     @DeleteMapping("/{evalId}")
-    suspend fun deleteEval(@PathVariable evalId: String): ResponseEntity<Void> {
+    suspend fun deleteEval(
+        @PathVariable evalId: String,
+    ): ResponseEntity<Void> {
         val deleted = evalService.deleteEval(evalId)
         if (!deleted) {
             throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
         }
         return ResponseEntity.noContent().build()
     }
-    
+
     /**
      * Update an evaluation.
      *
@@ -108,10 +117,11 @@ class EvalController(private val evalService: EvalService) {
     @PostMapping("/{evalId}")
     suspend fun updateEval(
         @PathVariable evalId: String,
-        @RequestBody request: UpdateEvalRequest
+        @RequestBody request: UpdateEvalRequest,
     ): ResponseEntity<Eval> {
-        val updatedEval = evalService.updateEval(evalId, request) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+        val updatedEval =
+            evalService.updateEval(evalId, request)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
         
         return ResponseEntity.ok(updatedEval)
     }

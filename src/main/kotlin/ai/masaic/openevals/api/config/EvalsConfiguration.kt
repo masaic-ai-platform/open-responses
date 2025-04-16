@@ -6,12 +6,13 @@ import org.springframework.context.annotation.Configuration
 
 @Configuration
 class EvalsConfiguration {
-
     @Bean
     fun pebbleEngine(): PebbleEngine {
-        val engine: PebbleEngine = PebbleEngine.Builder()
-            .autoEscaping(false)
-            .build()
+        val engine: PebbleEngine =
+            PebbleEngine
+                .Builder()
+                .autoEscaping(false)
+                .build()
         return engine
     }
 } 

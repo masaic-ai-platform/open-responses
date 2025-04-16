@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component
  * Factory class for managing criterion evaluators.
  */
 @Component
-class CriterionEvaluatorFactory(private val evaluators: List<CriterionEvaluator>) {
+class CriterionEvaluatorFactory(
+    private val evaluators: List<CriterionEvaluator>,
+) {
     private val logger = LoggerFactory.getLogger(CriterionEvaluatorFactory::class.java)
 
     /**
@@ -38,14 +40,14 @@ class CriterionEvaluatorFactory(private val evaluators: List<CriterionEvaluator>
     fun evaluate(
         criterion: TestingCriterion,
         actualJson: String,
-        referenceJson: String
+        referenceJson: String,
     ): CriterionEvaluator.CriterionResult {
         val evaluator = getEvaluator(criterion)
         
         return evaluator?.evaluate(criterion, actualJson, referenceJson)
             ?: CriterionEvaluator.CriterionResult(
                 passed = false,
-                message = "No evaluator found for criterion type: ${criterion.javaClass.simpleName}"
+                message = "No evaluator found for criterion type: ${criterion.javaClass.simpleName}",
             )
     }
 } 

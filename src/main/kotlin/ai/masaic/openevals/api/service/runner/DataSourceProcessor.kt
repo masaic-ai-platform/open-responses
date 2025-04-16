@@ -13,7 +13,7 @@ interface DataSourceProcessor {
      * @return True if this processor can handle the data source
      */
     fun canProcess(dataSource: RunDataSource): Boolean
-    
+
     /**
      * Process the data source and prepare the appropriate data structure based on the source type.
      * Different implementations will return different subclasses of DataSourceProcessingResult.
@@ -22,7 +22,7 @@ interface DataSourceProcessor {
      * @return Result of processing the data source
      */
     suspend fun processDataSource(dataSource: RunDataSource): DataSourceProcessingResult
-    
+
     /**
      * Get the raw data lines from the data source.
      * 

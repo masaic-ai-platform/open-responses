@@ -2,11 +2,9 @@ package ai.masaic.openevals.api.repository
 
 import ai.masaic.openevals.api.model.ChatMessage
 import ai.masaic.openevals.api.model.CompletionsRunDataSource
-import ai.masaic.openevals.api.model.DataSource
 import ai.masaic.openevals.api.model.EvalRun
 import ai.masaic.openevals.api.model.EvalRunStatus
 import ai.masaic.openevals.api.model.FileDataSource
-import ai.masaic.openevals.api.model.InputMessages
 import ai.masaic.openevals.api.model.ResultCounts
 import ai.masaic.openevals.api.model.TemplateInputMessages
 import kotlinx.coroutines.test.runTest
@@ -56,7 +54,7 @@ class MongoEvalRunRepositoryTest {
                 "mongodb://${mongoDBContainer.host}:${mongoDBContainer.firstMappedPort}/testdb" 
             }
         }
-        
+
         // Define the collection name for tests, matching the one in MongoEvalRunRepository
         const val EVAL_RUN_COLLECTION = "eval_runs" 
     }
@@ -86,7 +84,9 @@ class MongoEvalRunRepositoryTest {
             mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             
             // Verify the collection is empty after cleanup
-            val query = org.springframework.data.mongodb.core.query.Query()
+            val query =
+                org.springframework.data.mongodb.core.query
+                    .Query()
             val count = mongoTemplate.count(query, EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
             if (count > 0) {
                 println("WARNING: Collection still has $count documents after cleanup!")
@@ -100,16 +100,17 @@ class MongoEvalRunRepositoryTest {
         name: String = "Test Run",
         createdAt: Long = Instant.now().epochSecond,
         status: EvalRunStatus = EvalRunStatus.QUEUED,
-        metadata: Map<String, String>? = mapOf("key1" to "value1", "key2" to "value2")
+        metadata: Map<String, String>? = mapOf("key1" to "value1", "key2" to "value2"),
     ): EvalRun {
         val messages = listOf(ChatMessage("user", "Hello, how are you?"))
         val templateMessages = TemplateInputMessages(template = messages)
         val fileDataSource = FileDataSource(fileId = "file_12345")
-        val completionsRunDataSource = CompletionsRunDataSource(
-            inputMessages = templateMessages,
-            model = "gpt-4",
-            source = fileDataSource
-        )
+        val completionsRunDataSource =
+            CompletionsRunDataSource(
+                inputMessages = templateMessages,
+                model = "gpt-4",
+                source = fileDataSource,
+            )
         
         return EvalRun(
             apiKey = "sk-test-123456",
@@ -121,7 +122,7 @@ class MongoEvalRunRepositoryTest {
             model = "gpt-4",
             status = status,
             resultCounts = ResultCounts(passed = 0, failed = 0, errored = 0, total = 0),
-            metadata = metadata
+            metadata = metadata,
         )
     }
 
@@ -198,8 +199,14 @@ class MongoEvalRunRepositoryTest {
     fun `listEvalRuns should return all eval runs sorted by createdAt descending`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             }
@@ -222,8 +229,14 @@ class MongoEvalRunRepositoryTest {
             println("Saved eval run IDs: ${savedEvalRun1.id}, ${savedEvalRun2.id}, ${savedEvalRun3.id}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // When - get all eval runs (default is descending order by createdAt)
@@ -242,8 +255,14 @@ class MongoEvalRunRepositoryTest {
     fun `listEvalRunsByEvalId should return runs for a specific eval ID`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             }
@@ -280,8 +299,14 @@ class MongoEvalRunRepositoryTest {
     fun `listEvalRunsByEvalId with parameters should respect limit parameter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             }
@@ -317,8 +342,14 @@ class MongoEvalRunRepositoryTest {
     fun `listEvalRunsByEvalId with parameters should respect status filter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             }
@@ -348,8 +379,14 @@ class MongoEvalRunRepositoryTest {
     fun `listEvalRunsByEvalId with parameters should respect after parameter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             }
@@ -404,8 +441,14 @@ class MongoEvalRunRepositoryTest {
     fun `listEvalRunsByEvalId with parameters should respect ascending order parameter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                EvalRun::class.java, MongoEvalRunRepository.EVAL_RUN_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        EvalRun::class.java,
+                        MongoEvalRunRepository.EVAL_RUN_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRunRepository.EVAL_RUN_COLLECTION).block()
             }
@@ -480,8 +523,10 @@ class MongoEvalRunRepositoryTest {
                 throw AssertionError("Expected exception was not thrown")
             } catch (e: Exception) {
                 // Expected exception
-                assertTrue(e.message!!.contains("Evaluation run not found") || 
-                         e is IllegalArgumentException)
+                assertTrue(
+                    e.message!!.contains("Evaluation run not found") || 
+                        e is IllegalArgumentException,
+                )
             }
         }
 

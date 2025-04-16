@@ -13,7 +13,7 @@ interface CriterionEvaluator {
      * @return True if this evaluator can handle the criterion
      */
     fun canEvaluate(criterion: TestingCriterion): Boolean
-    
+
     /**
      * Evaluate the criterion against the actual result and reference data.
      *
@@ -22,13 +22,17 @@ interface CriterionEvaluator {
      * @param referenceJson The reference data JSON string to compare against
      * @return Result of the evaluation
      */
-    fun evaluate(criterion: TestingCriterion, actualJson: String, referenceJson: String): CriterionResult
-    
+    fun evaluate(
+        criterion: TestingCriterion,
+        actualJson: String,
+        referenceJson: String,
+    ): CriterionResult
+
     /**
      * Data class to store the result of a criterion evaluation.
      */
     data class CriterionResult(
         val passed: Boolean,
-        val message: String? = null
+        val message: String? = null,
     )
 } 

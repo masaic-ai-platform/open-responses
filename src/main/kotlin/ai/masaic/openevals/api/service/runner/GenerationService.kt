@@ -16,7 +16,7 @@ interface GenerationService {
      * @return True if this service can handle the generation
      */
     fun canGenerate(dataSource: RunDataSource): Boolean
-    
+
     /**
      * Generate completions for the provided message sets.
      *
@@ -30,14 +30,14 @@ interface GenerationService {
         completionMessagesSet: Map<Int, List<ChatMessage>>,
         dataSource: CompletionsRunDataSource,
         apiKey: String,
-        dataSourceConfig: CustomDataSourceConfig
+        dataSourceConfig: CustomDataSourceConfig,
     ): Map<Int, CompletionResult>
-    
+
     /**
      * Data class to store completion results.
      */
     data class CompletionResult(
         val contentJson: String,
-        val error: String? = null
+        val error: String? = null,
     )
 } 

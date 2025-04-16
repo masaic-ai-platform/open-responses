@@ -3,7 +3,6 @@ package ai.masaic.openevals.api.service.runner
 import ai.masaic.openevals.api.model.*
 import ai.masaic.openresponses.api.service.storage.FileService
 import com.fasterxml.jackson.core.JsonParseException
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.mitchellbosecke.pebble.PebbleEngine
@@ -19,7 +18,7 @@ import java.io.StringWriter
 class FileDataSourceProcessor(
     private val fileService: FileService,
     private val objectMapper: ObjectMapper,
-    private val pebbleEngine: PebbleEngine
+    private val pebbleEngine: PebbleEngine,
 ) : DataSourceProcessor {
     private val logger = LoggerFactory.getLogger(FileDataSourceProcessor::class.java)
 
@@ -29,9 +28,7 @@ class FileDataSourceProcessor(
      * @param dataSource The data source to check
      * @return True if this processor can handle the data source
      */
-    override fun canProcess(dataSource: RunDataSource): Boolean {
-        return dataSource.source is FileDataSource
-    }
+    override fun canProcess(dataSource: RunDataSource): Boolean = dataSource.source is FileDataSource
 
     /**
      * Process the data source and prepare the appropriate data structure based on the source type.
@@ -66,29 +63,30 @@ class FileDataSourceProcessor(
         val jsonLines = getRawDataLines(dataSource)
 
         // Process based on input message type
-        val messagesMap = when (val inputMessages = dataSource.inputMessages) {
-            is TemplateInputMessages -> {
-                // Prepare template once
-                val templateStr = objectMapper.writeValueAsString(inputMessages.template)
-                val compiledTemplate = pebbleEngine.getLiteralTemplate(templateStr)
+        val messagesMap =
+            when (val inputMessages = dataSource.inputMessages) {
+                is TemplateInputMessages -> {
+                    // Prepare template once
+                    val templateStr = objectMapper.writeValueAsString(inputMessages.template)
+                    val compiledTemplate = pebbleEngine.getLiteralTemplate(templateStr)
 
-                // Process each line with the template
-                jsonLines.asSequence()
-                    .mapIndexed { index, jsonLine ->
-                        index to processJsonLineWithTemplate(jsonLine, compiledTemplate)
-                    }
-                    .toMap()
+                    // Process each line with the template
+                    jsonLines
+                        .asSequence()
+                        .mapIndexed { index, jsonLine ->
+                            index to processJsonLineWithTemplate(jsonLine, compiledTemplate)
+                        }.toMap()
+                }
+                is ItemReferenceInputMessages -> {
+                    logger.info("Processing item reference: ${inputMessages.itemReference}")
+                    // Item reference handling will be implemented later
+                    emptyMap()
+                }
+                else -> {
+                    logger.warn("Unsupported input message type: ${inputMessages.javaClass.simpleName}")
+                    emptyMap()
+                }
             }
-            is ItemReferenceInputMessages -> {
-                logger.info("Processing item reference: ${inputMessages.itemReference}")
-                // Item reference handling will be implemented later
-                emptyMap()
-            }
-            else -> {
-                logger.warn("Unsupported input message type: ${inputMessages.javaClass.simpleName}")
-                emptyMap()
-            }
-        }
 
         return if (messagesMap.isNotEmpty()) {
             CompletionMessagesResult(messagesMap)
@@ -108,11 +106,12 @@ class FileDataSourceProcessor(
         val jsonLines = getRawDataLines(dataSource)
         
         // Parse each line as a JsonNode
-        val itemsMap = jsonLines.asSequence()
-            .mapIndexed { index, jsonLine ->
-                index to objectMapper.readTree(jsonLine)
-            }
-            .toMap()
+        val itemsMap =
+            jsonLines
+                .asSequence()
+                .mapIndexed { index, jsonLine ->
+                    index to objectMapper.readTree(jsonLine)
+                }.toMap()
 
         return if (itemsMap.isNotEmpty()) {
             JsonlDataResult(itemsMap)
@@ -133,7 +132,12 @@ class FileDataSourceProcessor(
         }
         
         val fileDataSource = dataSource.source as FileDataSource
-        val content = fileService.getFileContent(fileDataSource.fileId).inputStream.bufferedReader().use { it.readText() }
+        val content =
+            fileService
+                .getFileContent(fileDataSource.fileId)
+                .inputStream
+                .bufferedReader()
+                .use { it.readText() }
         return validateJsonl(content)
     }
 
@@ -144,7 +148,10 @@ class FileDataSourceProcessor(
      * @param template The compiled Pebble template
      * @return List of ChatMessage objects after template processing
      */
-    private fun processJsonLineWithTemplate(jsonLine: String, template: PebbleTemplate): List<ChatMessage> {
+    private fun processJsonLineWithTemplate(
+        jsonLine: String,
+        template: PebbleTemplate,
+    ): List<ChatMessage> {
         // Parse the JSON context
         val context: Map<String, Any> = objectMapper.readValue(jsonLine)
 

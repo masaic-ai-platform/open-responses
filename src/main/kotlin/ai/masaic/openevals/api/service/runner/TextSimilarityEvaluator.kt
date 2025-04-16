@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class TextSimilarityEvaluator(
-    private val pebbleEngine: PebbleEngine
+    private val pebbleEngine: PebbleEngine,
 ) : CriterionEvaluator {
     private val logger = LoggerFactory.getLogger(TextSimilarityEvaluator::class.java)
 
@@ -22,9 +22,7 @@ class TextSimilarityEvaluator(
      * @param criterion The criterion to check
      * @return True if this evaluator can handle the criterion
      */
-    override fun canEvaluate(criterion: TestingCriterion): Boolean {
-        return criterion is TextSimilarityGrader
-    }
+    override fun canEvaluate(criterion: TestingCriterion): Boolean = criterion is TextSimilarityGrader
 
     /**
      * Evaluate the text similarity criterion against the actual result and reference data.
@@ -37,12 +35,12 @@ class TextSimilarityEvaluator(
     override fun evaluate(
         criterion: TestingCriterion,
         actualJson: String,
-        referenceJson: String
+        referenceJson: String,
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is TextSimilarityGrader) {
             return CriterionEvaluator.CriterionResult(
                 passed = false,
-                message = "Invalid criterion type: expected TextSimilarityGrader but got ${criterion.javaClass.simpleName}"
+                message = "Invalid criterion type: expected TextSimilarityGrader but got ${criterion.javaClass.simpleName}",
             )
         }
         
@@ -54,14 +52,14 @@ class TextSimilarityEvaluator(
             if (inputValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
                     passed = false,
-                    message = "Input value not found or empty: '${criterion.input}' in actual result"
+                    message = "Input value not found or empty: '${criterion.input}' in actual result",
                 )
             }
 
             if (referenceValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
                     passed = false,
-                    message = "Reference value not found or empty: '${criterion.reference}' in reference data"
+                    message = "Reference value not found or empty: '${criterion.reference}' in reference data",
                 )
             }
 
@@ -71,14 +69,18 @@ class TextSimilarityEvaluator(
 
             return CriterionEvaluator.CriterionResult(
                 passed = passed,
-                message = if (passed) "Similarity check passed with score $similarity (threshold: ${criterion.passThreshold})"
-                else "Similarity check failed with score $similarity (threshold: ${criterion.passThreshold})"
+                message =
+                    if (passed) {
+                        "Similarity check passed with score $similarity (threshold: ${criterion.passThreshold})"
+                    } else {
+                        "Similarity check failed with score $similarity (threshold: ${criterion.passThreshold})"
+                    },
             )
         } catch (e: Exception) {
             logger.error("Error evaluating text similarity: ${e.message}", e)
             return CriterionEvaluator.CriterionResult(
                 passed = false,
-                message = "Error: ${e.message}"
+                message = "Error: ${e.message}",
             )
         }
     }
@@ -91,7 +93,10 @@ class TextSimilarityEvaluator(
      * @param str2 Second string
      * @return Similarity score between 0.0 and 1.0
      */
-    private fun calculateSimilarity(str1: String, str2: String): Double {
+    private fun calculateSimilarity(
+        str1: String,
+        str2: String,
+    ): Double {
         // Simple implementation using Jaccard similarity of words
         val words1 = str1.lowercase().split(Regex("\\W+")).toSet()
         val words2 = str2.lowercase().split(Regex("\\W+")).toSet()

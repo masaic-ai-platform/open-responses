@@ -15,7 +15,7 @@ sealed class DataSourceProcessingResult
  * @property messages Map of chat messages by index
  */
 class CompletionMessagesResult(
-    val messages: Map<Int, List<ChatMessage>>
+    val messages: Map<Int, List<ChatMessage>>,
 ) : DataSourceProcessingResult()
 
 /**
@@ -24,7 +24,7 @@ class CompletionMessagesResult(
  * @property items Map of JSON nodes by index
  */
 class JsonlDataResult(
-    val items: Map<Int, JsonNode>
+    val items: Map<Int, JsonNode>,
 ) : DataSourceProcessingResult()
 
 /**
@@ -33,5 +33,5 @@ class JsonlDataResult(
  * @property reason Explanation of why no data was produced
  */
 class EmptyProcessingResult(
-    val reason: String
+    val reason: String,
 ) : DataSourceProcessingResult() 

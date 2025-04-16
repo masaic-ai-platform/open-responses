@@ -1,6 +1,5 @@
 package ai.masaic.openevals.api.repository
 
-import ai.masaic.openevals.api.model.CreateEvalRequest
 import ai.masaic.openevals.api.model.CustomDataSourceConfig
 import ai.masaic.openevals.api.model.Eval
 import ai.masaic.openevals.api.model.ListEvalsParams
@@ -53,7 +52,7 @@ class MongoEvalRepositoryTest {
                 "mongodb://${mongoDBContainer.host}:${mongoDBContainer.firstMappedPort}/testdb" 
             }
         }
-        
+
         // Define the collection name for tests, matching the one in MongoEvalRepository
         const val EVAL_COLLECTION = "evals" 
     }
@@ -83,7 +82,9 @@ class MongoEvalRepositoryTest {
             mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             
             // Verify the collection is empty after cleanup
-            val query = org.springframework.data.mongodb.core.query.Query()
+            val query =
+                org.springframework.data.mongodb.core.query
+                    .Query()
             val count = mongoTemplate.count(query, Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
             if (count > 0) {
                 println("WARNING: Collection still has $count documents after cleanup!")
@@ -95,18 +96,19 @@ class MongoEvalRepositoryTest {
         id: String = "eval_${UUID.randomUUID().toString().replace("-", "")}",
         name: String = "Test Evaluation",
         createdAt: Long = Instant.now().epochSecond,
-        metadata: Map<String, String>? = mapOf("key1" to "value1", "key2" to "value2")
+        metadata: Map<String, String>? = mapOf("key1" to "value1", "key2" to "value2"),
     ): Eval {
         val schemaMap = mapOf<String, JsonValue>()
         val dataSourceConfig = CustomDataSourceConfig(schema = schemaMap)
         
-        val testingCriterion = StringCheckGrader(
-            name = "String Check",
-            id = "crit_${UUID.randomUUID().toString().replace("-", "")}",
-            input = "{{input}}",
-            reference = "expected value",
-            operation = StringCheckGrader.Operation.EQUAL
-        )
+        val testingCriterion =
+            StringCheckGrader(
+                name = "String Check",
+                id = "crit_${UUID.randomUUID().toString().replace("-", "")}",
+                input = "{{input}}",
+                reference = "expected value",
+                operation = StringCheckGrader.Operation.EQUAL,
+            )
         
         return Eval(
             id = id,
@@ -114,7 +116,7 @@ class MongoEvalRepositoryTest {
             createdAt = createdAt,
             dataSourceConfig = dataSourceConfig,
             testingCriteria = listOf(testingCriterion),
-            metadata = metadata
+            metadata = metadata,
         )
     }
 
@@ -190,8 +192,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals should return all evals sorted by createdAt descending`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -214,8 +222,14 @@ class MongoEvalRepositoryTest {
             println("Saved eval IDs: ${savedEval1.id}, ${savedEval2.id}, ${savedEval3.id}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // When - get all evals (default is descending order by createdAt)
@@ -234,8 +248,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals with params should respect pagination parameters`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -258,8 +278,14 @@ class MongoEvalRepositoryTest {
             println("Saved eval IDs: ${savedEval1.id}, ${savedEval2.id}, ${savedEval3.id}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // When - get results after eval3 (newest, which is first in DESC order)
@@ -276,8 +302,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals with params should respect limit parameter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -300,8 +332,14 @@ class MongoEvalRepositoryTest {
             println("Saved eval IDs: ${savedEval1.id}, ${savedEval2.id}, ${savedEval3.id}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // When - limit to 2 results (in descending order by default)
@@ -318,8 +356,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals with params should filter by metadata`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -345,8 +389,14 @@ class MongoEvalRepositoryTest {
             println("Metadata3: $metadata3")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // When - filter by metadata
@@ -372,8 +422,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals with params should respect before parameter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -398,8 +454,14 @@ class MongoEvalRepositoryTest {
             println("Saved eval timestamps: ${savedEval1.createdAt}, ${savedEval2.createdAt}, ${savedEval3.createdAt}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // Get all evals in different orders to verify
@@ -445,8 +507,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals with params should respect ascending order parameter`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -470,8 +538,14 @@ class MongoEvalRepositoryTest {
             println("Saved eval timestamps: ${savedEval1.createdAt}, ${savedEval2.createdAt}, ${savedEval3.createdAt}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // When - get results in ascending order
@@ -563,8 +637,14 @@ class MongoEvalRepositoryTest {
     fun `listEvals with params should respect before parameter in ascending order`() =
         runTest {
             // Ensure we start with a clean collection
-            val initialCount = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val initialCount =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             if (initialCount > 0) {
                 mongoTemplate.dropCollection(MongoEvalRepository.EVAL_COLLECTION).block()
             }
@@ -589,8 +669,14 @@ class MongoEvalRepositoryTest {
             println("Saved eval timestamps: ${savedEval1.createdAt}, ${savedEval2.createdAt}, ${savedEval3.createdAt}")
             
             // Verify how many docs we have before testing
-            val count = mongoTemplate.count(org.springframework.data.mongodb.core.query.Query(), 
-                Eval::class.java, MongoEvalRepository.EVAL_COLLECTION).block() ?: 0
+            val count =
+                mongoTemplate
+                    .count(
+                        org.springframework.data.mongodb.core.query
+                            .Query(), 
+                        Eval::class.java,
+                        MongoEvalRepository.EVAL_COLLECTION,
+                    ).block() ?: 0
             assertEquals(3, count, "Expected 3 documents in database before running test")
             
             // Get all evals in ascending order to find our target by timestamp

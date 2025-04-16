@@ -30,7 +30,7 @@ data class EvalRun(
     @JsonProperty("report_url")
     val reportUrl: String? = "Coming soon with Masaic.AI dashboard",
     val metadata: Map<String, String>? = null,
-    val error: EvalRunError? = null
+    val error: EvalRunError? = null,
 )
 
 /**
@@ -50,24 +50,25 @@ enum class EvalRunStatus {
     COMPLETED,
     
     @JsonProperty("canceled")
-    CANCELED;
+    CANCELED,
     
+    ;
+
     @JsonValue
-    fun getValue(): String {
-        return when (this) {
+    fun getValue(): String =
+        when (this) {
             QUEUED -> "queued"
             IN_PROGRESS -> "in_progress"
             FAILED -> "failed"
             COMPLETED -> "completed"
             CANCELED -> "canceled"
         }
-    }
-    
+
     companion object {
         @JsonCreator
         @JvmStatic
-        fun fromValue(value: String): EvalRunStatus {
-            return when (value) {
+        fun fromValue(value: String): EvalRunStatus =
+            when (value) {
                 "queued" -> QUEUED
                 "in_progress" -> IN_PROGRESS
                 "failed" -> FAILED
@@ -75,7 +76,6 @@ enum class EvalRunStatus {
                 "canceled" -> CANCELED
                 else -> throw IllegalArgumentException("Unknown status: $value")
             }
-        }
     }
 }
 
@@ -84,7 +84,7 @@ enum class EvalRunStatus {
  */
 data class EvalRunError(
     val code: String,
-    val message: String
+    val message: String,
 )
 
 /**
@@ -94,7 +94,7 @@ data class ResultCounts(
     val passed: Int = 0,
     val failed: Int = 0,
     val errored: Int = 0,
-    val total: Int = 0
+    val total: Int = 0,
 )
 
 /**
@@ -104,7 +104,7 @@ data class TestingCriteriaResult(
     @JsonProperty("testing_criteria")
     val testingCriteria: String,
     val passed: Int = 0,
-    val failed: Int = 0
+    val failed: Int = 0,
 )
 
 /**
@@ -122,7 +122,7 @@ data class ModelUsage(
     @JsonProperty("cached_tokens")
     val cachedTokens: Int = 0,
     @JsonProperty("total_tokens")
-    val totalTokens: Int = 0
+    val totalTokens: Int = 0,
 )
 
 // Run Data Source
@@ -130,11 +130,11 @@ data class ModelUsage(
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    property = "type",
 )
 @JsonSubTypes(
 //    JsonSubTypes.Type(value = JsonlRunDataSource::class, name = "jsonl"),
-    JsonSubTypes.Type(value = CompletionsRunDataSource::class, name = "completions")
+    JsonSubTypes.Type(value = CompletionsRunDataSource::class, name = "completions"),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 interface RunDataSource {
@@ -144,7 +144,7 @@ interface RunDataSource {
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    property = "type",
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = FileDataSource::class, name = "file_id"),
@@ -154,20 +154,20 @@ interface DataSource
 
 data class FileDataSource(
     @JsonProperty("file_id")
-    val fileId: String
+    val fileId: String,
 ) : DataSource
 
-//data class CSVFileDataSource(
+// data class CSVFileDataSource(
 //    @JsonProperty("file_id")
 //    val fileId: String
-//) : DataSource {
+// ) : DataSource {
 //    override val type: String = "csv"
-//}
+// }
 
 // Jsonl Run Data Source
-//data class JsonlRunDataSource(
+// data class JsonlRunDataSource(
 //    override val source: JsonlFileDataSource
-//) : RunDataSource
+// ) : RunDataSource
 
 // Completions Run Data Source
 data class CompletionsRunDataSource(
@@ -176,35 +176,35 @@ data class CompletionsRunDataSource(
     @JsonProperty("sampling_params")
     val samplingParams: SamplingParams? = null,
     val model: String,
-    override val source: DataSource
+    override val source: DataSource,
 ) : RunDataSource
 
 // Input Messages
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "type"
+    property = "type",
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = TemplateInputMessages::class, name = "template"),
-    JsonSubTypes.Type(value = ItemReferenceInputMessages::class, name = "item_reference")
+    JsonSubTypes.Type(value = ItemReferenceInputMessages::class, name = "item_reference"),
 )
 interface InputMessages
 
 data class TemplateInputMessages(
     val type: String = "template",
-    val template: List<ChatMessage>
+    val template: List<ChatMessage>,
 ) : InputMessages
 
-data class ItemReferenceInputMessages( //TODO: JB revisit ... can be used for stored completions
+data class ItemReferenceInputMessages( // TODO: JB revisit ... can be used for stored completions
     val type: String = "item_reference",
     @JsonProperty("item_reference")
-    val itemReference: String
+    val itemReference: String,
 ) : InputMessages
 
 data class ChatMessage(
     val role: String,
-    val content: String
+    val content: String,
 )
 
 // Sampling Parameters
@@ -219,7 +219,7 @@ data class SamplingParams(
     @JsonProperty("presence_penalty")
     val presencePenalty: Double = 0.0,
     @JsonProperty("seed")
-    val seed: Int? = null
+    val seed: Int? = null,
 )
 
 // Create Eval Run Request
@@ -234,5 +234,5 @@ data class CreateEvalRunRequest(
 data class CompletionResult(
     @JsonProperty("content_json")
     val contentJson: String,
-    val error: String? = null
+    val error: String? = null,
 ) 

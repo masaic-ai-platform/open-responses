@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component
  */
 @Component
 class StringCheckEvaluator(
-    private val pebbleEngine: PebbleEngine
+    private val pebbleEngine: PebbleEngine,
 ) : CriterionEvaluator {
     private val logger = LoggerFactory.getLogger(StringCheckEvaluator::class.java)
 
@@ -22,9 +22,7 @@ class StringCheckEvaluator(
      * @param criterion The criterion to check
      * @return True if this evaluator can handle the criterion
      */
-    override fun canEvaluate(criterion: TestingCriterion): Boolean {
-        return criterion is StringCheckGrader
-    }
+    override fun canEvaluate(criterion: TestingCriterion): Boolean = criterion is StringCheckGrader
 
     /**
      * Evaluate the string check criterion against the actual result and reference data.
@@ -37,12 +35,12 @@ class StringCheckEvaluator(
     override fun evaluate(
         criterion: TestingCriterion,
         actualJson: String,
-        referenceJson: String
+        referenceJson: String,
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is StringCheckGrader) {
             return CriterionEvaluator.CriterionResult(
                 passed = false,
-                message = "Invalid criterion type: expected StringCheckGrader but got ${criterion.javaClass.simpleName}"
+                message = "Invalid criterion type: expected StringCheckGrader but got ${criterion.javaClass.simpleName}",
             )
         }
         
@@ -56,35 +54,40 @@ class StringCheckEvaluator(
             if (inputValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
                     passed = false,
-                    message = "Input value not found or empty: '${criterion.input}' in actual result"
+                    message = "Input value not found or empty: '${criterion.input}' in actual result",
                 )
             }
 
             if (referenceValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
                     passed = false,
-                    message = "Reference value not found or empty: '${criterion.reference}' in reference data"
+                    message = "Reference value not found or empty: '${criterion.reference}' in reference data",
                 )
             }
 
             // Perform the comparison based on the operation
-            val passed = when (criterion.operation) {
-                StringCheckGrader.Operation.EQUAL -> inputValue == referenceValue
-                StringCheckGrader.Operation.NOT_EQUAL -> inputValue != referenceValue
-                StringCheckGrader.Operation.LIKE -> inputValue.contains(referenceValue)
-                StringCheckGrader.Operation.ILIKE -> inputValue.lowercase().contains(referenceValue.lowercase())
-            }
+            val passed =
+                when (criterion.operation) {
+                    StringCheckGrader.Operation.EQUAL -> inputValue == referenceValue
+                    StringCheckGrader.Operation.NOT_EQUAL -> inputValue != referenceValue
+                    StringCheckGrader.Operation.LIKE -> inputValue.contains(referenceValue)
+                    StringCheckGrader.Operation.ILIKE -> inputValue.lowercase().contains(referenceValue.lowercase())
+                }
 
             return CriterionEvaluator.CriterionResult(
                 passed = passed,
-                message = if (passed) "Check passed: '$inputValue' ${criterion.operation} '$referenceValue'"
-                else "Check failed: '$inputValue' ${criterion.operation} '$referenceValue'"
+                message =
+                    if (passed) {
+                        "Check passed: '$inputValue' ${criterion.operation} '$referenceValue'"
+                    } else {
+                        "Check failed: '$inputValue' ${criterion.operation} '$referenceValue'"
+                    },
             )
         } catch (e: Exception) {
             logger.error("Error evaluating string check: ${e.message}", e)
             return CriterionEvaluator.CriterionResult(
                 passed = false,
-                message = "Error: ${e.message}"
+                message = "Error: ${e.message}",
             )
         }
     }

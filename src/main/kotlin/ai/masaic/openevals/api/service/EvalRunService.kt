@@ -1,9 +1,9 @@
 package ai.masaic.openevals.api.service
 
+import ai.masaic.openevals.api.model.CompletionsRunDataSource
 import ai.masaic.openevals.api.model.CreateEvalRunRequest
 import ai.masaic.openevals.api.model.EvalRun
 import ai.masaic.openevals.api.model.EvalRunStatus
-import ai.masaic.openevals.api.model.CompletionsRunDataSource
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.repository.EvalRunRepository
 import ai.masaic.openevals.api.service.runner.EvalRunner
@@ -24,7 +24,7 @@ import java.time.Instant
 class EvalRunService(
     private val evalRunRepository: EvalRunRepository,
     private val evalRepository: EvalRepository,
-    private val evalRunner: EvalRunner
+    private val evalRunner: EvalRunner,
 ) {
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
@@ -35,29 +35,36 @@ class EvalRunService(
      * @param request The evaluation run creation request
      * @return The created evaluation run
      */
-    suspend fun createEvalRun(headers: MultiValueMap<String, String>, evalId: String, request: CreateEvalRunRequest): EvalRun {
+    suspend fun createEvalRun(
+        headers: MultiValueMap<String, String>,
+        evalId: String,
+        request: CreateEvalRunRequest,
+    ): EvalRun {
         // Verify that the eval exists
-        val eval = evalRepository.getEval(evalId) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+        val eval =
+            evalRepository.getEval(evalId)
+                ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
         
         // Extract model from data source if it's a completions run
-        val model = when (request.dataSource) {
-            is CompletionsRunDataSource -> request.dataSource.model
-            else -> null
-        }
+        val model =
+            when (request.dataSource) {
+                is CompletionsRunDataSource -> request.dataSource.model
+                else -> null
+            }
 
         // Create the evaluation run
-        val evalRun = EvalRun(
-            apiKey = extractApiKey(headers),
-            id = "",
-            evalId = evalId,
-            name = request.name,
-            createdAt = Instant.now().epochSecond,
-            dataSource = request.dataSource,
-            model = model,
-            status = EvalRunStatus.QUEUED,
-            metadata = request.metadata ?: emptyMap()
-        )
+        val evalRun =
+            EvalRun(
+                apiKey = extractApiKey(headers),
+                id = "",
+                evalId = evalId,
+                name = request.name,
+                createdAt = Instant.now().epochSecond,
+                dataSource = request.dataSource,
+                model = model,
+                status = EvalRunStatus.QUEUED,
+                metadata = request.metadata ?: emptyMap(),
+            )
 
         val createdEvalRun = evalRunRepository.createEvalRun(evalRun)
         
@@ -78,20 +85,23 @@ class EvalRunService(
      */
     private fun extractApiKey(headerMap: MultiValueMap<String, String>?): String {
         // Try to get from Authorization header
-        val authHeader = headerMap?.get("Authorization")?.get(0)?.split(" ")?.getOrNull(1) ?: throw IllegalStateException("api-key is missing in request")
+        val authHeader =
+            headerMap
+                ?.get("Authorization")
+                ?.get(0)
+                ?.split(" ")
+                ?.getOrNull(1) ?: throw IllegalStateException("api-key is missing in request")
         return authHeader
     }
-    
+
     /**
      * Get an evaluation run by ID.
      *
      * @param evalRunId The ID of the evaluation run to retrieve
      * @return The evaluation run, or null if not found
      */
-    suspend fun getEvalRun(evalRunId: String): EvalRun? {
-        return evalRunRepository.getEvalRun(evalRunId)
-    }
-    
+    suspend fun getEvalRun(evalRunId: String): EvalRun? = evalRunRepository.getEvalRun(evalRunId)
+
     /**
      * List all evaluation runs for a specific eval.
      *
@@ -100,12 +110,12 @@ class EvalRunService(
      */
     suspend fun listEvalRunsByEvalId(evalId: String): List<EvalRun> {
         // Verify that the eval exists
-        evalRepository.getEval(evalId) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+        evalRepository.getEval(evalId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
             
         return evalRunRepository.listEvalRunsByEvalId(evalId)
     }
-    
+
     /**
      * List evaluation runs for a specific eval with pagination, ordering, and status filtering.
      *
@@ -121,22 +131,20 @@ class EvalRunService(
         after: String?,
         limit: Int,
         order: String,
-        status: EvalRunStatus?
+        status: EvalRunStatus?,
     ): List<EvalRun> {
         // Verify that the eval exists
-        evalRepository.getEval(evalId) ?: 
-            throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+        evalRepository.getEval(evalId)
+            ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
             
         return evalRunRepository.listEvalRunsByEvalId(evalId, after, limit, order, status)
     }
-    
+
     /**
      * Delete an evaluation run.
      *
      * @param evalRunId The ID of the evaluation run to delete
      * @return True if the evaluation run was deleted, false otherwise
      */
-    suspend fun deleteEvalRun(evalRunId: String): Boolean {
-        return evalRunRepository.deleteEvalRun(evalRunId)
-    }
+    suspend fun deleteEvalRun(evalRunId: String): Boolean = evalRunRepository.deleteEvalRun(evalRunId)
 } 

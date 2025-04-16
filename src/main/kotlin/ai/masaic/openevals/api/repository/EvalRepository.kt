@@ -34,7 +34,7 @@ interface EvalRepository {
      * @return A list of all evaluations
      */
     suspend fun listEvals(): List<Eval>
-    
+
     /**
      * List evaluations with pagination and filtering.
      *
@@ -75,53 +75,53 @@ class InMemoryEvalRepository : EvalRepository {
         return newEval
     }
 
-    override suspend fun getEval(evalId: String): Eval? {
-        return evaluations[evalId]
-    }
+    override suspend fun getEval(evalId: String): Eval? = evaluations[evalId]
 
-    override suspend fun listEvals(): List<Eval> {
-        return evaluations.values.toList()
-    }
-    
+    override suspend fun listEvals(): List<Eval> = evaluations.values.toList()
+
     override suspend fun listEvals(params: ListEvalsParams): List<Eval> {
         var result = evaluations.values.toList()
         
         // Filter by metadata if provided
         if (params.metadata != null && params.metadata.isNotEmpty()) {
-            result = result.filter { eval ->
-                params.metadata.all { (key, value) ->
-                    eval.metadata?.get(key) == value
+            result =
+                result.filter { eval ->
+                    params.metadata.all { (key, value) ->
+                        eval.metadata?.get(key) == value
+                    }
                 }
-            }
         }
         
         // Sort by createdAt
-        result = if (params.order.equals("asc", ignoreCase = true)) {
-            result.sortedBy { it.createdAt }
-        } else {
-            result.sortedByDescending { it.createdAt }
-        }
+        result =
+            if (params.order.equals("asc", ignoreCase = true)) {
+                result.sortedBy { it.createdAt }
+            } else {
+                result.sortedByDescending { it.createdAt }
+            }
         
         // Apply cursor-based pagination
         if (params.after != null) {
             val afterEval = evaluations[params.after]
             if (afterEval != null) {
-                result = if (params.order.equals("asc", ignoreCase = true)) {
-                    result.filter { it.createdAt > afterEval.createdAt }
-                } else {
-                    result.filter { it.createdAt < afterEval.createdAt }
-                }
+                result =
+                    if (params.order.equals("asc", ignoreCase = true)) {
+                        result.filter { it.createdAt > afterEval.createdAt }
+                    } else {
+                        result.filter { it.createdAt < afterEval.createdAt }
+                    }
             }
         }
         
         if (params.before != null) {
             val beforeEval = evaluations[params.before]
             if (beforeEval != null) {
-                result = if (params.order.equals("asc", ignoreCase = true)) {
-                    result.filter { it.createdAt < beforeEval.createdAt }
-                } else {
-                    result.filter { it.createdAt > beforeEval.createdAt }
-                }
+                result =
+                    if (params.order.equals("asc", ignoreCase = true)) {
+                        result.filter { it.createdAt < beforeEval.createdAt }
+                    } else {
+                        result.filter { it.createdAt > beforeEval.createdAt }
+                    }
             }
         }
         
@@ -129,10 +129,8 @@ class InMemoryEvalRepository : EvalRepository {
         return result.take(params.limit)
     }
 
-    override suspend fun deleteEval(evalId: String): Boolean {
-        return evaluations.remove(evalId) != null
-    }
-    
+    override suspend fun deleteEval(evalId: String): Boolean = evaluations.remove(evalId) != null
+
     override suspend fun updateEval(eval: Eval): Eval? {
         // Check if the eval exists
         if (!evaluations.containsKey(eval.id)) {

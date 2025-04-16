@@ -34,7 +34,7 @@ interface EvalRunRepository {
      * @return A list of all evaluation runs
      */
     suspend fun listEvalRuns(): List<EvalRun>
-    
+
     /**
      * List evaluation runs for a specific eval.
      *
@@ -58,7 +58,7 @@ interface EvalRunRepository {
         after: String?,
         limit: Int,
         order: String,
-        status: EvalRunStatus?
+        status: EvalRunStatus?,
     ): List<EvalRun>
 
     /**
@@ -93,24 +93,18 @@ class InMemoryEvalRunRepository : EvalRunRepository {
         return newEvalRun
     }
 
-    override suspend fun getEvalRun(evalRunId: String): EvalRun? {
-        return evalRuns[evalRunId]
-    }
+    override suspend fun getEvalRun(evalRunId: String): EvalRun? = evalRuns[evalRunId]
 
-    override suspend fun listEvalRuns(): List<EvalRun> {
-        return evalRuns.values.toList()
-    }
-    
-    override suspend fun listEvalRunsByEvalId(evalId: String): List<EvalRun> {
-        return evalRuns.values.filter { it.evalId == evalId }
-    }
+    override suspend fun listEvalRuns(): List<EvalRun> = evalRuns.values.toList()
+
+    override suspend fun listEvalRunsByEvalId(evalId: String): List<EvalRun> = evalRuns.values.filter { it.evalId == evalId }
 
     override suspend fun listEvalRunsByEvalId(
         evalId: String,
         after: String?,
         limit: Int,
         order: String,
-        status: EvalRunStatus?
+        status: EvalRunStatus?,
     ): List<EvalRun> {
         // Filter runs by evalId and status if provided
         var filteredRuns = evalRuns.values.filter { it.evalId == evalId }
@@ -123,18 +117,20 @@ class InMemoryEvalRunRepository : EvalRunRepository {
         if (after != null) {
             val afterRun = evalRuns[after]
             if (afterRun != null) {
-                filteredRuns = filteredRuns.filter { 
-                    it.createdAt > afterRun.createdAt 
-                }
+                filteredRuns =
+                    filteredRuns.filter { 
+                        it.createdAt > afterRun.createdAt 
+                    }
             }
         }
         
         // Sort runs by creation timestamp
-        val sortedRuns = if (order == "asc") {
-            filteredRuns.sortedBy { it.createdAt }
-        } else {
-            filteredRuns.sortedByDescending { it.createdAt }
-        }
+        val sortedRuns =
+            if (order == "asc") {
+                filteredRuns.sortedBy { it.createdAt }
+            } else {
+                filteredRuns.sortedByDescending { it.createdAt }
+            }
         
         // Apply limit
         return sortedRuns.take(limit)
@@ -147,8 +143,6 @@ class InMemoryEvalRunRepository : EvalRunRepository {
         evalRuns[evalRun.id] = evalRun
         return evalRun
     }
-    
-    override suspend fun deleteEvalRun(evalRunId: String): Boolean {
-        return evalRuns.remove(evalRunId) != null
-    }
+
+    override suspend fun deleteEvalRun(evalRunId: String): Boolean = evalRuns.remove(evalRunId) != null
 } 
