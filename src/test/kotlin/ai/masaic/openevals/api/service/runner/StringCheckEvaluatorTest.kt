@@ -59,7 +59,7 @@ class StringCheckEvaluatorTest {
     fun `evaluate should return false result for non-StringCheckGrader criterion`() {
         // Arrange
         val criterion = mockk<TestingCriterion>()
-
+        every { criterion.id } returns "test-1"
         // Act
         val result = evaluator.evaluate(criterion, "{}", "{}")
 

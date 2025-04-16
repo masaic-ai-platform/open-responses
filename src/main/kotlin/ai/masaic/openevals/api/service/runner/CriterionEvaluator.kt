@@ -32,6 +32,7 @@ interface CriterionEvaluator {
      * Data class to store the result of a criterion evaluation.
      */
     data class CriterionResult(
+        val id: String,
         val passed: Boolean,
         val message: String? = null,
     )

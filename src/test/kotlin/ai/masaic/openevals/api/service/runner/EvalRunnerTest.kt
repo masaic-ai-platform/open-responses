@@ -275,7 +275,7 @@ class EvalRunnerTest {
         
             val jsonLines = listOf("{\"test\":\"data\"}")
             val generationResults = mapOf(0 to GenerationService.CompletionResult("response", "{\"response\":\"value\"}"))
-            val criterionResult = CriterionEvaluator.CriterionResult(passed = true, message = "Test passed")
+            val criterionResult = CriterionEvaluator.CriterionResult(id = "test-1", passed = true, message = "Test passed")
             val testingResults = mapOf(0 to mapOf("criterion1" to criterionResult))
             val resultCounts = ResultCounts(passed = 1, failed = 0, errored = 0)
             val perCriteriaResults = listOf(TestingCriteriaResult(testingCriteria = "criterion1", passed = 1, failed = 0))
@@ -423,7 +423,7 @@ class EvalRunnerTest {
             // Empty JSON lines but we have an index in the generation results
             val jsonLines = emptyList<String>()
             val generationResults = mapOf(0 to GenerationService.CompletionResult("response", "{\"response\":\"value\"}"))
-            val criterionResult = CriterionEvaluator.CriterionResult(passed = false, message = "Error: Missing reference data for index 0")
+            val criterionResult = CriterionEvaluator.CriterionResult(id = "test-1", passed = false, message = "Error: Missing reference data for index 0")
             val testingResults = mapOf(0 to mapOf("criterion1" to criterionResult))
             val resultCounts = ResultCounts(passed = 0, failed = 1, errored = 0)
             val perCriteriaResults = listOf(TestingCriteriaResult(testingCriteria = "criterion1", passed = 0, failed = 1))

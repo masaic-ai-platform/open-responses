@@ -39,6 +39,7 @@ class StringCheckEvaluator(
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is StringCheckGrader) {
             return CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = false,
                 message = "Invalid criterion type: expected StringCheckGrader but got ${criterion.javaClass.simpleName}",
             )
@@ -53,6 +54,7 @@ class StringCheckEvaluator(
 
             if (inputValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
+                    id = criterion.id,
                     passed = false,
                     message = "Input value not found or empty: '${criterion.input}' in actual result",
                 )
@@ -60,6 +62,7 @@ class StringCheckEvaluator(
 
             if (referenceValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
+                    id = criterion.id,
                     passed = false,
                     message = "Reference value not found or empty: '${criterion.reference}' in reference data",
                 )
@@ -75,6 +78,7 @@ class StringCheckEvaluator(
                 }
 
             return CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = passed,
                 message =
                     if (passed) {
@@ -86,6 +90,7 @@ class StringCheckEvaluator(
         } catch (e: Exception) {
             logger.error("Error evaluating string check: ${e.message}", e)
             return CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = false,
                 message = "Error: ${e.message}",
             )

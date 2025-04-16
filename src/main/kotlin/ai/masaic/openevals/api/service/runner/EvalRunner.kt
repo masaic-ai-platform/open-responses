@@ -358,6 +358,7 @@ class EvalRunner(
                     testingCriteria.associate { criterion ->
                         criterion.name to
                             CriterionEvaluator.CriterionResult(
+                                id = criterion.id,
                                 passed = false,
                                 message = "Error: Missing reference data for index $index",
                             )
@@ -386,6 +387,7 @@ class EvalRunner(
                     logger.error("Error evaluating criterion '${criterion.name}' for index $index [evalRunId=$evalRunId]: ${e.message}", e)
                     criteriaResults[criterion.name] =
                         CriterionEvaluator.CriterionResult(
+                            id = criterion.id,
                             passed = false,
                             message = "Error: ${e.message ?: "Unknown error during evaluation"}",
                         )

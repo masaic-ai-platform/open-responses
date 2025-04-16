@@ -46,6 +46,7 @@ class CriterionEvaluatorFactory(
         
         return evaluator?.evaluate(criterion, actualJson, referenceJson)
             ?: CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = false,
                 message = "No evaluator found for criterion type: ${criterion.javaClass.simpleName}",
             )

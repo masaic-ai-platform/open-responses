@@ -58,14 +58,17 @@ class ResultProcessor {
             var passed = 0
             var failed = 0
 
+            val criterionResultList = mutableListOf<CriterionEvaluator.CriterionResult>()
             results.forEach { (_, criteriaResults) ->
                 criteriaResults[criterion.name]?.let { result ->
                     if (result.passed) passed++ else failed++
+                    criterionResultList.add(result)
                 }
             }
 
             TestingCriteriaResult(
                 testingCriteria = criterion.name,
+                criterionResults = criterionResultList,
                 passed = passed,
                 failed = failed,
             )

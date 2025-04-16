@@ -1,5 +1,6 @@
 package ai.masaic.openevals.api.model
 
+import ai.masaic.openevals.api.service.runner.CriterionEvaluator
 import com.fasterxml.jackson.annotation.*
 import java.time.Instant
 
@@ -103,6 +104,7 @@ data class ResultCounts(
 data class TestingCriteriaResult(
     @JsonProperty("testing_criteria")
     val testingCriteria: String,
+    val criterionResults: List<CriterionEvaluator.CriterionResult>? = null,
     val passed: Int = 0,
     val failed: Int = 0,
 )

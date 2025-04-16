@@ -85,7 +85,7 @@ class CriterionEvaluatorFactoryTest {
         val criterion = mockk<StringCheckGrader>()
         val actualJson = "{\"actual\": \"value\"}"
         val referenceJson = "{\"reference\": \"value\"}"
-        val expectedResult = CriterionEvaluator.CriterionResult(passed = true, message = "Success")
+        val expectedResult = CriterionEvaluator.CriterionResult(id = "test-1", passed = true, message = "Success")
 
         every { stringCheckEvaluator.canEvaluate(criterion) } returns true
         every { stringCheckEvaluator.evaluate(criterion, actualJson, referenceJson) } returns expectedResult
@@ -110,6 +110,7 @@ class CriterionEvaluatorFactoryTest {
         
         every { stringCheckEvaluator.canEvaluate(criterion) } returns false
         every { anotherEvaluator.canEvaluate(criterion) } returns false
+        every { criterion.id } returns "test-1"
 
         // Act
         val result = factory.evaluate(criterion, actualJson, referenceJson)
@@ -130,6 +131,7 @@ class CriterionEvaluatorFactoryTest {
         val criterion = mockk<TestingCriterion>()
         val actualJson = "{\"actual\": \"value\"}"
         val referenceJson = "{\"reference\": \"value\"}"
+        every { criterion.id } returns "test-1"
 
         // Act
         val result = emptyFactory.evaluate(criterion, actualJson, referenceJson)

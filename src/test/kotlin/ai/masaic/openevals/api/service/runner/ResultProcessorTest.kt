@@ -18,9 +18,9 @@ class ResultProcessorTest {
         // Arrange
         val results =
             mapOf(
-                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
-                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
-                2 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
+                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true)),
+                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-2", passed = true)),
+                2 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-3", passed = true)),
             )
         
         // Act
@@ -38,9 +38,9 @@ class ResultProcessorTest {
         // Arrange
         val results =
             mapOf(
-                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
-                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = false)),
-                2 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
+                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true)),
+                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = false)),
+                2 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true)),
             )
         
         // Act
@@ -58,9 +58,9 @@ class ResultProcessorTest {
         // Arrange
         val results =
             mapOf(
-                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
-                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = false, message = "Error: Test error")),
-                2 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
+                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true)),
+                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = false, message = "Error: Test error")),
+                2 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true)),
             )
         
         // Act
@@ -80,18 +80,18 @@ class ResultProcessorTest {
             mapOf(
                 0 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = true),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = true),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = true),
                     ),
                 1 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = true),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = false),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = false),
                     ),
                 2 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = false, message = "Error: Something went wrong"),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = true),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = false, message = "Error: Something went wrong"),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = true),
                     ),
             )
         
@@ -131,18 +131,18 @@ class ResultProcessorTest {
             mapOf(
                 0 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = true),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = false),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = false),
                     ),
                 1 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = false),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = true),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = false),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = true),
                     ),
                 2 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = true),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = true),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = true),
                     ),
             )
         
@@ -173,12 +173,12 @@ class ResultProcessorTest {
             mapOf(
                 0 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = true),
-                        "criterion2" to CriterionEvaluator.CriterionResult(passed = false),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true),
+                        "criterion2" to CriterionEvaluator.CriterionResult(id = "test-2", passed = false),
                     ),
                 1 to
                     mapOf(
-                        "criterion1" to CriterionEvaluator.CriterionResult(passed = false),
+                        "criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = false),
                         // criterion2 missing for this item
                     ),
             )
@@ -233,8 +233,8 @@ class ResultProcessorTest {
         
         val results =
             mapOf(
-                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = true)),
-                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(passed = false)),
+                0 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-1", passed = true)),
+                1 to mapOf("criterion1" to CriterionEvaluator.CriterionResult(id = "test-2", passed = false)),
             )
         
         // Act

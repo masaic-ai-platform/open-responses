@@ -39,6 +39,7 @@ class TextSimilarityEvaluator(
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is TextSimilarityGrader) {
             return CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = false,
                 message = "Invalid criterion type: expected TextSimilarityGrader but got ${criterion.javaClass.simpleName}",
             )
@@ -51,6 +52,7 @@ class TextSimilarityEvaluator(
 
             if (inputValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
+                    id = criterion.id,
                     passed = false,
                     message = "Input value not found or empty: '${criterion.input}' in actual result",
                 )
@@ -58,6 +60,7 @@ class TextSimilarityEvaluator(
 
             if (referenceValue.isBlank()) {
                 return CriterionEvaluator.CriterionResult(
+                    id = criterion.id,
                     passed = false,
                     message = "Reference value not found or empty: '${criterion.reference}' in reference data",
                 )
@@ -68,6 +71,7 @@ class TextSimilarityEvaluator(
             val passed = similarity >= criterion.passThreshold
 
             return CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = passed,
                 message =
                     if (passed) {
@@ -79,6 +83,7 @@ class TextSimilarityEvaluator(
         } catch (e: Exception) {
             logger.error("Error evaluating text similarity: ${e.message}", e)
             return CriterionEvaluator.CriterionResult(
+                id = criterion.id,
                 passed = false,
                 message = "Error: ${e.message}",
             )
