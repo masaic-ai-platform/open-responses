@@ -280,6 +280,8 @@ class NativeToolRegistry(
                 isInitialResults = true,
                 openAIClient,
                 requestParams = requestParams,
+                iterationNumber = 0,
+                maxIterations = params.max_iterations
             )
             
             log.info("LLM initial decision: $initialDecision")
@@ -445,6 +447,8 @@ class NativeToolRegistry(
                     previousIterations = searchIterations,
                     client = openAIClient,
                     requestParams = requestParams,
+                    iterationNumber = iterationCount,
+                    maxIterations = params.max_iterations
                 )
                 
                 log.info("Iteration $iterationCount" + (if (retryCount > 0) ", retry $retryCount" else "") + ": LLM decision: $llmDecision")
@@ -783,7 +787,9 @@ class NativeToolRegistry(
         previousIterations: List<AgenticSearchIteration>,
         isInitialResults: Boolean = false,
         client: OpenAIClient,
-        requestParams: ResponseCreateParams
+        requestParams: ResponseCreateParams,
+        iterationNumber: Int = 0,
+        maxIterations: Int = 5
     ): String {
         // Prepare prompt for LLM
         val promptBuilder = StringBuilder()
@@ -861,6 +867,10 @@ class NativeToolRegistry(
         promptBuilder.append("\n1. TERMINATE - if you have sufficient information to answer the question completely. Always verify that the information is complete before terminating, as you may be returning only partial answers otherwise.")
         promptBuilder.append("\n2. NEXT_QUERY:[your next search query] {optional filter JSON} - if you need more specific information")
         
+        // Add iteration countdown information
+        val iterationsLeft = maxIterations - iterationNumber
+        promptBuilder.append("\n\nYou are on search attempt ${iterationNumber}/${maxIterations} (${iterationsLeft} search attempts left). Use your remaining search attempts wisely to maximize information discovery.")
+        
         // Additional context if these are initial results
         if (isInitialResults) {
             promptBuilder.append("\n\nThese are the initial results based on the original question. ")
@@ -928,14 +938,19 @@ class NativeToolRegistry(
         if (knowledgeGained.isNotEmpty()) {
             promptBuilder.append("\n$knowledgeGained")
         } else {
-            promptBuilder.append("\n[No knowledge accumulated yet. Use this space to build your understanding across iterations.]")
+            promptBuilder.append("\n[No knowledge summary yet. You must provide a comprehensive summary of information found.]")
         }
         
         // Add structured memory format guidance
-        promptBuilder.append("\n\nWhen suggesting a new query, you can include a knowledge update in this format:")
-        promptBuilder.append("\nNEXT_QUERY:your query {filters} ##MEMORY## New facts learned: 1) First fact 2) Second fact")
-
-        promptBuilder.append("\n\nMake sure you only capture knowledge that is relevant to the current search context. Avoid including irrelevant or unrelated information.")
+        promptBuilder.append("\n\nEach time you suggest a new query, provide a complete knowledge summary in this format:")
+        promptBuilder.append("\nNEXT_QUERY:your query {filters} ##MEMORY## Complete information summary: 1) First key point 2) Second key point...")
+        
+        // Add guidance for memory updates
+        promptBuilder.append("\n\nYour knowledge summary should:")
+        promptBuilder.append("\n- Include ALL relevant information found so far, not just new information")
+        promptBuilder.append("\n- Synthesize and organize the information in a clear, structured way")
+        promptBuilder.append("\n- Prioritize facts most relevant to the original question")
+        promptBuilder.append("\n- Replace previous summaries completely (not incremental updates)")
 
         // Add strict formatting guidelines for JSON
         promptBuilder.append("\n\n## IMPORTANT: Response Format")
@@ -981,40 +996,38 @@ class NativeToolRegistry(
     
     /**
      * Builds a knowledge memory from previous iterations and search results.
-     * This extracts any memory updates the LLM has provided and summarizes knowledge gained.
+     * This extracts any memory updates the LLM has provided and uses the latest one.
      *
      * @param previousIterations List of previous search iterations
-     * @return A string containing the accumulated knowledge
+     * @return A string containing the most recent knowledge summary
      */
     private fun buildKnowledgeMemory(
         previousIterations: List<AgenticSearchIteration>
     ): String {
         val memoryBuilder = StringBuilder()
 
-        log.debug("Building knowledge memory from previous iterations and search buffer")
+        log.debug("Building knowledge memory from previous iterations, using most recent summary")
 
-        // Extract memory updates from previous iterations
-        val memoryUpdates = mutableListOf<String>()
-        for (iteration in previousIterations) {
-            // Look for memory updates in the query string
-            val query = iteration.query
-            if (query.contains("##MEMORY##")) {
+        // Find the most recent memory update
+        val latestMemoryUpdate = previousIterations.reversed()
+            .find { iteration ->
+                val query = iteration.query
+                query.contains("##MEMORY##")
+            }
+            ?.let { iteration ->
+                val query = iteration.query
                 val memoryIndex = query.indexOf("##MEMORY##")
                 if (memoryIndex != -1) {
-                    val memoryPart = query.substring(memoryIndex + 10).trim()
-                    if (memoryPart.isNotEmpty() && !memoryUpdates.contains(memoryPart)) {
-                        memoryUpdates.add(memoryPart)
-                    }
+                    query.substring(memoryIndex + 10).trim()
+                } else {
+                    null
                 }
             }
-        }
         
-        // Add all memory updates to the memory builder
-        if (memoryUpdates.isNotEmpty()) {
-            memoryBuilder.append("Knowledge accumulated so far:\n")
-            memoryUpdates.forEachIndexed { index, update ->
-                memoryBuilder.append("${index + 1}. $update\n")
-            }
+        // Add the latest memory update to the memory builder
+        if (latestMemoryUpdate != null && latestMemoryUpdate.isNotEmpty()) {
+            memoryBuilder.append("Knowledge summary (most recent):\n")
+            memoryBuilder.append(latestMemoryUpdate)
         }
         
         return memoryBuilder.toString().trim()

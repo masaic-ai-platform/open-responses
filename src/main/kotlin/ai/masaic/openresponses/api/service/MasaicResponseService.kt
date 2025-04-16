@@ -54,7 +54,7 @@ class MasaicResponseService(
 ) {
     companion object {
         const val MODEL_BASE_URL = "MODEL_BASE_URL"
-        const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
+        const val MODEL_DEFAULT_BASE_URL = "https://api.together.xyz/v1"
         private const val DEFAULT_TIMEOUT_SECONDS = 30L
 
         /**
