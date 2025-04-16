@@ -91,9 +91,7 @@ data class FileCitation(
  */
 @Serializable
 data class AgenticSearchParams(
-    val question: String,
-    val max_iterations: Int = 5,
-    val confidence_threshold: Float = 0.8f,
+    val question: String
 )
 
 /**

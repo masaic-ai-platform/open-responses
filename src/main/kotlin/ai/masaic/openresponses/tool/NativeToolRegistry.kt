@@ -183,7 +183,7 @@ class NativeToolRegistry(
         openAIClient: OpenAIClient,
     ): String {
         val params = objectMapper.readValue(arguments, AgenticSearchParams::class.java)
-        log.info("Starting agentic search for question: '${params.question}' with max_iterations: ${params.max_iterations}")
+        log.info("Starting agentic search for question: '${params.question}'")
 
         // Get vector store IDs and filters from the function parameters
         val function =
@@ -208,10 +208,17 @@ class NativeToolRegistry(
         val maxResults =
             function
                 .first()
-                ._additionalProperties()["max_num_results"]
+                ._additionalProperties().getOrDefault("max_num_results", 5)
                 .toString()
                 .toInt()
         log.debug("Max results per search: $maxResults")
+
+        val maxIterations =
+            function
+                .first()
+                ._additionalProperties().getOrDefault("max_iterations", 5)
+                .toString()
+                .toInt()
 
         // Initialize our search state
         val searchBuffer = mutableListOf<VectorStoreSearchResult>()
@@ -285,7 +292,7 @@ class NativeToolRegistry(
                     openAIClient,
                     requestParams = requestParams,
                     iterationNumber = 0,
-                    maxIterations = params.max_iterations,
+                    maxIterations = maxIterations,
                 )
             
             log.info("LLM initial decision: $initialDecision")
@@ -348,8 +355,10 @@ class NativeToolRegistry(
             }
         }
 
+        var conclusion: String? = null
+
         // Main agentic search loop
-        while (!shouldTerminate && iterationCount < params.max_iterations) {
+        while (!shouldTerminate && iterationCount < maxIterations) {
             iterationCount++
             
             // Record the query/filters *before* executing the search for this iteration
@@ -445,7 +454,7 @@ class NativeToolRegistry(
             var retryCount = 0
             var decisionParsed = false
             var decision: LlmDecision? = null
-            
+
             // Retry loop for getting a valid decision with properly formatted JSON
             while (!decisionParsed && retryCount < 3) {
                 llmDecision =
@@ -456,7 +465,7 @@ class NativeToolRegistry(
                         client = openAIClient,
                         requestParams = requestParams,
                         iterationNumber = iterationCount,
-                        maxIterations = params.max_iterations,
+                        maxIterations = maxIterations,
                     )
                 
                 log.info("Iteration $iterationCount" + (if (retryCount > 0) ", retry $retryCount" else "") + ": LLM decision: $llmDecision")
@@ -466,6 +475,11 @@ class NativeToolRegistry(
                 val nextQueryPattern = "(?m)^NEXT_QUERY:.*$".toRegex()
                 
                 val hasTerminateDecision = terminatePattern.find(llmDecision) != null || llmDecision.contains("TERMINATE", ignoreCase = true)
+
+                if(hasTerminateDecision){
+                    conclusion = llmDecision.substringAfter("TERMINATE").trim()
+                }
+
                 val nextQueryMatch = nextQueryPattern.find(llmDecision)
                 
                 // Parse the LLM decision
@@ -523,14 +537,14 @@ class NativeToolRegistry(
         }
 
         // If we reached max iterations without terminating, add a final termination iteration record
-        if (iterationCount >= params.max_iterations && !shouldTerminate) {
+        if (iterationCount >= maxIterations && !shouldTerminate) {
             log.info("Reached max iterations ($iterationCount) without LLM explicitly terminating. Forcing termination.")
-            searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Reached max iterations (${params.max_iterations})."))
+            searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Reached max iterations (${maxIterations})."))
             log.info("Recorded termination iteration due to max iterations.")
         }
 
         // Generate knowledge summary from search iterations
-        val knowledgeAcquired = buildKnowledgeMemory(searchIterations)
+        val knowledgeAcquired = buildKnowledgeMemory(searchIterations) + conclusion.let { if (it != null) { "\n Conclusion: $it" } else { "" } }
         log.info("Knowledge acquired: $knowledgeAcquired")
 
         // Convert results to response format
