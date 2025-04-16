@@ -130,10 +130,11 @@ class ToolService(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
+        openAIClient: OpenAIClient
     ): String? {
         try {
             val tool = findToolByName(name) ?: return null
-            return executeToolByProtocol(tool, name, arguments, params)
+            return executeToolByProtocol(tool, name, arguments, params, openAIClient)
         } catch (e: Exception) {
             return handleToolExecutionError(name, arguments, e)
         }
@@ -161,10 +162,11 @@ class ToolService(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
+        openAIClient: OpenAIClient
     ): String? {
         val toolResult =
             when (tool.protocol) {
-                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params)
+                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params, openAIClient)
                 ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
             }
         log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")

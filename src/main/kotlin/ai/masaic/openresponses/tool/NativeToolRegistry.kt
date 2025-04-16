@@ -27,9 +27,6 @@ class NativeToolRegistry(
     @Autowired
     private lateinit var vectorStoreService: VectorStoreService
 
-    @Autowired
-    private lateinit var client: OpenAIClient
-
     init {
         toolRepository["think"] = loadExtendedThinkTool()
         toolRepository["file_search"] = loadFileSearchTool()
@@ -44,14 +41,15 @@ class NativeToolRegistry(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
+        client: OpenAIClient
     ): String? {
-        val tool = toolRepository[name] ?: return null
+        toolRepository[name] ?: return null
         log.debug("Executing tool $name with arguments: $arguments")
 
         return when (name) {
             "think" -> "Your thought has been logged."
             "file_search" -> executeFileSearch(arguments, params)
-            "agentic_search" -> executeAgenticSearch(arguments, params)
+            "agentic_search" -> executeAgenticSearch(arguments, params, client)
             else -> null
         }
     }
@@ -182,6 +180,7 @@ class NativeToolRegistry(
     private suspend fun executeAgenticSearch(
         arguments: String,
         requestParams: ResponseCreateParams,
+        openAIClient: OpenAIClient
     ): String {
         val params = objectMapper.readValue(arguments, AgenticSearchParams::class.java)
         log.info("Starting agentic search for question: '${params.question}' with max_iterations: ${params.max_iterations}")
@@ -278,7 +277,9 @@ class NativeToolRegistry(
                 originalQuestion = params.question,
                 searchBuffer = searchBuffer,
                 previousIterations = searchIterations,
-                isInitialResults = true
+                isInitialResults = true,
+                openAIClient,
+                requestParams = requestParams,
             )
             
             log.info("LLM initial decision: $initialDecision")
@@ -359,7 +360,7 @@ class NativeToolRegistry(
                 }
                 
                 // Find any exact matches
-                val exactMatch = searchIterations.find { it.query == currentQuery && it.applied_filters == currentFilters }
+                val exactMatch = searchIterations.dropLast(1).find { it.query == currentQuery && it.applied_filters == currentFilters }
 
                 if (exactMatch != null) {
                     log.warn("Detected repeated query with identical filters: '$currentQuery' with $currentFilters. Forcing termination to prevent redundant search.")
@@ -442,7 +443,8 @@ class NativeToolRegistry(
                     originalQuestion = params.question, 
                     searchBuffer = searchBuffer, 
                     previousIterations = searchIterations,
-                    filterSuggestions = if (iterationCount == 1) currentFilters else null
+                    client = openAIClient,
+                    requestParams = requestParams,
                 )
                 
                 log.info("Iteration $iterationCount" + (if (retryCount > 0) ", retry $retryCount" else "") + ": LLM decision: $llmDecision")
@@ -772,7 +774,6 @@ class NativeToolRegistry(
      * @param originalQuestion The original user question
      * @param searchBuffer Current search results buffer
      * @param previousIterations Previous search iterations
-     * @param filterSuggestions Initial filter suggestions (only used in first iteration)
      * @param isInitialResults Whether these are the initial results from the pre-population step
      * @return LLM decision string (TERMINATE or NEXT_QUERY:[query])
      */
@@ -780,8 +781,9 @@ class NativeToolRegistry(
         originalQuestion: String,
         searchBuffer: List<VectorStoreSearchResult>,
         previousIterations: List<AgenticSearchIteration>,
-        filterSuggestions: Map<String, Any>? = null,
-        isInitialResults: Boolean = false
+        isInitialResults: Boolean = false,
+        client: OpenAIClient,
+        requestParams: ResponseCreateParams
     ): String {
         // Prepare prompt for LLM
         val promptBuilder = StringBuilder()
@@ -839,7 +841,7 @@ class NativeToolRegistry(
             // Add the actual results for this iteration
             if (iteration.results.isNotEmpty()) {
                 promptBuilder.append("   Results (${iteration.results.size}):\n")
-                iteration.results.take(3).forEachIndexed { resultIndex, result ->
+                iteration.results.forEachIndexed { resultIndex, result ->
                     promptBuilder.append("   ${resultIndex + 1}. ${result.filename}: ${result.content.firstOrNull()?.text}\n")
                     
                     // Include key attributes
@@ -849,21 +851,8 @@ class NativeToolRegistry(
                         promptBuilder.append("\n")
                     }
                 }
-                
-                // If there are more than 3 results, add a note
-                if (iteration.results.size > 3) {
-                    promptBuilder.append("   ... and ${iteration.results.size - 3} more results\n")
-                }
             } else {
                 promptBuilder.append("   No results found for this query.\n")
-            }
-        }
-        
-        // If there are filter suggestions and this is the first iteration, add them to the prompt
-        filterSuggestions?.let {
-            if (it.isNotEmpty()) {
-                promptBuilder.append("\nFilter suggestions (consider using these):\n")
-                promptBuilder.append("$filterSuggestions\n")
             }
         }
 
@@ -973,7 +962,7 @@ class NativeToolRegistry(
 
         val chatCompletionRequest = ChatCompletionCreateParams.builder()
             .messages(listOf(messageWithContent))
-            .model("gpt-4.1-mini")
+            .model(requestParams.model().toString())
             .build()
 
         try {

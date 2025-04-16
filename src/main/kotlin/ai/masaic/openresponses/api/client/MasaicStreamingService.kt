@@ -307,6 +307,7 @@ class MasaicStreamingService(
                                         finalResponse,
                                         eventEmitter = { event -> trySend(event) },
                                         parentObservation,
+                                        client
                                     )
                                 updatedParams =
                                     params
