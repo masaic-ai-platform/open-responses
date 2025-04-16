@@ -119,7 +119,7 @@ class NativeToolRegistry(
                 data =
                     sortedResults.map { result ->
                         // Get chunk index from metadata
-                        val chunkIndex = result.attributes?.get("chunk_index") as? Long ?: 0
+                        val chunkIndex = result.attributes?.get("chunk_index")
 
                         FileSearchResult(
                             file_id = result.fileId,
@@ -130,7 +130,7 @@ class NativeToolRegistry(
                                 listOf(
                                     FileCitation(
                                         type = "file_citation",
-                                        index = chunkIndex.toInt(),
+                                        index = chunkIndex?.toString()?.toInt() ?: 0,
                                         file_id = result.fileId,
                                         filename = result.filename,
                                     ),
@@ -310,7 +310,7 @@ class NativeToolRegistry(
                     AgenticSearchResponse(
                         data =
                             searchBuffer.map { result ->
-                                val chunkIndex = result.attributes?.get("chunk_index") as? Long ?: 0
+                                val chunkIndex = result.attributes?.get("chunk_index")
                                 AgenticSearchResult(
                                     file_id = result.fileId,
                                     filename = result.filename,
@@ -320,7 +320,7 @@ class NativeToolRegistry(
                                         listOf(
                                             FileCitation(
                                                 type = "file_citation",
-                                                index = chunkIndex.toInt(),
+                                                index = chunkIndex?.toString()?.toInt() ?: 0,
                                                 file_id = result.fileId,
                                                 filename = result.filename,
                                             ),
