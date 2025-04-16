@@ -107,8 +107,8 @@ class FileBasedVectorSearchProviderPersistenceTest {
         
         // Verify files were created on disk
         val embeddingsDir = tempDirPath.resolve("embeddings")
-        assertTrue(Files.exists(embeddingsDir.resolve("$fileId1.json")), "First embeddings file should exist")
-        assertTrue(Files.exists(embeddingsDir.resolve("$fileId2.json")), "Second embeddings file should exist")
+        assertTrue(Files.exists(embeddingsDir.resolve("embeddings-$fileId1.json")), "First embeddings file should exist")
+        assertTrue(Files.exists(embeddingsDir.resolve("embeddings-$fileId2.json")), "Second embeddings file should exist")
     }
 
     /**
@@ -176,8 +176,8 @@ class FileBasedVectorSearchProviderPersistenceTest {
         
         // Verify first file was deleted from disk
         val embeddingsDir = tempDirPath.resolve("embeddings")
-        assertTrue(!Files.exists(embeddingsDir.resolve("$fileId1.json")), "First embeddings file should be deleted")
-        assertTrue(Files.exists(embeddingsDir.resolve("$fileId2.json")), "Second embeddings file should still exist")
+        assertTrue(!Files.exists(embeddingsDir.resolve("embeddings-$fileId1.json")), "First embeddings file should be deleted")
+        assertTrue(Files.exists(embeddingsDir.resolve("embeddings-$fileId2.json")), "Second embeddings file should still exist")
     }
 
     /**

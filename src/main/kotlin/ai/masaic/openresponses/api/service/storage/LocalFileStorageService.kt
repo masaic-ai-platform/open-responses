@@ -68,7 +68,7 @@ class LocalFileStorageService(
             try {
                 Files
                     .walk(rootLocation, 2)
-                    .filter { path -> Files.isRegularFile(path) && !Files.isHidden(path) && path.fileName.name.contains("open-responses-file") } // Hidden files are ignored
+                    .filter { path -> Files.isRegularFile(path) && !Files.isHidden(path) && path.fileName.name.startsWith("open-responses-file") } // Hidden files are ignored
                     .filter { !it.name.endsWith(".metadata") } // Exclude metadata files
                     .asSequence()
                     .forEach { 
@@ -86,7 +86,7 @@ class LocalFileStorageService(
                 if (Files.exists(purposeDir)) {
                     Files
                         .walk(purposeDir, 1)
-                        .filter { path -> Files.isRegularFile(path) && !Files.isHidden(path) && path.fileName.name.contains("open-responses-file") }
+                        .filter { path -> Files.isRegularFile(path) && !Files.isHidden(path) && path.fileName.name.startsWith("open-responses-file") }
                         .filter { !it.name.endsWith(".metadata") } // Exclude metadata files
                         .asSequence()
                         .forEach { 
@@ -174,7 +174,9 @@ class LocalFileStorageService(
             
                 metadata
             } catch (e: IOException) {
-                throw FileNotFoundException("Could not read file metadata: $fileId", e)
+                // We will not throw an exception here, as the file may not exist
+                log.error("Error reading metadata for file $fileId", e)
+                return@withContext emptyMap<String, Any>()
             }
         }
 
@@ -335,12 +337,12 @@ class LocalFileStorageService(
         }
 }
 
-class FileStorageException : RuntimeException {
+class FileStorageException : IOException {
     constructor(message: String) : super(message)
     constructor(message: String, cause: Throwable) : super(message, cause)
 }
 
-class FileNotFoundException : RuntimeException {
+class FileNotFoundException : IOException {
     constructor(message: String) : super(message)
     constructor(message: String, cause: Throwable) : super(message, cause)
 } 

@@ -50,7 +50,7 @@ services:
 
   # Flavor 2: replicated for Windows with named pipe
   open-responses-mcp-windows:
-    image: masaicai/open-responses:0.0.3-alpha
+    image: masaicai/open-responses:latest
     ports:
       - "8080:8080"
     volumes:
@@ -92,7 +92,7 @@ services:
 
   #Flavour 3: replicated for Windows with named pipe
   open-responses-custom-mcp-windows:
-    image: masaicai/open-responses:0.0.3-alpha
+    image: masaicai/open-responses:latest
     ports:
       - "8080:8080"
     volumes:
@@ -150,7 +150,7 @@ services:
     environment:
       - OPEN_RESPONSES_MONGODB_DATABASE=openresponses
       - OPEN_RESPONSES_MONGODB_URI=mongodb://mongodb:27017
-      - OPEN_RESPONSES_RESPONSE_STORE_TYPE=mongodb
+      - OPEN_RESPONSES_STORE_TYPE=mongodb
     networks:
       - observability-network
     depends_on:
