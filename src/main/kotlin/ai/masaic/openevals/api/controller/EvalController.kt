@@ -8,6 +8,7 @@ import ai.masaic.openevals.api.model.UpdateEvalRequest
 import ai.masaic.openevals.api.service.EvalService
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
+import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 
@@ -28,9 +29,10 @@ class EvalController(
      */
     @PostMapping
     suspend fun createEval(
+        @RequestHeader headers: MultiValueMap<String, String>,
         @RequestBody request: CreateEvalRequest,
     ): ResponseEntity<Eval> {
-        val eval = evalService.createEval(request)
+        val eval = evalService.createEval(request, headers)
         return ResponseEntity.status(HttpStatus.CREATED).body(eval)
     }
 

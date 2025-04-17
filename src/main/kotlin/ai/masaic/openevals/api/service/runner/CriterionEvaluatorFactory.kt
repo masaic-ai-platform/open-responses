@@ -13,6 +13,10 @@ class CriterionEvaluatorFactory(
 ) {
     private val logger = LoggerFactory.getLogger(CriterionEvaluatorFactory::class.java)
 
+    init {
+        logger.info("loaded evaluators: $evaluators")
+    }
+
     /**
      * Get the appropriate evaluator for the given criterion.
      *

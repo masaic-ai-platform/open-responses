@@ -77,24 +77,6 @@ class EvalRunService(
     }
 
     /**
-     * Extract API key from headers.
-     *
-     * @param headerMap Map of HTTP headers
-     * @return Extracted API key
-     * @throws IllegalStateException if API key cannot be found
-     */
-    private fun extractApiKey(headerMap: MultiValueMap<String, String>?): String {
-        // Try to get from Authorization header
-        val authHeader =
-            headerMap
-                ?.get("Authorization")
-                ?.get(0)
-                ?.split(" ")
-                ?.getOrNull(1) ?: throw IllegalStateException("api-key is missing in request")
-        return authHeader
-    }
-
-    /**
      * Get an evaluation run by ID.
      *
      * @param evalRunId The ID of the evaluation run to retrieve
@@ -147,4 +129,24 @@ class EvalRunService(
      * @return True if the evaluation run was deleted, false otherwise
      */
     suspend fun deleteEvalRun(evalRunId: String): Boolean = evalRunRepository.deleteEvalRun(evalRunId)
+
+    companion object {
+        /**
+         * Extract API key from headers.
+         *
+         * @param headerMap Map of HTTP headers
+         * @return Extracted API key
+         * @throws IllegalStateException if API key cannot be found
+         */
+        fun extractApiKey(headerMap: MultiValueMap<String, String>?): String {
+            // Try to get from Authorization header
+            val authHeader =
+                headerMap
+                    ?.get("Authorization")
+                    ?.get(0)
+                    ?.split(" ")
+                    ?.getOrNull(1) ?: throw IllegalStateException("api-key is missing in request")
+            return authHeader
+        }
+    }
 } 

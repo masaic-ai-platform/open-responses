@@ -73,10 +73,12 @@ data class LabelModelGrader(
     override val name: String,
     override val id: String = "", // Default empty to be filled by service
     val model: String,
-    val input: List<Any>,
+    val input: List<SimpleInputMessage>,
     val labels: List<String>,
     @JsonProperty("passing_labels")
     val passingLabels: List<String>,
+    @JsonIgnore
+    val apiKey: String = ""
 ) : TestingCriterion
 
 // String Check Grader
@@ -152,6 +154,8 @@ data class TextSimilarityGrader(
     @JsonProperty("pass_threshold")
     val passThreshold: Double,
 ) : TestingCriterion
+
+data class SimpleInputMessage(val role: String, val content: String)
 
 // Request classes
 data class CreateEvalRequest(

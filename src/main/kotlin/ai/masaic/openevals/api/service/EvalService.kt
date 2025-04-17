@@ -5,6 +5,7 @@ import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import com.openai.core.JsonValue
 import org.springframework.stereotype.Service
+import org.springframework.util.MultiValueMap
 import java.time.Instant
 import java.util.*
 
@@ -22,7 +23,7 @@ class EvalService(
      * @param request The evaluation creation request
      * @return The created evaluation
      */
-    suspend fun createEval(request: CreateEvalRequest): Eval {
+    suspend fun createEval(request: CreateEvalRequest, headers: MultiValueMap<String, String>): Eval {
         val dataSourceConfigRequest = request.dataSourceConfig
 
         val dataSourceConfig =
@@ -76,7 +77,7 @@ class EvalService(
                 when (criterion) {
                     is LabelModelGrader ->
                         criterion.copy(
-                            id = "${criterion.name}-${UUID.randomUUID()}",
+                            id = "${criterion.name}-${UUID.randomUUID()}", apiKey = EvalRunService.extractApiKey(headers)
                         )
                     is StringCheckGrader ->
                         criterion.copy(
