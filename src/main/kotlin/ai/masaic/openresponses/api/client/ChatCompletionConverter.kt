@@ -187,7 +187,7 @@ object ChatCompletionConverter {
                     val response =
                         objectMapper.readValue(
                             functionCallOutput.output().toString(),
-                            FileSearchResponse::class.java,
+                            AgenticSearchResponse::class.java,
                         )
 
                     val annotations =

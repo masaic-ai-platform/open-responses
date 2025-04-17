@@ -61,6 +61,8 @@ data class AgenticSeachTool(
     val maxNumResults: Int = 20,
     @JsonProperty("vector_store_ids")
     val vectorStoreIds: List<String>? = null,
+    @JsonProperty("max_iterations")
+    val maxIterations: Int = 5,
 ) : Tool
 
 /**

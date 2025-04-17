@@ -216,12 +216,14 @@ class NativeToolRegistry(
         val maxIterations =
             function
                 .first()
-                ._additionalProperties().getOrDefault("max_iterations", 5)
+                ._additionalProperties().getOrDefault("max_iterations", 2)
                 .toString()
                 .toInt()
 
         // Initialize our search state
         val searchBuffer = mutableListOf<VectorStoreSearchResult>()
+        // Keep track of all unique chunks that contributed information, not just top-scoring ones
+        val allRelevantChunks = mutableSetOf<VectorStoreSearchResult>()
         val searchIterations = mutableListOf<AgenticSearchIteration>()
         var currentQuery = params.question
         var shouldTerminate = false
@@ -267,6 +269,9 @@ class NativeToolRegistry(
                 
                 // Store results with the iteration record
                 initialQueryRecord.results.addAll(initialResults)
+                
+                // Track initial results in the allRelevantChunks set
+                allRelevantChunks.addAll(initialResults)
             } catch (e: Exception) {
                 log.error("Error searching vector store $vectorStoreId for initial results", e)
             }
@@ -293,6 +298,7 @@ class NativeToolRegistry(
                     requestParams = requestParams,
                     iterationNumber = 0,
                     maxIterations = maxIterations,
+                    maxResults = maxResults,
                 )
             
             log.info("LLM initial decision: $initialDecision")
@@ -439,6 +445,9 @@ class NativeToolRegistry(
             }
             log.info("Iteration $iterationCount: Added $newResultCount new unique results to buffer")
 
+            // Track all relevant chunks across all iterations (not just top-scoring ones)
+            allRelevantChunks.addAll(sortedResults)
+
             // Limit buffer size to keep token count manageable
             if (searchBuffer.size > maxResults) {
                 log.debug("Iteration $iterationCount: Trimming search buffer from ${searchBuffer.size} to $maxResults results")
@@ -466,6 +475,7 @@ class NativeToolRegistry(
                         requestParams = requestParams,
                         iterationNumber = iterationCount,
                         maxIterations = maxIterations,
+                        maxResults = maxResults,
                     )
                 
                 log.info("Iteration $iterationCount" + (if (retryCount > 0) ", retry $retryCount" else "") + ": LLM decision: $llmDecision")
@@ -534,10 +544,12 @@ class NativeToolRegistry(
                 // Default to termination if we couldn't parse a valid decision after retries
                 log.warn("Iteration $iterationCount: Failed to parse a valid LLM decision after $retryCount retries. Defaulting to TERMINATE.")
                 shouldTerminate = true
-                searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Default termination after LLM decision parse failures."))
+                // Use a simple query without ##MEMORY## marker to avoid confusion in memory tracking
+                searchIterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "Default termination after LLM decision parse failures."))
                 log.info("Iteration $iterationCount: Recorded termination iteration due to parse failure.")
             } else if (shouldTerminate) {
-                searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "LLM decided to TERMINATE."))
+                // Use a simple query without ##MEMORY## marker to avoid confusion in memory tracking
+                searchIterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "LLM decided to TERMINATE."))
                 log.info("Iteration $iterationCount: Recorded termination iteration based on LLM decision.")
             }
         }
@@ -545,7 +557,8 @@ class NativeToolRegistry(
         // If we reached max iterations without terminating, add a final termination iteration record
         if (iterationCount >= maxIterations && !shouldTerminate) {
             log.info("Reached max iterations ($iterationCount) without LLM explicitly terminating. Forcing termination.")
-            searchIterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Reached max iterations (${maxIterations})."))
+            // Use a simple query without ##MEMORY## marker to avoid confusion in memory tracking
+            searchIterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "Reached max iterations (${maxIterations})."))
             log.info("Recorded termination iteration due to max iterations.")
         }
 
@@ -553,12 +566,22 @@ class NativeToolRegistry(
         val knowledgeAcquired = buildKnowledgeMemory(searchIterations) + conclusion.let { if (it != null) { "\n\n## Final Conclusion:\n$it" } else { "" } }
         log.info("Knowledge acquired: $knowledgeAcquired")
 
-        // Convert results to response format
-        log.info("Search completed after $iterationCount iterations. Returning ${searchBuffer.size} results and ${searchIterations.size} iterations")
+        // Convert results to response format using ALL relevant chunks, not just the top-scoring ones
+        log.info("Search completed after $iterationCount iterations. Returning ${allRelevantChunks.size} relevant chunks and ${searchIterations.size} iterations")
+        
+        // Deduplicate by content and file ID, then sort by score
+        val uniqueRelevantChunks = allRelevantChunks
+            .groupBy { "${it.fileId}:${it.content.firstOrNull()?.text}" }
+            .map { it.value.maxByOrNull { chunk -> chunk.score } }
+            .filterNotNull()
+            .sortedByDescending { it.score }
+        
+        log.info("After deduplication: ${uniqueRelevantChunks.size} unique chunks to include in response")
+        
         val response =
             AgenticSearchResponse(
                 data =
-                    searchBuffer.map { result ->
+                    uniqueRelevantChunks.map { result ->
                         // Get chunk index from metadata
                         val chunkIndex = result.attributes?.get("chunk_index")
 
@@ -646,8 +669,16 @@ class NativeToolRegistry(
             if (queryIndex == -1) {
                 throw IllegalArgumentException("Missing colon in NEXT_QUERY format")
             }
-            val content = decisionString.substring(queryIndex + 1).trim()
+            
+            var content = decisionString.substring(queryIndex + 1).trim()
             log.debug("Found NEXT_QUERY with content: $content")
+            
+            // Remove any memory section from the query
+            val memoryIndex = content.indexOf("##MEMORY##")
+            if (memoryIndex != -1) {
+                content = content.substring(0, memoryIndex).trim()
+                log.debug("Removed ##MEMORY## section from query, updated content: $content")
+            }
             
             // Check if there are filters specified in JSON format
             val filterStart = content.indexOf("{")
@@ -662,12 +693,24 @@ class NativeToolRegistry(
                 log.debug("Found potential filter JSON: $filterJson")
                 
                 // Handle any content after the JSON filters (could include memory updates)
+                // but before memory section
                 if (filterEnd + 1 < content.length) {
                     val afterFilterContent = content.substring(filterEnd + 1).trim()
                     if (afterFilterContent.isNotEmpty()) {
-                        // Append the remaining content to the query
-                        log.debug("Found additional content after filter: $afterFilterContent")
-                        query = "$query $afterFilterContent"
+                        // Check if there's a memory marker in the remaining content
+                        val remainingMemoryIndex = afterFilterContent.indexOf("##MEMORY##")
+                        if (remainingMemoryIndex != -1 && remainingMemoryIndex > 0) {
+                            // Only append content before the memory marker
+                            val additionalContent = afterFilterContent.substring(0, remainingMemoryIndex).trim()
+                            if (additionalContent.isNotEmpty()) {
+                                query = "$query $additionalContent"
+                                log.debug("Found additional content before memory marker: $additionalContent")
+                            }
+                        } else if (remainingMemoryIndex == -1) {
+                            // No memory marker, append everything
+                            query = "$query $afterFilterContent"
+                            log.debug("Found additional content after filter: $afterFilterContent")
+                        }
                     }
                 }
                 
@@ -843,6 +886,11 @@ class NativeToolRegistry(
      * @param searchBuffer Current search results buffer
      * @param previousIterations Previous search iterations
      * @param isInitialResults Whether these are the initial results from the pre-population step
+     * @param client The OpenAI client to use for making API calls
+     * @param requestParams The response creation parameters
+     * @param iterationNumber Current iteration number
+     * @param maxIterations Maximum number of iterations allowed
+     * @param maxResults Maximum number of results that can be returned in a single search
      * @return LLM decision string (TERMINATE or NEXT_QUERY:[query])
      */
     private suspend fun callLlmForDecision(
@@ -854,6 +902,7 @@ class NativeToolRegistry(
         requestParams: ResponseCreateParams,
         iterationNumber: Int = 0,
         maxIterations: Int = 5,
+        maxResults: Int = 20,
     ): String {
         // Prepare prompt for LLM
         val promptBuilder = StringBuilder()
@@ -936,6 +985,9 @@ class NativeToolRegistry(
         // Add iteration countdown information
         val iterationsLeft = maxIterations - iterationNumber
         promptBuilder.append("\n\nYou are on search attempt $iterationNumber/$maxIterations ($iterationsLeft search attempts left). Use your remaining search attempts wisely to maximize information discovery.")
+        
+        // Inform LLM about the results limit per search
+        promptBuilder.append("\n\nIMPORTANT: Each search can only return a maximum of $maxResults chunks at a time. Plan your search strategy accordingly.")
         
         // Additional context if these are initial results
         if (isInitialResults) {
@@ -1085,30 +1137,47 @@ class NativeToolRegistry(
     ): String {
         val memoryBuilder = StringBuilder()
 
-        log.debug("Building knowledge memory from previous iterations, keeping all iteration knowledge")
+        log.debug("Building knowledge memory from ${previousIterations.size} iterations")
 
         // Build a comprehensive knowledge history by iteration
         memoryBuilder.append("Knowledge gathered across iterations:\n")
         
         // Track iterations with memory updates
         var hasAnyMemoryUpdates = false
+        var memoryUpdateCount = 0
         
         // Process iterations in chronological order (oldest first)
         previousIterations.forEachIndexed { index, iteration ->
             val query = iteration.query
-            val memoryIndex = query.indexOf("##MEMORY##")
+            log.debug("Examining iteration ${index + 1} query: '${query.take(50)}${if(query.length > 50) "..." else ""}'")
             
-            if (memoryIndex != -1) {
-                hasAnyMemoryUpdates = true
+            // More strict pattern matching for memory updates - must follow NEXT_QUERY format
+            val memoryPattern = "NEXT_QUERY:.*##MEMORY##".toRegex(RegexOption.IGNORE_CASE)
+            val memoryMatch = memoryPattern.find(query)
+            
+            if (memoryMatch != null) {
+                val memoryIndex = query.indexOf("##MEMORY##")
                 val memoryContent = query.substring(memoryIndex + 10).trim()
+                log.debug("Found proper ##MEMORY## marker in iteration ${index + 1}, content length: ${memoryContent.length}")
                 
                 if (memoryContent.isNotEmpty()) {
+                    memoryUpdateCount++
+                    hasAnyMemoryUpdates = true
+                    // Use actual iteration number (index+1) rather than an arbitrary counter
                     memoryBuilder.append("\n## Iteration ${index + 1}:\n")
                     memoryBuilder.append(memoryContent)
                     memoryBuilder.append("\n")
+                } else {
+                    log.debug("Skipping empty memory content in iteration ${index + 1}")
                 }
+            } else if (query.contains("##MEMORY##")) {
+                log.debug("Found ##MEMORY## marker but not in proper NEXT_QUERY format in iteration ${index + 1}, skipping")
+            } else {
+                log.debug("No ##MEMORY## marker found in iteration ${index + 1}")
             }
         }
+        
+        log.debug("Found $memoryUpdateCount memory updates across ${previousIterations.size} iterations")
         
         // If no iterations had memory updates, return empty string
         if (!hasAnyMemoryUpdates) {
