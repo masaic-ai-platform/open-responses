@@ -105,8 +105,8 @@ object ChatCompletionConverter {
             val agenticSearchFunctionCall =
                 params.input().asResponse().filter {
                     it.isFunctionCall() &&
-                            it.asFunctionCall().name() == "agentic_search" &&
-                            it.asFunctionCall().callId() == callId
+                        it.asFunctionCall().name() == "agentic_search" &&
+                        it.asFunctionCall().callId() == callId
                 }
 
             if (fileSearchFunctionCall.isNotEmpty()) {
@@ -181,8 +181,7 @@ object ChatCompletionConverter {
                     // did not succeed to parse the function call. Continue without annotation parse
                     log.warn("Failed to parse function call output: ${e.message}")
                 }
-            }
-            else if (agenticSearchFunctionCall.isNotEmpty()) {
+            } else if (agenticSearchFunctionCall.isNotEmpty()) {
                 try {
                     val response =
                         objectMapper.readValue(
@@ -444,8 +443,8 @@ object ChatCompletionConverter {
                 val agentSearchFunctionCall =
                     inputResponse.filter {
                         it.isFunctionCall() &&
-                                it.asFunctionCall().name() == "agentic_search" &&
-                                it.asFunctionCall().callId() == callId
+                            it.asFunctionCall().name() == "agentic_search" &&
+                            it.asFunctionCall().callId() == callId
                     }
 
                 if (fileSearchFunctionCall.isNotEmpty()) {
@@ -482,8 +481,7 @@ object ChatCompletionConverter {
                         // did not succeed to parse the function call. Continue without annotation parse
                         log.warn("Failed to parse function call output: ${e.message}")
                     }
-                }
-                else if (agentSearchFunctionCall.isNotEmpty()) {
+                } else if (agentSearchFunctionCall.isNotEmpty()) {
                     try {
                         val response =
                             objectMapper.readValue(

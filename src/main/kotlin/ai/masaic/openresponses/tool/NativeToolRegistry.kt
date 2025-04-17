@@ -208,7 +208,8 @@ class NativeToolRegistry(
         val maxResults =
             function
                 .first()
-                ._additionalProperties().getOrDefault("max_num_results", 5)
+                ._additionalProperties()
+                .getOrDefault("max_num_results", 5)
                 .toString()
                 .toInt()
         log.debug("Max results per search: $maxResults")
@@ -216,7 +217,8 @@ class NativeToolRegistry(
         val maxIterations =
             function
                 .first()
-                ._additionalProperties().getOrDefault("max_iterations", 2)
+                ._additionalProperties()
+                .getOrDefault("max_iterations", 5)
                 .toString()
                 .toInt()
 
@@ -486,7 +488,7 @@ class NativeToolRegistry(
                 
                 val hasTerminateDecision = terminatePattern.find(llmDecision) != null || llmDecision.contains("TERMINATE", ignoreCase = true)
 
-                if(hasTerminateDecision){
+                if (hasTerminateDecision) {
                     conclusion = llmDecision.substringAfter("TERMINATE").trim()
                 }
 
@@ -558,23 +560,32 @@ class NativeToolRegistry(
         if (iterationCount >= maxIterations && !shouldTerminate) {
             log.info("Reached max iterations ($iterationCount) without LLM explicitly terminating. Forcing termination.")
             // Use a simple query without ##MEMORY## marker to avoid confusion in memory tracking
-            searchIterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "Reached max iterations (${maxIterations})."))
+            searchIterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "Reached max iterations ($maxIterations)."))
             log.info("Recorded termination iteration due to max iterations.")
         }
 
         // Generate knowledge summary from search iterations
-        val knowledgeAcquired = buildKnowledgeMemory(searchIterations) + conclusion.let { if (it != null) { "\n\n## Final Conclusion:\n$it" } else { "" } }
+        val knowledgeAcquired =
+            buildKnowledgeMemory(searchIterations) +
+                conclusion.let {
+                    if (it != null) {
+                        "\n\n## Final Conclusion:\n$it"
+                    } else {
+                        ""
+                    }
+                }
         log.info("Knowledge acquired: $knowledgeAcquired")
 
         // Convert results to response format using ALL relevant chunks, not just the top-scoring ones
         log.info("Search completed after $iterationCount iterations. Returning ${allRelevantChunks.size} relevant chunks and ${searchIterations.size} iterations")
         
         // Deduplicate by content and file ID, then sort by score
-        val uniqueRelevantChunks = allRelevantChunks
-            .groupBy { "${it.fileId}:${it.content.firstOrNull()?.text}" }
-            .map { it.value.maxByOrNull { chunk -> chunk.score } }
-            .filterNotNull()
-            .sortedByDescending { it.score }
+        val uniqueRelevantChunks =
+            allRelevantChunks
+                .groupBy { "${it.fileId}:${it.content.firstOrNull()?.text}" }
+                .map { it.value.maxByOrNull { chunk -> chunk.score } }
+                .filterNotNull()
+                .sortedByDescending { it.score }
         
         log.info("After deduplication: ${uniqueRelevantChunks.size} unique chunks to include in response")
         
@@ -1149,7 +1160,7 @@ class NativeToolRegistry(
         // Process iterations in chronological order (oldest first)
         previousIterations.forEachIndexed { index, iteration ->
             val query = iteration.query
-            log.debug("Examining iteration ${index + 1} query: '${query.take(50)}${if(query.length > 50) "..." else ""}'")
+            log.debug("Examining iteration ${index + 1} query: '${query.take(50)}${if (query.length > 50) "..." else ""}'")
             
             // More strict pattern matching for memory updates - must follow NEXT_QUERY format
             val memoryPattern = "NEXT_QUERY:.*##MEMORY##".toRegex(RegexOption.IGNORE_CASE)
