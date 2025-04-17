@@ -34,7 +34,7 @@ class MasaicStreamingService(
     private val toolService: ToolService,
     private val responseStore: ResponseStore,
     // Make these constructor params for easy mocking:
-    private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10,
+    private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 30,
     private val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L, // 60 seconds
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
@@ -209,6 +209,7 @@ class MasaicStreamingService(
                                     ),
                                 )
 
+                                logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                                 telemetryService.stopObservation(observation, finalResponse, params, metadata)
                                 telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
                             }
@@ -276,7 +277,9 @@ class MasaicStreamingService(
                                     responseId,
                                     responseOutputItemAccumulator,
                                 )
+                            runBlocking { storeResponseWithInputItems(finalResponse, params) }
 
+                            logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                             telemetryService.stopObservation(observation, finalResponse, params, metadata)
                             telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
 

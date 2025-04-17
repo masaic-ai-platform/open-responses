@@ -25,12 +25,7 @@ object ChatCompletionChunkConverter {
         completion.choices().flatMap { chunk ->
             when {
                 // Handle text content
-                chunk.delta().content().isPresent &&
-                    chunk
-                        .delta()
-                        .content()
-                        .get()
-                        .isNotBlank() -> {
+                chunk.delta().content().isPresent -> {
                     createTextDeltaEvent(chunk.delta().content().get(), chunk.index(), completion.id())
                 }
                 // Handle tool calls
