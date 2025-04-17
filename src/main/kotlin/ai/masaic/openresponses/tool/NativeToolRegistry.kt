@@ -494,6 +494,12 @@ class NativeToolRegistry(
                             @Suppress("UNCHECKED_CAST")
                             currentFilters = decision.filters as Map<String, Any>
                             log.info("Iteration $iterationCount: LLM suggested filters: $currentFilters")
+                            
+                            // Validate that filename is present when chunk_index is used
+                            if (currentFilters.containsKey("chunk_index") && !currentFilters.containsKey("filename")) {
+                                log.warn("Iteration $iterationCount: LLM provided chunk_index filter without filename filter. This is invalid. Retrying.")
+                                throw IllegalArgumentException("When using chunk_index filter, a filename filter must also be provided")
+                            }
                         } else {
                             // If no filters were found but the nextQueryMatch exists, we can still use the query
                             log.debug("Iteration $iterationCount: No filters found in LLM response, but query parsed successfully")
@@ -544,7 +550,7 @@ class NativeToolRegistry(
         }
 
         // Generate knowledge summary from search iterations
-        val knowledgeAcquired = buildKnowledgeMemory(searchIterations) + conclusion.let { if (it != null) { "\n Conclusion: $it" } else { "" } }
+        val knowledgeAcquired = buildKnowledgeMemory(searchIterations) + conclusion.let { if (it != null) { "\n\n## Final Conclusion:\n$it" } else { "" } }
         log.info("Knowledge acquired: $knowledgeAcquired")
 
         // Convert results to response format
@@ -986,9 +992,10 @@ class NativeToolRegistry(
         // Add guidance for chunk-by-chunk searching and memory interface
         promptBuilder.append("\n\n## Search Strategy and Memory")
         promptBuilder.append("\nSome questions require methodical chunk-by-chunk exploration. If you see 'chunk_index' in the attributes, you can:")
-        promptBuilder.append("\n1. Search sequentially through chunks using filters like {\"chunk_index\": 1}, then {\"chunk_index\": 2}, etc.")
-        promptBuilder.append("\n2. Use filters to target specific document sections with {\"chunk_index\": [3, 4, 5]} for multiple chunks.")
+        promptBuilder.append("\n1. Search sequentially through chunks using filters like {\"filename\": \"document.pdf\", \"chunk_index\": 1}, then {\"filename\": \"document.pdf\", \"chunk_index\": 2}, etc.")
+        promptBuilder.append("\n2. Use filters to target specific document sections with {\"filename\": \"document.pdf\", \"chunk_index\": [3, 4, 5]} for multiple chunks.")
         promptBuilder.append("\n3. If you think you've a chunk has partial information then you can add filter of previous chunk indexes to the query and same for the next chunks.")
+        promptBuilder.append("\n\n⚠️ IMPORTANT: When filtering by 'chunk_index', you MUST ALWAYS include a 'filename' filter as well, since different files can have the same chunk indices. Failure to include a filename filter with chunk_index will result in errors.")
 
         // Add memory interface
         promptBuilder.append("\n\n## Your Knowledge Memory:")
@@ -1007,10 +1014,12 @@ class NativeToolRegistry(
         
         // Add guidance for memory updates
         promptBuilder.append("\n\nYour knowledge summary should:")
-        promptBuilder.append("\n- Include ALL relevant information found so far, not just new information")
+        promptBuilder.append("\n- BUILD ON previous knowledge, not replace it entirely")
+        promptBuilder.append("\n- Include both existing information AND new findings from the latest search")
         promptBuilder.append("\n- Synthesize and organize the information in a clear, structured way")
         promptBuilder.append("\n- Prioritize facts most relevant to the original question")
-        promptBuilder.append("\n- Replace previous summaries completely (not incremental updates)")
+        promptBuilder.append("\n- When adding new information, preserve the valuable insights from previous iterations")
+        promptBuilder.append("\n- Use numbered or bulleted lists to organize key points")
 
         // Add strict formatting guidelines for JSON
         promptBuilder.append("\n\n## IMPORTANT: Response Format")
@@ -1027,6 +1036,7 @@ class NativeToolRegistry(
         promptBuilder.append("\n- Arrays and objects must use proper JSON syntax")
         promptBuilder.append("\n- Example: NEXT_QUERY:search query {\"filename\": \"document.pdf\", \"chunk_index\": [1, 2, 3]}")
         promptBuilder.append("\n- DO NOT use: {filename: \"document.pdf\"} or {chunk_index: [1, 2, 3]}")
+        promptBuilder.append("\n- When using chunk_index filter, you MUST include a filename filter in the same query")
 
         promptBuilder.append("\n\n- IMPORTANT: Avoid querying same chunk_index with different wording. This won't yield new results. Once you receive a chunk, save your learning in memory and avoid filtering the same chunk again.")
 
@@ -1075,29 +1085,34 @@ class NativeToolRegistry(
     ): String {
         val memoryBuilder = StringBuilder()
 
-        log.debug("Building knowledge memory from previous iterations, using most recent summary")
+        log.debug("Building knowledge memory from previous iterations, keeping all iteration knowledge")
 
-        // Find the most recent memory update
-        val latestMemoryUpdate =
-            previousIterations
-                .reversed()
-                .find { iteration ->
-                    val query = iteration.query
-                    query.contains("##MEMORY##")
-                }?.let { iteration ->
-                    val query = iteration.query
-                    val memoryIndex = query.indexOf("##MEMORY##")
-                    if (memoryIndex != -1) {
-                        query.substring(memoryIndex + 10).trim()
-                    } else {
-                        null
-                    }
-                }
+        // Build a comprehensive knowledge history by iteration
+        memoryBuilder.append("Knowledge gathered across iterations:\n")
         
-        // Add the latest memory update to the memory builder
-        if (latestMemoryUpdate != null && latestMemoryUpdate.isNotEmpty()) {
-            memoryBuilder.append("Knowledge summary (most recent):\n")
-            memoryBuilder.append(latestMemoryUpdate)
+        // Track iterations with memory updates
+        var hasAnyMemoryUpdates = false
+        
+        // Process iterations in chronological order (oldest first)
+        previousIterations.forEachIndexed { index, iteration ->
+            val query = iteration.query
+            val memoryIndex = query.indexOf("##MEMORY##")
+            
+            if (memoryIndex != -1) {
+                hasAnyMemoryUpdates = true
+                val memoryContent = query.substring(memoryIndex + 10).trim()
+                
+                if (memoryContent.isNotEmpty()) {
+                    memoryBuilder.append("\n## Iteration ${index + 1}:\n")
+                    memoryBuilder.append(memoryContent)
+                    memoryBuilder.append("\n")
+                }
+            }
+        }
+        
+        // If no iterations had memory updates, return empty string
+        if (!hasAnyMemoryUpdates) {
+            return ""
         }
         
         return memoryBuilder.toString().trim()
