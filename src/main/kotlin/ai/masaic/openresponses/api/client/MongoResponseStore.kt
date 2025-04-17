@@ -65,7 +65,7 @@ class MongoResponseStore(
                                 type = "function_call",
                                 call_id = functionCall.callId(),
                                 name = functionCall.name(),
-                                arguments = functionCall.arguments()
+                                arguments = functionCall.arguments(),
                             )
                         }
                         else -> null
