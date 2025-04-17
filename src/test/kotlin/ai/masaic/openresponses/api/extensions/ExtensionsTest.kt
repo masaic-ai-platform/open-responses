@@ -166,6 +166,7 @@ class ExtensionsTest {
                 mockk<ResponseCreateParams.Builder> {
                     every { input(capture(inputSlot)) } returns this
                     every { model(ofType<ChatModel>()) } returns this
+                    every { model(ofType<String>()) } returns this
                     every { instructions(ofType<Optional<String>>()) } returns this
                     every { reasoning(ofType<Optional<com.openai.models.Reasoning>>()) } returns this
                     every { parallelToolCalls(ofType<Optional<Boolean>>()) } returns this
