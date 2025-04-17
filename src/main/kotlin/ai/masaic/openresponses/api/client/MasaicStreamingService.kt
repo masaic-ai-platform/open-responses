@@ -209,6 +209,7 @@ class MasaicStreamingService(
                                     ),
                                 )
 
+                                logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                                 telemetryService.stopObservation(observation, finalResponse, params, metadata)
                                 telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
                             }
@@ -276,7 +277,9 @@ class MasaicStreamingService(
                                     responseId,
                                     responseOutputItemAccumulator,
                                 )
+                            runBlocking { storeResponseWithInputItems(finalResponse, params)}
 
+                            logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                             telemetryService.stopObservation(observation, finalResponse, params, metadata)
                             telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
 

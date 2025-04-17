@@ -177,7 +177,7 @@ data class CreateResponseRequest(
     val topP: Double? = null,
     @JsonProperty("tool_choice")
     val toolChoice: String? = null,
-    val store: Boolean? = null,
+    val store: Boolean = true,
     val stream: Boolean = false,
     val reasoning: Reasoning? = null,
     val metadata: Metadata? = null,
