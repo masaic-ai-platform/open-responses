@@ -24,15 +24,6 @@ object ChatCompletionChunkConverter {
     fun toResponseStreamEvent(completion: ChatCompletionChunk): List<ResponseStreamEvent> =
         completion.choices().flatMap { chunk ->
             when {
-                // Handle text content
-                chunk.delta().content().isPresent &&
-                    chunk
-                        .delta()
-                        .content()
-                        .get()
-                        .isNotBlank() -> {
-                    createTextDeltaEvent(chunk.delta().content().get(), chunk.index(), completion.id())
-                }
                 // Handle tool calls
                 chunk.delta().toolCalls().isPresent &&
                     chunk
@@ -45,6 +36,10 @@ object ChatCompletionChunkConverter {
                 // Handle tool call completion
                 chunk.finishReason().isPresent && chunk.finishReason().get().asString() == "tool_calls" -> {
                     createToolCallDoneEvent(chunk.index(), completion.id(), chunk._additionalProperties())
+                }
+                // Handle text content
+                chunk.delta().content().isPresent && chunk.delta().content().get() != "" -> {
+                    createTextDeltaEvent(chunk.delta().content().get(), chunk.index(), completion.id())
                 }
                 // Default case
                 else -> emptyList()
@@ -117,7 +112,7 @@ object ChatCompletionChunkConverter {
         ResponseStreamEvent.ofOutputItemAdded(
             ResponseOutputItemAddedEvent
                 .builder()
-                .outputIndex(toolCall.index())
+                .outputIndex(if (toolCall._index().isMissing()) 0 else toolCall.index())
                 .item(
                     ResponseOutputItem.ofFunctionCall(
                         ResponseFunctionToolCall

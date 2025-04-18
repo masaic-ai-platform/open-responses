@@ -636,6 +636,7 @@ object ChatCompletionConverter {
                 builder.usage(convertUsage(chatCompletion.usage().get()))
             }
 
+            log.info("Response completed for id: ${chatCompletion.id()}")
             return builder.build()
         } else if (chatCompletion.choices().any { it.finishReason().asString() == "content_filter" }) {
             val builder =
@@ -674,6 +675,7 @@ object ChatCompletionConverter {
                 builder.usage(convertUsage(chatCompletion.usage().get()))
             }
 
+            log.info("Response completed for id: ${chatCompletion.id()}")
             return builder.build()
         }
 
@@ -703,6 +705,7 @@ object ChatCompletionConverter {
             builder.usage(convertUsage(chatCompletion.usage().get()))
         }
 
+        log.info("Response completed for id: ${chatCompletion.id()}")
         return builder.build()
     }
 

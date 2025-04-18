@@ -34,7 +34,7 @@ class MasaicStreamingService(
     private val toolService: ToolService,
     private val responseStore: ResponseStore,
     // Make these constructor params for easy mocking:
-    private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10,
+    private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 30,
     private val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L, // 60 seconds
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
@@ -140,7 +140,17 @@ class MasaicStreamingService(
             val observation = telemetryService.startObservation("open.responses.createStream")
             telemetryService.emitModelInputEvents(observation, createParams, metadata)
 
-            subscription.subscribe { completion ->
+            subscription.subscribe { completionResponse ->
+
+                val completion =
+                    if (completionResponse._id().isMissing()) { // special handling for gemini
+                        val builder = completionResponse.toBuilder()
+                        builder.id(UUID.randomUUID().toString())
+                        builder.build()
+                    } else {
+                        completionResponse
+                    }
+
                 if (!completion._choices().isMissing()) {
                     // Fire in-progress event if we haven't:
                     if (!inProgressFired) {
@@ -171,6 +181,27 @@ class MasaicStreamingService(
                                     .contains(choice.finishReason().get().asString())
                         }
                     ) {
+                        if (!completion._choices().isMissing()) {
+                            completion.choices().mapIndexed { index, choice ->
+                                choice.delta().content().ifPresent {
+                                    textAccumulator
+                                        .getOrPut(choice.index()) { mutableListOf() }
+                                        .add(
+                                            ResponseStreamEvent.ofOutputTextDelta(
+                                                ResponseTextDeltaEvent
+                                                    .builder()
+                                                    .delta(it)
+                                                    .outputIndex(choice.index())
+                                                    .contentIndex(index.toLong())
+                                                    .itemId(completion.id())
+                                                    .putAllAdditionalProperties(choice._additionalProperties())
+                                                    .build(),
+                                            ),
+                                        )
+                                }
+                            }
+                        }
+
                         // Process any text so far:
                         handleTextCompletion(textAccumulator, responseOutputItemAccumulator)
 
@@ -209,6 +240,7 @@ class MasaicStreamingService(
                                     ),
                                 )
 
+                                logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                                 telemetryService.stopObservation(observation, finalResponse, params, metadata)
                                 telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
                             }
@@ -276,12 +308,15 @@ class MasaicStreamingService(
                                     responseId,
                                     responseOutputItemAccumulator,
                                 )
+                            runBlocking { storeResponseWithInputItems(finalResponse, params) }
 
+                            logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                             telemetryService.stopObservation(observation, finalResponse, params, metadata)
                             telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
 
                             if (internalToolItemIds.isEmpty()) {
                                 // No calls to actually handle
+                                logger.info { "Response completed for id: ${finalResponse.id()}" }
                                 nextIteration = false
                                 trySend(
                                     EventUtils.convertEvent(

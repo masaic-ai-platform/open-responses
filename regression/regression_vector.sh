@@ -181,8 +181,7 @@ run_vector_tests() {
     read -p "> " MODEL_PROVIDER
     
     echo -e "${BOLD}Enter the API key for $MODEL_PROVIDER:${NC}"
-    read -sp "> " API_KEY
-    echo # Add a newline after the hidden input
+    read -p "> " API_KEY
     
     echo -e "${BOLD}Enter the model name to use (e.g., llama3-70b-8192, gpt-4o):${NC}"
     read -p "> " MODEL_NAME

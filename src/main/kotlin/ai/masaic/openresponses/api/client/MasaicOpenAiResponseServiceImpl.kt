@@ -18,6 +18,7 @@ import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
+import java.util.UUID
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -86,7 +87,10 @@ class MasaicOpenAiResponseServiceImpl(
                 logger.debug { "Creating completion with model: ${params.model()}" }
                 val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
-                val chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
+                var chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
+                if (chatCompletions._id().isMissing()) {
+                    chatCompletions = chatCompletions.toBuilder().id(UUID.randomUUID().toString()).build()
+                }
                 logger.debug { "Received chat completion with ID: ${chatCompletions.id()}" }
                 telemetryService.emitModelOutputEvents(observation, chatCompletions, metadata)
                 telemetryService.setAllObservationAttributes(observation, chatCompletions, params, metadata)
