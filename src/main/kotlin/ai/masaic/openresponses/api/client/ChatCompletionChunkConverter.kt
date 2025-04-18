@@ -26,11 +26,11 @@ object ChatCompletionChunkConverter {
             when {
                 // Handle tool calls
                 chunk.delta().toolCalls().isPresent &&
-                        chunk
-                            .delta()
-                            .toolCalls()
-                            .get()
-                            .isNotEmpty() -> {
+                    chunk
+                        .delta()
+                        .toolCalls()
+                        .get()
+                        .isNotEmpty() -> {
                     createToolCallEvents(chunk.delta().toolCalls().get(), completion.id())
                 }
                 // Handle tool call completion
