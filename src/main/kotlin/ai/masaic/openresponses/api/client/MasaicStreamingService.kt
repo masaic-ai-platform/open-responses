@@ -285,6 +285,7 @@ class MasaicStreamingService(
 
                             if (internalToolItemIds.isEmpty()) {
                                 // No calls to actually handle
+                                logger.info { "Response completed for id: ${finalResponse.id()}" }
                                 nextIteration = false
                                 trySend(
                                     EventUtils.convertEvent(
