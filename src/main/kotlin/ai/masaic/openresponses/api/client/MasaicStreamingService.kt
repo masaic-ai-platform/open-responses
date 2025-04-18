@@ -140,7 +140,17 @@ class MasaicStreamingService(
             val observation = telemetryService.startObservation("open.responses.createStream")
             telemetryService.emitModelInputEvents(observation, createParams, metadata)
 
-            subscription.subscribe { completion ->
+            subscription.subscribe { completionResponse ->
+
+                val completion =
+                    if (completionResponse._id().isMissing()) { // special handling for gemini
+                        val builder = completionResponse.toBuilder()
+                        builder.id(UUID.randomUUID().toString())
+                        builder.build()
+                    } else {
+                        completionResponse
+                    }
+
                 if (!completion._choices().isMissing()) {
                     // Fire in-progress event if we haven't:
                     if (!inProgressFired) {
@@ -171,6 +181,27 @@ class MasaicStreamingService(
                                     .contains(choice.finishReason().get().asString())
                         }
                     ) {
+                        if (!completion._choices().isMissing()) {
+                            completion.choices().mapIndexed { index, choice ->
+                                choice.delta().content().ifPresent {
+                                    textAccumulator
+                                        .getOrPut(choice.index()) { mutableListOf() }
+                                        .add(
+                                            ResponseStreamEvent.ofOutputTextDelta(
+                                                ResponseTextDeltaEvent
+                                                    .builder()
+                                                    .delta(it)
+                                                    .outputIndex(choice.index())
+                                                    .contentIndex(index.toLong())
+                                                    .itemId(completion.id())
+                                                    .putAllAdditionalProperties(choice._additionalProperties())
+                                                    .build(),
+                                            ),
+                                        )
+                                }
+                            }
+                        }
+
                         // Process any text so far:
                         handleTextCompletion(textAccumulator, responseOutputItemAccumulator)
 

@@ -112,7 +112,7 @@ object ChatCompletionChunkConverter {
         ResponseStreamEvent.ofOutputItemAdded(
             ResponseOutputItemAddedEvent
                 .builder()
-                .outputIndex(toolCall.index())
+                .outputIndex(if (toolCall._index().isMissing()) 0 else toolCall.index())
                 .item(
                     ResponseOutputItem.ofFunctionCall(
                         ResponseFunctionToolCall
