@@ -1,5 +1,7 @@
 package ai.masaic.openresponses.tool.agentic
 
+import ai.masaic.openresponses.api.model.ComparisonFilter
+import ai.masaic.openresponses.api.model.CompoundFilter
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.service.search.VectorStoreService
@@ -142,8 +144,23 @@ class AgenticSearchService(
                     }
                 }
             
-                // Apply search filter
-                val searchFilter = FilterBuilder.createSearchFilter(userFilter, currentFilters, mapper)
+                // Build base filter from user security and LLM filters
+                val baseFilter = FilterBuilder.createSearchFilter(userFilter, currentFilters, mapper)
+                // Exclude previously seen chunks using chunk_id attribute
+                val chunkIds = allRelevantChunks.mapNotNull { it.attributes?.get("chunk_id") as? String }.distinct()
+                val exclusionFilter =
+                    when {
+                        chunkIds.isEmpty() -> null
+                        chunkIds.size == 1 -> ComparisonFilter("chunk_id", "ne", chunkIds.first())
+                        else -> CompoundFilter("and", chunkIds.map { ComparisonFilter("chunk_id", "ne", it) })
+                    }
+                // Combine base filter and exclusion filter
+                val searchFilter: Filter? =
+                    when {
+                        baseFilter != null && exclusionFilter != null -> CompoundFilter("and", listOf(baseFilter, exclusionFilter))
+                        baseFilter != null -> baseFilter
+                        else -> exclusionFilter
+                    }
             
                 // Perform vector search with current query and filters
                 val newResults = strategy.seed(currentQuery, maxResults, searchFilter, vectorStoreIds)
@@ -173,10 +190,10 @@ class AgenticSearchService(
                     }
                 }
 
-                // Extract available attributes for filtering
-                val availableAttributes = extractAttributes(searchBuffer)
+                // Extract available attributes for filtering just the new results
+                val availableAttributes = extractAttributes(newResults)
             
-                // Call LLM to decide next action
+                // Call LLM to decide next action based on new results
                 var llmDecision = ""
                 var retryCount = 0
                 var decisionParsed = false
@@ -186,8 +203,8 @@ class AgenticSearchService(
                 while (!decisionParsed && retryCount < 3) {
                     llmDecision =
                         callLlmForDecision(
-                            question = params.question, 
-                            buffer = searchBuffer, 
+                            question = params.question,
+                            buffer = newResults,
                             iterations = iterations,
                             attrs = availableAttributes,
                             iterationNumber = iterationCount,
@@ -347,12 +364,16 @@ class AgenticSearchService(
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
     ): String {
+        // For current iteration, we should use the iterations up to but not including the current one
+        // to avoid showing the same results twice in the prompt
+        val iterationsToUse = if (iterationNumber > 0) iterations.dropLast(1) else iterations
+        
         // Prepare prompt for LLM using the PromptBuilder
         val promptContent =
             PromptBuilder.build(
                 question = question,
                 buffer = buffer,
-                iterations = iterations,
+                iterations = iterationsToUse,
                 attrs = attrs,
                 iteration = iterationNumber,
                 maxIter = maxIter,

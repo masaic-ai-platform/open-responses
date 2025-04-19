@@ -48,43 +48,46 @@ object PromptBuilder {
         }
 
         // Add previous queries and filters with their results
-        promptBuilder.append("\nPrevious search iterations:\n")
-    
-        log.debug("Adding ${iterations.size} previous iterations to prompt")
-        iterations.forEachIndexed { index, iteration ->
-            val filterInfo =
-                if (iteration.applied_filters != null && iteration.applied_filters.isNotEmpty()) {
-                    " with filters: ${iteration.applied_filters}"
-                } else {
-                    ""
-                }
-        
-            // Check if this query was used before
-            val isDuplicate =
-                iterations.take(index).any { 
-                    it.query == iteration.query && it.applied_filters == iteration.applied_filters 
-                }
-        
-            val duplicateWarning = if (isDuplicate) " ⚠️ DUPLICATE" else ""
-            val iterationStatus = if (iteration.is_final) " (FINAL)" else ""
-        
-            promptBuilder.append("${index + 1}. Query: \"${iteration.query}\"$filterInfo$duplicateWarning$iterationStatus\n")
-        
-            // Add the actual results for this iteration
-            if (iteration.results.isNotEmpty()) {
-                promptBuilder.append("   Results (${iteration.results.size}):\n")
-                iteration.results.forEachIndexed { resultIndex, result ->
-                    promptBuilder.append("   ${resultIndex + 1}. ${result.filename}: ${result.content.firstOrNull()?.text}\n")
-                
-                    // Include key attributes
-                    if (result.attributes != null && result.attributes.isNotEmpty()) {
-                        promptBuilder.append("      Attributes: ")
-                        result.attributes.entries.joinTo(promptBuilder, ", ") { "${it.key}=${it.value}" }
-                        promptBuilder.append("\n")
+        // Only show previous iterations if not the initial search and there are previous iterations
+        if (!isInitial && iterations.isNotEmpty()) {
+            promptBuilder.append("\nPrevious search iterations:\n")
+            
+            log.debug("Adding ${iterations.size} previous iterations to prompt")
+            iterations.forEachIndexed { index, iteration ->
+                val filterInfo =
+                    if (iteration.applied_filters != null && iteration.applied_filters.isNotEmpty()) {
+                        " with filters: ${iteration.applied_filters}"
+                    } else {
+                        ""
                     }
+            
+                // Check if this query was used before
+                val isDuplicate =
+                    iterations.take(index).any { 
+                        it.query == iteration.query && it.applied_filters == iteration.applied_filters 
+                    }
+            
+                val duplicateWarning = if (isDuplicate) " ⚠️ DUPLICATE" else ""
+                val iterationStatus = if (iteration.is_final) " (FINAL)" else ""
+            
+                promptBuilder.append("${index + 1}. Query: \"${iteration.query}\"$filterInfo$duplicateWarning$iterationStatus\n")
+            
+                // Add the actual results for this iteration
+                if (iteration.results.isNotEmpty()) {
+                    promptBuilder.append("   Results (${iteration.results.size}):\n")
+                    iteration.results.forEachIndexed { resultIndex, result ->
+                        promptBuilder.append("   ${resultIndex + 1}. ${result.filename}: ${result.content.firstOrNull()?.text}\n")
+                    
+                        // Include key attributes
+                        if (result.attributes != null && result.attributes.isNotEmpty()) {
+                            promptBuilder.append("      Attributes: ")
+                            result.attributes.entries.joinTo(promptBuilder, ", ") { "${it.key}=${it.value}" }
+                            promptBuilder.append("\n")
+                        }
+                    }
+                } else {
+                    promptBuilder.append("   No results found for this query.\n")
                 }
-            } else {
-                promptBuilder.append("   No results found for this query.\n")
             }
         }
 

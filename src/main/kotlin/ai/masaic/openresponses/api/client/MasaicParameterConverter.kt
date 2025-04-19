@@ -411,8 +411,7 @@ class MasaicParameterConverter(
                                                 objectMapper.writeValueAsString(nativeTool.parameters),
                                                 FunctionParameters::class.java,
                                             ),
-                                        ).additionalProperties(responseTool.asWebSearch()._additionalProperties())
-                                        .build(),
+                                        ).build(),
                                 ).build(),
                         )
                     } else {
