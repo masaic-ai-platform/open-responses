@@ -3,12 +3,10 @@ package ai.masaic.openevals.api.service.runner
 import ai.masaic.openevals.api.model.LabelModelGrader
 import ai.masaic.openevals.api.model.SimpleInputMessage
 import ai.masaic.openevals.api.model.TestingCriterion
+import ai.masaic.openevals.api.service.ModelClientService
 import ai.masaic.openevals.api.utils.TemplateUtils
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.mitchellbosecke.pebble.PebbleEngine
-import com.openai.client.OpenAIClient
-import com.openai.client.okhttp.OpenAIOkHttpClient
-import com.openai.credential.BearerTokenCredential
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
@@ -22,6 +20,7 @@ import org.springframework.stereotype.Component
 @Component
 class LabelModelGraderEvaluator(
     private val pebbleEngine: PebbleEngine,
+    private val modelClientService: ModelClientService,
 ) : CriterionEvaluator {
     private val logger = LoggerFactory.getLogger(LabelModelGraderEvaluator::class.java)
     private val objectMapper = jacksonObjectMapper()
@@ -61,11 +60,8 @@ class LabelModelGraderEvaluator(
             
             logger.debug("Calling model ${criterion.model} with inputs: $processedInputs")
 
-            // Create the API client
-            val openAIClient = createOpenAIClient(criterion.apiKey)
-            
             // Call the model to get a classification
-            val result = callLabelModel(openAIClient, criterion, processedInputs)
+            val result = callLabelModel(criterion, processedInputs)
             
             logger.debug("Model returned label: $result")
             
@@ -75,11 +71,12 @@ class LabelModelGraderEvaluator(
             return CriterionEvaluator.CriterionResult(
                 id = criterion.id,
                 passed = passed,
-                message = if (passed) {
-                    "Model classification ($result) is in the passing labels: ${criterion.passingLabels}"
-                } else {
-                    "Model classification ($result) is not in the passing labels: ${criterion.passingLabels}"
-                }
+                message =
+                    if (passed) {
+                        "Model classification ($result) is in the passing labels: ${criterion.passingLabels}"
+                    } else {
+                        "Model classification ($result) is not in the passing labels: ${criterion.passingLabels}"
+                    },
             )
         } catch (e: Exception) {
             logger.error("Error evaluating label model: ${e.message}", e)
@@ -90,7 +87,7 @@ class LabelModelGraderEvaluator(
             )
         }
     }
-    
+
     /**
      * Process the input templates to use actual values from the JSON.
      *
@@ -98,80 +95,79 @@ class LabelModelGraderEvaluator(
      * @param actualJson The actual JSON result to resolve values from
      * @return List of processed input messages
      */
-    private fun processInputs(inputs: List<SimpleInputMessage>, actualJson: String): List<SimpleInputMessage> {
-        return inputs.map { input ->
+    private fun processInputs(
+        inputs: List<SimpleInputMessage>,
+        actualJson: String,
+    ): List<SimpleInputMessage> =
+        inputs.map { input ->
             SimpleInputMessage(
                 role = input.role,
-                content = TemplateUtils.resolveTemplateValue(input.content, actualJson, pebbleEngine)
+                content = TemplateUtils.resolveTemplateValue(input.content, actualJson, pebbleEngine),
             )
         }
-    }
-    
+
     /**
-     * Create an OpenAI client.
+     * Add SimpleInputMessages to a completion params builder based on their roles.
      *
-     * @return An authenticated OpenAI client
+     * @param builder The builder to add messages to
+     * @param messages The list of simple input messages
+     * @return The updated builder
      */
-    private fun createOpenAIClient(apiKey: String): OpenAIClient {
-        val baseURL = "https://api.openai.com/v1"
-        return OpenAIOkHttpClient
-            .builder()
-            .credential(BearerTokenCredential.create { apiKey })
-            .baseUrl(baseURL)
-            .build()
+    private fun addSimpleInputMessagesToBuilder(
+        builder: ChatCompletionCreateParams.Builder,
+        messages: List<SimpleInputMessage>,
+    ): ChatCompletionCreateParams.Builder {
+        messages.forEach { message ->
+            when {
+                // System messages
+                message.role.lowercase() == "system" || message.role.lowercase() == "developer" -> {
+                    builder.addMessage(
+                        ChatCompletionSystemMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+                // User messages (or any other role)
+                else -> {
+                    builder.addMessage(
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+            }
+        }
+        return builder
     }
-    
+
     /**
      * Call the label model to classify the inputs.
      *
-     * @param client The OpenAI client
      * @param criterion The label model grader criterion containing model and labels
      * @param inputs The processed input messages
      * @return The selected label
      */
     private fun callLabelModel(
-        client: OpenAIClient,
         criterion: LabelModelGrader,
-        inputs: List<SimpleInputMessage>
+        inputs: List<SimpleInputMessage>,
     ): String {
-        // Create completion params builder
-        val completionBuilder = ChatCompletionCreateParams.builder().model(criterion.model)
+        // Create completion params and execute with cached client
+        val builder = modelClientService.createBasicCompletionParams(criterion.model)
+        addSimpleInputMessagesToBuilder(builder, inputs)
         
-        // Add input messages based on their roles
-        inputs.forEach { message ->
-            when {
-                // System messages
-                message.role.lowercase() == "system" || message.role.lowercase() == "developer" -> {
-                    completionBuilder.addMessage(
-                        ChatCompletionSystemMessageParam
-                            .builder()
-                            .content(message.content)
-                            .build()
-                    )
+        val response =
+            modelClientService.executeWithClientAndErrorHandling(
+                apiKey = criterion.apiKey,
+                params = builder.build(),
+                identifier = "label-model-${criterion.id}",
+            ) { content, error ->
+                if (error != null) {
+                    throw RuntimeException("Error calling label model: $error")
                 }
-                // User messages (or any other role)
-                else -> {
-                    completionBuilder.addMessage(
-                        ChatCompletionUserMessageParam
-                            .builder()
-                            .content(message.content)
-                            .build()
-                    )
-                }
+                content
             }
-        }
-        
-        // Call the API
-        val completion = client.chat().completions().create(completionBuilder.build())
-        
-        // Extract and clean the response
-        val response = completion
-            .choices()
-            .firstOrNull()
-            ?.message()
-            ?.content()
-            ?.orElse("")
-            ?.trim() ?: ""
         
         // Verify the response is a valid label
         return if (criterion.labels.contains(response)) {

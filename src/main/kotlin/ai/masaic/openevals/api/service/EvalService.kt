@@ -23,7 +23,10 @@ class EvalService(
      * @param request The evaluation creation request
      * @return The created evaluation
      */
-    suspend fun createEval(request: CreateEvalRequest, headers: MultiValueMap<String, String>): Eval {
+    suspend fun createEval(
+        request: CreateEvalRequest,
+        headers: MultiValueMap<String, String>,
+    ): Eval {
         val dataSourceConfigRequest = request.dataSourceConfig
 
         val dataSourceConfig =
@@ -77,7 +80,8 @@ class EvalService(
                 when (criterion) {
                     is LabelModelGrader ->
                         criterion.copy(
-                            id = "${criterion.name}-${UUID.randomUUID()}", apiKey = EvalRunService.extractApiKey(headers)
+                            id = "${criterion.name}-${UUID.randomUUID()}",
+                            apiKey = EvalRunService.extractApiKey(headers),
                         )
                     is StringCheckGrader ->
                         criterion.copy(

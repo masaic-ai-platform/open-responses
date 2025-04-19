@@ -4,10 +4,8 @@ import ai.masaic.openevals.api.model.ChatMessage
 import ai.masaic.openevals.api.model.CompletionsRunDataSource
 import ai.masaic.openevals.api.model.CustomDataSourceConfig
 import ai.masaic.openevals.api.model.RunDataSource
-import com.openai.client.OpenAIClient
-import com.openai.client.okhttp.OpenAIOkHttpClient
+import ai.masaic.openevals.api.service.ModelClientService
 import com.openai.core.JsonValue
-import com.openai.credential.BearerTokenCredential
 import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -23,9 +21,10 @@ import org.springframework.stereotype.Component
  * Implementation of GenerationService for OpenAI Chat Completions API.
  */
 @Component
-class ChatCompletionsGenerationService : GenerationService {
+class ChatCompletionsGenerationService(
+    private val modelClientService: ModelClientService,
+) : GenerationService {
     private val logger = LoggerFactory.getLogger(ChatCompletionsGenerationService::class.java)
-    private val baseURL = "https://api.openai.com/v1"
 
     /**
      * Checks if this service can handle the generation based on the provided data source.
@@ -57,42 +56,28 @@ class ChatCompletionsGenerationService : GenerationService {
         runBlocking {
             logger.info("Processing ${completionMessagesSet.size} completions with model: ${dataSource.model}")
 
-            // Create OpenAI client
-            val openAIClient = createOpenAIClient(apiKey)
-
             // Process each message set in parallel
             val resultMap = mutableMapOf<Int, GenerationService.CompletionResult>()
             completionMessagesSet
                 .map { (index, messages) ->
                     async {
-                        try {
-                            // Create the completion params
-                            val completionParams = createCompletionParams(messages, dataSource, dataSourceConfig)
-
-                            // Call the OpenAI API
-                            val completion = openAIClient.chat().completions().create(completionParams)
-
-                            // Extract the result
-                            val content =
-                                completion
-                                    .choices()
-                                    .firstOrNull()
-                                    ?.message()
-                                    ?.content()
-                                    ?.orElse("")
-
-                            resultMap[index] =
+                        // Create the completion params
+                        val completionParams = createCompletionParams(messages, dataSource, dataSourceConfig)
+                        
+                        // Execute with error handling using the cached client
+                        val result =
+                            modelClientService.executeWithClientAndErrorHandling(
+                                apiKey = apiKey,
+                                params = completionParams,
+                                identifier = index,
+                            ) { content, error ->
                                 GenerationService.CompletionResult(
-                                    contentJson = content ?: "",
+                                    contentJson = content,
+                                    error = error,
                                 )
-                        } catch (e: Exception) {
-                            logger.error("Error processing completion for index $index: ${e.message}", e)
-                            resultMap[index] =
-                                GenerationService.CompletionResult(
-                                    contentJson = "",
-                                    error = e.message ?: "Unknown error",
-                                )
-                        }
+                            }
+                        
+                        resultMap[index] = result
                     }
                 }.awaitAll()
 
@@ -101,17 +86,55 @@ class ChatCompletionsGenerationService : GenerationService {
         }
 
     /**
-     * Create OpenAI client with authentication.
+     * Add messages to a completion params builder based on their roles.
      *
-     * @param apiKey The API key for authentication
-     * @return OpenAI client instance
+     * @param builder The builder to add messages to
+     * @param messages The list of chat messages
+     * @return The updated builder
      */
-    private fun createOpenAIClient(apiKey: String): OpenAIClient =
-        OpenAIOkHttpClient
-            .builder()
-            .credential(BearerTokenCredential.create { apiKey })
-            .baseUrl(baseURL)
-            .build()
+    private fun addMessagesToBuilder(
+        builder: ChatCompletionCreateParams.Builder,
+        messages: List<ChatMessage>,
+    ): ChatCompletionCreateParams.Builder {
+        messages.forEach { message ->
+            when (message.role.lowercase()) {
+                "system" -> {
+                    builder.addMessage(
+                        ChatCompletionSystemMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+                "user" -> {
+                    builder.addMessage(
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+                "assistant" -> {
+                    builder.addMessage(
+                        ChatCompletionAssistantMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+                else -> {
+                    // Default to user role for unknown roles
+                    builder.addMessage(
+                        ChatCompletionUserMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+            }
+        }
+        return builder
+    }
 
     /**
      * Create completion parameters for the OpenAI API.
@@ -126,80 +149,42 @@ class ChatCompletionsGenerationService : GenerationService {
         dataSource: CompletionsRunDataSource,
         dataSourceConfig: CustomDataSourceConfig,
     ): ChatCompletionCreateParams {
-        val schema =
+        // Create JSON schema for response format
+        val jsonSchema =
             ResponseFormatJsonSchema.JsonSchema.Schema
                 .builder()
                 .additionalProperties(dataSourceConfig.schema)
                 .build()
+                
         val format =
             ResponseFormatJsonSchema.JsonSchema
                 .builder()
-                .schema(schema)
+                .schema(jsonSchema)
                 .name("evalSchema")
                 .build()
+                
+        // Create the builder with basic properties
         val builder =
             ChatCompletionCreateParams
                 .builder()
                 .model(dataSource.model)
                 .responseFormat(
-                    ChatCompletionCreateParams.ResponseFormat.ofJsonSchema(
-                        ResponseFormatJsonSchema
-                            .builder()
-                            .type(
-                                JsonValue.from("json_schema"),
-                            ).jsonSchema(format)
-                            .build(),
-                    ),
+                    ResponseFormatJsonSchema
+                        .builder()
+                        .type(JsonValue.from("json_schema"))
+                        .jsonSchema(format)
+                        .build(),
                 )
-
-        // Add messages
-        messages.forEach { message ->
-            when (message.role) {
-                "system" -> {
-                    builder.addMessage(
-                        ChatCompletionSystemMessageParam
-                            .builder()
-                            .content(message.content)
-                            .build(),
-                    )
-                }
-
-                "user" -> {
-                    builder.addMessage(
-                        ChatCompletionUserMessageParam
-                            .builder()
-                            .content(message.content)
-                            .build(),
-                    )
-                }
-
-                "assistant" -> {
-                    builder.addMessage(
-                        ChatCompletionAssistantMessageParam
-                            .builder()
-                            .content(message.content)
-                            .build(),
-                    )
-                }
-
-                else -> {
-                    // Default to user role for unknown roles
-                    builder.addMessage(
-                        ChatCompletionUserMessageParam
-                            .builder()
-                            .content(message.content)
-                            .build(),
-                    )
-                }
-            }
-        }
-
-        // Add sampling parameters if available
+        
+        // Add temperature and topP if available
         dataSource.samplingParams?.let { params ->
-            builder.temperature(params.temperature)
-            builder.topP(params.topP)
+            params.temperature.let { builder.temperature(it) }
+            params.topP.let { builder.topP(it) }
         }
-
+        
+        // Add messages to the builder
+        addMessagesToBuilder(builder, messages)
+        
         return builder.build()
     }
 } 

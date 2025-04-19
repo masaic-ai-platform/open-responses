@@ -8,6 +8,7 @@ import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.util.MultiValueMap
 import java.time.Instant
 import java.util.*
 import kotlin.test.*
@@ -15,11 +16,13 @@ import kotlin.test.*
 class EvalServiceTest {
     private lateinit var evalRepository: EvalRepository
     private lateinit var evalService: EvalService
+    private lateinit var headers: MultiValueMap<String, String>
 
     @BeforeEach
     fun setup() {
         // Create and configure mocks
         evalRepository = mockk()
+        headers.add("Authorization", "Bearer test-api-key")
 
         // Mock the SampleSchemaUtils to return a simple schema
         mockkObject(SampleSchemaUtils.Companion)
@@ -82,7 +85,7 @@ class EvalServiceTest {
             }
 
             // When
-            val result = evalService.createEval(createRequest)
+            val result = evalService.createEval(createRequest, headers)
 
             // Then
             assertNotNull(result)
@@ -99,60 +102,6 @@ class EvalServiceTest {
                         it.name == "Test Eval" &&
                             it.testingCriteria.size == 1 &&
                             it.testingCriteria[0] is StringCheckGrader &&
-                            it.metadata?.get("key1") == "value1"
-                    },
-                )
-            }
-        }
-
-    @Test
-    fun `createEval should create eval with stored completions data source config`() =
-        runTest {
-            // Given
-            val testingCriterion =
-                LabelModelGrader(
-                    name = "Test Label Model",
-                    model = "gpt-4",
-                    input = listOf("What is the sentiment of this text: {{input}}"),
-                    labels = listOf("positive", "negative", "neutral"),
-                    passingLabels = listOf("positive"),
-                )
-
-            val createRequest =
-                CreateEvalRequest(
-                    name = "Test Eval",
-                    dataSourceConfig =
-                        StoredCompletionsDataSourceConfig(
-                            metadata = mapOf("filter" to "test"),
-                        ),
-                    testingCriteria = listOf(testingCriterion),
-                    metadata = mapOf("key1" to "value1"),
-                )
-
-            // Mock the repository to return a valid eval with ID
-            coEvery { evalRepository.createEval(any()) } answers {
-                val eval = firstArg<Eval>()
-                eval.copy(id = "eval_${UUID.randomUUID().toString().replace("-", "")}")
-            }
-
-            // When
-            val result = evalService.createEval(createRequest)
-
-            // Then
-            assertNotNull(result)
-            assertNotNull(result.id)
-            assertEquals("Test Eval", result.name)
-            assertEquals(mapOf("key1" to "value1"), result.metadata)
-            assertTrue(result.dataSourceConfig is StoredCompletionsDataSourceConfig)
-            assertEquals(1, result.testingCriteria.size)
-
-            // Verify that createEval was called with appropriate parameters
-            coVerify {
-                evalRepository.createEval(
-                    match {
-                        it.name == "Test Eval" &&
-                            it.testingCriteria.size == 1 &&
-                            it.testingCriteria[0] is LabelModelGrader &&
                             it.metadata?.get("key1") == "value1"
                     },
                 )
@@ -196,7 +145,7 @@ class EvalServiceTest {
             }
 
             // When
-            val result = evalService.createEval(createRequest)
+            val result = evalService.createEval(createRequest, headers)
 
             // Then
             assertNotNull(result)

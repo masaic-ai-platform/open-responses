@@ -29,8 +29,8 @@ class EvalController(
      */
     @PostMapping
     suspend fun createEval(
-        @RequestHeader headers: MultiValueMap<String, String>,
         @RequestBody request: CreateEvalRequest,
+        @RequestHeader headers: MultiValueMap<String, String>,
     ): ResponseEntity<Eval> {
         val eval = evalService.createEval(request, headers)
         return ResponseEntity.status(HttpStatus.CREATED).body(eval)

@@ -10,6 +10,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.http.HttpStatus
+import org.springframework.util.LinkedMultiValueMap
+import org.springframework.util.MultiValueMap
 import org.springframework.web.server.ResponseStatusException
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -17,11 +19,16 @@ import kotlin.test.assertNotNull
 class EvalControllerTest {
     private lateinit var evalService: EvalService
     private lateinit var evalController: EvalController
+    private lateinit var headers: MultiValueMap<String, String>
 
     @BeforeEach
     fun setup() {
         evalService = mockk()
         evalController = EvalController(evalService)
+        headers =
+            LinkedMultiValueMap<String, String>().apply {
+                add("Authorization", "Bearer test-api-key")
+            }
     }
 
     @Test
@@ -45,15 +52,15 @@ class EvalControllerTest {
                     metadata = request.metadata,
                 )
         
-            coEvery { evalService.createEval(request) } returns expectedEval
+            coEvery { evalService.createEval(request, headers) } returns expectedEval
         
             // Act
-            val response = evalController.createEval(request)
+            val response = evalController.createEval(request, headers)
         
             // Assert
             assertEquals(HttpStatus.CREATED, response.statusCode)
             assertEquals(expectedEval, response.body)
-            coVerify(exactly = 1) { evalService.createEval(request) }
+            coVerify(exactly = 1) { evalService.createEval(request, headers) }
         }
 
     @Test

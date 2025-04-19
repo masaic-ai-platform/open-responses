@@ -78,7 +78,7 @@ data class LabelModelGrader(
     @JsonProperty("passing_labels")
     val passingLabels: List<String>,
     @JsonIgnore
-    val apiKey: String = ""
+    val apiKey: String = "",
 ) : TestingCriterion
 
 // String Check Grader
@@ -155,7 +155,10 @@ data class TextSimilarityGrader(
     val passThreshold: Double,
 ) : TestingCriterion
 
-data class SimpleInputMessage(val role: String, val content: String)
+data class SimpleInputMessage(
+    val role: String,
+    val content: String,
+)
 
 // Request classes
 data class CreateEvalRequest(
