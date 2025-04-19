@@ -1,5 +1,6 @@
 package ai.masaic.openevals.api.service
 
+import ai.masaic.openevals.api.model.CompletionResult
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.credential.BearerTokenCredential
@@ -118,13 +119,19 @@ class ModelClientService {
      * @param resultBuilder Function to build the result
      * @return The result object
      */
-    fun <T, R> executeWithClientAndErrorHandling(
+    fun executeWithClientAndErrorHandling(
         apiKey: String,
         params: ChatCompletionCreateParams,
-        identifier: T? = null,
-        resultBuilder: (content: String, error: String?) -> R,
-    ): R {
+        identifier: String? = null,
+        resultBuilder: (content: String, error: String?) -> CompletionResult,
+    ): CompletionResult {
         val client = getOpenAIClient(apiKey)
-        return executeCompletionWithErrorHandling(client, params, identifier, resultBuilder) as R
+        return try {
+            val content = executeCompletionCall(client, params)
+            resultBuilder(content, null)
+        } catch (e: Exception) {
+            logger.error("Error processing completion${identifier?.let { " for $it" } ?: ""}: ${e.message}", e)
+            resultBuilder("", e.message ?: "Unknown error")
+        }
     }
 } 

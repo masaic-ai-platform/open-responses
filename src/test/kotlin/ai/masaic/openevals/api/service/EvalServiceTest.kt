@@ -8,6 +8,7 @@ import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.springframework.util.LinkedMultiValueMap
 import org.springframework.util.MultiValueMap
 import java.time.Instant
 import java.util.*
@@ -22,6 +23,7 @@ class EvalServiceTest {
     fun setup() {
         // Create and configure mocks
         evalRepository = mockk()
+        headers = LinkedMultiValueMap()
         headers.add("Authorization", "Bearer test-api-key")
 
         // Mock the SampleSchemaUtils to return a simple schema

@@ -340,7 +340,7 @@ class EvalRunner(
      * @return Map of testing criteria results by index and criteria
      */
     private fun evaluateTestingCriteria(
-        resultMap: Map<Int, GenerationService.CompletionResult>,
+        resultMap: Map<Int, CompletionResult>,
         jsonLines: List<String>,
         testingCriteria: List<TestingCriterion>,
         evalRunId: String,

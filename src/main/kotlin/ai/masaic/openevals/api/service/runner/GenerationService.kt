@@ -32,12 +32,12 @@ interface GenerationService {
         apiKey: String,
         dataSourceConfig: CustomDataSourceConfig,
     ): Map<Int, CompletionResult>
+}
 
-    /**
-     * Data class to store completion results.
-     */
-    data class CompletionResult(
-        val contentJson: String,
-        val error: String? = null,
-    )
-} 
+/**
+ * Data class to store completion results.
+ */
+data class CompletionResult(
+    val contentJson: String,
+    val error: String? = null,
+)

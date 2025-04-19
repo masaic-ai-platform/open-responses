@@ -52,12 +52,12 @@ class ChatCompletionsGenerationService(
         dataSource: CompletionsRunDataSource,
         apiKey: String,
         dataSourceConfig: CustomDataSourceConfig,
-    ): Map<Int, GenerationService.CompletionResult> =
+    ): Map<Int, CompletionResult> =
         runBlocking {
             logger.info("Processing ${completionMessagesSet.size} completions with model: ${dataSource.model}")
 
             // Process each message set in parallel
-            val resultMap = mutableMapOf<Int, GenerationService.CompletionResult>()
+            val resultMap = mutableMapOf<Int, CompletionResult>()
             completionMessagesSet
                 .map { (index, messages) ->
                     async {
@@ -69,15 +69,19 @@ class ChatCompletionsGenerationService(
                             modelClientService.executeWithClientAndErrorHandling(
                                 apiKey = apiKey,
                                 params = completionParams,
-                                identifier = index,
+                                identifier = index.toString(),
                             ) { content, error ->
-                                GenerationService.CompletionResult(
+                                ai.masaic.openevals.api.model.CompletionResult(
                                     contentJson = content,
-                                    error = error,
+                                    error = error?.let { it },
                                 )
                             }
                         
-                        resultMap[index] = result
+                        resultMap[index] =
+                            CompletionResult(
+                                contentJson = result.contentJson,
+                                error = result.error,
+                            )
                     }
                 }.awaitAll()
 

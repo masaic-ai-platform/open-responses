@@ -157,17 +157,24 @@ class LabelModelGraderEvaluator(
         val builder = modelClientService.createBasicCompletionParams(criterion.model)
         addSimpleInputMessagesToBuilder(builder, inputs)
         
-        val response =
+        val completionResult =
             modelClientService.executeWithClientAndErrorHandling(
                 apiKey = criterion.apiKey,
                 params = builder.build(),
-                identifier = "label-model-${criterion.id}",
+                identifier = criterion.id,
             ) { content, error ->
-                if (error != null) {
-                    throw RuntimeException("Error calling label model: $error")
-                }
-                content
+                ai.masaic.openevals.api.model.CompletionResult(
+                    contentJson = content,
+                    error = error,
+                )
             }
+        
+        // Check for errors
+        if (completionResult.error != null) {
+            throw RuntimeException("Error calling label model: ${completionResult.error}")
+        }
+        
+        val response = completionResult.contentJson
         
         // Verify the response is a valid label
         return if (criterion.labels.contains(response)) {
