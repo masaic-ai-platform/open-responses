@@ -395,6 +395,9 @@ class AgenticSearchService(
                 .builder()
                 .messages(listOf(messageWithContent))
                 .model(params.model().toString())
+                .temperature(0.9) // Adjusted temperature for more creative responses
+                .topP(0.9) // Adjusted top_p for more diverse sampling
+                .presencePenalty(1.0) // Adjusted presence penalty to encourage new topics
                 .build()
 
         try {

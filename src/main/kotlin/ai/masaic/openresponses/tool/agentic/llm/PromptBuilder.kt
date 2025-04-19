@@ -155,12 +155,21 @@ object PromptBuilder {
         promptBuilder.append("\n   - Use context of previous iterations in your query(for example domain specific keywords)")
         promptBuilder.append("\n3. Recognize when you have sufficient information and TERMINATE rather than continuing with marginally different queries")
 
+        // Add query novelty checklist to discourage duplicate re‑phrasing
+        promptBuilder.append("\n\n## Query Novelty Checklist")
+        promptBuilder.append("\nBefore proposing NEXT_QUERY, confirm that:")
+        promptBuilder.append("\n- It introduces at least one NEW domain‑specific term discovered in the search results that did not appear in any previous query.")
+        promptBuilder.append("\n- It targets a different attribute value (e.g., different filename or chunk_index range) than prior queries.")
+        promptBuilder.append("\n- Fewer than 50% of its words overlap with the ORIGINAL question or any earlier query.")
+        promptBuilder.append("\nIf these conditions are not met, craft a different query that satisfies them.")
+
         // Add guidance for chunk-by-chunk searching and memory interface
         promptBuilder.append("\n\n## Search Strategy and Memory")
         promptBuilder.append("\nSome questions require methodical chunk-by-chunk exploration. If you see 'chunk_index' in the attributes, you can:")
         promptBuilder.append("\n1. Search sequentially through chunks using filters like {\"filename\": \"document.pdf\", \"chunk_index\": 1}, then {\"filename\": \"document.pdf\", \"chunk_index\": 2}, etc.")
         promptBuilder.append("\n2. Use filters to target specific document sections with {\"filename\": \"document.pdf\", \"chunk_index\": [3, 4, 5]} for multiple chunks.")
-        promptBuilder.append("\n3. If you think you've a chunk has partial information then you can add filter of previous chunk indexes to the query and same for the next chunks.")
+        promptBuilder.append("\n3. If you think you've a chunk has partial information then you can add filter of trailing chunk indexes to the query and same for the leading chunks.")
+        promptBuilder.append("\n4. Do not query the chunks already received with different wording. They will be filtered out by the vector database. Once you receive a chunk, save your learning in memory and avoid filtering the same chunk again.")
         promptBuilder.append("\n\n⚠️ IMPORTANT: When filtering by 'chunk_index', you MUST ALWAYS include a 'filename' filter as well, since different files can have the same chunk indices. Failure to include a filename filter with chunk_index will result in errors.")
 
         // Add memory interface
