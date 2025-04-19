@@ -190,7 +190,7 @@ class NativeToolRegistry(
             
             val maxResults = function._additionalProperties()["max_num_results"]?.toString()?.toInt() ?: 5
             val maxIterations = function._additionalProperties()["max_iterations"]?.toString()?.toInt() ?: 5
-            val seedStrategy = function._additionalProperties()["seed_strategy"] as? String ?: "topk"
+            val seedStrategy = function._additionalProperties()["seed_strategy"] as? String ?: "default"
             val userFilter = function._additionalProperties()["filters"]?.convert(Filter::class.java)
             
             log.info("AgenticSearch parameters: maxResults=$maxResults, maxIterations=$maxIterations, seedStrategy=$seedStrategy")

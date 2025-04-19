@@ -10,7 +10,12 @@ import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
@@ -32,6 +37,7 @@ class FileBasedVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val objectMapper: ObjectMapper,
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
+    @Autowired private val hybridSearchServiceHelper: HybridSearchServiceHelper,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(FileBasedVectorSearchProvider::class.java)
 
@@ -141,6 +147,7 @@ class FileBasedVectorSearchProvider(
      * @param attributes Additional metadata attributes to include with each vector
      * @return True if indexing was successful, false otherwise
      */
+    @OptIn(DelicateCoroutinesApi::class, DelicateCoroutinesApi::class)
     override fun indexFile(
         fileId: String,
         inputStream: InputStream,
@@ -148,6 +155,7 @@ class FileBasedVectorSearchProvider(
         chunkingStrategy: ChunkingStrategy?,
         preDeleteIfExists: Boolean,
         attributes: Map<String, Any>?,
+        vectorStoreId: String,
     ): Boolean {
         try {
             if (preDeleteIfExists && fileMetadataCache.containsKey(fileId)) {
@@ -187,6 +195,7 @@ class FileBasedVectorSearchProvider(
                             "filename" to filename,
                             "chunk_id" to chunkId,
                             "chunk_index" to index,
+                            "vector_store_id" to vectorStoreId,
                             "total_chunks" to chunks.size,
                         )
                     
@@ -217,6 +226,29 @@ class FileBasedVectorSearchProvider(
             
             fileMetadataCache[fileId] = initialMetadata
 
+            // Asynchronously index chunks for text search via hybrid service
+            val chunksForIndexing =
+                chunksWithEmbeddings.map { cw ->
+                    HybridSearchService.ChunkForIndexing(
+                        chunkId = cw.chunkId,
+                        vectorStoreId = vectorStoreId,
+                        fileId = cw.fileId,
+                        filename = cw.chunkMetadata["filename"] as String,
+                        chunkIndex = cw.chunkMetadata["chunk_index"] as Int,
+                        content = cw.content,
+                    )
+                }
+            GlobalScope.launch(Dispatchers.IO) {
+                try {
+                    hybridSearchServiceHelper.indexChunks(chunksForIndexing)
+                    log.info("Indexed ${chunksForIndexing.size} chunks for hybrid search")
+                } catch (e: Exception) {
+                    log.error("Error indexing chunks for hybrid search: ${e.message}", e)
+                    deleteFile(fileId) // Rollback if indexing fails
+                    throw e
+                }
+            }
+
             // Persist to disk
             saveEmbeddings(fileId)
 
@@ -236,7 +268,8 @@ class FileBasedVectorSearchProvider(
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
         attributes: Map<String, Any>?,
-    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes, vectorStoreId)
 
     /**
      * Indexes a file without attributes.
@@ -246,7 +279,8 @@ class FileBasedVectorSearchProvider(
         inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
-    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null, vectorStoreId)
 
     /**
      * Searches for similar content in the vector store.
@@ -311,7 +345,7 @@ class FileBasedVectorSearchProvider(
             return chunks
         }
 
-        log.debug("Applying filter: $filter to ${chunks.size} chunks")
+        log.debug("Applying filter: {} to {} chunks", filter, chunks.size)
         
         // Apply the filter to each chunk
         val filteredChunks =
@@ -344,6 +378,9 @@ class FileBasedVectorSearchProvider(
      */
     override fun deleteFile(fileId: String): Boolean {
         try {
+            // Get vector store ID from cache before removing
+            val vectorStoreId = fileChunksCache[fileId]?.firstOrNull()?.chunkMetadata?.get("vector_store_id") as? String
+
             // Remove from memory cache
             fileChunksCache.remove(fileId)
             fileMetadataCache.remove(fileId)
@@ -353,6 +390,20 @@ class FileBasedVectorSearchProvider(
             if (Files.exists(embeddingsFile)) {
                 Files.delete(embeddingsFile)
                 log.info("Deleted embeddings for file: $fileId")
+            }
+
+            // Delete from text search indexes via hybrid service
+            if (vectorStoreId != null) {
+                hybridSearchServiceHelper.let {
+                    kotlinx.coroutines.runBlocking {
+                        try {
+                            it.deleteFileChunks(fileId, vectorStoreId)
+                            log.info("Deleted chunks for file $fileId from hybrid search indexes")
+                        } catch (e: Exception) {
+                            log.error("Error deleting file $fileId chunks from hybrid search indexes: ${e.message}", e)
+                        }
+                    }
+                }
             }
 
             return true
@@ -369,37 +420,4 @@ class FileBasedVectorSearchProvider(
      * @return Map of metadata, or null if the file doesn't exist
      */
     override fun getFileMetadata(fileId: String): Map<String, Any>? = fileMetadataCache[fileId]
-
-    /**
-     * Updates metadata for a file in the vector store.
-     * This is used to sync vectorstorefile attributes with the search provider.
-     *
-     * @param fileId The ID of the file
-     * @param metadata The metadata to update
-     * @return True if the update was successful, false otherwise
-     */
-    fun updateFileMetadata(
-        fileId: String,
-        metadata: Map<String, Any>,
-    ): Boolean {
-        try {
-            if (!fileMetadataCache.containsKey(fileId)) {
-                log.warn("Cannot update metadata for non-existent file: $fileId")
-                return false
-            }
-            
-            // Update the metadata cache with the new values
-            fileMetadataCache[fileId] = metadata
-            
-            // If the file chunks exist, update the disk storage too
-            if (fileChunksCache.containsKey(fileId)) {
-                saveEmbeddings(fileId)
-            }
-            
-            return true
-        } catch (e: Exception) {
-            log.error("Error updating metadata for file: $fileId", e)
-            return false
-        }
-    }
 }

@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.model.CompoundFilter
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
+import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.*
 import ai.masaic.openresponses.tool.agentic.llm.DecisionParser
@@ -24,9 +25,10 @@ import org.springframework.stereotype.Component
 class AgenticSearchService(
     store: VectorStoreService,
     private val mapper: ObjectMapper,
+    private val hybridSearchService: HybridSearchService,
 ) {
     private val log = LoggerFactory.getLogger(AgenticSearchService::class.java)
-    private val seeds = SeedStrategyFactory(store)
+    private val seeds = SeedStrategyFactory(store, hybridSearchService)
     private val parser = DecisionParser(mapper)
 
     suspend fun run(
@@ -418,9 +420,4 @@ class AgenticSearchService(
             return "TERMINATE"
         }
     }
-
-    /**
-     * Extract model from params or use default
-     */
-    private fun getModelFromParams(params: ResponseCreateParams?): String = params?.model()?.toString() ?: "gpt-4-0125-preview"
 } 

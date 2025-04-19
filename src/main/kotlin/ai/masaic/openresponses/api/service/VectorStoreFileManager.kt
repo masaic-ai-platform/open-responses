@@ -160,7 +160,7 @@ class VectorStoreFileManager(
             log.info("Indexing file ${file.id} in vector store $vectorStoreId")
             try {
                 val resource = fileStorageService.loadAsResource(file.id)
-                val success = vectorSearchProvider.indexFile(file.id, resource.inputStream, filename, chunkingStrategy)
+                val success = vectorSearchProvider.indexFile(file.id, resource.inputStream, filename, chunkingStrategy, vectorStoreId)
                 
                 val updatedFile =
                     if (success) {

@@ -132,7 +132,7 @@ class MasaicResponseService(
         }
     }
 
-    @Value("\${api.request.timeout:30}")
+    @Value("\${api.request.timeout:120}")
     private val requestTimeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS
 
     /**

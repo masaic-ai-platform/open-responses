@@ -76,6 +76,11 @@ dependencies {
     // MongoDB Testcontainers for testing
     testImplementation("org.testcontainers:mongodb:1.19.1")
     testImplementation("org.testcontainers:junit-jupiter:1.19.1")
+
+    // Apache Lucene for full-text indexing/search
+    implementation("org.apache.lucene:lucene-core:9.9.0")
+    implementation("org.apache.lucene:lucene-analysis-common:9.9.0")
+    implementation("org.apache.lucene:lucene-queryparser:9.9.0")
 }
 
 kotlin {

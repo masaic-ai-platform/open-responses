@@ -33,6 +33,7 @@ class VectorStoreService(
     @Autowired private val vectorStoreRepository: VectorStoreRepository,
     @Autowired private val vectorSearchProvider: VectorSearchProvider,
     @Autowired private val telemetryService: TelemetryService,
+    @Autowired(required = false) private val hybridSearchServiceHelper: HybridSearchServiceHelper,
 ) {
     private val log = LoggerFactory.getLogger(VectorStoreService::class.java)
     
@@ -334,6 +335,15 @@ class VectorStoreService(
             files.forEach { file ->
                 try {
                     vectorSearchProvider.deleteFile(file.id)
+                   
+                    // Also delete from text search indexes via hybrid service
+                    hybridSearchServiceHelper?.let {
+                        try {
+                            it.deleteFileChunks(file.id, vectorStoreId)
+                        } catch (e: Exception) {
+                            log.error("Error deleting file ${file.id} chunks from hybrid search indexes", e)
+                        }
+                    }
                 } catch (e: Exception) {
                     log.error("Error deleting file ${file.id} from vector search provider", e)
                 }
@@ -548,6 +558,7 @@ class VectorStoreService(
                     chunkingStrategy = file.chunkingStrategy,
                     preDeleteIfExists = true, // Always delete existing embeddings first
                     attributes = request.attributes,
+                    vectorStoreId = vectorStoreId,
                 )
             
             // Update the file status based on indexing result
@@ -600,6 +611,15 @@ class VectorStoreService(
                 vectorSearchProvider.deleteFile(fileId)
             } catch (e: Exception) {
                 log.error("Error deleting file $fileId from vector search provider", e)
+            }
+            
+            // Also delete from text search indexes via hybrid service
+            hybridSearchServiceHelper?.let {
+                try {
+                    it.deleteFileChunks(fileId, vectorStoreId)
+                } catch (e: Exception) {
+                    log.error("Error deleting file $fileId chunks from hybrid search indexes", e)
+                }
             }
         
             // Update vector store counts 
@@ -940,6 +960,7 @@ class VectorStoreService(
                             filename = filename, 
                             chunkingStrategy = effectiveChunkingStrategy,
                             attributes = file.attributes,
+                            vectorStoreId = vectorStoreId,
                         )
 
                     if (success) {
