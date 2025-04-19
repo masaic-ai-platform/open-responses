@@ -56,10 +56,26 @@ class InMemoryResponseStore(
         val outputMessageItems: List<InputMessageItem> =
             response
                 .output()
-                .mapNotNull {
-                    it.message().orElse(null)
-                }.map {
-                    objectMapper.convertValue(it, InputMessageItem::class.java)
+                .mapNotNull { outputItem ->
+                    when {
+                        // Handle regular messages
+                        outputItem.isMessage() && outputItem.message().orElse(null) != null -> {
+                            objectMapper.convertValue(outputItem.message().get(), InputMessageItem::class.java)
+                        }
+                        // Handle function calls
+                        outputItem.isFunctionCall() -> {
+                            val functionCall = outputItem.asFunctionCall()
+                            InputMessageItem(
+                                id = functionCall.id(),
+                                role = "assistant",
+                                type = "function_call",
+                                call_id = functionCall.callId(),
+                                name = functionCall.name(),
+                                arguments = functionCall.arguments(),
+                            )
+                        }
+                        else -> null
+                    }
                 }
 
         responses.put(responseId, response)

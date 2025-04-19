@@ -52,8 +52,18 @@ suspend fun ResponseCreateParams.Builder.fromBody(
         input(body.input())
     }
 
-    // set model
-    model(body.model())
+    // Extract model name from request
+    val modelName = body.model().toString()
+
+    // If model contains url@model format, update the model name to just the model part
+    if (modelName.contains("@") == true) {
+        val parts = modelName.split("@", limit = 2)
+        if (parts.size == 2) {
+            model(parts[1])
+        }
+    } else {
+        model(modelName)
+    }
 
     // Set optional parameters
     instructions(body.instructions())
