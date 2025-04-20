@@ -40,7 +40,7 @@ class VectorIndexingTest {
         vectorSearchProvider = mockk()
         telemetryService = mockk(relaxed = true)
         
-        coEvery { vectorSearchProvider.indexFile(any(), any(), any()) } returns true
+        coEvery { vectorSearchProvider.indexFile(any(), any(), any(), any(), any()) } returns true
         coEvery { vectorSearchProvider.deleteFile(any()) } returns true
         
         fileService = FileService(fileStorageService, vectorSearchProvider, telemetryService)

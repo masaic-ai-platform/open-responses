@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.FileBasedVectorSearchProvider
+import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
@@ -32,14 +33,21 @@ class FileBasedVectorSearchProviderTest {
     private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var objectMapper: ObjectMapper
     private lateinit var vectorSearchProvider: FileBasedVectorSearchProvider
+    private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
 
     @BeforeEach
     fun setup() {
         // Mock the embedding service
         embeddingService = mockk()
+        hybridSearchServiceHelper = mockk(relaxed = true)
         
         // Configure default behavior
         every { embeddingService.embedText(any()) } returns listOf(0.1f, 0.2f, 0.3f)
+        every { embeddingService.embedTexts(any()) } returns
+            listOf(
+                listOf(0.1f, 0.2f, 0.3f),
+                listOf(0.4f, 0.5f, 0.6f),
+            )
         every { embeddingService.calculateSimilarity(any(), any()) } returns 0.85f
         
         // Create vector search properties with default values
@@ -59,6 +67,7 @@ class FileBasedVectorSearchProviderTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
     }
 
@@ -79,11 +88,11 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename)
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test")
         
         // Then
         assertTrue(result, "File should be successfully indexed")
-        verify { embeddingService.embedText(any()) }
+        verify { embeddingService.embedTexts(any()) }
         
         // Check that the embeddings file was created
         val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
@@ -98,7 +107,7 @@ class FileBasedVectorSearchProviderTest {
         val filename = "test.txt"
         val content = "This is a test document for vector indexing."
         val inputStream = ByteArrayInputStream(content.toByteArray())
-        vectorSearchProvider.indexFile(fileId, inputStream, filename)
+        vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test")
         
         // Configure similarity score for the search query
         val query = "test document"
@@ -121,8 +130,8 @@ class FileBasedVectorSearchProviderTest {
         val content1 = "This is document one."
         val content2 = "This is document two."
         
-        vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "doc1.txt")
-        vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt")
+        vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "doc1.txt", null, "test")
+        vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt", null, "test")
         
         // When - search with a filter for fileId1
         val filter = ComparisonFilter(key = "file_id", type = "eq", value = fileId1)
@@ -143,7 +152,7 @@ class FileBasedVectorSearchProviderTest {
         // Given
         val fileId = "test-file-id"
         val content = "Test content"
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "test.txt")
+        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "test.txt", null, "test")
         
         // Verify file exists before deletion
         val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
@@ -175,7 +184,7 @@ class FileBasedVectorSearchProviderTest {
         val filename = "persistence.txt"
         
         // First instance creates and indexes a file
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename)
+        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename, null, "test")
         
         // When - create a new instance
         val secondProvider =
@@ -183,6 +192,7 @@ class FileBasedVectorSearchProviderTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Then - the new instance should load the existing embeddings
@@ -210,6 +220,8 @@ class FileBasedVectorSearchProviderTest {
                 fileId,
                 ByteArrayInputStream(contents[index].toByteArray()),
                 filenames[index],
+                null,
+                "test",
             )
         }
         
@@ -234,10 +246,10 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // Mock embedding service to throw exception
-        every { embeddingService.embedText(any()) } throws RuntimeException("Embedding service error")
+        every { embeddingService.embedTexts(any()) } throws RuntimeException("Embedding service error")
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "error-test.txt")
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "error-test.txt", null, "test")
         
         // Then
         assertFalse(result, "Indexing should fail when embedding service throws an error")
@@ -251,7 +263,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt")
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt", null, "test")
         
         // Then
         assertFalse(result, "Indexing should fail for empty content")
@@ -274,7 +286,7 @@ class FileBasedVectorSearchProviderTest {
         every { chunkingStrategy.static } returns staticChunkingStrategy
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "chunking-test.txt", chunkingStrategy)
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "chunking-test.txt", chunkingStrategy, null, "test")
         
         // Then
         assertTrue(result, "File should be successfully indexed with custom chunking strategy")
@@ -289,7 +301,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // Index the file
-        vectorSearchProvider.indexFile(fileId, inputStream, filename)
+        vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test")
         
         // When
         val metadata = vectorSearchProvider.getFileMetadata(fileId)
@@ -319,7 +331,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // Index a file
-        vectorSearchProvider.indexFile(fileId, inputStream, "test.txt")
+        vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test")
         
         // When
         val results = vectorSearchProvider.searchSimilar("", rankingOptions = null)
@@ -346,7 +358,7 @@ class FileBasedVectorSearchProviderTest {
         
         // Index all documents
         documentsAndIds.forEach { (fileId, content) ->
-            vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "$fileId.txt")
+            vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "$fileId.txt", null, "test")
         }
         
         // When - perform a search

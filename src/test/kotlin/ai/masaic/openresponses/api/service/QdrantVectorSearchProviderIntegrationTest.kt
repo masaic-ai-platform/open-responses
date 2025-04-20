@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
 import io.mockk.every
 import io.mockk.mockk
@@ -57,6 +58,7 @@ class QdrantVectorSearchProviderIntegrationTest {
     private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
     private lateinit var qdrantClient: QdrantClient
+    private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
 
     @BeforeEach
     fun setup() {
@@ -106,6 +108,7 @@ class QdrantVectorSearchProviderIntegrationTest {
                 qdrantProperties = qdrantProperties,
                 vectorSearchProperties = vectorSearchProperties,
                 client = qdrantClient,
+                hybridSearchServiceHelper = hybridSearchServiceHelper,
             )
     }
 
@@ -135,6 +138,8 @@ class QdrantVectorSearchProviderIntegrationTest {
                     fileId = fileId1,
                     inputStream = ByteArrayInputStream(content1.toByteArray()),
                     filename = "test1.txt",
+                    null,
+                    "test",
                 )
         
             val result2 =
@@ -151,6 +156,8 @@ class QdrantVectorSearchProviderIntegrationTest {
                                     chunkOverlapTokens = 20,
                                 ),
                         ),
+                    null,
+                    "test",
                 )
         
             assertTrue(result1, "First file should be indexed successfully")
@@ -224,6 +231,8 @@ class QdrantVectorSearchProviderIntegrationTest {
                     fileId = "empty-file",
                     inputStream = ByteArrayInputStream("".toByteArray()),
                     filename = "empty.txt",
+                    null,
+                    "test",
                 )
         
             assertFalse(emptyResult, "Indexing empty file should fail gracefully")
@@ -240,6 +249,8 @@ class QdrantVectorSearchProviderIntegrationTest {
                 fileId = fileId,
                 inputStream = ByteArrayInputStream(content.toByteArray()),
                 filename = "test.txt",
+                null,
+                "test",
             )
         
             // Search with empty query
