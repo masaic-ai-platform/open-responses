@@ -173,43 +173,56 @@ class FileBasedVectorSearchProvider(
 
             // Use the TextChunkingUtil to chunk the text
             log.debug("Chunking text for file: $filename")
-            val chunks = TextChunkingUtil.chunkText(text, chunkingStrategy).map { it.text }
-
-            if (chunks.isEmpty()) {
+            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
+            
+            if (textChunks.isEmpty()) {
                 log.warn("No chunks created for file: $filename")
                 return false
             }
 
-            log.info("Created ${chunks.size} chunks for file: $filename")
+            log.info("Created ${textChunks.size} chunks for file: $filename")
 
-            // Generate embeddings for each chunk
+            // Prepare for batch embedding
+            val chunkTexts = textChunks.map { it.text }
+            val chunkMetadataList = mutableListOf<Map<String, Any>>()
+            
+            // Prepare metadata for each chunk
+            textChunks.forEachIndexed { index, chunk ->
+                // Generate a short unique ID for each chunk
+                val chunkId = IdGenerator.generateChunkId()
+                
+                // Create base metadata
+                val chunkMetadata =
+                    mutableMapOf<String, Any>(
+                        "file_id" to fileId,
+                        "filename" to filename,
+                        "chunk_id" to chunkId,
+                        "chunk_index" to index,
+                        "vector_store_id" to vectorStoreId,
+                        "total_chunks" to textChunks.size,
+                    )
+                
+                // Add any additional attributes
+                if (attributes != null) {
+                    chunkMetadata.putAll(attributes)
+                }
+                
+                chunkMetadataList.add(chunkMetadata)
+            }
+            
+            // Generate embeddings for all chunks in batch
+            log.debug("Generating batch embeddings for {} chunks", chunkTexts.size)
+            val embeddings = embeddingService.embedTexts(chunkTexts)
+            
+            // Create chunks with embeddings
             val chunksWithEmbeddings =
-                chunks.mapIndexed { index, chunk ->
-                    // Generate a short unique ID for each chunk
-                    val chunkId = IdGenerator.generateChunkId()
-
-                    // Create base metadata
-                    val chunkMetadata =
-                        mutableMapOf<String, Any>(
-                            "file_id" to fileId,
-                            "filename" to filename,
-                            "chunk_id" to chunkId,
-                            "chunk_index" to index,
-                            "vector_store_id" to vectorStoreId,
-                            "total_chunks" to chunks.size,
-                        )
-                    
-                    // Add any additional attributes
-                    if (attributes != null) {
-                        chunkMetadata.putAll(attributes)
-                    }
-
+                textChunks.mapIndexed { index, chunk ->
                     ChunkWithEmbedding(
                         fileId = fileId,
-                        chunkId = chunkId,
-                        content = chunk,
-                        embedding = embeddingService.embedText(chunk),
-                        chunkMetadata = chunkMetadata,
+                        chunkId = chunkMetadataList[index]["chunk_id"] as String,
+                        content = chunk.text,
+                        embedding = embeddings[index],
+                        chunkMetadata = chunkMetadataList[index],
                     )
                 }
 

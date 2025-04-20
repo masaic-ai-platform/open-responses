@@ -58,8 +58,8 @@ object FilterUtils {
      * Helper method to build MongoDB Criteria from Filter
      * @throws IllegalArgumentException if a filter cannot be parsed
      */
-    fun buildCriteriaFromFilter(filter: Filter): Criteria? {
-        return when (filter) {
+    fun buildCriteriaFromFilter(filter: Filter): Criteria? =
+        when (filter) {
             is ComparisonFilter -> {
                 when (filter.type) {
                     "eq" -> Criteria.where(filter.key).`is`(filter.value)
@@ -69,13 +69,15 @@ object FilterUtils {
                     "lt" -> Criteria.where(filter.key).lt(filter.value)
                     "lte" -> Criteria.where(filter.key).lte(filter.value)
                     "in" -> {
-                        val values = filter.value as? List<*> 
-                            ?: throw IllegalArgumentException("Invalid 'in' filter value. Expected List but got: ${filter.value}")
+                        val values =
+                            filter.value as? List<*> 
+                                ?: throw IllegalArgumentException("Invalid 'in' filter value. Expected List but got: ${filter.value}")
                         Criteria.where(filter.key).`in`(values)
                     }
                     "nin" -> {
-                        val values = filter.value as? List<*> 
-                            ?: throw IllegalArgumentException("Invalid 'nin' filter value. Expected List but got: ${filter.value}")
+                        val values =
+                            filter.value as? List<*> 
+                                ?: throw IllegalArgumentException("Invalid 'nin' filter value. Expected List but got: ${filter.value}")
                         Criteria.where(filter.key).nin(values)
                     }
                     else -> throw IllegalArgumentException("Unsupported comparison type: ${filter.type}")
@@ -86,26 +88,27 @@ object FilterUtils {
                     throw IllegalArgumentException("Compound filter must contain at least one sub-filter")
                 }
                 
-                val criteriaList = filter.filters.map { subFilter ->
-                    buildCriteriaFromFilter(subFilter) 
-                        ?: throw IllegalArgumentException("Failed to parse sub-filter: $subFilter")
-                }
+                val criteriaList =
+                    filter.filters.map { subFilter ->
+                        buildCriteriaFromFilter(subFilter) 
+                            ?: throw IllegalArgumentException("Failed to parse sub-filter: $subFilter")
+                    }
                 
                 when (filter.type) {
                     "and" -> {
-                        val first = criteriaList.first()
-                        criteriaList.drop(1).fold(first) { acc, criteria -> acc.andOperator(criteria) }
+                        // Create a flatter criteria structure to avoid nested $and operators
+                        // which cause the MongoDB error
+                        Criteria().andOperator(*criteriaList.toTypedArray())
                     }
                     "or" -> {
-                        val first = criteriaList.first()
-                        criteriaList.drop(1).fold(first) { acc, criteria -> acc.orOperator(criteria) }
+                        // Similarly for OR, use a flatter structure
+                        Criteria().orOperator(*criteriaList.toTypedArray())
                     }
                     else -> throw IllegalArgumentException("Unsupported compound filter type: ${filter.type}")
                 }
             }
             else -> throw IllegalArgumentException("Unsupported filter type: ${filter::class.simpleName}")
         }
-    }
 
     /**
      * Evaluates a comparison filter against entity attributes.
@@ -230,10 +233,12 @@ object FilterUtils {
         log.debug("Converting filter to Qdrant filter: $filter")
         
         return when (filter) {
-            is ComparisonFilter -> convertComparisonToQdrantFilter(filter)
-                ?: throw IllegalArgumentException("Failed to convert comparison filter: $filter. This may impact security.")
-            is CompoundFilter -> convertCompoundToQdrantFilter(filter)
-                ?: throw IllegalArgumentException("Failed to convert compound filter: $filter. This may impact security.")
+            is ComparisonFilter ->
+                convertComparisonToQdrantFilter(filter)
+                    ?: throw IllegalArgumentException("Failed to convert comparison filter: $filter. This may impact security.")
+            is CompoundFilter ->
+                convertCompoundToQdrantFilter(filter)
+                    ?: throw IllegalArgumentException("Failed to convert compound filter: $filter. This may impact security.")
             else -> {
                 throw IllegalArgumentException("Unknown filter type for Qdrant conversion: ${filter.javaClass.name}")
             }
@@ -303,9 +308,10 @@ object FilterUtils {
         log.debug("Converting compound filter: $filter with ${filter.filters.size} inner filters")
         
         // Convert all child filters
-        val convertedFilters = filter.filters.map { 
-            convertToQdrantFilter(it) ?: throw IllegalArgumentException("Failed to convert sub-filter: $it")
-        }
+        val convertedFilters =
+            filter.filters.map { 
+                convertToQdrantFilter(it) ?: throw IllegalArgumentException("Failed to convert sub-filter: $it")
+            }
         
         log.debug("After conversion, ${convertedFilters.size} valid filters remain")
         

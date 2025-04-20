@@ -159,8 +159,9 @@ object PromptBuilder {
         promptBuilder.append("\n\n## Query Novelty Checklist")
         promptBuilder.append("\nBefore proposing NEXT_QUERY, confirm that:")
         promptBuilder.append("\n- It introduces at least one NEW domain‑specific term discovered in the search results that did not appear in any previous query.")
-        promptBuilder.append("\n- It targets a different attribute value (e.g., different filename or chunk_index range) than prior queries.")
-        promptBuilder.append("\n- Fewer than 50% of its words overlap with the ORIGINAL question or any earlier query.")
+        promptBuilder.append("\n- It targets a different attribute value (e.g., different filename or chunk_index range) than prior queries, and excludes chunk_index values already searched.")
+        promptBuilder.append("\n- Filters must exclude any 'chunk_index' for same 'filename' values that appeared in earlier iterations.")
+        promptBuilder.append("\n- Fewer than 70% of its words overlap with the ORIGINAL question or any earlier query.")
         promptBuilder.append("\nIf these conditions are not met, craft a different query that satisfies them.")
 
         // Add guidance for chunk-by-chunk searching and memory interface

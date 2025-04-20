@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.service.embedding
 
 import dev.langchain4j.data.embedding.Embedding
+import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel
 import dev.langchain4j.store.embedding.CosineSimilarity
 import org.springframework.beans.factory.annotation.Value
@@ -46,8 +47,16 @@ class OpenAIEmbeddingService(
      * @return A list of embedding vectors, one for each input text
      */
     override fun embedTexts(texts: List<String>): List<List<Float>> {
-        val embeddings = texts.map { embedText(it) }
-        return embeddings
+        val embeddings =
+            embeddingModel.value
+                .embedAll(
+                    texts.map {
+                        TextSegment.from(it)
+                    },
+                ).content()
+        return embeddings.map {
+            it.vectorAsList()
+        }
     }
 
     /**

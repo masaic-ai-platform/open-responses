@@ -55,7 +55,7 @@ class MasaicResponseService(
     companion object {
         const val MODEL_BASE_URL = "MODEL_BASE_URL"
         const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
-        private const val DEFAULT_TIMEOUT_SECONDS = 30L
+        private const val DEFAULT_TIMEOUT_SECONDS = 120L
 
         private val PROVIDER_BASE_URLS =
             mapOf(
@@ -132,7 +132,7 @@ class MasaicResponseService(
         }
     }
 
-    @Value("\${api.request.timeout:120}")
+    @Value("\${api.request.timeout:$DEFAULT_TIMEOUT_SECONDS}")
     private val requestTimeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS
 
     /**

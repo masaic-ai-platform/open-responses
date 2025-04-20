@@ -137,55 +137,68 @@ class QdrantVectorSearchProvider(
 
             // Prepare chunks for hybrid indexing
             val chunksForIndexing = mutableListOf<ChunkForIndexing>()
-
-            // Generate embeddings and store them
-            var indexingSuccessful = true
-            for (chunk in textChunks) {
-                try {
-                    // Generate embedding for the chunk
-                    val embedding = embeddingService.embedText(chunk.text)
-
-                    // Create metadata for this chunk
-                    val metadata =
-                        mutableMapOf<String, Any>(
-                            "file_id" to fileId,
-                            "filename" to filename,
-                            "chunk_index" to chunk.index,
-                            "chunk_id" to IdGenerator.generateChunkId(),
-                            "vector_store_id" to vectorStoreId,
-                            "total_chunks" to textChunks.size,
-                        )
-                    
-                    // Add any additional user-provided attributes to the metadata
-                    if (attributes != null) {
-                        metadata.putAll(attributes)
-                    }
-                    
-                    // Add to hybrid indexing list
-                    chunksForIndexing.add(
-                        ChunkForIndexing(
-                            chunkId = metadata["chunk_id"] as String,
-                            vectorStoreId = vectorStoreId,
-                            fileId = fileId,
-                            filename = filename,
-                            chunkIndex = chunk.index,
-                            content = chunk.text,
-                        ),
+            
+            // Prepare batch embedding
+            val chunkTexts = textChunks.map { it.text }
+            val chunkMetadataList = mutableListOf<Map<String, Any>>()
+            val textSegments = mutableListOf<TextSegment>()
+            
+            // Generate metadata for each chunk first
+            for (i in textChunks.indices) {
+                val chunk = textChunks[i]
+                // Create metadata for this chunk
+                val metadata =
+                    mutableMapOf<String, Any>(
+                        "file_id" to fileId,
+                        "filename" to filename,
+                        "chunk_index" to chunk.index,
+                        "chunk_id" to IdGenerator.generateChunkId(),
+                        "vector_store_id" to vectorStoreId,
+                        "total_chunks" to textChunks.size,
                     )
-
-                    // Store the embedding with metadata
-                    embeddingStore.add(
-                        Embedding.from(embedding),
-                        TextSegment.from(chunk.text, Metadata.from(metadata)),
-                    )
-                } catch (e: Exception) {
-                    log.error("Error indexing chunk {} for file {}: {}", chunk.index, filename, e.message, e)
-                    indexingSuccessful = false
+                
+                // Add any additional user-provided attributes to the metadata
+                if (attributes != null) {
+                    metadata.putAll(attributes)
                 }
+                
+                chunkMetadataList.add(metadata)
+                
+                // Add to hybrid indexing list
+                chunksForIndexing.add(
+                    ChunkForIndexing(
+                        chunkId = metadata["chunk_id"] as String,
+                        vectorStoreId = vectorStoreId,
+                        fileId = fileId,
+                        filename = filename,
+                        chunkIndex = chunk.index,
+                        content = chunk.text,
+                    ),
+                )
+                
+                // Create TextSegment for this chunk
+                textSegments.add(TextSegment.from(chunk.text, Metadata.from(metadata)))
+            }
+
+            try {
+                // Generate embeddings for all chunks in batch
+                log.debug("Generating batch embeddings for {} chunks", chunkTexts.size)
+                val embeddings = embeddingService.embedTexts(chunkTexts)
+                
+                // Convert to Embedding list for Qdrant
+                val embeddingList = embeddings.map { Embedding.from(it.toFloatArray()) }
+                
+                // Store all embeddings with metadata in a single batch operation
+                embeddingStore.addAll(embeddingList, textSegments)
+                log.info("Successfully stored {} embeddings in batch", embeddings.size)
+            } catch (e: Exception) {
+                log.error("Error generating or storing batch embeddings: {}", e.message, e)
+                deleteFile(fileId) // Rollback
+                return false
             }
             
             // Index chunks for text search via hybrid service
-            if (indexingSuccessful && chunksForIndexing.isNotEmpty()) {
+            if (chunksForIndexing.isNotEmpty()) {
                 try {
                     kotlinx.coroutines.runBlocking {
                         hybridSearchServiceHelper.indexChunks(chunksForIndexing)
@@ -193,14 +206,16 @@ class QdrantVectorSearchProvider(
                     log.info("Indexed {} chunks for hybrid search", chunksForIndexing.size)
                 } catch (e: Exception) {
                     log.error("Error indexing chunks for hybrid search: {}", e.message, e)
-                    // Don't fail the overall indexing if MongoDB indexing fails
+                    deleteFile(fileId) // Rollback
+                    return false
                 }
             }
 
             log.info("Successfully indexed file: {} with {} chunks", filename, textChunks.size)
-            return indexingSuccessful
+            return true
         } catch (e: Exception) {
             log.error("Error indexing file {}: {}", filename, e.message, e)
+            deleteFile(fileId) // Rollback
             return false
         }
     }

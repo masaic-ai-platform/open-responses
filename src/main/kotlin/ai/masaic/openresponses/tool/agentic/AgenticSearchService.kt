@@ -53,6 +53,7 @@ class AgenticSearchService(
             var currentFilters = emptyMap<String, Any>()
             var shouldTerminate = false
             var iterationCount = 0
+            var repeatCount = 0
         
             // Pre-populate search buffer with initial results based on the original question
             log.info("Pre-populating search buffer with initial query: '$currentQuery'")
@@ -139,10 +140,15 @@ class AgenticSearchService(
                         }
 
                     if (exactMatch != null) {
-                        log.warn("Detected repeated query with identical filters: '$currentQuery' with $currentFilters. Forcing termination to prevent redundant search.")
-                        shouldTerminate = true
-                        iterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated due to exact query repetition."))
-                        break
+                        repeatCount++
+                        log.warn("Detected repeated query with identical filters: '$currentQuery' (repeat #$repeatCount). Discouraging further repeats.")
+                        if (repeatCount >= 2) {
+                            log.warn("Repeated query threshold reached ($repeatCount). Forcing termination.")
+                            shouldTerminate = true
+                            iterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated after $repeatCount repeated queries."))
+                            break
+                        }
+                        // Otherwise, allow one repeat but do not terminate yet
                     }
                 }
             
@@ -392,14 +398,24 @@ class AgenticSearchService(
                 ChatCompletionUserMessageParam.builder().content(promptContent).build(),
             )
 
+        val (t, p, f) =
+            if (iterationNumber == 0) {
+                // First pass: wide exploration
+                Triple(0.8, 0.9, 0.2)
+            } else {
+                // Later passes: hone in
+                Triple(0.4, 0.7, 0.5)
+            }
+
         val chatCompletionRequest =
             ChatCompletionCreateParams
                 .builder()
                 .messages(listOf(messageWithContent))
                 .model(params.model().toString())
-                .temperature(0.9) // Adjusted temperature for more creative responses
-                .topP(0.9) // Adjusted top_p for more diverse sampling
-                .presencePenalty(1.0) // Adjusted presence penalty to encourage new topics
+                .temperature(t) // Adjusted temperature for more creative responses
+                .topP(p) // Adjusted top_p for more diverse sampling
+                .presencePenalty(0.5) // Adjusted presence penalty to encourage new topics
+                .frequencyPenalty(f) // Adjusted frequency penalty to reduce repetition
                 .build()
 
         try {

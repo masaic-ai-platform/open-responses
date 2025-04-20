@@ -18,6 +18,8 @@ import org.springframework.data.mongodb.core.index.ReactiveIndexOperations
 import org.springframework.data.mongodb.core.index.TextIndexDefinition
 import org.springframework.data.mongodb.core.index.TextIndexed
 import org.springframework.data.mongodb.core.mapping.Document
+import org.springframework.data.mongodb.core.mapping.Field
+import org.springframework.data.mongodb.core.mapping.TextScore
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.TextCriteria
 import org.springframework.data.mongodb.core.query.TextQuery
@@ -94,7 +96,7 @@ class HybridSearchService
                     }
 
                 val vectorDeferred =
-                    async { 
+                    async {
                         // Convert VectorSearchProvider.SearchResult to VectorStoreSearchResult
                         vectorSearchProvider
                             .searchSimilar(
@@ -119,36 +121,62 @@ class HybridSearchService
                     } else {
                         emptyList()
                     }
-        
+
                 // Only run MongoDB search if using mongodb repository and mongoTemplate is available
                 val mongoResults =
                     if (repositoryType == "mongodb" && mongoTemplate != null) {
-                        val criteria = TextCriteria.forDefaultLanguage().matching(query)
-                        val textQuery = TextQuery(criteria).limit(maxResults)
-            
-                        // Apply vectorStoreId filter if specified
+                        // Create text criteria
+                        val textCriteria = TextCriteria.forDefaultLanguage().matching(query)
+                        
+                        // Build a list of additional criteria
+                        val additionalCriteria = mutableListOf<Criteria>()
+                        
+                        // Add vectorStoreId criteria if needed
                         if (vectorStoreIds.isNotEmpty()) {
-                            textQuery.addCriteria(Criteria.where("vectorStoreId").`in`(vectorStoreIds))
+                            additionalCriteria.add(Criteria.where("vector_store_id").`in`(vectorStoreIds))
                         }
-
+                        
                         // Apply userFilter if provided
-                        if (userFilter != null) {
-                            val criteria = FilterUtils.buildCriteriaFromFilter(userFilter)
-                                ?: throw IllegalArgumentException("Failed to parse user filter: $userFilter. This may impact security filters.")
-                            textQuery.addCriteria(criteria)
+                        userFilter?.let {
+                            val filterCriteria = FilterUtils.buildCriteriaFromFilter(it)
+                            if (filterCriteria != null) {
+                                additionalCriteria.add(filterCriteria)
+                            } else {
+                                log.warn("Failed to parse user filter: $it. This may impact security filters.")
+                            }
                         }
-
-                        val chunks = mongoTemplate.find(textQuery, MongoChunk::class.java).collectList().awaitSingle()
-                        chunks.map { chunk ->
+                        
+                        // Build the text query
+                        val textQuery = TextQuery(textCriteria).sortByScore().includeScore().limit(maxResults)
+                        
+                        // Add combined criteria if we have any
+                        if (additionalCriteria.isNotEmpty()) {
+                            val combinedCriteria =
+                                if (additionalCriteria.size == 1) {
+                                    additionalCriteria.first()
+                                } else {
+                                    // Use a flat andOperator to avoid nested $and in the query
+                                    Criteria().andOperator(*additionalCriteria.toTypedArray())
+                                }
+                            textQuery.addCriteria(combinedCriteria)
+                        }
+                        
+                        // Work with raw Document instead of MongoChunk to properly handle the score
+                        val documents = mongoTemplate.find(textQuery, org.bson.Document::class.java, "mongo_chunks").collectList().awaitSingle()
+                        
+                        // Log for debugging
+                        log.debug("MongoDB text search returned ${documents.size} results")
+                        
+                        documents.map { doc ->
                             VectorStoreSearchResult(
-                                fileId = chunk.fileId,
-                                filename = chunk.filename,
-                                score = 0.0,
-                                content = listOf(VectorStoreSearchResultContent("text", chunk.content)),
+                                fileId = doc.getString("file_id"),
+                                filename = doc.getString("filename"),
+                                score = doc.getDouble("score") ?: 0.0,
+                                content = listOf(VectorStoreSearchResultContent("text", doc.getString("content"))),
                                 attributes =
                                     mapOf(
-                                        "chunk_id" to chunk.id,
-                                        "chunk_index" to chunk.chunkIndex,
+                                        "chunk_id" to doc.getString("chunk_id"),
+                                        "chunk_index" to (doc.getInteger("chunk_index") ?: 0),
                                     ),
                             )
                         }
@@ -160,7 +188,7 @@ class HybridSearchService
 
                 // Merge results and normalize scores
                 val allResults = mutableMapOf<String, MergedResult>()
-        
+
                 // Add vector results
                 vectorResults.forEach { result ->
                     val key = getResultKey(result)
@@ -171,8 +199,8 @@ class HybridSearchService
                             textScore = 0.0,
                         )
                 }
-        
-                // Add Lucene results 
+
+                // Add Lucene results
                 luceneResults.forEach { result ->
                     val key = getResultKey(result)
                     val existing = allResults[key]
@@ -187,7 +215,7 @@ class HybridSearchService
                             )
                     }
                 }
-        
+
                 // Add MongoDB results
                 mongoResults.forEach { result ->
                     val key = getResultKey(result)
@@ -205,11 +233,18 @@ class HybridSearchService
                 }
         
                 // Calculate combined scores and sort results
+                val maxVec =
+                    allResults.values.takeIf { it.isNotEmpty() }?.maxOf { it.vectorScore }
+                        ?: 0.0
+                val maxTxt =
+                    allResults.values.takeIf { it.isNotEmpty() }?.maxOf { it.textScore }
+                        ?: 0.0
+
                 allResults.values
-                    .map { merged ->
-                        merged.result.copy(
-                            score = alpha * merged.vectorScore + (1 - alpha) * merged.textScore,
-                        )
+                    .map { m ->
+                        val v = if (maxVec > 0) m.vectorScore / maxVec else 0.0
+                        val t = if (maxTxt > 0) m.textScore / maxTxt else 0.0
+                        m.result.copy(score = alpha * v + (1 - alpha) * t)
                     }.sortedByDescending { it.score }
             }
 
@@ -258,9 +293,17 @@ class HybridSearchService
 @Document(collection = "mongo_chunks")
 data class MongoChunk(
     @Id val id: String,
+    @Field("vector_store_id")
     val vectorStoreId: String,
+    @Field("file_id")
     val fileId: String,
     val filename: String,
+    @Field("chunk_index")
     val chunkIndex: Int,
+    @Field("chunk_id")
+    val chunkId: String = id,
     @TextIndexed val content: String,
-) 
+) {
+    @TextScore
+    var score: Double = 0.0
+}
