@@ -69,6 +69,10 @@ class HybridSearchService
             alpha: Double = 0.5,
         ): List<VectorStoreSearchResult> =
             coroutineScope {
+                if (query.isBlank()) {
+                    return@coroutineScope emptyList()
+                }
+
                 // Create filter for vector store IDs if provided
                 val vectorStoreFilter: Filter? =
                     vectorStoreIds.takeIf { it.isNotEmpty() }?.let { ids ->

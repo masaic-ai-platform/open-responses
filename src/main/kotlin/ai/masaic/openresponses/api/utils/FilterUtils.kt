@@ -309,31 +309,43 @@ object FilterUtils {
         
         // Convert all child filters
         val convertedFilters =
-            filter.filters.map { 
+            filter.filters.map {
                 convertToQdrantFilter(it) ?: throw IllegalArgumentException("Failed to convert sub-filter: $it")
             }
         
         log.debug("After conversion, ${convertedFilters.size} valid filters remain")
         
-        // Apply the compound operation
-        var result = convertedFilters.first()
-        for (i in 1 until convertedFilters.size) {
-            result =
-                when (filter.type.lowercase()) {
-                    "and" -> {
-                        log.debug("Applying AND filter at index $i")
-                        result.and(convertedFilters[i])
-                    }
-                    "or" -> {
-                        log.debug("Applying OR filter at index $i")
-                        result.or(convertedFilters[i])
-                    }
-                    else -> {
-                        throw IllegalArgumentException("Unsupported compound filter type for Qdrant: ${filter.type}")
-                    }
+        val type = filter.type.lowercase()
+
+        // Build a balanced binary filter tree to avoid deep nesting
+        fun buildBalanced(
+            filters: List<dev.langchain4j.store.embedding.filter.Filter>,
+            start: Int,
+            end: Int,
+        ): dev.langchain4j.store.embedding.filter.Filter {
+            val size = end - start
+            if (size == 1) {
+                return filters[start]
+            }
+            if (size == 2) {
+                val left = filters[start]
+                val right = filters[start + 1]
+                return when (type) {
+                    "and" -> left.and(right)
+                    "or" -> left.or(right)
+                    else -> throw IllegalArgumentException("Unsupported compound filter type for Qdrant: ${filter.type}")
                 }
+            }
+            val mid = start + size / 2
+            val left = buildBalanced(filters, start, mid)
+            val right = buildBalanced(filters, mid, end)
+            return when (type) {
+                "and" -> left.and(right)
+                "or" -> left.or(right)
+                else -> throw IllegalArgumentException("Unsupported compound filter type for Qdrant: ${filter.type}")
+            }
         }
         
-        return result
+        return buildBalanced(convertedFilters, 0, convertedFilters.size)
     }
 } 
