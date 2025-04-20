@@ -40,8 +40,12 @@ class AgenticSearchService(
         seedName: String?,
         openAIClient: OpenAIClient,
         requestParams: ResponseCreateParams,
-    ): AgenticSearchResponse =
-        withContext(Dispatchers.IO) {
+    ): AgenticSearchResponse {
+        require(params.question.isNotBlank()) { "Question must not be blank" }
+        require(maxResults > 0) { "maxResults must be positive" }
+        require(maxIterations > 0) { "maxIterations must be positive" }
+
+        return withContext(Dispatchers.IO) {
             log.info("Starting agentic search for question: '${params.question}'")
             val strategy = seeds.byName(seedName)
             val iterations = mutableListOf<AgenticSearchIteration>()
@@ -59,22 +63,28 @@ class AgenticSearchService(
             log.info("Pre-populating search buffer with initial query: '$currentQuery'")
             val initialSearchFilter = FilterBuilder.createSearchFilter(userFilter, currentFilters, mapper)
         
-            // Record the initial search before executing it
-            val initialQueryRecord = AgenticSearchIteration(currentQuery, false, currentFilters)
-            iterations.add(initialQueryRecord)
-            log.debug("Recorded initial pre-population search iteration for query: '${initialQueryRecord.query}'")
-        
-            // Perform initial seed search
+            // Perform initial seed search without recording it as an iteration
             val searchBuffer = strategy.seed(currentQuery, maxResults, initialSearchFilter, vectorStoreIds).toMutableList()
-        
-            // Store results with the iteration record
-            initialQueryRecord.results.addAll(searchBuffer)
-        
+            
             // Track initial results in the allRelevantChunks set
             allRelevantChunks.addAll(searchBuffer)
         
             // If we already have good results, check if LLM wants to refine further
-            if (searchBuffer.isNotEmpty()) {
+            if (searchBuffer.isEmpty()) {
+                // Handle empty initial results: terminate immediately
+                log.info("Initial search returned no results. Terminating early.")
+                val terminationRecord =
+                    AgenticSearchIteration(
+                        query = params.question, // Use original question for context
+                        is_final = true,
+                        applied_filters = emptyMap(),
+                        termination_reason = "No initial results found.",
+                    )
+                iterations.add(terminationRecord)
+                conclusion = "No initial results found."
+                shouldTerminate = true // Ensure the main loop doesn't run
+            } else {
+                // Original logic: Initial results exist, proceed with LLM decision
                 log.info("Initial search found ${searchBuffer.size} results, asking LLM for next steps")
             
                 // Extract available attributes for filtering
@@ -99,9 +109,12 @@ class AgenticSearchService(
             
                 if (initialDecision.startsWith("TERMINATE")) {
                     log.info("LLM decided to terminate with initial results")
-                    initialQueryRecord.is_final = true
-                    initialQueryRecord.termination_reason = "Terminated after initial results."
-                
+                    
+                    // Only record a termination iteration when LLM explicitly decides to terminate
+                    val terminationRecord = AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated after initial results.")
+                    terminationRecord.results.addAll(searchBuffer)
+                    iterations.add(terminationRecord)
+                    
                     conclusion = initialDecision.substringAfter("TERMINATE").trim()
                     shouldTerminate = true
                 } else if (initialDecision.startsWith("NEXT_QUERY:")) {
@@ -116,6 +129,13 @@ class AgenticSearchService(
                             currentFilters = decision.filters
                             log.info("LLM suggested filters for initial iteration: $currentFilters")
                         }
+                        
+                        // Record the LLM-driven query as the first iteration
+                        // Store the *entire* NEXT_QUERY decision string in the query field
+                        // so that buildKnowledgeMemory can find the ##MEMORY## marker.
+                        val queryToStore = initialDecision.lines().firstOrNull { it.startsWith("NEXT_QUERY:") } ?: initialDecision
+                        val llmDrivenIteration = AgenticSearchIteration(queryToStore.trim(), false, currentFilters)
+                        iterations.add(llmDrivenIteration)
                     } catch (e: Exception) {
                         log.error("Failed to parse initial decision: ${e.message}", e)
                     }
@@ -126,17 +146,25 @@ class AgenticSearchService(
             while (!shouldTerminate && iterationCount < maxIterations) {
                 iterationCount++
             
-                // Record the query/filters before executing the search for this iteration
-                val currentIterationRecord = AgenticSearchIteration(currentQuery, false, currentFilters)
-                iterations.add(currentIterationRecord)
+                // We already recorded the LLM-driven query in the iterations list
+                // from the previous iteration or initial decision
                 log.info("==== Iteration $iterationCount: Starting search with query: '$currentQuery' and filters: $currentFilters ====")
+                
+                // Get the current iteration record
+                val currentIterationRecord = if (iterations.isNotEmpty()) iterations.last() else null
             
                 // Check for repeated queries with same or similar filters
                 if (iterationCount > 1) {
                     // Find any exact matches
                     val exactMatch =
-                        iterations.dropLast(1).find { 
-                            it.query == currentQuery && it.applied_filters == currentFilters 
+                        iterations.dropLast(1).find { iteration ->
+                            // Parse the query part from the stored iteration string for comparison
+                            val storedQueryPart =
+                                iteration.query
+                                    .substringAfter("NEXT_QUERY:")
+                                    .substringBefore("{")
+                                    .trim()
+                            storedQueryPart == currentQuery && iteration.applied_filters == currentFilters
                         }
 
                     if (exactMatch != null) {
@@ -145,7 +173,9 @@ class AgenticSearchService(
                         if (repeatCount >= 2) {
                             log.warn("Repeated query threshold reached ($repeatCount). Forcing termination.")
                             shouldTerminate = true
-                            iterations.add(AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated after $repeatCount repeated queries."))
+                            // Only add termination record for repeat threshold if needed
+                            val terminationRecord = AgenticSearchIteration(currentQuery, true, currentFilters, "Terminated after $repeatCount repeated queries.")
+                            iterations.add(terminationRecord)
                             break
                         }
                         // Otherwise, allow one repeat but do not terminate yet
@@ -173,8 +203,8 @@ class AgenticSearchService(
                 // Perform vector search with current query and filters
                 val newResults = strategy.seed(currentQuery, maxResults, searchFilter, vectorStoreIds)
             
-                // Add results to current iteration record
-                currentIterationRecord.results.addAll(newResults)
+                // Add results to current iteration record if available
+                currentIterationRecord?.results?.addAll(newResults)
             
                 // Add unique results to buffer
                 var newResultCount = 0
@@ -260,6 +290,14 @@ class AgenticSearchService(
                             }
                         
                             log.info("Iteration $iterationCount: LLM suggested next query: '$currentQuery'")
+                            
+                            // Only add a new iteration when LLM suggests a new query
+                            // Store the *entire* NEXT_QUERY decision string in the query field
+                            // so that buildKnowledgeMemory can find the ##MEMORY## marker.
+                            val queryToStore = llmDecision.lines().firstOrNull { it.startsWith("NEXT_QUERY:") } ?: llmDecision
+                            val llmDrivenIteration = AgenticSearchIteration(queryToStore.trim(), false, currentFilters)
+                            iterations.add(llmDrivenIteration)
+                            
                             decisionParsed = true
                         } catch (e: Exception) {
                             log.warn("Iteration $iterationCount: Failed to parse LLM decision: ${e.message}")
@@ -269,6 +307,11 @@ class AgenticSearchService(
                         decision = LlmDecision("", null)
                         decisionParsed = true
                         shouldTerminate = true
+                        
+                        // Only add termination iteration when LLM explicitly decides to terminate
+                        val terminationRecord = AgenticSearchIteration("TERMINATE", true, currentFilters, "LLM decided to TERMINATE.")
+                        iterations.add(terminationRecord)
+                        
                         log.info("Iteration $iterationCount: LLM decided to TERMINATE search")
                     } else {
                         // If no valid decision pattern was found, increment retry count
@@ -282,16 +325,20 @@ class AgenticSearchService(
                     // Default to termination if we couldn't parse a valid decision after retries
                     log.warn("Iteration $iterationCount: Failed to parse a valid LLM decision after $retryCount retries. Defaulting to TERMINATE.")
                     shouldTerminate = true
-                    iterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "Default termination after LLM decision parse failures."))
-                } else if (shouldTerminate) {
-                    iterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "LLM decided to TERMINATE."))
+                    
+                    // Add termination record for parse failure
+                    val terminationRecord = AgenticSearchIteration("TERMINATE", true, currentFilters, "Default termination after LLM decision parse failures.")
+                    iterations.add(terminationRecord)
                 }
             }
 
             // If we reached max iterations without terminating, add a final termination iteration record
             if (iterationCount >= maxIterations && !shouldTerminate) {
                 log.info("Reached max iterations ($iterationCount) without LLM explicitly terminating. Forcing termination.")
-                iterations.add(AgenticSearchIteration("TERMINATE", true, currentFilters, "Reached max iterations ($maxIterations)."))
+                
+                // Add max iterations termination record
+                val terminationRecord = AgenticSearchIteration("TERMINATE", true, currentFilters, "Reached max iterations ($maxIterations).")
+                iterations.add(terminationRecord)
             }
 
             // Generate knowledge summary from search iterations
@@ -343,6 +390,7 @@ class AgenticSearchService(
                 knowledge_acquired = knowledgeAcquired,
             )
         }
+    }
 
     /**
      * Extract unique attributes from search results for filtering
@@ -360,7 +408,7 @@ class AgenticSearchService(
     /**
      * Call LLM to make a decision on the next search action
      */
-    private suspend fun callLlmForDecision(
+    suspend fun callLlmForDecision(
         question: String,
         buffer: List<VectorStoreSearchResult>,
         iterations: List<AgenticSearchIteration>,

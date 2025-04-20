@@ -249,7 +249,7 @@ object PromptBuilder {
             // More strict pattern matching for memory updates - must follow NEXT_QUERY format
             val memoryPattern = "NEXT_QUERY:.*##MEMORY##".toRegex(RegexOption.IGNORE_CASE)
             val memoryMatch = memoryPattern.find(query)
-          
+            
             if (memoryMatch != null) {
                 val memoryIndex = query.indexOf("##MEMORY##")
                 val memoryContent = query.substring(memoryIndex + 10).trim()
@@ -269,6 +269,35 @@ object PromptBuilder {
                 log.debug("Found ##MEMORY## marker but not in proper NEXT_QUERY format in iteration ${index + 1}, skipping")
             } else {
                 log.debug("No ##MEMORY## marker found in iteration ${index + 1}")
+                
+                // Even if there's no explicit memory marker, include a summary of this iteration's results
+                // This ensures we capture knowledge from all iterations even if no memory marker is present
+                if (iteration.results.isNotEmpty()) {
+                    memoryUpdateCount++
+                    hasAnyMemoryUpdates = true
+                    
+                    memoryBuilder.append("\n## Iteration ${index + 1}:\n")
+                    memoryBuilder.append("Query: ${iteration.query}\n")
+                    
+                    if (iteration.applied_filters != null && iteration.applied_filters.isNotEmpty()) {
+                        memoryBuilder.append("Filters: ${iteration.applied_filters}\n")
+                    }
+                    
+                    // Include summary of top results (limit to 3 to prevent memory explosion)
+                    memoryBuilder.append("Key findings from ${iteration.results.size} results:\n")
+                    iteration.results.take(3).forEachIndexed { resultIndex, result ->
+                        val content = result.content.firstOrNull()?.text ?: ""
+                        val truncatedContent = if (content.length > 200) content.substring(0, 200) + "..." else content
+                        memoryBuilder.append("- ${result.filename}: $truncatedContent\n")
+                    }
+                    
+                    // If this is a termination iteration, include the termination reason
+                    if (iteration.is_final && iteration.termination_reason != null) {
+                        memoryBuilder.append("Termination reason: ${iteration.termination_reason}\n")
+                    }
+                    
+                    memoryBuilder.append("\n")
+                }
             }
         }
       
