@@ -335,6 +335,7 @@ class FileBasedVectorSearchProvider(
 
     /**
      * Apply filters to chunks.
+     * @throws IllegalArgumentException if the filter cannot be properly applied
      */
     private fun applyFilters(
         chunks: List<ChunkWithEmbedding>,
@@ -347,18 +348,23 @@ class FileBasedVectorSearchProvider(
 
         log.debug("Applying filter: {} to {} chunks", filter, chunks.size)
         
-        // Apply the filter to each chunk
-        val filteredChunks =
-            chunks.filter { chunk ->
-                // Combine chunk metadata with file metadata
-                val combinedMetadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap())
-                val matches = FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
-                matches
-            }
-        
-        log.debug("After filtering: ${filteredChunks.size} chunks remain")
-        
-        return filteredChunks
+        try {
+            // Apply the filter to each chunk
+            val filteredChunks =
+                chunks.filter { chunk ->
+                    // Combine chunk metadata with file metadata
+                    val combinedMetadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap())
+                    val matches = FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
+                    matches
+                }
+            
+            log.debug("After filtering: ${filteredChunks.size} chunks remain")
+            
+            return filteredChunks
+        } catch (e: Exception) {
+            // Re-throw with more context about security implications
+            throw IllegalArgumentException("Failed to apply filter: $filter. This may impact security filters.", e)
+        }
     }
 
     /**

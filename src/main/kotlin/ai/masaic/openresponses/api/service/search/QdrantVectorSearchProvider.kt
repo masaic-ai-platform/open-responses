@@ -236,6 +236,7 @@ class QdrantVectorSearchProvider(
      * @param rankingOptions Optional ranking options for search
      * @param filter Optional structured filter object (new format)
      * @return List of search results
+     * @throws IllegalArgumentException if the filter cannot be properly applied
      */
     override fun searchSimilar(
         query: String,
@@ -256,7 +257,7 @@ class QdrantVectorSearchProvider(
             // Find relevant documents
             val minScore = rankingOptions?.scoreThreshold ?: qdrantProperties.minScore ?: 0.07
 
-            // Convert filter to Qdrant filter
+            // Convert filter to Qdrant filter - will throw exception if filter is invalid
             val qdrantFilter = filter?.let { FilterUtils.convertToQdrantFilter(it) }
             
             // Create search request
@@ -292,8 +293,12 @@ class QdrantVectorSearchProvider(
             log.debug("Found {} results for query", results.size)
             return results
         } catch (e: Exception) {
-            log.error("Error searching similar content: {}", e.message, e)
-            return emptyList()
+            log.error("Error searching for similar content: {}", e.message, e)
+            // Re-throw exceptions related to filter parsing
+            if (e is IllegalArgumentException && e.message?.contains("filter") == true) {
+                throw IllegalArgumentException("Error applying security filter: ${e.message}", e)
+            }
+            throw e
         }
     }
 

@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.model.CompoundFilter
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.model.VectorStoreSearchResultContent
+import ai.masaic.openresponses.api.utils.FilterUtils
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.reactor.awaitSingle
@@ -122,14 +123,21 @@ class HybridSearchService
                 // Only run MongoDB search if using mongodb repository and mongoTemplate is available
                 val mongoResults =
                     if (repositoryType == "mongodb" && mongoTemplate != null) {
-                        val criteria = TextCriteria.forDefaultLanguage().matchingPhrase(query)
+                        val criteria = TextCriteria.forDefaultLanguage().matching(query)
                         val textQuery = TextQuery(criteria).limit(maxResults)
             
                         // Apply vectorStoreId filter if specified
-                        if (vectorStoreIds != null && vectorStoreIds.isNotEmpty()) {
+                        if (vectorStoreIds.isNotEmpty()) {
                             textQuery.addCriteria(Criteria.where("vectorStoreId").`in`(vectorStoreIds))
                         }
-            
+
+                        // Apply userFilter if provided
+                        if (userFilter != null) {
+                            val criteria = FilterUtils.buildCriteriaFromFilter(userFilter)
+                                ?: throw IllegalArgumentException("Failed to parse user filter: $userFilter. This may impact security filters.")
+                            textQuery.addCriteria(criteria)
+                        }
+
                         val chunks = mongoTemplate.find(textQuery, MongoChunk::class.java).collectList().awaitSingle()
                         chunks.map { chunk ->
                             VectorStoreSearchResult(
