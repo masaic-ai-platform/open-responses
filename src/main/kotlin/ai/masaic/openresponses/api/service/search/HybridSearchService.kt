@@ -5,10 +5,13 @@ import ai.masaic.openresponses.api.model.CompoundFilter
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.model.VectorStoreSearchResultContent
+import ai.masaic.openresponses.api.service.rerank.RerankerService
 import ai.masaic.openresponses.api.utils.FilterUtils
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.reactor.awaitSingle
+import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
@@ -39,6 +42,8 @@ class HybridSearchService
         private val luceneIndexService: LuceneIndexService? = null,
         @Autowired(required = false)
         private val mongoTemplate: ReactiveMongoTemplate? = null,
+        @Autowired(required = false)
+        private val rerankerService: RerankerService? = null,
     ) {
         private val log = LoggerFactory.getLogger(HybridSearchService::class.java)
 
@@ -235,7 +240,7 @@ class HybridSearchService
                             )
                     }
                 }
-        
+
                 // Calculate combined scores and sort results
                 val maxVec =
                     allResults.values.takeIf { it.isNotEmpty() }?.maxOf { it.vectorScore }
@@ -244,12 +249,22 @@ class HybridSearchService
                     allResults.values.takeIf { it.isNotEmpty() }?.maxOf { it.textScore }
                         ?: 0.0
 
-                allResults.values
-                    .map { m ->
-                        val v = if (maxVec > 0) m.vectorScore / maxVec else 0.0
-                        val t = if (maxTxt > 0) m.textScore / maxTxt else 0.0
-                        m.result.copy(score = alpha * v + (1 - alpha) * t)
-                    }.sortedByDescending { it.score }
+                // Dynamic α: if a reranker is configured, ignore the caller‑provided alpha and
+                // fall back to a constant 0.5 that’s only used for the pre‑rerank pruning step.
+                val blendAlpha = if (rerankerService != null) 0.5 else alpha
+
+                val prelimRanked =
+                    allResults.values
+                        .map { m ->
+                            val v = if (maxVec > 0) m.vectorScore / maxVec else 0.0
+                            val t = if (maxTxt > 0) m.textScore / maxTxt else 0.0
+                            m.result.copy(score = blendAlpha * v + (1 - blendAlpha) * t)
+                        }.sortedByDescending { it.score }
+
+                return@coroutineScope withContext(Dispatchers.IO) {
+                    rerankerService
+                        ?.rerank(query, prelimRanked)
+                }?.take(maxResults) ?: prelimRanked.take(maxResults)
             }
 
         /**

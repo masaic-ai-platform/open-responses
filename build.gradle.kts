@@ -42,6 +42,7 @@ dependencies {
     implementation("com.openai:openai-java:0.34.1")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j:1.0.0-beta2")
+    implementation("dev.langchain4j:langchain4j-onnx-scoring:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-embeddings:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-embeddings-all-minilm-l6-v2:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2")
