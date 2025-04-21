@@ -157,9 +157,7 @@ class MasaicResponseService(
         }
 
         @JvmStatic
-        fun getDefaultApiUri(): URI {
-            return URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
-        }
+        fun getDefaultApiUri(): URI = URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
     }
 
     @Value("\${api.request.timeout:30}")

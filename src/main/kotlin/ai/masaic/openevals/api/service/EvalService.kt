@@ -2,7 +2,6 @@ package ai.masaic.openevals.api.service
 
 import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.repository.EvalRepository
-import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import com.openai.core.JsonValue
 import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap

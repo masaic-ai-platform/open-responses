@@ -52,8 +52,8 @@ class ModelClientServiceTest {
         clientCache["test-api-key"] = mockClient
         
         // Get the client twice with the same key
-        val client1 = serviceWithSpy.getOpenAIClient("test-api-key")
-        val client2 = serviceWithSpy.getOpenAIClient("test-api-key")
+        val client1 = serviceWithSpy.getOpenAIClient("test-api-key", "test-model")
+        val client2 = serviceWithSpy.getOpenAIClient("test-api-key", "test-model")
         
         // Verify both references are to the same client
         assertSame(client1, client2)

@@ -164,7 +164,7 @@ class SampleSchemaUtils {
             // Create properties map for our schema
             val propertiesMap =
                 mutableMapOf<String, Any>(
-                    "item" to labelSchema
+                    "item" to labelSchema,
                 )
 
             // Build the final schema
