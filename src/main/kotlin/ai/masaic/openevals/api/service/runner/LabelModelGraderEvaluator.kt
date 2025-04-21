@@ -1,12 +1,13 @@
 package ai.masaic.openevals.api.service.runner
 
-import ai.masaic.openevals.api.model.LabelModelGrader
-import ai.masaic.openevals.api.model.SimpleInputMessage
-import ai.masaic.openevals.api.model.TestingCriterion
+import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.service.ModelClientService
+import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import ai.masaic.openevals.api.utils.TemplateUtils
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.mitchellbosecke.pebble.PebbleEngine
+import com.openai.core.JsonValue
+import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
@@ -62,20 +63,39 @@ class LabelModelGraderEvaluator(
 
             // Call the model to get a classification
             val result = callLabelModel(criterion, processedInputs)
+            val (label, rawResponse) = result
             
-            logger.debug("Model returned label: $result")
+            logger.debug("Model returned label: $label, from response: $rawResponse")
             
             // Check if the result is in the passing labels
-            val passed = criterion.passingLabels.contains(result)
+            val passed = criterion.passingLabels.contains(label)
+            
+            // Extract user message for more verbose output
+            val userMessage = processedInputs.find { it.role.lowercase() == "user" }?.content ?: "No user message found"
+            
+            // Find message with assistant content to display
+            val assistantContent =
+                processedInputs
+                    .find { it.role.lowercase() == "assistant" }
+                    ?.content
+                    ?.let { "Assistant: '$it'" } ?: ""
+            
+            // Create a shortened version of the raw response for the message
+            val shortResponse =
+                if (rawResponse.length > 50) {
+                    "${rawResponse.substring(0, 50)}..." 
+                } else {
+                    rawResponse
+                }
             
             return CriterionEvaluator.CriterionResult(
                 id = criterion.id,
                 passed = passed,
                 message =
                     if (passed) {
-                        "Model classification ($result) is in the passing labels: ${criterion.passingLabels}"
+                        "Label check passed: model classified as '$label' which is in passing labels ${criterion.passingLabels}. User message: '$userMessage' $assistantContent. Raw response: '$shortResponse'"
                     } else {
-                        "Model classification ($result) is not in the passing labels: ${criterion.passingLabels}"
+                        "Label check failed: model classified as '$label' which is not in passing labels ${criterion.passingLabels}. User message: '$userMessage' $assistantContent. Raw response: '$shortResponse'"
                     },
             )
         } catch (e: Exception) {
@@ -147,14 +167,39 @@ class LabelModelGraderEvaluator(
      *
      * @param criterion The label model grader criterion containing model and labels
      * @param inputs The processed input messages
-     * @return The selected label
+     * @return Pair of (selected label, original response)
      */
     private fun callLabelModel(
         criterion: LabelModelGrader,
         inputs: List<SimpleInputMessage>,
-    ): String {
+    ): Pair<String, String> {
         // Create completion params and execute with cached client
         val builder = modelClientService.createBasicCompletionParams(criterion.model)
+        // Create JSON schema for response format
+        val jsonSchema =
+            ResponseFormatJsonSchema.JsonSchema.Schema
+                .builder()
+                .additionalProperties(SampleSchemaUtils.schemaForModelLabeler())
+                .build()
+
+        val format =
+            ResponseFormatJsonSchema.JsonSchema
+                .builder()
+                .schema(jsonSchema)
+                .name("evalSchema")
+                .build()
+
+        // Create the builder with basic properties
+        builder
+            .model(criterion.model)
+            .responseFormat(
+                ResponseFormatJsonSchema
+                    .builder()
+                    .type(JsonValue.from("json_schema"))
+                    .jsonSchema(format)
+                    .build(),
+            )
+
         addSimpleInputMessagesToBuilder(builder, inputs)
         
         val completionResult =
@@ -176,12 +221,38 @@ class LabelModelGraderEvaluator(
         
         val response = completionResult.contentJson
         
+        logger.debug("Response from model: $response")
+        
+        // Extract the label from the nested JSON structure
+        val extractedLabel =
+            try {
+                val jsonNode = objectMapper.readTree(response)
+                val labelNode = jsonNode.path("item").path("label")
+                if (labelNode.isMissingNode) {
+                    logger.warn("Unable to find 'item.label' in response: $response")
+                    response // Fall back to using full response if we can't extract label
+                } else {
+                    labelNode.asText()
+                }
+            } catch (e: Exception) {
+                logger.warn("Failed to parse JSON response: ${e.message}", e)
+                response // Fall back to using full response if parsing fails
+            }
+        
+        logger.debug("Extracted label: $extractedLabel")
+        
         // Verify the response is a valid label
-        return if (criterion.labels.contains(response)) {
-            response
-        } else {
-            // If the model didn't return an exact label, try to find the closest match
-            criterion.labels.find { response.contains(it, ignoreCase = true) } ?: criterion.labels.first()
-        }
+        val finalLabel =
+            if (criterion.labels.contains(extractedLabel)) {
+                extractedLabel
+            } else {
+                // If the model didn't return an exact label, try to find the closest match
+                criterion.labels.find { extractedLabel.contains(it, ignoreCase = true) } 
+                    ?: criterion.labels.first().also { 
+                        logger.warn("Could not match extracted label '$extractedLabel' to any of the expected labels: ${criterion.labels}")
+                    }
+            }
+        
+        return Pair(finalLabel, response)
     }
 }

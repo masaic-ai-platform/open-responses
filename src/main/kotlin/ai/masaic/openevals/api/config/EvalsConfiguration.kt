@@ -11,7 +11,7 @@ class EvalsConfiguration {
         val engine: PebbleEngine =
             PebbleEngine
                 .Builder()
-                .autoEscaping(false)
+                .autoEscaping(true)
                 .build()
         return engine
     }

@@ -155,21 +155,8 @@ interface RunDataSource {
 interface DataSource
 
 data class FileDataSource(
-    @JsonProperty("file_id")
-    val fileId: String,
+    val id: String,
 ) : DataSource
-
-// data class CSVFileDataSource(
-//    @JsonProperty("file_id")
-//    val fileId: String
-// ) : DataSource {
-//    override val type: String = "csv"
-// }
-
-// Jsonl Run Data Source
-// data class JsonlRunDataSource(
-//    override val source: JsonlFileDataSource
-// ) : RunDataSource
 
 // Completions Run Data Source
 data class CompletionsRunDataSource(

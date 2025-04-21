@@ -7,10 +7,7 @@ import ai.masaic.openevals.api.model.RunDataSource
 import ai.masaic.openevals.api.service.ModelClientService
 import com.openai.core.JsonValue
 import com.openai.models.ResponseFormatJsonSchema
-import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
-import com.openai.models.chat.completions.ChatCompletionCreateParams
-import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
-import com.openai.models.chat.completions.ChatCompletionUserMessageParam
+import com.openai.models.chat.completions.*
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -70,10 +67,10 @@ class ChatCompletionsGenerationService(
                                 apiKey = apiKey,
                                 params = completionParams,
                                 identifier = index.toString(),
-                            ) { content, error ->
+                            ) { content, er ->
                                 ai.masaic.openevals.api.model.CompletionResult(
                                     contentJson = content,
-                                    error = error?.let { it },
+                                    error = er,
                                 )
                             }
                         
@@ -82,6 +79,9 @@ class ChatCompletionsGenerationService(
                                 contentJson = result.contentJson,
                                 error = result.error,
                             )
+
+                        logger.debug("Input for completions: $messages")
+                        logger.debug("Output for completions: content=${result.contentJson} ?: error=${result.error}")
                     }
                 }.awaitAll()
 
@@ -105,6 +105,14 @@ class ChatCompletionsGenerationService(
                 "system" -> {
                     builder.addMessage(
                         ChatCompletionSystemMessageParam
+                            .builder()
+                            .content(message.content)
+                            .build(),
+                    )
+                }
+                "developer" -> {
+                    builder.addMessage(
+                        ChatCompletionDeveloperMessageParam
                             .builder()
                             .content(message.content)
                             .build(),

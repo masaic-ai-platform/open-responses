@@ -28,7 +28,7 @@ class EvalServiceTest {
 
         // Mock the SampleSchemaUtils to return a simple schema
         mockkObject(SampleSchemaUtils.Companion)
-        every { SampleSchemaUtils.sampleSchemaForEvals() } returns
+        every { SampleSchemaUtils.schemaForEvalConfig() } returns
             mapOf(
                 "type" to "object",
                 "properties" to

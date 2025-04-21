@@ -75,9 +75,9 @@ class TextSimilarityEvaluator(
                 passed = passed,
                 message =
                     if (passed) {
-                        "Similarity check passed with score $similarity (threshold: ${criterion.passThreshold})"
+                        "Similarity check passed: '$inputValue' has similarity score $similarity with '$referenceValue' (threshold: ${criterion.passThreshold})"
                     } else {
-                        "Similarity check failed with score $similarity (threshold: ${criterion.passThreshold})"
+                        "Similarity check failed: '$inputValue' has similarity score $similarity with '$referenceValue' (threshold: ${criterion.passThreshold})"
                     },
             )
         } catch (e: Exception) {

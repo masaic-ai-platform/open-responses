@@ -51,7 +51,7 @@ class EvalRunServiceTest {
                             template = listOf(ChatMessage("user", "Hello")),
                         ),
                     model = "gpt-4",
-                    source = FileDataSource(fileId = "file_123"),
+                    source = FileDataSource(id = "file_123"),
                 )
             val request =
                 CreateEvalRunRequest(
@@ -382,7 +382,7 @@ class EvalRunServiceTest {
                         template = listOf(ChatMessage("user", "Hello")),
                     ),
                 model = "gpt-4",
-                source = FileDataSource(fileId = "file_123"),
+                source = FileDataSource(id = "file_123"),
             )
         
         return EvalRun(

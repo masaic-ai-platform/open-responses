@@ -22,14 +22,14 @@ class LabelModelGraderEvaluatorTest {
     private lateinit var evaluator: LabelModelGraderEvaluator
     private lateinit var mockPebbleEngine: PebbleEngine
     private lateinit var mockModelClientService: ModelClientService
-    
+
     @BeforeEach
     fun setUp() {
         mockPebbleEngine = mockk<PebbleEngine>()
         mockModelClientService = mockk<ModelClientService>()
         evaluator = LabelModelGraderEvaluator(mockPebbleEngine, mockModelClientService)
     }
-    
+
     @Test
     fun `canEvaluate should return true for LabelModelGrader`() {
         // Arrange
@@ -41,7 +41,7 @@ class LabelModelGraderEvaluatorTest {
         // Assert
         assertTrue(result)
     }
-    
+
     @Test
     fun `canEvaluate should return false for non-LabelModelGrader`() {
         // Arrange
@@ -53,7 +53,7 @@ class LabelModelGraderEvaluatorTest {
         // Assert
         assertFalse(result)
     }
-    
+
     @Test
     fun `evaluate should return error result when criterion is not LabelModelGrader`() {
         // Arrange
@@ -68,14 +68,15 @@ class LabelModelGraderEvaluatorTest {
         assertFalse(result.passed)
         assertTrue(result.message!!.contains("Invalid criterion type"))
     }
-    
+
     @Test
     fun `evaluate should return passed result when model returns matching label`() {
         // Arrange
-        val inputMessages = listOf(
-            SimpleInputMessage("user", "Test content with {{ data.value }}"),
-            SimpleInputMessage("system", "System message")
-        )
+        val inputMessages =
+            listOf(
+                SimpleInputMessage("user", "Test content with {{ data.value }}"),
+                SimpleInputMessage("system", "System message"),
+            )
         
         val criterion = mockk<LabelModelGrader>()
         every { criterion.id } returns "test-id"
@@ -106,11 +107,11 @@ class LabelModelGraderEvaluatorTest {
                 apiKey = any(),
                 params = any(),
                 identifier = any(),
-                resultBuilder = any()
+                resultBuilder = any(),
             )
         } answers {
             val resultBuilder = lastArg<(String, String?) -> CompletionResult>()
-            resultBuilder("positive", null)
+            resultBuilder("""{"item":{"label":"positive"},"sample":{"model":"chat"}}""", null)
         }
         
         // Act
@@ -130,13 +131,14 @@ class LabelModelGraderEvaluatorTest {
         }
         unmockkObject(TemplateUtils)
     }
-    
+
     @Test
     fun `evaluate should return failed result when model returns non-matching label`() {
         // Arrange
-        val inputMessages = listOf(
-            SimpleInputMessage("user", "Test content"),
-        )
+        val inputMessages =
+            listOf(
+                SimpleInputMessage("user", "Test content"),
+            )
         
         val criterion = mockk<LabelModelGrader>()
         every { criterion.id } returns "test-id"
@@ -163,11 +165,11 @@ class LabelModelGraderEvaluatorTest {
                 apiKey = any(),
                 params = any(),
                 identifier = any(),
-                resultBuilder = any()
+                resultBuilder = any(),
             )
         } answers {
             val resultBuilder = lastArg<(String, String?) -> CompletionResult>()
-            resultBuilder("negative", null)
+            resultBuilder("""{"item":{"label":"negative"},"sample":{"model":"chat"}}""", null)
         }
         
         // Act
@@ -176,19 +178,21 @@ class LabelModelGraderEvaluatorTest {
         // Assert
         assertEquals("test-id", result.id)
         assertFalse(result.passed)
-        assertTrue(result.message!!.contains("not in the passing labels"))
+        assertTrue(result.message!!.contains("label check failed", ignoreCase = true))
+        assertTrue(result.message!!.contains("negative"))
         
         // Verify and clean up
         verify(exactly = 1) { TemplateUtils.resolveTemplateValue("Test content", "{}", mockPebbleEngine) }
         unmockkObject(TemplateUtils)
     }
-    
+
     @Test
     fun `evaluate should handle API errors properly`() {
         // Arrange
-        val inputMessages = listOf(
-            SimpleInputMessage("user", "Test content"),
-        )
+        val inputMessages =
+            listOf(
+                SimpleInputMessage("user", "Test content"),
+            )
         
         val criterion = mockk<LabelModelGrader>()
         every { criterion.id } returns "test-id"
@@ -214,7 +218,7 @@ class LabelModelGraderEvaluatorTest {
                 apiKey = any(),
                 params = any(),
                 identifier = any(),
-                resultBuilder = any()
+                resultBuilder = any(),
             )
         } answers {
             val resultBuilder = lastArg<(String, String?) -> CompletionResult>()
@@ -233,13 +237,14 @@ class LabelModelGraderEvaluatorTest {
         verify(exactly = 1) { TemplateUtils.resolveTemplateValue("Test content", "{}", mockPebbleEngine) }
         unmockkObject(TemplateUtils)
     }
-    
+
     @Test
     fun `evaluate should find closest matching label when exact match not found`() {
         // Arrange
-        val inputMessages = listOf(
-            SimpleInputMessage("user", "Test content"),
-        )
+        val inputMessages =
+            listOf(
+                SimpleInputMessage("user", "Test content"),
+            )
         
         val criterion = mockk<LabelModelGrader>()
         every { criterion.id } returns "test-id"
@@ -266,11 +271,11 @@ class LabelModelGraderEvaluatorTest {
                 apiKey = any(),
                 params = any(),
                 identifier = any(),
-                resultBuilder = any()
+                resultBuilder = any(),
             )
         } answers {
             val resultBuilder = lastArg<(String, String?) -> CompletionResult>()
-            resultBuilder("The sentiment is positive.", null)
+            resultBuilder("""{"item":{"label":"The sentiment is positive."},"sample":{"model":"chat"}}""", null)
         }
         
         // Act
@@ -285,13 +290,14 @@ class LabelModelGraderEvaluatorTest {
         verify(exactly = 1) { TemplateUtils.resolveTemplateValue("Test content", "{}", mockPebbleEngine) }
         unmockkObject(TemplateUtils)
     }
-    
+
     @Test
     fun `evaluate should use first label as fallback when no match found`() {
         // Arrange
-        val inputMessages = listOf(
-            SimpleInputMessage("user", "Test content"),
-        )
+        val inputMessages =
+            listOf(
+                SimpleInputMessage("user", "Test content"),
+            )
         
         val criterion = mockk<LabelModelGrader>()
         every { criterion.id } returns "test-id"
@@ -318,11 +324,11 @@ class LabelModelGraderEvaluatorTest {
                 apiKey = any(),
                 params = any(),
                 identifier = any(),
-                resultBuilder = any()
+                resultBuilder = any(),
             )
         } answers {
             val resultBuilder = lastArg<(String, String?) -> CompletionResult>()
-            resultBuilder("Something completely different", null)
+            resultBuilder("""{"item":{"label":"Something completely different"},"sample":{"model":"chat"}}""", null)
         }
         
         // Act
@@ -331,7 +337,8 @@ class LabelModelGraderEvaluatorTest {
         // Assert
         assertEquals("test-id", result.id)
         assertFalse(result.passed)
-        assertTrue(result.message!!.contains("positive")) // First label is used as fallback
+        assertTrue(result.message!!.contains("positive"))
+        assertTrue(result.message!!.contains("Something completely different"))
         
         // Verify and clean up
         verify(exactly = 1) { TemplateUtils.resolveTemplateValue("Test content", "{}", mockPebbleEngine) }

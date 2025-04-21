@@ -17,7 +17,6 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.data.mongo.DataMongoTest
 import org.springframework.context.annotation.Import
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
-import org.springframework.data.mongodb.core.dropCollection
 import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.springframework.test.context.TestPropertySource
@@ -104,7 +103,7 @@ class MongoEvalRunRepositoryTest {
     ): EvalRun {
         val messages = listOf(ChatMessage("user", "Hello, how are you?"))
         val templateMessages = TemplateInputMessages(template = messages)
-        val fileDataSource = FileDataSource(fileId = "file_12345")
+        val fileDataSource = FileDataSource(id = "file_12345")
         val completionsRunDataSource =
             CompletionsRunDataSource(
                 inputMessages = templateMessages,

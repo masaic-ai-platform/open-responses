@@ -51,7 +51,7 @@ class EvalService(
 
                     // Include sample schema if requested
                     if (dataSourceConfigRequest.includeSampleSchema) {
-                        propertiesMap["sample"] = SampleSchemaUtils.sampleSchemaForEvals()
+                        propertiesMap["sample"] = SampleSchemaUtils.schemaForEvalConfig()
                         requiredArray.add("sample") // Add sample to required array when included
                     }
 

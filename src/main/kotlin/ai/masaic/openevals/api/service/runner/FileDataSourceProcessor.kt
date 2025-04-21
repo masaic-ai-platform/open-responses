@@ -134,7 +134,7 @@ class FileDataSourceProcessor(
         val fileDataSource = dataSource.source as FileDataSource
         val content =
             fileService
-                .getFileContent(fileDataSource.fileId)
+                .getFileContent(fileDataSource.id)
                 .inputStream
                 .bufferedReader()
                 .use { it.readText() }
