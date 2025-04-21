@@ -157,7 +157,7 @@ class NativeToolRegistry(
     ): String {
         try {
             val paramsObj = objectMapper.readValue(arguments, AgenticSearchParams::class.java)
-            log.info("Starting agentic search for question: '${paramsObj.question}'")
+            log.info("Starting agentic search for question: '${paramsObj.query}'")
             
             val functions = requestParams.tools().orElseThrow().filter { it.isWebSearch() }
             if (functions.isEmpty()) {
@@ -294,13 +294,13 @@ class NativeToolRegistry(
                 "type" to "object",
                 "properties" to
                     mapOf(
-                        "question" to
+                        "query" to
                             mapOf(
                                 "type" to "string",
-                                "description" to "The question to find information for",
+                                "description" to "The query to find information for",
                             ),
                     ),
-                "required" to listOf("question"),
+                "required" to listOf("query"),
                 "additionalProperties" to false,
             )
 
@@ -308,7 +308,7 @@ class NativeToolRegistry(
             name = "agentic_search",
             description =
                 """
-                Perform an AI-guided iterative search through vector stores that refines queries and filters until finding the best results for your questions.
+                Perform an AI-guided iterative search through vector stores that refines queries and filters until finding the best results for your queries.
                 """.trimIndent(),
             parameters = parameters,
         )

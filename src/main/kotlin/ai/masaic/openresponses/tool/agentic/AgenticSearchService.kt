@@ -51,12 +51,12 @@ class AgenticSearchService(
         initialSeedMultiplier: Int = 3,
         alpha: Double = 0.5,
     ): AgenticSearchResponse {
-        require(params.question.isNotBlank()) { "Question must not be blank" }
+        require(params.query.isNotBlank()) { "Question must not be blank" }
         require(maxResults > 0) { "maxResults must be positive" }
         require(maxIterations > 0) { "maxIterations must be positive" }
 
         return withContext(Dispatchers.IO) {
-            log.info("Starting agentic search for question: '${params.question}'")
+            log.info("Starting agentic search for question: '${params.query}'")
             val strategy = seeds.byName(seedName)
             val iterations = mutableListOf<AgenticSearchIteration>()
             val allRelevantChunks = mutableSetOf<VectorStoreSearchResult>()
@@ -65,7 +65,7 @@ class AgenticSearchService(
             additionalParams["alpha"] = alpha
         
             // Initial query and filters
-            var currentQuery = params.question
+            var currentQuery = params.query
             var currentFilters = emptyMap<String, Any>()
             var shouldTerminate = false
             var iterationCount = 0
@@ -112,7 +112,7 @@ class AgenticSearchService(
                 log.info("Initial search returned no results. Terminating early.")
                 val terminationRecord =
                     AgenticSearchIteration(
-                        query = params.question, // Use original question for context
+                        query = params.query, // Use original question for context
                         is_final = true,
                         applied_filters = emptyMap(),
                         termination_reason = "No initial results found.",
@@ -134,7 +134,7 @@ class AgenticSearchService(
                 // Call LLM to decide next action
                 val initialDecision =
                     callLlmForDecision(
-                        question = params.question,
+                        question = params.query,
                         buffer = searchBuffer,
                         iterations = iterations,
                         attrs = availableAttributes,
@@ -304,7 +304,7 @@ class AgenticSearchService(
                 while (!decisionParsed && retryCount < 3) {
                     llmDecision =
                         callLlmForDecision(
-                            question = params.question,
+                            question = params.query,
                             buffer = newResults,
                             iterations = iterations,
                             attrs = availableAttributes,

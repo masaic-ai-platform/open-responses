@@ -91,7 +91,7 @@ data class FileCitation(
  */
 @Serializable
 data class AgenticSearchParams(
-    val question: String,
+    val query: String,
 )
 
 /**
