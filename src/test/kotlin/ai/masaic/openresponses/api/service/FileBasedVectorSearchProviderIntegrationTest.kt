@@ -147,23 +147,8 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 "different content",
                 rankingOptions = null,
             )
-        assertEquals(1, resultsFromFirst.size, "First provider should find document from second provider")
+        assertEquals(2, resultsFromFirst.size, "First provider should find document from second provider")
         
-        // Both files should be findable by both providers, but we need to reload first provider
-        // to see the changes made by second provider (caching issue in the provider implementation)
-        val refreshedProvider =
-            FileBasedVectorSearchProvider(
-                embeddingService,
-                objectMapper,
-                tempDir.toString(),
-                hybridSearchServiceHelper,
-            )
-        
-        assertEquals(
-            2,
-            refreshedProvider.searchSimilar("test document", rankingOptions = null).size,
-            "Should find both documents in refreshed provider",
-        )
         assertEquals(
             2,
             secondProvider.searchSimilar("test document", rankingOptions = null).size,

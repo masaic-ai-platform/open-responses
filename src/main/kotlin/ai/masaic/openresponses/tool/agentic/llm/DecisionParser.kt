@@ -16,10 +16,21 @@ class DecisionParser(
     private val log = LoggerFactory.getLogger(DecisionParser::class.java)
 
     fun parse(decisionText: String): LlmDecision {
+        val cleanedText = decisionText.trim()
+        val firstNext = cleanedText.indexOf("NEXT_QUERY:")
+        val firstTerminate = cleanedText.indexOf("TERMINATE")
+        val startIdx =
+            when {
+                firstNext == -1 && firstTerminate == -1 -> 0 // no keywords found
+                firstNext == -1 -> firstTerminate // only TERMINATE present
+                firstTerminate == -1 -> firstNext // only NEXT_QUERY present
+                else -> minOf(firstNext, firstTerminate) // both present – pick earliest
+            }
+        val targetText = cleanedText.substring(startIdx).trim()
         // 1) If it’s a TERMINATE decision, capture any reason text
-        if (decisionText.startsWith("TERMINATE", ignoreCase = true)) {
+        if (targetText.startsWith("TERMINATE", ignoreCase = true)) {
             val reason =
-                decisionText
+                targetText
                     .substringAfter("TERMINATE", "")
                     .removePrefix(":")
                     .trim()
@@ -32,12 +43,16 @@ class DecisionParser(
         }
 
         // 2) Otherwise must be NEXT_QUERY:
-        if (!decisionText.startsWith("NEXT_QUERY:")) {
+        if (!targetText.startsWith("NEXT_QUERY:")) {
             throw IllegalArgumentException("Unsupported decision format: $decisionText")
         }
 
         // 3) Split off everything after the label
-        val afterNext = decisionText.substringAfter("NEXT_QUERY:")
+        val afterNext = targetText.substringAfter("NEXT_QUERY:")
+        val braceIndex = afterNext.indexOf('{')
+        if (braceIndex == -1) {
+            return LlmDecision(query = afterNext.trim(), filters = null)
+        }
         // Extract the free‐text query up to the JSON
         val queryPart = afterNext.substringBefore("{").trim()
         // Extract JSON between the first `{` and the last `}`

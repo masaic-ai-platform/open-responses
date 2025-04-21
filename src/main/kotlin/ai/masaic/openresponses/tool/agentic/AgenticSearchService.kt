@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import kotlin.jvm.optionals.getOrElse
+import kotlin.jvm.optionals.getOrNull
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -47,7 +48,7 @@ class AgenticSearchService(
         seedName: String?,
         openAIClient: OpenAIClient,
         requestParams: ResponseCreateParams,
-        initialSeedMultiplier: Int = 5,
+        initialSeedMultiplier: Int = 3,
         alpha: Double = 0.5,
     ): AgenticSearchResponse {
         require(params.question.isNotBlank()) { "Question must not be blank" }
@@ -146,7 +147,7 @@ class AgenticSearchService(
                         hyperParams = hyperParams,
                     )
             
-                log.info("LLM initial decision: $initialDecision")
+                log.debug("LLM initial decision: $initialDecision")
             
                 if (initialDecision.startsWith("TERMINATE")) {
                     log.info("LLM decided to terminate with initial results")
@@ -414,7 +415,7 @@ class AgenticSearchService(
                             ""
                         }
                     }
-            log.info("Knowledge acquired: $knowledgeAcquired")
+            log.debug("Knowledge acquired: $knowledgeAcquired")
 
             // Deduplicate by content and file ID, then sort by score
             val uniqueRelevantChunks =
@@ -510,19 +511,75 @@ class AgenticSearchService(
                 ChatCompletionUserMessageParam.builder().content(promptContent).build(),
             )
 
-        val chatCompletionRequest =
+        // Extract model name from request
+        val modelName = params.model().toString()
+
+        val chatCompletionRequestBuilder =
             ChatCompletionCreateParams
                 .builder()
                 .messages(listOf(messageWithContent))
-                .model(params.model().toString())
-                .temperature(hyperParams.temperature) // Adjusted temperature for more creative responses
-                .topP(hyperParams.topP) // Adjusted top_p for more diverse sampling
-                .presencePenalty(hyperParams.presence) // Adjusted presence penalty to encourage new topics
-                .frequencyPenalty(hyperParams.frequency) // Adjusted frequency penalty to reduce repetition
-                .build()
+                .model(
+                    if (modelName.contains("@")) {
+                        modelName.split("@", limit = 2)[1]
+                    } else {
+                        modelName
+                    },
+                )
 
+        var usePresencePenalty = false
+        var useFrequencyPenalty = false
+        var useTemperature = false
+        var useTopP = false
+        params
+            .tools()
+            .getOrNull()
+            ?.find { it.asWebSearch().type().toString() == "agentic_search" }
+            ?.let { tool ->
+                usePresencePenalty = tool
+                    .asWebSearch()
+                    ._additionalProperties()["enable_presence_penalty_tuning"]
+                    ?.toString()
+                    ?.toBoolean() == true
+                useFrequencyPenalty = tool
+                    .asWebSearch()
+                    ._additionalProperties()["enable_frequency_penalty_tuning"]
+                    ?.toString()
+                    ?.toBoolean() == true
+                useTemperature = tool
+                    .asWebSearch()
+                    ._additionalProperties()["enable_temperature_tuning"]
+                    ?.toString()
+                    ?.toBoolean() == true
+                useTopP = tool
+                    .asWebSearch()
+                    ._additionalProperties()["enable_top_p_tuning"]
+                    ?.toString()
+                    ?.toBoolean() == true
+            }
+
+        if (useTopP) {
+            log.debug("Using top_p for LLM decision")
+            chatCompletionRequestBuilder.topP(hyperParams.topP)
+        }
+
+        if (useTemperature) {
+            log.debug("Using temperature for LLM decision")
+            chatCompletionRequestBuilder.temperature(hyperParams.temperature)
+        } else {
+            log.debug("Not using temperature for LLM decision")
+            chatCompletionRequestBuilder.temperature(params.temperature())
+        }
+
+        if (usePresencePenalty) {
+            log.debug("Using presence penalty for LLM decision")
+            chatCompletionRequestBuilder.presencePenalty(hyperParams.presence)
+        }
+        if (useFrequencyPenalty) {
+            log.debug("Not using presence penalty for LLM decision")
+            chatCompletionRequestBuilder.frequencyPenalty(hyperParams.frequency)
+        }
         try {
-            val response = openAIClient.chat().completions().create(chatCompletionRequest)
+            val response = openAIClient.chat().completions().create(chatCompletionRequestBuilder.build())
             val content =
                 response
                     .choices()
