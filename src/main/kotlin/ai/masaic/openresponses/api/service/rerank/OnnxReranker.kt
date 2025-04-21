@@ -34,7 +34,7 @@ class OnnxReranker(
         k: Int,
     ): List<VectorStoreSearchResult> =
         coroutineScope {
-            log.info("Reranking ${docs.size} documents for query: $query")
+            log.debug("Reranking ${docs.size} documents for query: $query")
             val rerankedDocs =
                 docs
                     .sortedByDescending { doc ->

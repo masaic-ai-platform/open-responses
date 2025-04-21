@@ -54,6 +54,7 @@ class AgenticSearchServiceComprehensiveTest {
             isInitial: Boolean,
             params: ResponseCreateParams,
             openAIClient: OpenAIClient,
+            hyperParams: LlHyperParams,
         ): String = if (decisions.isNotEmpty()) decisions.removeAt(0) else "TERMINATE"
     }
 

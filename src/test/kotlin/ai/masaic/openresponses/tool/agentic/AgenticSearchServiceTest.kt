@@ -7,10 +7,12 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
+import java.util.Optional
 
 class AgenticSearchServiceTest {
     private val vectorStoreService = mockk<VectorStoreService>()
@@ -18,7 +20,11 @@ class AgenticSearchServiceTest {
     private val mapper = ObjectMapper()
     private val agenticSearchService = AgenticSearchService(vectorStoreService, mapper, hybridSearchService)
     private val openAIClient = mockk<OpenAIClient>()
-    private val responseParams = mockk<ResponseCreateParams>()
+    private val responseParams =
+        mockk<ResponseCreateParams> {
+            every { temperature() } returns Optional.of(0.9)
+            every { topP() } returns Optional.of(0.9)
+        }
 
     @Test
     fun `run throws exception when question is blank`() {

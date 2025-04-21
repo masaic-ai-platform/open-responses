@@ -186,7 +186,7 @@ object PromptBuilder {
     
         // Add structured memory format guidance
         promptBuilder.append("\n\nEach time you suggest a new query, provide a complete knowledge summary in this format:")
-        promptBuilder.append("\nNEXT_QUERY:your query {filters} ##MEMORY## Complete information summary: 1) First key point 2) Second key point...")
+        promptBuilder.append("\nNEXT_QUERY:your query {filters} ##MEMORY## 1) First key point 2) Second key point...")
     
         // Add guidance for memory updates
         promptBuilder.append("\n\nYour knowledge summary should:")
