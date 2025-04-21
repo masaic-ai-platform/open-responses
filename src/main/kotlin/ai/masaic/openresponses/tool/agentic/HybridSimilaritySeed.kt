@@ -12,12 +12,14 @@ class HybridSimilaritySeed(
         maxResults: Int,
         userFilter: Filter?,
         vectorStoreIds: List<String>,
+        additionalParams: Map<String, Any>,
     ) = coroutineScope {
         svc.hybridSearch(
             query = query,
             maxResults = maxResults.toInt(),
             userFilter = userFilter,
             vectorStoreIds = vectorStoreIds,
+            alpha = additionalParams["alpha"] as? Double ?: 0.5,
         )
     }
 }

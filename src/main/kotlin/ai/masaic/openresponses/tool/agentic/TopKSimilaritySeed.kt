@@ -12,6 +12,7 @@ class TopKSimilaritySeed(
         maxResults: Int,
         userFilter: Filter?,
         vectorStoreIds: List<String>,
+        additionalParams: Map<String, Any>,
     ) = coroutineScope {
         vectorStoreIds
             .map { id ->

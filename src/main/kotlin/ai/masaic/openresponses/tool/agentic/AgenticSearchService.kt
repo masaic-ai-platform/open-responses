@@ -48,6 +48,7 @@ class AgenticSearchService(
         openAIClient: OpenAIClient,
         requestParams: ResponseCreateParams,
         initialSeedMultiplier: Int = 5,
+        alpha: Double = 0.5,
     ): AgenticSearchResponse {
         require(params.question.isNotBlank()) { "Question must not be blank" }
         require(maxResults > 0) { "maxResults must be positive" }
@@ -59,6 +60,8 @@ class AgenticSearchService(
             val iterations = mutableListOf<AgenticSearchIteration>()
             val allRelevantChunks = mutableSetOf<VectorStoreSearchResult>()
             var conclusion: String? = null
+            val additionalParams = mutableMapOf<String, Any>()
+            additionalParams["alpha"] = alpha
         
             // Initial query and filters
             var currentQuery = params.question
@@ -73,7 +76,7 @@ class AgenticSearchService(
 
             val seedSize = min(maxResults * initialSeedMultiplier, 100)
             // Perform initial seed search without recording it as an iteration
-            val searchBuffer = strategy.seed(currentQuery, seedSize, initialSearchFilter, vectorStoreIds).take(maxResults).toMutableList()
+            val searchBuffer = strategy.seed(currentQuery, seedSize, initialSearchFilter, vectorStoreIds, additionalParams).take(maxResults).toMutableList()
             
             // Track initial results in the allRelevantChunks set
             allRelevantChunks.addAll(searchBuffer)
@@ -237,7 +240,7 @@ class AgenticSearchService(
                     }
             
                 // Perform vector search with current query and filters
-                val newResults = strategy.seed(currentQuery, maxResults, searchFilter, vectorStoreIds)
+                val newResults = strategy.seed(currentQuery, maxResults, searchFilter, vectorStoreIds, additionalParams)
             
                 // Add results to current iteration record if available
                 currentIterationRecord?.results?.addAll(newResults)

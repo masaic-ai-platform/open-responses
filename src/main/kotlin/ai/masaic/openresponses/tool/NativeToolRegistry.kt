@@ -191,6 +191,8 @@ class NativeToolRegistry(
             val maxResults = function._additionalProperties()["max_num_results"]?.toString()?.toInt() ?: 5
             val maxIterations = function._additionalProperties()["max_iterations"]?.toString()?.toInt() ?: 5
             val seedStrategy = function._additionalProperties()["seed_strategy"] as? String ?: "default"
+            val alpha = function._additionalProperties()["alpha"]?.toString()?.toDouble() ?: 0.5
+            val initialSeedMultiplier = function._additionalProperties()["initial_seed_multiplier"]?.toString()?.toInt() ?: 5
             val userFilter = function._additionalProperties()["filters"]?.convert(Filter::class.java)
             
             log.info("AgenticSearch parameters: maxResults=$maxResults, maxIterations=$maxIterations, seedStrategy=$seedStrategy")
@@ -205,6 +207,8 @@ class NativeToolRegistry(
                     seedName = seedStrategy,
                     openAIClient = openAIClient,
                     requestParams = requestParams,
+                    alpha = alpha,
+                    initialSeedMultiplier = initialSeedMultiplier,
                 )
             
             log.info("AgenticSearch completed with ${response.data.size} results and ${response.search_iterations.size} iterations")

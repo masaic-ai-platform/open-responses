@@ -9,5 +9,6 @@ interface SeedStrategy {
         maxResults: Int,
         userFilter: Filter?,
         vectorStoreIds: List<String>,
+        additionalParams: Map<String, Any>,
     ): List<VectorStoreSearchResult>
 } 
