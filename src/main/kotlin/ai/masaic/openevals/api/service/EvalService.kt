@@ -49,12 +49,6 @@ class EvalService(
                     // Create required array for schema
                     val requiredArray = mutableListOf("item")
 
-                    // Include sample schema if requested
-                    if (dataSourceConfigRequest.includeSampleSchema) {
-                        propertiesMap["sample"] = SampleSchemaUtils.schemaForEvalConfig()
-                        requiredArray.add("sample") // Add sample to required array when included
-                    }
-
                     // Build the final schema
                     val schema =
                         mapOf(

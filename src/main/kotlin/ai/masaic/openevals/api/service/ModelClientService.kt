@@ -1,6 +1,7 @@
 package ai.masaic.openevals.api.service
 
 import ai.masaic.openevals.api.model.CompletionResult
+import ai.masaic.openresponses.api.service.MasaicResponseService
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.credential.BearerTokenCredential
@@ -16,8 +17,6 @@ import java.util.concurrent.ConcurrentHashMap
 @Service
 class ModelClientService {
     private val logger = LoggerFactory.getLogger(ModelClientService::class.java)
-    private val baseURL = "https://api.openai.com/v1"
-    
     // Client cache to avoid recreating clients
     private val clientCache = ConcurrentHashMap<String, OpenAIClient>()
 
@@ -26,11 +25,12 @@ class ModelClientService {
      * Clients are cached by API key to avoid recreating them.
      *
      * @param apiKey The API key for authentication
+     * @param model The model name, which may include provider@model or url@model format
      * @return OpenAI client instance
      */
-    fun getOpenAIClient(apiKey: String): OpenAIClient =
+    fun getOpenAIClient(apiKey: String, model: String): OpenAIClient =
         clientCache.computeIfAbsent(apiKey) { key ->
-            createOpenAIClient(key)
+            createOpenAIClient(key, model)
         }
 
     /**
@@ -38,14 +38,19 @@ class ModelClientService {
      * This is now a private method as external code should use getOpenAIClient.
      *
      * @param apiKey The API key for authentication
+     * @param model The model name, which may include provider@model or url@model format
      * @return OpenAI client instance
      */
-    private fun createOpenAIClient(apiKey: String): OpenAIClient =
-        OpenAIOkHttpClient
+    private fun createOpenAIClient(apiKey: String, model: String): OpenAIClient {
+        val baseUrl = MasaicResponseService.getApiBaseUri(model).toURL().toString()
+        logger.debug("Creating OpenAI client with base URL: {}", baseUrl)
+        
+        return OpenAIOkHttpClient
             .builder()
             .credential(BearerTokenCredential.create { apiKey })
-            .baseUrl(baseURL)
+            .baseUrl(baseUrl)
             .build()
+    }
 
     /**
      * Create basic chat completion parameters with the specified model.
@@ -82,8 +87,55 @@ class ModelClientService {
         client: OpenAIClient,
         params: ChatCompletionCreateParams,
     ): String {
-        val completion = client.chat().completions().create(params)
+        // Extract model name from @ convention if needed
+        val updatedParams = extractActualModelName(params)
+        val completion = client.chat().completions().create(updatedParams)
         return extractCompletionContent(completion)
+    }
+    
+    /**
+     * Extracts the actual model name from URL@model or provider@model format.
+     * If the model contains @ symbol, it will extract just the model part.
+     *
+     * @param params The original completion parameters
+     * @return Updated completion parameters with proper model name
+     */
+    private fun extractActualModelName(params: ChatCompletionCreateParams): ChatCompletionCreateParams {
+        val modelName = params.model().asString()
+        
+        // If model doesn't contain @, return the original params
+        if (!modelName.contains("@")) {
+            return params
+        }
+        
+        // Split by @ and get the actual model name (second part)
+        val parts = modelName.split("@", limit = 2)
+        if (parts.size == 2) {
+            val actualModelName = parts[1]
+            logger.debug("Extracted model name '{}' from '{}'", actualModelName, modelName)
+            
+            // Create new params with the extracted model name
+            return ChatCompletionCreateParams.builder()
+                .model(actualModelName)
+                .messages(params.messages())
+                .apply {
+                    // Copy other fields if present
+                    params.temperature().ifPresent { temperature(it) }
+                    params.topP().ifPresent { topP(it) }
+                    params.n().ifPresent { n(it) }
+                    params.stop().ifPresent { stop(it) }
+                    params.presencePenalty().ifPresent { presencePenalty(it) }
+                    params.frequencyPenalty().ifPresent { frequencyPenalty(it) }
+                    params.logitBias().ifPresent { logitBias(it) }
+                    params.user().ifPresent { user(it) }
+                    params.responseFormat().ifPresent { responseFormat(it) }
+                    params.seed().ifPresent { seed(it) }
+                }
+                .build()
+        }
+        
+        // If for some reason we can't extract the model name, return original params
+        return params
     }
 
     /**
@@ -125,9 +177,16 @@ class ModelClientService {
         identifier: String? = null,
         resultBuilder: (content: String, error: String?) -> CompletionResult,
     ): CompletionResult {
-        val client = getOpenAIClient(apiKey)
+        // Extract model information for proper client and API call
+        val originalModelName = params.model().asString()
+        val modelForUrl = originalModelName // Use full model with provider for URL
+        val updatedParams = extractActualModelName(params) // Use clean model name for API call
+        
+        val client = getOpenAIClient(apiKey, modelForUrl)
         return try {
-            val content = executeCompletionCall(client, params)
+            val content = client.chat().completions().create(updatedParams).let { completion ->
+                extractCompletionContent(completion)
+            }
             resultBuilder(content, null)
         } catch (e: Exception) {
             logger.error("Error processing completion${identifier?.let { " for $it" } ?: ""}: ${e.message}", e)

@@ -164,15 +164,14 @@ class SampleSchemaUtils {
             // Create properties map for our schema
             val propertiesMap =
                 mutableMapOf<String, Any>(
-                    "item" to labelSchema,
-                    "sample" to schemaForEvalConfig(),
+                    "item" to labelSchema
                 )
 
             // Build the final schema
             return mapOf(
                 "type" to JsonValue.from("object"),
                 "properties" to JsonValue.from(propertiesMap),
-                "required" to JsonValue.from(listOf("item", "sample")),
+                "required" to JsonValue.from(listOf("item")),
             )
         }
     }
