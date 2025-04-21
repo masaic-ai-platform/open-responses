@@ -73,7 +73,7 @@ class HybridSearchServiceHelper
                     log.info("Indexed ${chunks.size} chunks in Lucene")
                 } catch (e: Exception) {
                     log.error("Error indexing chunks in Lucene: ${e.message}", e)
-                    // Don't rethrow - we want to be resilient to indexing failures
+                    throw e
                 }
             }
 
@@ -98,7 +98,7 @@ class HybridSearchServiceHelper
                     log.info("Indexed ${chunks.size} chunks in MongoDB")
                 } catch (e: Exception) {
                     log.error("Error indexing chunks in MongoDB: ${e.message}", e)
-                    // Don't rethrow - we want to be resilient to indexing failures
+                    throw e
                 }
             }
         }

@@ -22,6 +22,7 @@ import org.apache.lucene.store.FSDirectory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.nio.file.Paths
+import kotlin.math.pow
 
 /**
  * Service for full-text indexing and search using Lucene.
@@ -33,28 +34,46 @@ class LuceneIndexService(
 ) {
     private val indexPath = "$rootDir/lucene-index"
     private val analyzer = StandardAnalyzer()
+    private val log = org.slf4j.LoggerFactory.getLogger(LuceneIndexService::class.java)
 
     /**
      * Indexes a batch of text chunks in Lucene.
      */
     fun indexChunks(chunks: List<LuceneChunk>) {
         val dir = FSDirectory.open(Paths.get(indexPath))
-        val writerConfig = IndexWriterConfig(analyzer)
-        IndexWriter(dir, writerConfig).use { writer ->
-            chunks.forEach { chunk ->
-                val doc =
-                    Document().apply {
-                        add(StringField("chunk_id", chunk.chunkId, Field.Store.YES))
-                        add(StringField("file_id", chunk.fileId, Field.Store.YES))
-                        add(StringField("filename", chunk.filename, Field.Store.YES))
-                        add(StringField("vector_store_id", chunk.vectorStoreId, Field.Store.YES))
-                        add(IntPoint("chunk_index", chunk.chunkIndex))
-                        add(StoredField("chunk_index", chunk.chunkIndex))
-                        add(TextField("content", chunk.content, Field.Store.YES))
+        val maxRetries = 5
+        var attempt = 0
+        while (true) {
+            try {
+                val writerConfig = IndexWriterConfig(analyzer)
+                IndexWriter(dir, writerConfig).use { writer ->
+                    chunks.forEach { chunk ->
+                        val doc =
+                            Document().apply {
+                                add(StringField("chunk_id", chunk.chunkId, Field.Store.YES))
+                                add(StringField("file_id", chunk.fileId, Field.Store.YES))
+                                add(StringField("filename", chunk.filename, Field.Store.YES))
+                                add(StringField("vector_store_id", chunk.vectorStoreId, Field.Store.YES))
+                                add(IntPoint("chunk_index", chunk.chunkIndex))
+                                add(StoredField("chunk_index", chunk.chunkIndex))
+                                add(TextField("content", chunk.content, Field.Store.YES))
+                            }
+                        writer.addDocument(doc)
                     }
-                writer.addDocument(doc)
+                    writer.commit()
+                }
+                break
+            } catch (e: org.apache.lucene.store.LockObtainFailedException) {
+                attempt++
+                if (attempt > maxRetries) {
+                    log.error("Failed to obtain Lucene index lock after $attempt attempts", e)
+                    throw e
+                }
+                log.warn("Lucene index locked, retrying attempt $attempt/$maxRetries", e)
+                val backOff = 2.0.pow(attempt).toLong()
+                val jitter = (0..1000).random()
+                Thread.sleep(backOff * 1000 + jitter) // Exponential backoff
             }
-            writer.commit()
         }
     }
 
@@ -72,12 +91,12 @@ class LuceneIndexService(
         if (vectorStoreIds != null && vectorStoreIds.isEmpty()) {
             return emptyList()
         }
-        
+
         val dir = FSDirectory.open(Paths.get(indexPath))
         DirectoryReader.open(dir).use { reader ->
             val searcher = IndexSearcher(reader)
             val parser = QueryParser("content", analyzer)
-            
+
             // Build query combining text search with vector store filter if needed
             // Escape special characters in the query text to avoid parse exceptions
             val escapedQuery = QueryParser.escape(queryText)
@@ -86,7 +105,7 @@ class LuceneIndexService(
                 if (vectorStoreIds != null) {
                     val builder = BooleanQuery.Builder()
                     builder.add(contentQuery, BooleanClause.Occur.MUST)
-                
+
                     // Add a clause to filter by vectorStoreId
                     val vectorStoreFilter = BooleanQuery.Builder()
                     vectorStoreIds.forEach { vectorStoreId ->
@@ -100,7 +119,7 @@ class LuceneIndexService(
                 } else {
                     contentQuery
                 }
-            
+
             val hits = searcher.search(finalQuery, topK).scoreDocs
             return hits.map { hit ->
                 val doc = searcher.doc(hit.doc)
