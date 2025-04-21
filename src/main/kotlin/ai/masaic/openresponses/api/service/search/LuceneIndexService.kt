@@ -79,7 +79,9 @@ class LuceneIndexService(
             val parser = QueryParser("content", analyzer)
             
             // Build query combining text search with vector store filter if needed
-            val contentQuery = parser.parse(queryText)
+            // Escape special characters in the query text to avoid parse exceptions
+            val escapedQuery = QueryParser.escape(queryText)
+            val contentQuery = parser.parse(escapedQuery)
             val finalQuery =
                 if (vectorStoreIds != null) {
                     val builder = BooleanQuery.Builder()
