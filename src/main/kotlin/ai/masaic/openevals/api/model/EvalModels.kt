@@ -1,6 +1,9 @@
 package ai.masaic.openevals.api.model
 
 import com.fasterxml.jackson.annotation.*
+import jakarta.validation.Valid
+import jakarta.validation.constraints.NotEmpty
+import jakarta.validation.constraints.Size
 import java.time.Instant
 
 // Main Eval object
@@ -73,8 +76,14 @@ data class LabelModelGrader(
     override val name: String,
     override val id: String = "", // Default empty to be filled by service
     val model: String,
+    @field:NotEmpty @field:Size(min = 1, message = "at least one input object with role, content must be provided")
+    @field:Valid
     val input: List<SimpleInputMessage>,
+    @field:NotEmpty @field:Size(min = 1)
+    @field:Valid
     val labels: List<String>,
+    @field:NotEmpty @field:Size(min = 1)
+    @field:Valid
     @JsonProperty("passing_labels")
     val passingLabels: List<String>,
     @JsonIgnore
@@ -165,6 +174,9 @@ data class CreateEvalRequest(
     val name: String?,
     @JsonProperty("data_source_config")
     val dataSourceConfig: DataSourceConfig,
+
+    @field:NotEmpty @field:Size(min = 1) // at least one testing criterion
+    @field:Valid
     @JsonProperty("testing_criteria")
     val testingCriteria: List<TestingCriterion>,
     val metadata: Map<String, String>? = null, // TODO: JB to revisit for constraints of 16 key value pair... etc

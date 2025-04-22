@@ -6,6 +6,7 @@ import ai.masaic.openevals.api.model.EvalListResponse
 import ai.masaic.openevals.api.model.ListEvalsParams
 import ai.masaic.openevals.api.model.UpdateEvalRequest
 import ai.masaic.openevals.api.service.EvalService
+import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.util.MultiValueMap
@@ -29,7 +30,7 @@ class EvalController(
      */
     @PostMapping
     suspend fun createEval(
-        @RequestBody request: CreateEvalRequest,
+        @Valid @RequestBody request: CreateEvalRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
     ): ResponseEntity<Eval> {
         val eval = evalService.createEval(request, headers)
