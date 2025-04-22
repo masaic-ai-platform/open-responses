@@ -5,7 +5,6 @@ import ai.masaic.openresponses.api.service.storage.FileService
 import com.fasterxml.jackson.core.JsonLocation
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.core.JsonParser
-import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mitchellbosecke.pebble.PebbleEngine
 import io.mockk.*
@@ -78,14 +77,6 @@ class FileDataSourceProcessorTest {
         
             // Mock file service to return content
             coEvery { fileService.getFileContent(fileId) } returns resource
-        
-            // Mock ObjectMapper to validate JSON
-            every { objectMapper.readTree(any<String>()) } returnsMany
-                listOf(
-                    mockk<JsonNode>(),
-                    mockk(),
-                    mockk(),
-                )
 
             // Act
             val result = processor.getRawDataLines(runDataSource)
@@ -98,7 +89,6 @@ class FileDataSourceProcessorTest {
         
             // Verify
             coVerify(exactly = 1) { fileService.getFileContent(fileId) }
-            verify(exactly = 3) { objectMapper.readTree(any<String>()) }
         }
 
     @Test
@@ -134,7 +124,6 @@ class FileDataSourceProcessorTest {
         
             // Verify
             coVerify(exactly = 1) { fileService.getFileContent(fileId) }
-            verify(exactly = 2) { objectMapper.readTree(any<String>()) }
         }
 
     @Test

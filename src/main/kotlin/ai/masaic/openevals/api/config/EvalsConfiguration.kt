@@ -12,6 +12,7 @@ class EvalsConfiguration {
             PebbleEngine
                 .Builder()
                 .autoEscaping(true)
+                .strictVariables(true)
                 .build()
         return engine
     }

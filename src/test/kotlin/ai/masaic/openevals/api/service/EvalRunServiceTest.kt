@@ -4,6 +4,7 @@ import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.repository.EvalRunRepository
 import ai.masaic.openevals.api.service.runner.EvalRunner
+import ai.masaic.openevals.api.validation.EvalRunValidator
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -20,6 +21,7 @@ class EvalRunServiceTest {
     private lateinit var evalRunRepository: EvalRunRepository
     private lateinit var evalRepository: EvalRepository 
     private lateinit var evalRunner: EvalRunner
+    private lateinit var evalRunValidator: EvalRunValidator
     private lateinit var evalRunService: EvalRunService
     private lateinit var headers: MultiValueMap<String, String>
 
@@ -29,9 +31,10 @@ class EvalRunServiceTest {
         evalRunRepository = mockk()
         evalRepository = mockk()
         evalRunner = mockk()
+        evalRunValidator = mockk()
         
         // Create the service
-        evalRunService = EvalRunService(evalRunRepository, evalRepository, evalRunner)
+        evalRunService = EvalRunService(evalRunRepository, evalRepository, evalRunner, evalRunValidator)
         
         // Setup headers with API key
         headers = LinkedMultiValueMap()
@@ -67,6 +70,7 @@ class EvalRunServiceTest {
                 evalRun.copy(id = "run_abcdef123456")
             }
             coJustRun { evalRunner.processEvalRun(any()) }
+            coJustRun { evalRunValidator.validate(request) }
         
             // When
             val result = evalRunService.createEvalRun(headers, evalId, request)
@@ -84,6 +88,7 @@ class EvalRunServiceTest {
             // Verify repository calls
             coVerify { 
                 evalRepository.getEval(evalId)
+                evalRunValidator.validate(request)
                 evalRunRepository.createEvalRun(
                     match {
                         it.name == "Test Run" &&
@@ -126,6 +131,50 @@ class EvalRunServiceTest {
         
             // Verify repository call
             coVerify { evalRepository.getEval(evalId) }
+            coVerify(exactly = 0) { evalRunValidator.validate(any()) }
+            coVerify(exactly = 0) { evalRunRepository.createEvalRun(any()) }
+            coVerify(exactly = 0) { evalRunner.processEvalRun(any()) }
+        }
+
+    @Test
+    fun `createEvalRun should throw exception when validation fails`() =
+        runTest {
+            // Given
+            val evalId = "eval_123456"
+            val eval = createSampleEval(evalId)
+            val dataSource =
+                CompletionsRunDataSource(
+                    inputMessages =
+                        TemplateInputMessages(
+                            template = listOf(ChatMessage("user", "{{ item.invalid_field }}")),
+                        ),
+                    model = "gpt-4",
+                    source = FileDataSource(id = "file_123"),
+                )
+            val request =
+                CreateEvalRunRequest(
+                    name = "Test Run",
+                    dataSource = dataSource,
+                    metadata = mapOf("key1" to "value1"),
+                )
+        
+            // Mock responses
+            coEvery { evalRepository.getEval(evalId) } returns eval
+            coEvery { evalRunValidator.validate(request) } throws 
+                IllegalArgumentException("File source data content is not matching with the template used in input_messages")
+        
+            // When/Then
+            val exception =
+                assertThrows<ResponseStatusException> {
+                    evalRunService.createEvalRun(headers, evalId, request)
+                }
+        
+            assertEquals(HttpStatus.BAD_REQUEST, exception.statusCode)
+            assertTrue(exception.reason?.contains("not matching") == true)
+        
+            // Verify calls
+            coVerify { evalRepository.getEval(evalId) }
+            coVerify { evalRunValidator.validate(request) }
             coVerify(exactly = 0) { evalRunRepository.createEvalRun(any()) }
             coVerify(exactly = 0) { evalRunner.processEvalRun(any()) }
         }
@@ -150,6 +199,7 @@ class EvalRunServiceTest {
             // The method first checks if the eval exists, so we need to mock this
             // to allow the code to progress to the point where it extracts the API key
             coEvery { evalRepository.getEval(evalId) } returns createSampleEval(evalId)
+            coJustRun { evalRunValidator.validate(request) }
         
             // When/Then
             val exception =
@@ -161,6 +211,7 @@ class EvalRunServiceTest {
         
             // Verify repository calls - we should reach getEval but not createEvalRun
             coVerify(exactly = 1) { evalRepository.getEval(evalId) }
+            coVerify(exactly = 1) { evalRunValidator.validate(request) }
             coVerify(exactly = 0) { evalRunRepository.createEvalRun(any()) }
         }
 

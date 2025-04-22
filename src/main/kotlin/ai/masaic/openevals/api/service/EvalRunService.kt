@@ -7,6 +7,7 @@ import ai.masaic.openevals.api.model.EvalRunStatus
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.repository.EvalRunRepository
 import ai.masaic.openevals.api.service.runner.EvalRunner
+import ai.masaic.openevals.api.validation.EvalRunValidator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -25,6 +26,7 @@ class EvalRunService(
     private val evalRunRepository: EvalRunRepository,
     private val evalRepository: EvalRepository,
     private val evalRunner: EvalRunner,
+    private val evalRunValidator: EvalRunValidator,
 ) {
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
 
@@ -44,6 +46,13 @@ class EvalRunService(
         val eval =
             evalRepository.getEval(evalId)
                 ?: throw ResponseStatusException(HttpStatus.NOT_FOUND, "Evaluation not found with ID: $evalId")
+        
+        // Validate the request
+        try {
+            evalRunValidator.validate(request)
+        } catch (e: IllegalArgumentException) {
+            throw ResponseStatusException(HttpStatus.BAD_REQUEST, e.message)
+        }
         
         // Extract model from data source if it's a completions run
         val model =

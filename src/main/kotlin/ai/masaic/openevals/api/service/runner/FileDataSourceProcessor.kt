@@ -4,6 +4,7 @@ import ai.masaic.openevals.api.model.*
 import ai.masaic.openresponses.api.service.storage.FileService
 import com.fasterxml.jackson.core.JsonParseException
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.mitchellbosecke.pebble.PebbleEngine
 import com.mitchellbosecke.pebble.template.PebbleTemplate
@@ -22,7 +23,7 @@ class FileDataSourceProcessor(
 ) : DataSourceProcessor {
     private val logger = LoggerFactory.getLogger(FileDataSourceProcessor::class.java)
 
-    /**
+    /**x
      * Checks if this processor can handle the given data source type.
      *
      * @param dataSource The data source to check
@@ -163,29 +164,33 @@ class FileDataSourceProcessor(
         return objectMapper.readValue(writer.toString())
     }
 
-    /**
-     * Validate that each line of the JSONL file is valid JSON.
-     *
-     * @param content The JSONL file content
-     * @return List of validated JSON strings
-     */
-    private fun validateJsonl(content: String): List<String> {
-        val jsonLines = mutableListOf<String>()
-        val lines = content.trim().split("\n")
+    companion object {
+        val objectMapper = jacksonObjectMapper()
 
-        lines.forEachIndexed { index, line ->
-            if (line.isNotBlank()) {
-                try {
-                    // Validate by attempting to parse, but don't store the JsonNode
-                    objectMapper.readTree(line)
-                    // If no exception was thrown, add the original line to the result
-                    jsonLines.add(line)
-                } catch (e: JsonParseException) {
-                    throw IllegalArgumentException("Invalid JSON at line ${index + 1}: ${e.message}")
+        /**
+         * Validate that each line of the JSONL file is valid JSON.
+         *
+         * @param content The JSONL file content
+         * @return List of validated JSON strings
+         */
+        fun validateJsonl(content: String): List<String> {
+            val jsonLines = mutableListOf<String>()
+            val lines = content.trim().split("\n")
+
+            lines.forEachIndexed { index, line ->
+                if (line.isNotBlank()) {
+                    try {
+                        // Validate by attempting to parse, but don't store the JsonNode
+                        objectMapper.readTree(line)
+                        // If no exception was thrown, add the original line to the result
+                        jsonLines.add(line)
+                    } catch (e: JsonParseException) {
+                        throw IllegalArgumentException("Invalid JSON at line ${index + 1}: ${e.message}")
+                    }
                 }
             }
-        }
 
-        return jsonLines
+            return jsonLines
+        }
     }
 } 
