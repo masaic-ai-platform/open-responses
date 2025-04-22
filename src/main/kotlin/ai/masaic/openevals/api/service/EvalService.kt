@@ -2,6 +2,7 @@ package ai.masaic.openevals.api.service
 
 import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.repository.EvalRepository
+import ai.masaic.openevals.api.validation.DataSourceConfigValidator
 import com.openai.core.JsonValue
 import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap
@@ -16,6 +17,8 @@ import java.util.*
 class EvalService(
     private val evalRepository: EvalRepository,
 ) {
+    private val dataSourceConfigValidator = DataSourceConfigValidator()
+
     /**
      * Create a new evaluation.
      *
@@ -27,6 +30,9 @@ class EvalService(
         headers: MultiValueMap<String, String>,
     ): Eval {
         val dataSourceConfigRequest = request.dataSourceConfig
+        
+        // Validate the data source config
+        dataSourceConfigValidator.validate(dataSourceConfigRequest)
 
         val dataSourceConfig =
             when {

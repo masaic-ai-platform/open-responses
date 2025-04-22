@@ -5,9 +5,11 @@ import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import com.openai.core.JsonValue
 import io.mockk.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.util.MultiValueMap
 import java.time.Instant
@@ -68,6 +70,7 @@ class EvalServiceTest {
                         CustomDataSourceConfigRequest(
                             schema =
                                 mapOf(
+                                    "type" to "object",
                                     "properties" to
                                         mapOf(
                                             "text" to mapOf("type" to "string"),
@@ -130,6 +133,7 @@ class EvalServiceTest {
                         CustomDataSourceConfigRequest(
                             schema =
                                 mapOf(
+                                    "type" to "object",
                                     "properties" to
                                         mapOf(
                                             "text" to mapOf("type" to "string"),
@@ -417,6 +421,140 @@ class EvalServiceTest {
                 )
             }
         }
+
+    @Test
+    fun `createEval should throw when CustomDataSourceConfigRequest has invalid schema`() {
+        // Setup
+        val evalId = "eval_123"
+        val headers = LinkedMultiValueMap<String, String>()
+        
+        // Create an invalid request with missing type
+        val invalidSchema =
+            mapOf(
+                "properties" to
+                    mapOf(
+                        "notifications" to mapOf("type" to "string"),
+                    ),
+                "required" to listOf("notifications"),
+            )
+        
+        val createRequest =
+            CreateEvalRequest(
+                name = "Test Eval",
+                dataSourceConfig =
+                    CustomDataSourceConfigRequest(
+                        schema = invalidSchema,
+                        includeSampleSchema = true,
+                    ),
+                testingCriteria =
+                    listOf(
+                        StringCheckGrader(
+                            name = "Test Criterion",
+                            input = "test.item.notifications",
+                            reference = "Expected notification",
+                            operation = StringCheckGrader.Operation.EQUAL,
+                        ),
+                    ),
+            )
+        
+        // Assert
+        assertThrows<IllegalArgumentException> {
+            runBlocking {
+                evalService.createEval(createRequest, headers)
+            }
+        }
+    }
+
+    @Test
+    fun `createEval should throw when CustomDataSourceConfigRequest has empty properties`() {
+        // Setup
+        val evalId = "eval_123"
+        val headers = LinkedMultiValueMap<String, String>()
+        
+        // Create an invalid request with empty properties
+        val invalidSchema =
+            mapOf(
+                "type" to "object",
+                "properties" to emptyMap<String, Any>(),
+                "required" to listOf("notifications"),
+            )
+        
+        val createRequest =
+            CreateEvalRequest(
+                name = "Test Eval",
+                dataSourceConfig =
+                    CustomDataSourceConfigRequest(
+                        schema = invalidSchema,
+                        includeSampleSchema = true,
+                    ),
+                testingCriteria =
+                    listOf(
+                        StringCheckGrader(
+                            name = "Test Criterion",
+                            input = "test.item.notifications",
+                            reference = "Expected notification",
+                            operation = StringCheckGrader.Operation.EQUAL,
+                        ),
+                    ),
+            )
+        
+        // Assert
+        val exception =
+            assertThrows<IllegalArgumentException> {
+                runBlocking {
+                    evalService.createEval(createRequest, headers)
+                }
+            }
+        
+        assert(exception.message!!.contains("properties must contain at least one property"))
+    }
+
+    @Test
+    fun `createEval should throw when CustomDataSourceConfigRequest required doesn't match properties`() {
+        // Setup
+        val evalId = "eval_123"
+        val headers = LinkedMultiValueMap<String, String>()
+        
+        // Create an invalid request where required field doesn't exist in properties
+        val invalidSchema =
+            mapOf(
+                "type" to "object",
+                "properties" to
+                    mapOf(
+                        "notifications" to mapOf("type" to "string"),
+                    ),
+                "required" to listOf("nonExistentField"),
+            )
+        
+        val createRequest =
+            CreateEvalRequest(
+                name = "Test Eval",
+                dataSourceConfig =
+                    CustomDataSourceConfigRequest(
+                        schema = invalidSchema,
+                        includeSampleSchema = true,
+                    ),
+                testingCriteria =
+                    listOf(
+                        StringCheckGrader(
+                            name = "Test Criterion",
+                            input = "test.item.notifications",
+                            reference = "Expected notification",
+                            operation = StringCheckGrader.Operation.EQUAL,
+                        ),
+                    ),
+            )
+        
+        // Assert
+        val exception =
+            assertThrows<IllegalArgumentException> {
+                runBlocking {
+                    evalService.createEval(createRequest, headers)
+                }
+            }
+        
+        assert(exception.message!!.contains("must match a key in item_schema.properties"))
+    }
 
     // Helper method to create a sample Eval for testing
     private fun createSampleEval(

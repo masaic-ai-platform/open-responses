@@ -174,7 +174,6 @@ data class CreateEvalRequest(
     val name: String?,
     @JsonProperty("data_source_config")
     val dataSourceConfig: DataSourceConfig,
-
     @field:NotEmpty @field:Size(min = 1) // at least one testing criterion
     @field:Valid
     @JsonProperty("testing_criteria")
