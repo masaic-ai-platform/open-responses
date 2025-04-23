@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement
  * Uses reactive MongoDB exclusively to avoid unnecessary blocking operations.
  */
 @Configuration
-@EnableReactiveMongoRepositories(basePackages = ["ai.masaic.openresponses.api.repository"])
+@EnableReactiveMongoRepositories(basePackages = ["ai.masaic.openresponses.api.repository", "ai.masaic.openevals.api.repository"])
 @EnableReactiveMongoAuditing
 @EnableTransactionManagement
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "mongodb", matchIfMissing = false)

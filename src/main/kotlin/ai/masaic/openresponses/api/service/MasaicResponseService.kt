@@ -116,6 +116,31 @@ class MasaicResponseService(
             return getDefaultApiUri(headers)
         }
 
+        @JvmStatic
+        fun getApiBaseUri(
+            modelName: String,
+        ): URI {
+            // First check if the model contains url@model or provider@model format
+            if (modelName.contains("@")) {
+                val parts = modelName.split("@", limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank()) {
+                    // Check if the first part is a URL
+                    return if (parts[0].startsWith("http://") || parts[0].startsWith("https://")) {
+                        URI(parts[0])
+                    } else {
+                        // Check if it's a known provider name
+                        val providerUrl = PROVIDER_BASE_URLS[parts[0].lowercase()]
+                        if (providerUrl != null) {
+                            URI(providerUrl)
+                        } else {
+                            getDefaultApiUri()
+                        }
+                    }
+                }
+            }
+            return getDefaultApiUri()
+        }
+
         /**
          * Gets the default API URI based on x-model-provider header or environment variable
          *
@@ -130,6 +155,9 @@ class MasaicResponseService(
                 else -> URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
             }
         }
+
+        @JvmStatic
+        fun getDefaultApiUri(): URI = URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
     }
 
     @Value("\${api.request.timeout:30}")

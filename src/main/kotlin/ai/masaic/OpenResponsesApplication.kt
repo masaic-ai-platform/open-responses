@@ -1,4 +1,4 @@
-package ai.masaic.openresponses
+package ai.masaic
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.autoconfigure.data.mongo.MongoReactiveDataAutoConfiguration

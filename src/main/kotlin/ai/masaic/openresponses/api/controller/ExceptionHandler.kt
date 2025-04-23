@@ -7,6 +7,7 @@ import ai.masaic.openresponses.api.service.ResponseStreamingException
 import ai.masaic.openresponses.api.service.ResponseTimeoutException
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
 import com.openai.errors.BadRequestException
@@ -22,6 +23,7 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.bind.support.WebExchangeBindException
 import org.springframework.web.context.request.WebRequest
 import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.server.ServerWebInputException
@@ -468,6 +470,69 @@ class GlobalExceptionHandler(
             )
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
     }
+
+    @ExceptionHandler(WebExchangeBindException::class)
+    fun handleValidationErrors(
+        ex: WebExchangeBindException,
+    ): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "Validation exception: ${ex.message}" }
+        // first (or all) field‑level errors from Bean‑Validation
+        val first = ex.bindingResult.fieldErrors.firstOrNull()
+
+        val fieldPath = first?.field ?: "request"
+        val defaultMessage = first?.defaultMessage ?: "Validation failed"
+
+        val error =
+            ErrorResponse(
+                type = "invalid_request",
+                message = "$fieldPath $defaultMessage",
+                code = HttpStatus.BAD_REQUEST.value().toString(),
+                timestamp = System.currentTimeMillis(),
+            )
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+    }
+
+    @ExceptionHandler(ServerWebInputException::class)
+    fun handleJsonBindingErrors(
+        ex: ServerWebInputException,
+    ): ResponseEntity<ErrorResponse> {
+        logger.error(ex) { "Json binding errors: ${ex.message}" }
+        val missing =
+            (ex.cause?.cause as? MismatchedInputException)
+                ?.humanReadablePath() // e.g. "testing_criteria[0].name"
+
+        val error =
+            ErrorResponse(
+                type = "invalid_request",
+                message =
+                    missing
+                        ?.let { "Missing required parameter: '$it'" }
+                        ?: "Malformed JSON payload",
+                // fallback if path is absent
+                code = HttpStatus.BAD_REQUEST.value().toString(),
+                timestamp = System.currentTimeMillis(),
+            )
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+    }
+
+    /** Converts Jackson’s path list to dot‑plus‑bracket notation, e.g.
+     *  /testing_criteria/0/name  ->  testing_criteria[0].name
+     */
+    private fun JsonMappingException.humanReadablePath(): String =
+        buildString {
+            path.forEach { ref ->
+                when {
+                    ref.fieldName != null -> { // object property
+                        if (isNotEmpty()) append('.') // add dot only between segments
+                        append(ref.fieldName)
+                    }
+                    ref.index >= 0 -> // array element
+                        append("[${ref.index}]")
+                }
+            }
+        }
 }
 
 @JsonIgnoreProperties(ignoreUnknown = true)
