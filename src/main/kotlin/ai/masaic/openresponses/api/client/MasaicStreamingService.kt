@@ -35,7 +35,7 @@ class MasaicStreamingService(
     private val responseStore: ResponseStore,
     // Make these constructor params for easy mocking:
     private val allowedMaxToolCalls: Int = System.getenv("OPEN_RESPONSES_MAX_TOOL_CALLS")?.toInt() ?: 30,
-    private val maxDuration: Long = System.getenv("OPEN_RESPONSES__MAX_STREAMING_TIMEOUT")?.toLong() ?: 300000L, // 300 seconds
+    private val maxDuration: Long = System.getenv("OPEN_RESPONSES_MAX_STREAMING_TIMEOUT")?.toLong() ?: 300000L, // 300 seconds
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
     private val telemetryService: TelemetryService,
