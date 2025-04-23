@@ -84,14 +84,14 @@ class InMemoryResponseStore(
         
         val existingInputItems = inputItemsMap.getIfPresent(responseId)
         if (existingInputItems != null) {
-            inputItemsMap.put(responseId, existingInputItems.plus(inputMessageItems))
+            inputItemsMap.put(responseId, existingInputItems.plus(inputMessageItems.filter { it !in existingInputItems }))
         } else {
             inputItemsMap.put(responseId, inputMessageItems)
         }
 
         val existingOutputItems = outputInputItemsMap.getIfPresent(responseId)
         if (existingOutputItems != null) {
-            outputInputItemsMap.put(responseId, existingOutputItems.plus(outputMessageItems))
+            outputInputItemsMap.put(responseId, existingOutputItems.plus(outputMessageItems.filter { it !in existingOutputItems }))
         } else {
             outputInputItemsMap.put(responseId, outputMessageItems)
         }

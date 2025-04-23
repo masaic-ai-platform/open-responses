@@ -83,8 +83,8 @@ class MongoResponseStore(
                 .save(
                     existingDoc.copy(
                         responseJson = responseJson,
-                        inputItems = existingDoc.inputItems.plus(inputMessageItems),
-                        outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems),
+                        inputItems = existingDoc.inputItems.plus(inputMessageItems.filter { it !in existingDoc.inputItems }),
+                        outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems.filter { it !in existingDoc.outputInputItems }),
                     ),
                     "responses",
                 ).awaitFirst()
