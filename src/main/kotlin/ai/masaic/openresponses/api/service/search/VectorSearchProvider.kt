@@ -21,6 +21,7 @@ interface VectorSearchProvider {
      * @param chunkingStrategy Optional chunking strategy to use when splitting the text
      * @param preDeleteIfExists Whether to check and delete existing vectors for this file ID before indexing
      * @param attributes Additional metadata attributes to include with each vector
+     * @param vectorStoreId The ID of the vector store this file belongs to
      * @return True if indexing was successful, false otherwise
      */
     fun indexFile(
@@ -30,6 +31,7 @@ interface VectorSearchProvider {
         chunkingStrategy: ChunkingStrategy? = null,
         preDeleteIfExists: Boolean = true,
         attributes: Map<String, Any>? = null,
+        vectorStoreId: String,
     ): Boolean
 
     /**
@@ -41,6 +43,7 @@ interface VectorSearchProvider {
      * @param filename The name of the file
      * @param chunkingStrategy Optional chunking strategy to use when splitting the text
      * @param attributes Additional metadata attributes to include with each vector
+     * @param vectorStoreId The ID of the vector store this file belongs to
      * @return True if indexing was successful, false otherwise
      */
     fun indexFile(
@@ -49,7 +52,8 @@ interface VectorSearchProvider {
         filename: String,
         chunkingStrategy: ChunkingStrategy? = null,
         attributes: Map<String, Any>? = null,
-    ): Boolean = indexFile(fileId, content, filename, chunkingStrategy, true, attributes)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, content, filename, chunkingStrategy, true, attributes, vectorStoreId)
 
     /**
      * Indexes a file for vector search.
@@ -59,6 +63,7 @@ interface VectorSearchProvider {
      * @param content The file content as an InputStream
      * @param filename The name of the file
      * @param chunkingStrategy Optional chunking strategy to use when splitting the text
+     * @param vectorStoreId The ID of the vector store this file belongs to
      * @return True if indexing was successful, false otherwise
      */
     fun indexFile(
@@ -66,7 +71,8 @@ interface VectorSearchProvider {
         content: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy? = null,
-    ): Boolean = indexFile(fileId, content, filename, chunkingStrategy, true, null)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, content, filename, chunkingStrategy, true, null, vectorStoreId)
 
     /**
      * Searches for similar content in the vector store.

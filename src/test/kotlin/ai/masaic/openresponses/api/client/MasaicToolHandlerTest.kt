@@ -121,7 +121,7 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true), mockk(relaxed = true))
 
         // Then: We expect 2 items in the result:
         // 1) The original user input as a ResponseInputItem
@@ -184,7 +184,16 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
         // Let's pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction") } returns mockk()
-        coEvery { toolService.executeTool("myToolFunction", "{\"key\":\"value\"}", any()) } returns "Tool execution result"
+        coEvery {
+            toolService.executeTool(
+                "myToolFunction",
+                "{\"key\":\"value\"}",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns "Tool execution result"
 
         // Manually set the attributes since we're mocking the observation
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
@@ -192,7 +201,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "tool-call-id-123"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
         // Then: We expect:
         // 1) The original user input
@@ -266,14 +275,14 @@ class MasaicToolHandlerTest {
         every { toolService.getFunctionTool("errorTool") } returns mockk()
 
         // Setup direct exception throw when the tool executes
-        coEvery { toolService.executeTool("errorTool", any(), any()) } throws RuntimeException("Tool execution failed")
+        coEvery { toolService.executeTool("errorTool", any(), any(), mockk(), any(), any()) } throws RuntimeException("Tool execution failed")
 
         // Manually set the error attribute for testing purposes since we're using a mock
         capturedAttributes[errorTypeKey] = "RuntimeException"
 
         // When/Then - exception should be propagated
         assertThrows<RuntimeException> {
-            handler.handleMasaicToolCall(chatCompletion, params)
+            handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
         }
 
         // Skip the assertion on error message since it's being set differently in the actual code
@@ -328,7 +337,7 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, mockk())
+        val items = handler.handleMasaicToolCall(params, response, mockk(), mockk(), mockk())
 
         // Then
         // 1) The user input as a ResponseInputItem
@@ -406,7 +415,16 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
         // Let’s pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction") } returns mockk()
-        coEvery { toolService.executeTool("myToolFunction", "{\"foo\":\"bar\"}", any()) } returns "Executed tool"
+        coEvery {
+            toolService.executeTool(
+                "myToolFunction",
+                "{\"foo\":\"bar\"}",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns "Executed tool"
 
         // Mock event emitter function
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
@@ -417,7 +435,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "function-call-id"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then
         // 1) The user input
@@ -486,7 +504,7 @@ class MasaicToolHandlerTest {
         every { toolService.getFunctionTool("unsupportedTool") } returns null
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
         // Then: We expect the unsupported tool call to be parked
         // 1) The original user input as a ResponseInputItem
@@ -564,14 +582,14 @@ class MasaicToolHandlerTest {
         // Configure tools
         every { toolService.getFunctionTool("toolOne") } returns mockk()
         every { toolService.getFunctionTool("toolTwo") } returns mockk()
-        coEvery { toolService.executeTool("toolOne", "{\"param\":\"value1\"}", any()) } returns "Result from tool one"
-        coEvery { toolService.executeTool("toolTwo", "{\"param\":\"value2\"}", any()) } returns "Result from tool two"
+        coEvery { toolService.executeTool("toolOne", "{\"param\":\"value1\"}", any(), any(), any(), any()) } returns "Result from tool one"
+        coEvery { toolService.executeTool("toolTwo", "{\"param\":\"value2\"}", any(), any(), any(), any()) } returns "Result from tool two"
 
         // Manually set the attributes for testing purposes
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
         // Then: We expect 6 items:
         // 1) Original user message
@@ -640,13 +658,13 @@ class MasaicToolHandlerTest {
 
         // Return null from tool execution
         every { toolService.getFunctionTool("nullResultTool") } returns mockk()
-        coEvery { toolService.executeTool("nullResultTool", any(), any()) } returns null
+        coEvery { toolService.executeTool("nullResultTool", any(), any(), any(), any(), any()) } returns null
 
         // Set attributes for testing
         capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
         // Then: We expect only 2 items:
         // 1) Original user message
@@ -723,7 +741,16 @@ class MasaicToolHandlerTest {
 
         // Let's pretend the toolService recognizes and executes "newFunction"
         every { toolService.getFunctionTool("newFunction") } returns mockk()
-        coEvery { toolService.executeTool("newFunction", "{\"param\":\"new\"}", any()) } returns "New function result"
+        coEvery {
+            toolService.executeTool(
+                "newFunction",
+                "{\"param\":\"new\"}",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns "New function result"
 
         // Mock event emitter function
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
@@ -732,7 +759,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "newFunction"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then
         // We expect:
@@ -799,7 +826,7 @@ class MasaicToolHandlerTest {
 
         // Configure tool service
         every { toolService.getFunctionTool("telemetryTool") } returns mockk()
-        coEvery { toolService.executeTool("telemetryTool", any(), any()) } returns "Telemetry result"
+        coEvery { toolService.executeTool("telemetryTool", any(), any(), any(), any(), any()) } returns "Telemetry result"
 
         // Create a spy telemetry service to verify attributes
         val telemetrySpy = spyk(telemetryService)
@@ -825,7 +852,7 @@ class MasaicToolHandlerTest {
         }
 
         // When
-        val items = handlerWithSpy.handleMasaicToolCall(chatCompletion, params)
+        val items = handlerWithSpy.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
         // Then
         // Verify the attributes required for the OpenTelemetry GenAI semantic conventions
@@ -859,7 +886,7 @@ class MasaicToolHandlerTest {
         every { params.input().asText() } returns "User message"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
         // Then: We expect only the user input message as there are no choices to process
         assertEquals(1, items.size)
@@ -918,10 +945,19 @@ class MasaicToolHandlerTest {
 
         // Mock tool service
         every { toolService.getFunctionTool("mixedContentTool") } returns mockk()
-        coEvery { toolService.executeTool("mixedContentTool", "{\"param\":\"mixed\"}", any()) } returns "Mixed result"
+        coEvery {
+            toolService.executeTool(
+                "mixedContentTool",
+                "{\"param\":\"mixed\"}",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns "Mixed result"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true), mockk(relaxed = true))
 
         // Then: We expect 4 items in the result:
         // 1) The original user input as a ResponseInputItem
@@ -980,7 +1016,7 @@ class MasaicToolHandlerTest {
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then: We expect only the user input message since the empty message content should be filtered out
         assertEquals(1, items.size)
@@ -1044,13 +1080,22 @@ class MasaicToolHandlerTest {
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
         every { toolService.getFunctionTool("parentObsTool") } returns mockk()
-        coEvery { toolService.executeTool("parentObsTool", "{\"param\":\"parentTest\"}", any()) } returns "Parent observation test result"
+        coEvery {
+            toolService.executeTool(
+                "parentObsTool",
+                "{\"param\":\"parentTest\"}",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns "Parent observation test result"
 
         // Create a mock parent observation
         val parentObservation = mockk<Observation>()
 
         // Call handler with explicit parent observation
-        val items = handler.handleMasaicToolCall(chatCompletion, params, parentObservation)
+        val items = handler.handleMasaicToolCall(chatCompletion, params, parentObservation, mockk())
 
         // Then verify parent observation was passed to the withClientObservation method
         verify {
@@ -1117,11 +1162,20 @@ class MasaicToolHandlerTest {
         every { toolService.getFunctionTool("malformedArgsTool") } returns mockk()
 
         // Tool service throws error when parsing malformed JSON
-        coEvery { toolService.executeTool("malformedArgsTool", "{invalid json", any()) } throws IllegalArgumentException("Malformed JSON arguments")
+        coEvery {
+            toolService.executeTool(
+                "malformedArgsTool",
+                "{invalid json",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } throws IllegalArgumentException("Malformed JSON arguments")
 
         // When & Then - verify exception is propagated
         assertThrows<IllegalArgumentException> {
-            handler.handleMasaicToolCall(chatCompletion, params)
+            handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
         }
 
         // Verify observation recorded the error
@@ -1202,13 +1256,22 @@ class MasaicToolHandlerTest {
 
         // Tool configuration
         every { toolService.getFunctionTool("preserveFunction") } returns mockk()
-        coEvery { toolService.executeTool("preserveFunction", "{\"preserve\":\"existing\"}", any()) } returns "Preserved result"
+        coEvery {
+            toolService.executeTool(
+                "preserveFunction",
+                "{\"preserve\":\"existing\"}",
+                any(),
+                any(),
+                any(),
+                any(),
+            )
+        } returns "Preserved result"
 
         // Mock event emitter function
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter)
+        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then: We expect all existing items to be preserved and new items added
         // 1) Previous user message

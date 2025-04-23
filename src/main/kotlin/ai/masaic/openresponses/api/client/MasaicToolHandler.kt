@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
@@ -39,6 +40,7 @@ class MasaicToolHandler(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
         parentObservation: Observation? = null,
+        openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
         val responseInputItems =
@@ -117,7 +119,7 @@ class MasaicToolHandler(
                         )
 
                         // Execute the tool using the observation API
-                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), parentObservation, params) { toolResult ->
+                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), mapOf("toolId" to tool.id()), parentObservation, params, openAIClient, {}) { toolResult ->
                             if (toolResult != null) {
                                 logger.debug { "Tool execution successful for ${function.name()}" }
                                 responseInputItems.add(
@@ -169,8 +171,11 @@ class MasaicToolHandler(
         toolName: String,
         arguments: String,
         toolId: String,
+        toolMetadata: Map<String, Any>,
         parentObservation: Observation? = null,
         params: ResponseCreateParams,
+        openAIClient: OpenAIClient,
+        eventEmitter: ((ServerSentEvent<String>) -> Unit),
         resultHandler: (String?) -> Unit,
     ) {
         telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
@@ -178,7 +183,7 @@ class MasaicToolHandler(
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
-                val toolResult = runBlocking { toolService.executeTool(toolName, arguments, params) }
+                val toolResult = runBlocking { toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata) }
                 resultHandler(toolResult)
             } catch (e: Exception) {
                 observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
@@ -201,6 +206,7 @@ class MasaicToolHandler(
         response: Response,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
         parentObservation: Observation? = null,
+        openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
         val responseInputItems =
@@ -290,7 +296,7 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), function.arguments(), function.id(), parentObservation, params) { toolResult ->
+                executeToolWithObservation(function.name(), function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), parentObservation, params, openAIClient, eventEmitter) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

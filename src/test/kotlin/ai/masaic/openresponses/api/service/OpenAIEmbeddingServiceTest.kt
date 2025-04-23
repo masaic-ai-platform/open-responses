@@ -16,7 +16,21 @@ class OpenAIEmbeddingServiceTest {
 
     @BeforeEach
     fun setup() {
-        openAiEmbeddingModel = mockk()
+        openAiEmbeddingModel =
+            mockk {
+                every { embedAll(any()) } returns
+                    mockk {
+                        every { content() } returns
+                            listOf(
+                                mockk {
+                                    every { vectorAsList() } returns listOf(0.1f, 0.2f, 0.3f)
+                                },
+                                mockk {
+                                    every { vectorAsList() } returns listOf(0.4f, 0.5f, 0.6f)
+                                },
+                            )
+                    }
+            }
         
         // Create the service with test values
         embeddingService =
@@ -94,8 +108,7 @@ class OpenAIEmbeddingServiceTest {
 
         // Then
         assertEquals(listOf(embedding1, embedding2), result)
-        verify(exactly = 1) { openAiEmbeddingModel.embed("First text") }
-        verify(exactly = 1) { openAiEmbeddingModel.embed("Second text") }
+        verify(exactly = 1) { openAiEmbeddingModel.embedAll(any()) }
     }
 
     @Test

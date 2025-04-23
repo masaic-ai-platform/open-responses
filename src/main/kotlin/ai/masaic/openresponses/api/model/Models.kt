@@ -47,6 +47,25 @@ data class FileSearchTool(
 ) : Tool
 
 /**
+ * Tool implementation for agentic search operations.
+ *
+ * @property type The type identifier for this tool, should be "agentic_search"
+ * @property filters Optional filters to apply to the search
+ * @property maxNumResults Maximum number of results to return
+ * @property vectorStoreIds List of vector store IDs to search in
+ */
+data class AgenticSeachTool(
+    override val type: String,
+    val filters: Any? = null,
+    @JsonProperty("max_num_results")
+    val maxNumResults: Int = 20,
+    @JsonProperty("vector_store_ids")
+    val vectorStoreIds: List<String>? = null,
+    @JsonProperty("max_iterations")
+    val maxIterations: Int = 5,
+) : Tool
+
+/**
  * Configuration for ranking search results.
  *
  * @property ranker The ranking algorithm to use
@@ -74,6 +93,7 @@ data class RankingOptions(
     JsonSubTypes.Type(value = WebSearchTool::class, name = "web_search_preview"),
     JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search"),
     JsonSubTypes.Type(value = FunctionTool::class, name = "function"),
+    JsonSubTypes.Type(value = AgenticSeachTool::class, name = "agentic_search"),
 )
 interface Tool {
     val type: String
@@ -287,6 +307,34 @@ data class InputMessageItem(
         } else if (content is Map<*, *>?) {
             content = objectMapper.convertValue(content, InputMessageItemContent::class.java)
         }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as InputMessageItem
+
+        if (role != other.role) return false
+        if (content != other.content) return false
+        if (arguments != other.arguments) return false
+        if (name != other.name) return false
+        if (tool_call_id != other.tool_call_id) return false
+        if (call_id != other.call_id) return false
+        if (output != other.output) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = role?.hashCode() ?: 0
+        result = 31 * result + (content?.hashCode() ?: 0)
+        result = 31 * result + (arguments?.hashCode() ?: 0)
+        result = 31 * result + (name?.hashCode() ?: 0)
+        result = 31 * result + (tool_call_id?.hashCode() ?: 0)
+        result = 31 * result + (call_id?.hashCode() ?: 0)
+        result = 31 * result + (output?.hashCode() ?: 0)
+        return result
     }
 }
 

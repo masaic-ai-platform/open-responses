@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryResponseStore(
     private val objectMapper: ObjectMapper,
+    private val toolService: ToolService,
     @Value("\${open-responses.store.cache-size:10000}") private val cacheSize: Long,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
@@ -63,7 +65,7 @@ class InMemoryResponseStore(
                             objectMapper.convertValue(outputItem.message().get(), InputMessageItem::class.java)
                         }
                         // Handle function calls
-                        outputItem.isFunctionCall() -> {
+                        outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name()) == null) -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
                                 id = functionCall.id(),
@@ -82,14 +84,14 @@ class InMemoryResponseStore(
         
         val existingInputItems = inputItemsMap.getIfPresent(responseId)
         if (existingInputItems != null) {
-            inputItemsMap.put(responseId, existingInputItems.plus(inputMessageItems))
+            inputItemsMap.put(responseId, existingInputItems.plus(inputMessageItems.filter { it !in existingInputItems }))
         } else {
             inputItemsMap.put(responseId, inputMessageItems)
         }
 
         val existingOutputItems = outputInputItemsMap.getIfPresent(responseId)
         if (existingOutputItems != null) {
-            outputInputItemsMap.put(responseId, existingOutputItems.plus(outputMessageItems))
+            outputInputItemsMap.put(responseId, existingOutputItems.plus(outputMessageItems.filter { it !in existingOutputItems }))
         } else {
             outputInputItemsMap.put(responseId, outputMessageItems)
         }

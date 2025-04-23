@@ -110,7 +110,7 @@ class MasaicOpenAiResponseServiceImpl(
             return responseOrCompletions
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, parentObservation)
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, parentObservation, client)
         val updatedParams =
             params
                 .toBuilder()

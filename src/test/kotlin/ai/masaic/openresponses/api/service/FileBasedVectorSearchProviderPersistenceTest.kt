@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.FileBasedVectorSearchProvider
+import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
@@ -40,6 +41,7 @@ class FileBasedVectorSearchProviderPersistenceTest {
     private lateinit var embeddingService: EmbeddingService
     private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
     
     // File IDs used across tests to simulate persistence
     private val fileId1 = "persist-test-1"
@@ -54,7 +56,13 @@ class FileBasedVectorSearchProviderPersistenceTest {
         
         // Create mocks and configuration that will be used for all tests
         embeddingService = mockk()
+        hybridSearchServiceHelper = mockk(relaxed = true)
         every { embeddingService.embedText(any<String>()) } returns listOf(0.1f, 0.2f, 0.3f)
+        every { embeddingService.embedTexts(any()) } returns
+            listOf(
+                listOf(0.1f, 0.2f, 0.3f),
+                listOf(0.4f, 0.5f, 0.6f),
+            )
         every { embeddingService.calculateSimilarity(any<List<Float>>(), any<List<Float>>()) } returns 0.85f
         
         vectorSearchProperties =
@@ -91,15 +99,16 @@ class FileBasedVectorSearchProviderPersistenceTest {
                 embeddingService,
                 objectMapper,
                 tempDirPath.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Add first document
         val content1 = "This is the first test document that should persist across application restarts."
-        provider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt")
+        provider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt", null, "test")
         
         // Add second document
         val content2 = "This is the second test document with different content."
-        provider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt")
+        provider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt", null, "test")
         
         // Verify indexing worked in this session - using a general query should find both
         val results = provider.searchSimilar("test document", rankingOptions = null)
@@ -123,6 +132,7 @@ class FileBasedVectorSearchProviderPersistenceTest {
                 embeddingService,
                 objectMapper,
                 tempDirPath.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Verify documents can be found after "restart"
@@ -163,6 +173,7 @@ class FileBasedVectorSearchProviderPersistenceTest {
                 embeddingService,
                 objectMapper,
                 tempDirPath.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Delete the first document
@@ -192,6 +203,7 @@ class FileBasedVectorSearchProviderPersistenceTest {
                 embeddingService,
                 objectMapper,
                 tempDirPath.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Verify only the second document is still available

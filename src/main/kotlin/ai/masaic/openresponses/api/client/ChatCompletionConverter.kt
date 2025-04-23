@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.tool.AgenticSearchResponse
 import ai.masaic.openresponses.tool.FileSearchResponse
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -94,19 +95,98 @@ object ChatCompletionConverter {
                     .last()
                     .asFunctionCallOutput()
             val callId = functionCallOutput.callId()
-            val functionCall =
+            val fileSearchFunctionCall =
                 params.input().asResponse().filter {
                     it.isFunctionCall() &&
                         it.asFunctionCall().name() == "file_search" &&
                         it.asFunctionCall().callId() == callId
                 }
 
-            if (functionCall.isNotEmpty()) {
+            val agenticSearchFunctionCall =
+                params.input().asResponse().filter {
+                    it.isFunctionCall() &&
+                        it.asFunctionCall().name() == "agentic_search" &&
+                        it.asFunctionCall().callId() == callId
+                }
+
+            if (fileSearchFunctionCall.isNotEmpty()) {
                 try {
                     val response =
                         objectMapper.readValue(
                             functionCallOutput.output().toString(),
                             FileSearchResponse::class.java,
+                        )
+
+                    val annotations =
+                        response.data.flatMap { it.annotations }.map {
+                            ResponseOutputText.Annotation.ofFileCitation(
+                                ResponseOutputText.Annotation.FileCitation
+                                    .builder()
+                                    .type(JsonValue.from(it.type))
+                                    .index(JsonValue.from(it.index))
+                                    .fileId(it.file_id)
+                                    .putAdditionalProperty("filename", JsonValue.from(it.filename))
+                                    .build(),
+                            )
+                        }
+
+                    val list = outputItems.toMutableList()
+                    val last = list.removeLast()
+                    list.add(
+                        ResponseOutputItem.ofMessage(
+                            ResponseOutputMessage
+                                .builder()
+                                .addContent(
+                                    ResponseOutputMessage.Content.ofOutputText(
+                                        ResponseOutputText
+                                            .builder()
+                                            .text(
+                                                last
+                                                    .asMessage()
+                                                    .content()
+                                                    .last()
+                                                    .asOutputText()
+                                                    .text(),
+                                            ).annotations(annotations)
+                                            .build(),
+                                    ),
+                                ).id(UUID.randomUUID().toString())
+                                .status(ResponseOutputMessage.Status.COMPLETED)
+                                .build(),
+                        ),
+                    )
+
+                    return Response
+                        .builder()
+                        .id(id)
+                        .createdAt(Instant.now().toEpochMilli().toDouble())
+                        .error(null) // Required field, null since we assume no error
+                        .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
+                        .instructions(params.instructions())
+                        .metadata(params.metadata())
+                        .model(params.model())
+                        .object_(JsonValue.from("response")) // Standard value
+                        .temperature(params.temperature())
+                        .parallelToolCalls(params._parallelToolCalls())
+                        .tools(params._tools())
+                        .toolChoice(convertToolChoice(params.toolChoice()))
+                        .topP(params.topP())
+                        .maxOutputTokens(params.maxOutputTokens())
+                        .previousResponseId(params.previousResponseId())
+                        .reasoning(params.reasoning())
+                        .status(status)
+                        .output(list)
+                        .build()
+                } catch (e: JsonProcessingException) {
+                    // did not succeed to parse the function call. Continue without annotation parse
+                    log.warn("Failed to parse function call output: ${e.message}")
+                }
+            } else if (agenticSearchFunctionCall.isNotEmpty()) {
+                try {
+                    val response =
+                        objectMapper.readValue(
+                            functionCallOutput.output().toString(),
+                            AgenticSearchResponse::class.java,
                         )
 
                     val annotations =
@@ -353,19 +433,60 @@ object ChatCompletionConverter {
             if (inputResponse.last().isFunctionCallOutput()) {
                 val functionCallOutput = inputResponse.last().asFunctionCallOutput()
                 val callId = functionCallOutput.callId()
-                val functionCall =
+                val fileSearchFunctionCall =
                     inputResponse.filter {
                         it.isFunctionCall() &&
                             it.asFunctionCall().name() == "file_search" &&
                             it.asFunctionCall().callId() == callId
                     }
 
-                if (functionCall.isNotEmpty()) {
+                val agentSearchFunctionCall =
+                    inputResponse.filter {
+                        it.isFunctionCall() &&
+                            it.asFunctionCall().name() == "agentic_search" &&
+                            it.asFunctionCall().callId() == callId
+                    }
+
+                if (fileSearchFunctionCall.isNotEmpty()) {
                     try {
                         val response =
                             objectMapper.readValue(
                                 functionCallOutput.output().toString(),
                                 FileSearchResponse::class.java,
+                            )
+
+                        val annotations =
+                            response.data.flatMap { it.annotations }.map {
+                                ResponseOutputText.Annotation.ofFileCitation(
+                                    ResponseOutputText.Annotation.FileCitation
+                                        .builder()
+                                        .type(JsonValue.from(it.type))
+                                        .index(JsonValue.from(it.index))
+                                        .fileId(it.file_id)
+                                        .putAdditionalProperty("filename", JsonValue.from(it.filename))
+                                        .build(),
+                                )
+                            }
+
+                        return ResponseOutputItem.ofMessage(
+                            ResponseOutputMessage
+                                .builder()
+                                .addContent(
+                                    builder.text(messageText).annotations(annotations).build(),
+                                ).id(UUID.randomUUID().toString())
+                                .status(ResponseOutputMessage.Status.COMPLETED)
+                                .build(),
+                        )
+                    } catch (e: JsonProcessingException) {
+                        // did not succeed to parse the function call. Continue without annotation parse
+                        log.warn("Failed to parse function call output: ${e.message}")
+                    }
+                } else if (agentSearchFunctionCall.isNotEmpty()) {
+                    try {
+                        val response =
+                            objectMapper.readValue(
+                                functionCallOutput.output().toString(),
+                                AgenticSearchResponse::class.java,
                             )
 
                         val annotations =

@@ -10,6 +10,7 @@ import dev.langchain4j.store.embedding.filter.comparison.IsLessThan
 import dev.langchain4j.store.embedding.filter.comparison.IsLessThanOrEqualTo
 import dev.langchain4j.store.embedding.filter.comparison.IsNotEqualTo
 import org.slf4j.LoggerFactory
+import org.springframework.data.mongodb.core.query.Criteria
 
 /**
  * Utility class for working with filter objects.
@@ -52,6 +53,62 @@ object FilterUtils {
         
         return result
     }
+
+    /**
+     * Helper method to build MongoDB Criteria from Filter
+     * @throws IllegalArgumentException if a filter cannot be parsed
+     */
+    fun buildCriteriaFromFilter(filter: Filter): Criteria? =
+        when (filter) {
+            is ComparisonFilter -> {
+                when (filter.type) {
+                    "eq" -> Criteria.where(filter.key).`is`(filter.value)
+                    "ne" -> Criteria.where(filter.key).ne(filter.value)
+                    "gt" -> Criteria.where(filter.key).gt(filter.value)
+                    "gte" -> Criteria.where(filter.key).gte(filter.value)
+                    "lt" -> Criteria.where(filter.key).lt(filter.value)
+                    "lte" -> Criteria.where(filter.key).lte(filter.value)
+                    "in" -> {
+                        val values =
+                            filter.value as? List<*> 
+                                ?: throw IllegalArgumentException("Invalid 'in' filter value. Expected List but got: ${filter.value}")
+                        Criteria.where(filter.key).`in`(values)
+                    }
+                    "nin" -> {
+                        val values =
+                            filter.value as? List<*> 
+                                ?: throw IllegalArgumentException("Invalid 'nin' filter value. Expected List but got: ${filter.value}")
+                        Criteria.where(filter.key).nin(values)
+                    }
+                    else -> throw IllegalArgumentException("Unsupported comparison type: ${filter.type}")
+                }
+            }
+            is CompoundFilter -> {
+                if (filter.filters.isEmpty()) {
+                    throw IllegalArgumentException("Compound filter must contain at least one sub-filter")
+                }
+                
+                val criteriaList =
+                    filter.filters.map { subFilter ->
+                        buildCriteriaFromFilter(subFilter) 
+                            ?: throw IllegalArgumentException("Failed to parse sub-filter: $subFilter")
+                    }
+                
+                when (filter.type) {
+                    "and" -> {
+                        // Create a flatter criteria structure to avoid nested $and operators
+                        // which cause the MongoDB error
+                        Criteria().andOperator(*criteriaList.toTypedArray())
+                    }
+                    "or" -> {
+                        // Similarly for OR, use a flatter structure
+                        Criteria().orOperator(*criteriaList.toTypedArray())
+                    }
+                    else -> throw IllegalArgumentException("Unsupported compound filter type: ${filter.type}")
+                }
+            }
+            else -> throw IllegalArgumentException("Unsupported filter type: ${filter::class.simpleName}")
+        }
 
     /**
      * Evaluates a comparison filter against entity attributes.
@@ -168,6 +225,7 @@ object FilterUtils {
 
     /**
      * Converts a Filter to a Qdrant filter for langchain4j.
+     * @throws IllegalArgumentException if the filter cannot be parsed
      */
     fun convertToQdrantFilter(filter: Filter?): dev.langchain4j.store.embedding.filter.Filter? {
         if (filter == null) return null
@@ -175,17 +233,21 @@ object FilterUtils {
         log.debug("Converting filter to Qdrant filter: $filter")
         
         return when (filter) {
-            is ComparisonFilter -> convertComparisonToQdrantFilter(filter)
-            is CompoundFilter -> convertCompoundToQdrantFilter(filter)
+            is ComparisonFilter ->
+                convertComparisonToQdrantFilter(filter)
+                    ?: throw IllegalArgumentException("Failed to convert comparison filter: $filter. This may impact security.")
+            is CompoundFilter ->
+                convertCompoundToQdrantFilter(filter)
+                    ?: throw IllegalArgumentException("Failed to convert compound filter: $filter. This may impact security.")
             else -> {
-                log.warn("Unknown filter type for Qdrant conversion: ${filter.javaClass.name}")
-                null
+                throw IllegalArgumentException("Unknown filter type for Qdrant conversion: ${filter.javaClass.name}")
             }
         }
     }
 
     /**
      * Converts a ComparisonFilter to a Qdrant filter.
+     * @throws IllegalArgumentException if the comparison type is not supported or the value has an incompatible type
      */
     private fun convertComparisonToQdrantFilter(filter: ComparisonFilter): dev.langchain4j.store.embedding.filter.Filter? {
         val key = filter.key
@@ -201,8 +263,7 @@ object FilterUtils {
                     @Suppress("UNCHECKED_CAST")
                     IsGreaterThan(key, value as Comparable<Any>)
                 } else {
-                    log.warn("Value for 'gt' filter must be Comparable: ${value.javaClass}")
-                    null
+                    throw IllegalArgumentException("Value for 'gt' filter must be Comparable: ${value.javaClass}")
                 }
             }
             "gte" -> {
@@ -210,8 +271,7 @@ object FilterUtils {
                     @Suppress("UNCHECKED_CAST")
                     IsGreaterThanOrEqualTo(key, value as Comparable<Any>)
                 } else {
-                    log.warn("Value for 'gte' filter must be Comparable: ${value.javaClass}")
-                    null
+                    throw IllegalArgumentException("Value for 'gte' filter must be Comparable: ${value.javaClass}")
                 }
             }
             "lt" -> {
@@ -219,8 +279,7 @@ object FilterUtils {
                     @Suppress("UNCHECKED_CAST")
                     IsLessThan(key, value as Comparable<Any>)
                 } else {
-                    log.warn("Value for 'lt' filter must be Comparable: ${value.javaClass}")
-                    null
+                    throw IllegalArgumentException("Value for 'lt' filter must be Comparable: ${value.javaClass}")
                 }
             }
             "lte" -> {
@@ -228,51 +287,65 @@ object FilterUtils {
                     @Suppress("UNCHECKED_CAST")
                     IsLessThanOrEqualTo(key, value as Comparable<Any>)
                 } else {
-                    log.warn("Value for 'lte' filter must be Comparable: ${value.javaClass}")
-                    null
+                    throw IllegalArgumentException("Value for 'lte' filter must be Comparable: ${value.javaClass}")
                 }
             }
             else -> {
-                log.warn("Unsupported comparison type for Qdrant: ${filter.type}")
-                null
+                throw IllegalArgumentException("Unsupported comparison type for Qdrant: ${filter.type}")
             }
         }
     }
 
     /**
      * Converts a CompoundFilter to a Qdrant filter.
+     * @throws IllegalArgumentException if the compound filter type is not supported or contains no filters
      */
     private fun convertCompoundToQdrantFilter(filter: CompoundFilter): dev.langchain4j.store.embedding.filter.Filter? {
-        if (filter.filters.isEmpty()) return null
+        if (filter.filters.isEmpty()) {
+            throw IllegalArgumentException("Compound filter must contain at least one sub-filter")
+        }
         
         log.debug("Converting compound filter: $filter with ${filter.filters.size} inner filters")
         
         // Convert all child filters
-        val convertedFilters = filter.filters.mapNotNull { convertToQdrantFilter(it) }
-        if (convertedFilters.isEmpty()) return null
+        val convertedFilters =
+            filter.filters.map {
+                convertToQdrantFilter(it) ?: throw IllegalArgumentException("Failed to convert sub-filter: $it")
+            }
         
         log.debug("After conversion, ${convertedFilters.size} valid filters remain")
         
-        // Apply the compound operation
-        var result = convertedFilters.first()
-        for (i in 1 until convertedFilters.size) {
-            result =
-                when (filter.type.lowercase()) {
-                    "and" -> {
-                        log.debug("Applying AND filter at index $i")
-                        result.and(convertedFilters[i])
-                    }
-                    "or" -> {
-                        log.debug("Applying OR filter at index $i")
-                        result.or(convertedFilters[i])
-                    }
-                    else -> {
-                        log.warn("Unsupported compound filter type for Qdrant: ${filter.type}")
-                        return null
-                    }
+        val type = filter.type.lowercase()
+
+        // Build a balanced binary filter tree to avoid deep nesting
+        fun buildBalanced(
+            filters: List<dev.langchain4j.store.embedding.filter.Filter>,
+            start: Int,
+            end: Int,
+        ): dev.langchain4j.store.embedding.filter.Filter {
+            val size = end - start
+            if (size == 1) {
+                return filters[start]
+            }
+            if (size == 2) {
+                val left = filters[start]
+                val right = filters[start + 1]
+                return when (type) {
+                    "and" -> left.and(right)
+                    "or" -> left.or(right)
+                    else -> throw IllegalArgumentException("Unsupported compound filter type for Qdrant: ${filter.type}")
                 }
+            }
+            val mid = start + size / 2
+            val left = buildBalanced(filters, start, mid)
+            val right = buildBalanced(filters, mid, end)
+            return when (type) {
+                "and" -> left.and(right)
+                "or" -> left.or(right)
+                else -> throw IllegalArgumentException("Unsupported compound filter type for Qdrant: ${filter.type}")
+            }
         }
         
-        return result
+        return buildBalanced(convertedFilters, 0, convertedFilters.size)
     }
 } 

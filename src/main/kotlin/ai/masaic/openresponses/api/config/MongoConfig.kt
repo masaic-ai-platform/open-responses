@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.config
 
 import ai.masaic.openresponses.api.client.MongoResponseStore
+import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mongodb.reactivestreams.client.MongoClient
 import mu.KotlinLogging
@@ -45,9 +46,10 @@ class MongoConfig(
     fun mongoResponseStore(
         reactiveMongoTemplate: ReactiveMongoTemplate,
         objectMapper: ObjectMapper,
+        toolService: ToolService,
     ): MongoResponseStore {
         logger.debug { "Creating MongoResponseStore bean" }
-        return MongoResponseStore(reactiveMongoTemplate, objectMapper)
+        return MongoResponseStore(reactiveMongoTemplate, objectMapper, toolService)
     }
 
     /**

@@ -1,31 +1,24 @@
 package ai.masaic.openresponses.tool
 
-import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.FunctionTool
-import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
-import ai.masaic.openresponses.api.model.VectorStoreSearchResult
-import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.mcp.MCPServer
 import ai.masaic.openresponses.tool.mcp.MCPServers
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
+import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import dev.langchain4j.mcp.client.McpClient
 import dev.langchain4j.model.chat.request.json.*
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ResourceLoader
-import org.springframework.stereotype.Component
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.nio.charset.Charset
-import kotlin.jvm.optionals.getOrDefault
-import kotlin.jvm.optionals.getOrNull
 
 /**
  * Service responsible for managing tool operations including loading, listing, and executing MCP tools.
@@ -124,10 +117,13 @@ class ToolService(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
+        openAIClient: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): String? {
         try {
             val tool = findToolByName(name) ?: return null
-            return executeToolByProtocol(tool, name, arguments, params)
+            return executeToolByProtocol(tool, name, arguments, params, openAIClient, eventEmitter, toolMetadata)
         } catch (e: Exception) {
             return handleToolExecutionError(name, arguments, e)
         }
@@ -155,10 +151,13 @@ class ToolService(
         name: String,
         arguments: String,
         params: ResponseCreateParams,
+        openAIClient: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): String? {
         val toolResult =
             when (tool.protocol) {
-                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params)
+                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params, openAIClient, eventEmitter, toolMetadata)
                 ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
             }
         log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
@@ -446,259 +445,3 @@ class ToolService(
         }
     }
 }
-
-@Component
-class NativeToolRegistry {
-    private val log = LoggerFactory.getLogger(NativeToolRegistry::class.java)
-    private val toolRepository = mutableMapOf<String, ToolDefinition>()
-
-    @Autowired
-    private lateinit var vectorStoreService: VectorStoreService
-
-    init {
-        toolRepository["think"] = loadExtendedThinkTool()
-        toolRepository["file_search"] = loadFileSearchTool()
-    }
-
-    fun findByName(name: String): ToolDefinition? = toolRepository[name]
-
-    fun findAll(): List<ToolDefinition> = toolRepository.values.toList()
-
-    suspend fun executeTool(
-        name: String,
-        arguments: String,
-        params: ResponseCreateParams,
-    ): String? {
-        val tool = toolRepository[name] ?: return null
-        log.debug("Executing tool $name with arguments: $arguments")
-
-        return when (name) {
-            "think" -> "Your thought has been logged."
-            "file_search" -> executeFileSearch(arguments, params)
-            else -> null
-        }
-    }
-
-    /**
-     * Executes a file search operation using the vector store service.
-     *
-     * @param arguments JSON string containing the search parameters
-     * @param requestParams Optional metadata from the request
-     * @return JSON string containing the search results
-     */
-    private suspend fun executeFileSearch(
-        arguments: String,
-        requestParams: ResponseCreateParams,
-    ): String {
-        val json = Json { ignoreUnknownKeys = true }
-        val params = json.decodeFromString<FileSearchParams>(arguments)
-
-        val function =
-            requestParams
-                .tools()
-                .getOrNull()
-                ?.filter { it.isFileSearch() }
-                ?.map { it.asFileSearch() } ?: return json.encodeToString(FileSearchResponse.serializer(), FileSearchResponse(emptyList()))
-
-        val vectorStoreIds = function.first().vectorStoreIds()
-        val filters =
-            if (function.first().filters().isPresent) {
-                val filterJson = function.first().filters().get()
-                filterJson._json().get().convert(Filter::class.java)
-            } else {
-                null
-            }
-
-        val maxResults =
-            function
-                .first()
-                .maxNumResults()
-                .getOrDefault(20)
-                .toInt()
-
-        // Search each vector store and combine results
-        val allResults = mutableListOf<VectorStoreSearchResult>()
-        for (vectorStoreId in vectorStoreIds) {
-            try {
-                val searchRequest =
-                    VectorStoreSearchRequest(
-                        query = params.query,
-                        maxNumResults = maxResults,
-                        filters = filters,
-                    )
-                val results = vectorStoreService.searchVectorStore(vectorStoreId, searchRequest)
-                allResults.addAll(results.data)
-            } catch (e: Exception) {
-                log.error("Error searching vector store $vectorStoreId", e)
-            }
-        }
-
-        // Sort results by score and limit to max_num_results
-        val sortedResults =
-            allResults
-                .sortedByDescending { it.score }
-                .take(maxResults)
-
-        // Convert results to JSON with file citations
-        val response =
-            FileSearchResponse(
-                data =
-                    sortedResults.map { result ->
-                        // Get chunk index from metadata
-                        val chunkIndex = result.attributes?.get("chunk_index")
-                
-                        FileSearchResult(
-                            file_id = result.fileId,
-                            filename = result.filename,
-                            score = result.score,
-                            content = result.content.firstOrNull()?.text ?: "",
-                            annotations =
-                                listOf(
-                                    FileCitation(
-                                        type = "file_citation",
-                                        index = chunkIndex?.toString()?.toInt() ?: 0,
-                                        file_id = result.fileId,
-                                        filename = result.filename,
-                                    ),
-                                ),
-                        )
-                    },
-            )
-
-        return json.encodeToString(FileSearchResponse.serializer(), response)
-    }
-
-    /**
-     * Loads the extended "think" tool definition.
-     *
-     * This function creates a `NativeToolDefinition` for the "think" tool with predefined parameters.
-     * The tool is designed to append a thought to the log without obtaining new information or changing the database.
-     *
-     * @return A `NativeToolDefinition` instance representing the "think" tool.
-     */
-    private fun loadExtendedThinkTool(): NativeToolDefinition {
-        val parameters =
-            mutableMapOf(
-                "type" to "object",
-                "properties" to mapOf("thought" to mapOf("type" to "string", "description" to "A thought to think about")),
-                "required" to listOf("thought"),
-                "additionalProperties" to false,
-            )
-
-        return NativeToolDefinition(
-            name = "think",
-            description = "Use the tool to think about something. It will not obtain new information or change the database, but just append the thought to the log.",
-            parameters = parameters,
-        )
-    }
-
-    /**
-     * Loads the file search tool definition.
-     *
-     * This function creates a `NativeToolDefinition` for the "file_search" tool with predefined parameters.
-     * The tool is designed to search through vector stores for relevant file content.
-     *
-     * @return A `NativeToolDefinition` instance representing the "file_search" tool.
-     */
-    private fun loadFileSearchTool(): NativeToolDefinition {
-        val parameters =
-            mutableMapOf(
-                "type" to "object",
-                "properties" to
-                    mapOf(
-                        "query" to
-                            mapOf(
-                                "type" to "string",
-                                "description" to "The search query",
-                            ),
-                    ),
-                "required" to listOf("query"),
-                "additionalProperties" to false,
-            )
-
-        return NativeToolDefinition(
-            name = "file_search",
-            description = "Search through vector stores for relevant file content based on a query. If the user's query sounds ambiguous, it's likely that the user is looking for information from a file.",
-            parameters = parameters,
-        )
-    }
-}
-
-/**
- * Data class representing metadata about a tool.
- *
- * @property id Unique identifier for the tool
- * @property name Human-readable name of the tool
- * @property description Detailed description of what the tool does
- */
-@Serializable
-data class ToolMetadata(
-    val id: String,
-    val name: String,
-    val description: String,
-)
-
-/**
- * Data class representing metadata about AI models.
- *
- * @property models List of AI model information
- */
-@Serializable
-data class AIModelsMetadata(
-    val models: List<AIModelInfo>,
-)
-
-/**
- * Data class representing metadata about an AI model.
- *
- * @property id Unique identifier for the model
- * @property name Human-readable name of the model
- * @property description Detailed description of what the model does
- * @property provider Name of the provider of the model
- */
-@Serializable
-data class AIModelInfo(
-    val id: String,
-    val name: String,
-    val description: String,
-    val provider: String,
-)
-
-/**
- * Parameters for file search operation.
- */
-@Serializable
-data class FileSearchParams(
-    val query: String,
-)
-
-/**
- * Response from file search operation.
- */
-@Serializable
-data class FileSearchResponse(
-    val data: List<FileSearchResult>,
-)
-
-/**
- * Individual file search result.
- */
-@Serializable
-data class FileSearchResult(
-    val file_id: String,
-    val filename: String,
-    val score: Double,
-    val content: String,
-    val annotations: List<FileCitation>,
-)
-
-/**
- * File citation annotation.
- */
-@Serializable
-data class FileCitation(
-    val type: String,
-    val index: Int,
-    val file_id: String,
-    val filename: String,
-)

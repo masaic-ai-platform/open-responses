@@ -34,6 +34,7 @@ class MockVectorSearchProvider : VectorSearchProvider {
         chunkingStrategy: ChunkingStrategy?,
         preDeleteIfExists: Boolean,
         attributes: Map<String, Any>?,
+        vectorStoreId: String,
     ): Boolean {
         try {
             val contentString = content.readAllBytes().toString(Charsets.UTF_8)

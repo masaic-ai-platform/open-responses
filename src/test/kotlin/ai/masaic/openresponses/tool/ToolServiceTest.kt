@@ -151,6 +151,9 @@ class ToolServiceTest {
                         ),
                     ),
                     mockk(),
+                    mockk(),
+                    {},
+                    mockk(relaxed = true),
                 )
 
             // Assert result is not null and not empty

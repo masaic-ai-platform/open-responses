@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.FileBasedVectorSearchProvider
+import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
@@ -25,16 +26,23 @@ class FileBasedVectorSearchProviderIntegrationTest {
     private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var objectMapper: ObjectMapper
     private lateinit var vectorSearchProvider: FileBasedVectorSearchProvider
+    private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
 
     @BeforeEach
     fun setup() {
         // Mock the embedding service - always return the same similarity so we 
         // can predict search behavior regardless of query
+        hybridSearchServiceHelper = mockk(relaxed = true)
         embeddingService = mockk()
         
         // Configure the embedding service to always return the same embedding and similarity score
         // This ensures searches are predictable based on mocked similarity rather than actual text matching
         every { embeddingService.embedText(any<String>()) } returns listOf(0.1f, 0.2f, 0.3f)
+        every { embeddingService.embedTexts(any()) } returns
+            listOf(
+                listOf(0.1f, 0.2f, 0.3f),
+                listOf(0.4f, 0.5f, 0.6f),
+            )
         every { embeddingService.calculateSimilarity(any<List<Float>>(), any<List<Float>>()) } returns 0.85f
         
         // Create vector search properties with default values
@@ -57,6 +65,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
     }
 
@@ -77,7 +86,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val filename = "persistence.txt"
         
         // First "application instance" indexes a file
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename)
+        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename, null, "test")
         
         // Verify the file was properly indexed
         val results1 = vectorSearchProvider.searchSimilar("test document", rankingOptions = null)
@@ -89,6 +98,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Then - the new instance should still have access to the previously indexed data
@@ -107,7 +117,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val fileId1 = "file1"
         val content1 = "First test document with specific content."
         
-        vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt")
+        vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt", null, "test")
         
         // When - create a second provider instance (simulating a different service/component)
         val secondProvider =
@@ -115,6 +125,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Then - second provider should see the first provider's data
@@ -128,7 +139,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         // When - second provider adds a document
         val fileId2 = "file2"
         val content2 = "Second test document with different content."
-        secondProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt")
+        secondProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt", null, "test")
         
         // Then - first provider should see the second provider's data
         val resultsFromFirst =
@@ -136,22 +147,8 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 "different content",
                 rankingOptions = null,
             )
-        assertEquals(1, resultsFromFirst.size, "First provider should find document from second provider")
+        assertEquals(2, resultsFromFirst.size, "First provider should find document from second provider")
         
-        // Both files should be findable by both providers, but we need to reload first provider
-        // to see the changes made by second provider (caching issue in the provider implementation)
-        val refreshedProvider =
-            FileBasedVectorSearchProvider(
-                embeddingService,
-                objectMapper,
-                tempDir.toString(),
-            )
-        
-        assertEquals(
-            2,
-            refreshedProvider.searchSimilar("test document", rankingOptions = null).size,
-            "Should find both documents in refreshed provider",
-        )
         assertEquals(
             2,
             secondProvider.searchSimilar("test document", rankingOptions = null).size,
@@ -165,7 +162,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val fileId = "delete-test"
         val content = "This is a document that will be deleted."
         
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "delete.txt")
+        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "delete.txt", null, "test")
         
         // Create a second provider instance
         val secondProvider =
@@ -173,6 +170,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Verify both providers can see the document
@@ -200,6 +198,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
                 embeddingService,
                 objectMapper,
                 tempDir.toString(),
+                hybridSearchServiceHelper,
             )
         
         // Document should be gone from refreshed second provider

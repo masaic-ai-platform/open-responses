@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
@@ -14,12 +15,14 @@ import org.junit.jupiter.api.Test
 class InMemoryResponseStoreTest {
     private lateinit var responseStore: InMemoryResponseStore
     private lateinit var objectMapper: ObjectMapper
+    private lateinit var toolService: ToolService
 
     @BeforeEach
     fun setup() {
         objectMapper = mockk()
+        toolService = mockk(relaxed = true)
         every { objectMapper.convertValue(ofType<ResponseInputItem>(), InputMessageItem::class.java) } returns InputMessageItem()
-        responseStore = InMemoryResponseStore(objectMapper, 500)
+        responseStore = InMemoryResponseStore(objectMapper, toolService, 500)
     }
 
     @Test

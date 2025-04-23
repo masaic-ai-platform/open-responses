@@ -10,14 +10,18 @@ import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import kotlinx.coroutines.DelicateCoroutinesApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Paths
-import java.util.concurrent.ConcurrentHashMap
 
 /**
  * File-based implementation of VectorSearchProvider.
@@ -32,15 +36,12 @@ class FileBasedVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val objectMapper: ObjectMapper,
     @Value("\${open-responses.file-storage.local.root-dir}") private val rootDir: String,
+    @Autowired private val hybridSearchServiceHelper: HybridSearchServiceHelper,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(FileBasedVectorSearchProvider::class.java)
 
     // Directory for storing embeddings
     private val embeddingsDir = "$rootDir/embeddings"
-
-    // Cache to avoid reading from disk for every search
-    private val fileChunksCache = ConcurrentHashMap<String, List<ChunkWithEmbedding>>()
-    private val fileMetadataCache = ConcurrentHashMap<String, Map<String, Any>>()
 
     init {
         try {
@@ -50,9 +51,6 @@ class FileBasedVectorSearchProvider(
                 Files.createDirectories(embeddingsDirPath)
                 log.info("Created embeddings directory at {}", embeddingsDirPath.toAbsolutePath())
             }
-
-            // Load existing embeddings into cache on startup
-            loadAllEmbeddings()
         } catch (e: Exception) {
             log.error("Error initializing FileBasedVectorSearchProvider", e)
         }
@@ -79,41 +77,32 @@ class FileBasedVectorSearchProvider(
     )
 
     /**
-     * Loads all existing embeddings from disk into memory cache on startup.
+     * Load embeddings for a file directly from disk.
+     * Returns null if the file doesn't exist or can't be read.
      */
-    private fun loadAllEmbeddings() {
-        val embeddingsPath = Paths.get(embeddingsDir)
-        if (!Files.exists(embeddingsPath)) return
-
-        try {
-            Files.list(embeddingsPath).forEach { path ->
-                if (Files.isRegularFile(path) && path.toString().endsWith(".json") && path.fileName.toString().startsWith("embeddings-")) {
-                    try {
-                        val json = Files.readAllBytes(path)
-                        val fileEmbeddings = objectMapper.readValue<FileEmbeddings>(json)
-
-                        // Update caches
-                        fileChunksCache[fileEmbeddings.fileId] = fileEmbeddings.chunks
-                        fileMetadataCache[fileEmbeddings.fileId] = fileEmbeddings.metadata
-
-                        log.info("Loaded embeddings for file: ${fileEmbeddings.fileId}")
-                    } catch (e: Exception) {
-                        log.error("Error loading embeddings from ${path.fileName}", e)
-                    }
-                }
+    private fun loadEmbeddingsForFile(fileId: String): FileEmbeddings? {
+        val path = Paths.get(embeddingsDir, "embeddings-$fileId.json")
+        return try {
+            if (!Files.exists(path)) {
+                null
+            } else {
+                val json = Files.readAllBytes(path)
+                objectMapper.readValue<FileEmbeddings>(json)
             }
         } catch (e: Exception) {
-            log.error("Error loading embeddings from disk", e)
+            log.error("Error loading embeddings for file {}", fileId, e)
+            null
         }
     }
 
     /**
      * Saves embeddings for a file to disk.
      */
-    private fun saveEmbeddings(fileId: String) {
-        val chunks = fileChunksCache[fileId] ?: return
-        val metadata = fileMetadataCache[fileId] ?: emptyMap()
-
+    private fun saveEmbeddings(
+        fileId: String,
+        chunks: List<ChunkWithEmbedding>,
+        metadata: Map<String, Any>,
+    ) {
         try {
             val fileEmbeddings =
                 FileEmbeddings(
@@ -141,6 +130,7 @@ class FileBasedVectorSearchProvider(
      * @param attributes Additional metadata attributes to include with each vector
      * @return True if indexing was successful, false otherwise
      */
+    @OptIn(DelicateCoroutinesApi::class, DelicateCoroutinesApi::class)
     override fun indexFile(
         fileId: String,
         inputStream: InputStream,
@@ -148,9 +138,10 @@ class FileBasedVectorSearchProvider(
         chunkingStrategy: ChunkingStrategy?,
         preDeleteIfExists: Boolean,
         attributes: Map<String, Any>?,
+        vectorStoreId: String,
     ): Boolean {
         try {
-            if (preDeleteIfExists && fileMetadataCache.containsKey(fileId)) {
+            if (preDeleteIfExists && Files.exists(Paths.get(embeddingsDir, "embeddings-$fileId.json"))) {
                 // Delete existing embeddings for this file
                 deleteFile(fileId)
             }
@@ -165,47 +156,58 @@ class FileBasedVectorSearchProvider(
 
             // Use the TextChunkingUtil to chunk the text
             log.debug("Chunking text for file: $filename")
-            val chunks = TextChunkingUtil.chunkText(text, chunkingStrategy).map { it.text }
-
-            if (chunks.isEmpty()) {
+            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
+            
+            if (textChunks.isEmpty()) {
                 log.warn("No chunks created for file: $filename")
                 return false
             }
 
-            log.info("Created ${chunks.size} chunks for file: $filename")
+            log.info("Created ${textChunks.size} chunks for file: $filename")
 
-            // Generate embeddings for each chunk
+            // Prepare for batch embedding
+            val chunkTexts = textChunks.map { it.text }
+            val chunkMetadataList = mutableListOf<Map<String, Any>>()
+            
+            // Prepare metadata for each chunk
+            textChunks.forEachIndexed { index, chunk ->
+                // Generate a short unique ID for each chunk
+                val chunkId = IdGenerator.generateChunkId()
+                
+                // Create base metadata
+                val chunkMetadata =
+                    mutableMapOf<String, Any>(
+                        "file_id" to fileId,
+                        "filename" to filename,
+                        "chunk_id" to chunkId,
+                        "chunk_index" to index,
+                        "vector_store_id" to vectorStoreId,
+                        "total_chunks" to textChunks.size,
+                    )
+                
+                // Add any additional attributes
+                if (attributes != null) {
+                    chunkMetadata.putAll(attributes)
+                }
+                
+                chunkMetadataList.add(chunkMetadata)
+            }
+            
+            // Generate embeddings for all chunks in batch
+            log.debug("Generating batch embeddings for {} chunks", chunkTexts.size)
+            val embeddings = embeddingService.embedTexts(chunkTexts)
+            
+            // Create chunks with embeddings
             val chunksWithEmbeddings =
-                chunks.mapIndexed { index, chunk ->
-                    // Generate a short unique ID for each chunk
-                    val chunkId = IdGenerator.generateChunkId()
-
-                    // Create base metadata
-                    val chunkMetadata =
-                        mutableMapOf<String, Any>(
-                            "file_id" to fileId,
-                            "filename" to filename,
-                            "chunk_id" to chunkId,
-                            "chunk_index" to index,
-                            "total_chunks" to chunks.size,
-                        )
-                    
-                    // Add any additional attributes
-                    if (attributes != null) {
-                        chunkMetadata.putAll(attributes)
-                    }
-
+                textChunks.mapIndexed { index, chunk ->
                     ChunkWithEmbedding(
                         fileId = fileId,
-                        chunkId = chunkId,
-                        content = chunk,
-                        embedding = embeddingService.embedText(chunk),
-                        chunkMetadata = chunkMetadata,
+                        chunkId = chunkMetadataList[index]["chunk_id"] as String,
+                        content = chunk.text,
+                        embedding = embeddings[index],
+                        chunkMetadata = chunkMetadataList[index],
                     )
                 }
-
-            // Store in memory cache
-            fileChunksCache[fileId] = chunksWithEmbeddings
             
             // Initialize metadata
             val initialMetadata = mutableMapOf<String, Any>("filename" to filename)
@@ -214,11 +216,32 @@ class FileBasedVectorSearchProvider(
             if (attributes != null) {
                 initialMetadata.putAll(attributes)
             }
-            
-            fileMetadataCache[fileId] = initialMetadata
 
             // Persist to disk
-            saveEmbeddings(fileId)
+            saveEmbeddings(fileId, chunksWithEmbeddings, initialMetadata)
+
+            // Asynchronously index chunks for text search via hybrid service
+            val chunksForIndexing =
+                chunksWithEmbeddings.map { cw ->
+                    HybridSearchService.ChunkForIndexing(
+                        chunkId = cw.chunkId,
+                        vectorStoreId = vectorStoreId,
+                        fileId = cw.fileId,
+                        filename = cw.chunkMetadata["filename"] as String,
+                        chunkIndex = cw.chunkMetadata["chunk_index"] as Int,
+                        content = cw.content,
+                    )
+                }
+            GlobalScope.launch(Dispatchers.IO) {
+                try {
+                    hybridSearchServiceHelper.indexChunks(chunksForIndexing)
+                    log.info("Indexed ${chunksForIndexing.size} chunks for hybrid search")
+                } catch (e: Exception) {
+                    log.error("Error indexing chunks for hybrid search: ${e.message}", e)
+                    deleteFile(fileId) // Rollback if indexing fails
+                    throw e
+                }
+            }
 
             return true
         } catch (e: Exception) {
@@ -236,7 +259,8 @@ class FileBasedVectorSearchProvider(
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
         attributes: Map<String, Any>?,
-    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes, vectorStoreId)
 
     /**
      * Indexes a file without attributes.
@@ -246,7 +270,8 @@ class FileBasedVectorSearchProvider(
         inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
-    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null, vectorStoreId)
 
     /**
      * Searches for similar content in the vector store.
@@ -271,8 +296,26 @@ class FileBasedVectorSearchProvider(
         // Generate embedding for the query
         val queryEmbedding = embeddingService.embedText(query)
 
-        // Collect all chunks from cache
-        val allChunks = fileChunksCache.values.flatten()
+        // Collect all chunks from disk
+        val embeddingsPath = Paths.get(embeddingsDir)
+        val allChunks = mutableListOf<ChunkWithEmbedding>()
+        
+        if (Files.exists(embeddingsPath)) {
+            Files.list(embeddingsPath).use { paths ->
+                paths
+                    .filter { Files.isRegularFile(it) && it.fileName.toString().startsWith("embeddings-") }
+                    .forEach { path ->
+                        val id =
+                            path.fileName
+                                .toString()
+                                .removePrefix("embeddings-")
+                                .removeSuffix(".json")
+                        
+                        val fileEmbeddings = loadEmbeddingsForFile(id)
+                        fileEmbeddings?.let { allChunks.addAll(it.chunks) }
+                    }
+            }
+        }
 
         // Apply filters to chunks
         val filteredChunks = applyFilters(allChunks, filter)
@@ -290,17 +333,22 @@ class FileBasedVectorSearchProvider(
             .sortedByDescending { (_, score) -> score }
             .take(maxResults)
             .map { (chunk, score) ->
+                // Get file metadata for each result
+                val fileEmbeddings = loadEmbeddingsForFile(chunk.fileId)
+                val fileMetadata = fileEmbeddings?.metadata ?: emptyMap()
+                
                 VectorSearchProvider.SearchResult(
                     fileId = chunk.fileId,
                     score = score.toDouble(),
                     content = chunk.content,
-                    metadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap()),
+                    metadata = chunk.chunkMetadata + fileMetadata,
                 )
             }
     }
 
     /**
      * Apply filters to chunks.
+     * @throws IllegalArgumentException if the filter cannot be properly applied
      */
     private fun applyFilters(
         chunks: List<ChunkWithEmbedding>,
@@ -311,20 +359,29 @@ class FileBasedVectorSearchProvider(
             return chunks
         }
 
-        log.debug("Applying filter: $filter to ${chunks.size} chunks")
+        log.debug("Applying filter: {} to {} chunks", filter, chunks.size)
         
-        // Apply the filter to each chunk
-        val filteredChunks =
-            chunks.filter { chunk ->
-                // Combine chunk metadata with file metadata
-                val combinedMetadata = chunk.chunkMetadata + (fileMetadataCache[chunk.fileId] ?: emptyMap())
-                val matches = FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
-                matches
-            }
-        
-        log.debug("After filtering: ${filteredChunks.size} chunks remain")
-        
-        return filteredChunks
+        try {
+            // Apply the filter to each chunk
+            val filteredChunks =
+                chunks.filter { chunk ->
+                    // Load file metadata for each chunk being filtered
+                    val fileEmbeddings = loadEmbeddingsForFile(chunk.fileId)
+                    val fileMetadata = fileEmbeddings?.metadata ?: emptyMap()
+                    
+                    // Combine chunk metadata with file metadata
+                    val combinedMetadata = chunk.chunkMetadata + fileMetadata
+                    val matches = FilterUtils.matchesFilter(filter, combinedMetadata, chunk.fileId)
+                    matches
+                }
+            
+            log.debug("After filtering: ${filteredChunks.size} chunks remain")
+            
+            return filteredChunks
+        } catch (e: Exception) {
+            // Re-throw with more context about security implications
+            throw IllegalArgumentException("Failed to apply filter: $filter. This may impact security filters.", e)
+        }
     }
 
     /**
@@ -344,15 +401,34 @@ class FileBasedVectorSearchProvider(
      */
     override fun deleteFile(fileId: String): Boolean {
         try {
-            // Remove from memory cache
-            fileChunksCache.remove(fileId)
-            fileMetadataCache.remove(fileId)
+            // Get vector store ID from file before deleting
+            val fileEmbeddings = loadEmbeddingsForFile(fileId)
+            val vectorStoreId =
+                fileEmbeddings
+                    ?.chunks
+                    ?.firstOrNull()
+                    ?.chunkMetadata
+                    ?.get("vector_store_id") as? String
 
             // Delete the file from disk
             val embeddingsFile = Paths.get(embeddingsDir, "embeddings-$fileId.json")
             if (Files.exists(embeddingsFile)) {
                 Files.delete(embeddingsFile)
                 log.info("Deleted embeddings for file: $fileId")
+            }
+
+            // Delete from text search indexes via hybrid service
+            if (vectorStoreId != null) {
+                hybridSearchServiceHelper.let {
+                    kotlinx.coroutines.runBlocking {
+                        try {
+                            it.deleteFileChunks(fileId, vectorStoreId)
+                            log.info("Deleted chunks for file $fileId from hybrid search indexes")
+                        } catch (e: Exception) {
+                            log.error("Error deleting file $fileId chunks from hybrid search indexes: ${e.message}", e)
+                        }
+                    }
+                }
             }
 
             return true
@@ -368,38 +444,5 @@ class FileBasedVectorSearchProvider(
      * @param fileId The ID of the file
      * @return Map of metadata, or null if the file doesn't exist
      */
-    override fun getFileMetadata(fileId: String): Map<String, Any>? = fileMetadataCache[fileId]
-
-    /**
-     * Updates metadata for a file in the vector store.
-     * This is used to sync vectorstorefile attributes with the search provider.
-     *
-     * @param fileId The ID of the file
-     * @param metadata The metadata to update
-     * @return True if the update was successful, false otherwise
-     */
-    fun updateFileMetadata(
-        fileId: String,
-        metadata: Map<String, Any>,
-    ): Boolean {
-        try {
-            if (!fileMetadataCache.containsKey(fileId)) {
-                log.warn("Cannot update metadata for non-existent file: $fileId")
-                return false
-            }
-            
-            // Update the metadata cache with the new values
-            fileMetadataCache[fileId] = metadata
-            
-            // If the file chunks exist, update the disk storage too
-            if (fileChunksCache.containsKey(fileId)) {
-                saveEmbeddings(fileId)
-            }
-            
-            return true
-        } catch (e: Exception) {
-            log.error("Error updating metadata for file: $fileId", e)
-            return false
-        }
-    }
+    override fun getFileMetadata(fileId: String): Map<String, Any>? = loadEmbeddingsForFile(fileId)?.metadata
 }

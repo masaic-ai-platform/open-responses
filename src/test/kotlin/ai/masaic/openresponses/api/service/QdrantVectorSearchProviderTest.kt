@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
@@ -22,6 +23,7 @@ import io.qdrant.client.grpc.Collections
 import io.qdrant.client.grpc.Collections.CollectionOperationResponse
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.io.ByteArrayInputStream
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -40,12 +42,20 @@ class QdrantVectorSearchProviderTest {
     private lateinit var qdrantClient: QdrantClient
     private lateinit var embeddingStore: QdrantEmbeddingStore
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
+    private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
 
     @BeforeEach
     fun setup() {
         // Mock embedding service
         embeddingService = mockk()
         every { embeddingService.embedText(any()) } returns listOf(0.1f, 0.2f, 0.3f)
+        every { embeddingService.embedTexts(any()) } returns
+            listOf(
+                listOf(0.1f, 0.2f, 0.3f),
+                listOf(0.4f, 0.5f, 0.6f),
+            )
+
+        hybridSearchServiceHelper = mockk(relaxed = true)
         
         // Mock Qdrant client
         qdrantClient = mockk()
@@ -96,7 +106,9 @@ class QdrantVectorSearchProviderTest {
             listOf(
                 EmbeddingMatch(0.95, UUID.randomUUID().toString(), Embedding.from(FloatArray(10)), TextSegment.from("test content", Metadata.from(mapOf("file_id" to "test-file-id")))),
             )
-        
+
+        every { embeddingStore.addAll(any(), any()) } returns listOf(UUID.randomUUID().toString())
+
         // Create configuration
         qdrantProperties =
             QdrantVectorProperties(
@@ -120,6 +132,7 @@ class QdrantVectorSearchProviderTest {
                 embeddingService,
                 qdrantProperties,
                 vectorSearchProperties,
+                hybridSearchServiceHelper,
                 qdrantClient,
             )
         
@@ -135,14 +148,16 @@ class QdrantVectorSearchProviderTest {
         val fileId = "test-file-id"
         val content = "This is a test document for vector indexing."
         val inputStream = ByteArrayInputStream(content.toByteArray())
-        
+
+        every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
+
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt")
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test")
         
         // Then
         assertTrue(result, "File should be successfully indexed")
-        verify { embeddingService.embedText(any()) }
-        verify { embeddingStore.add(ofType<Embedding>(), any()) }
+        verify { embeddingService.embedTexts(any()) }
+        verify { embeddingStore.addAll(any(), any()) }
     }
 
     @Test
@@ -207,14 +222,14 @@ class QdrantVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // Mock embedding service to throw exception
-        every { embeddingService.embedText(any()) } throws RuntimeException("Embedding service error")
-        
+        every { embeddingService.embedTexts(any()) } throws RuntimeException("Embedding service error")
+        every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt")
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test")
         
         // Then
         assertFalse(result, "Indexing should fail when embedding service throws an error")
-        verify { embeddingService.embedText(any()) }
+        verify { embeddingService.embedTexts(any()) }
     }
 
     @Test
@@ -225,7 +240,7 @@ class QdrantVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt")
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt", null, "test")
         
         // Then
         assertFalse(result, "Indexing should fail for empty content")
@@ -247,14 +262,15 @@ class QdrantVectorSearchProviderTest {
         val chunkingStrategy = mockk<ChunkingStrategy>()
         every { chunkingStrategy.type } returns "static"
         every { chunkingStrategy.static } returns staticChunkingStrategy
-        
+        every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
+
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename, chunkingStrategy)
+        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename, chunkingStrategy, "test")
         
         // Then
         assertTrue(result, "File should be successfully indexed with custom chunking strategy")
-        verify { embeddingService.embedText(any()) }
-        verify { embeddingStore.add(ofType<Embedding>(), any()) }
+        verify { embeddingService.embedTexts(any()) }
+        verify { embeddingStore.addAll(any(), any()) }
     }
 
     @Test
@@ -307,7 +323,7 @@ class QdrantVectorSearchProviderTest {
     }
 
     @Test
-    fun `searchSimilar should handle search errors`() {
+    fun `searchSimilar should throw errors`() {
         // Given
         val query = "test query"
         
@@ -315,10 +331,13 @@ class QdrantVectorSearchProviderTest {
         every { embeddingService.embedText(any()) } throws RuntimeException("Search error")
         
         // When
-        val results = vectorSearchProvider.searchSimilar(query, rankingOptions = null)
-        
+        val exception =
+            assertThrows<RuntimeException> {
+                vectorSearchProvider.searchSimilar(query, rankingOptions = null)
+            }
+
         // Then
-        assertTrue(results.isEmpty(), "Should return empty results when search throws an error")
+        assertEquals("Search error", exception.message, "Should throw exception when search fails")
     }
 
     @Test

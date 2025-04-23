@@ -44,6 +44,7 @@ dependencies {
     implementation("com.openai:openai-java:0.34.1")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j:1.0.0-beta2")
+    implementation("dev.langchain4j:langchain4j-onnx-scoring:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-embeddings:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-embeddings-all-minilm-l6-v2:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2")
@@ -78,6 +79,11 @@ dependencies {
     // MongoDB Testcontainers for testing
     testImplementation("org.testcontainers:mongodb:1.19.1")
     testImplementation("org.testcontainers:junit-jupiter:1.19.1")
+
+    // Apache Lucene for full-text indexing/search
+    implementation("org.apache.lucene:lucene-core:9.9.0")
+    implementation("org.apache.lucene:lucene-analysis-common:9.9.0")
+    implementation("org.apache.lucene:lucene-queryparser:9.9.0")
 }
 
 kotlin {

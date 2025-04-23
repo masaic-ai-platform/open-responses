@@ -32,7 +32,7 @@ class VectorStoreCleanupScheduler(
             return
         }
 
-        log.info("Starting scheduled vector store cleanup")
+        log.debug("Starting scheduled vector store cleanup")
 
         runBlocking {
             try {

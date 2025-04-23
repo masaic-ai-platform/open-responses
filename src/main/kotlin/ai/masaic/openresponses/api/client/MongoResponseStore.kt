@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
@@ -21,6 +22,7 @@ import org.springframework.data.mongodb.core.query.Query
 class MongoResponseStore(
     private val mongoTemplate: ReactiveMongoTemplate,
     private val objectMapper: ObjectMapper,
+    private val toolService: ToolService,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
 
@@ -57,7 +59,7 @@ class MongoResponseStore(
                             objectMapper.convertValue(outputItem.message().get(), InputMessageItem::class.java)
                         }
                         // Handle function calls
-                        outputItem.isFunctionCall() -> {
+                        outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name()) == null) -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
                                 id = functionCall.id(),
@@ -83,8 +85,8 @@ class MongoResponseStore(
                 .save(
                     existingDoc.copy(
                         responseJson = responseJson,
-                        inputItems = existingDoc.inputItems.plus(inputMessageItems),
-                        outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems),
+                        inputItems = existingDoc.inputItems.plus(inputMessageItems.filter { it !in existingDoc.inputItems }),
+                        outputInputItems = existingDoc.outputInputItems.plus(outputMessageItems.filter { it !in existingDoc.outputInputItems }),
                     ),
                     "responses",
                 ).awaitFirst()

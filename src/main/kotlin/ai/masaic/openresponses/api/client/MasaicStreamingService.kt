@@ -34,8 +34,8 @@ class MasaicStreamingService(
     private val toolService: ToolService,
     private val responseStore: ResponseStore,
     // Make these constructor params for easy mocking:
-    private val allowedMaxToolCalls: Int = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 30,
-    private val maxDuration: Long = System.getenv("MASAIC_MAX_STREAMING_TIMEOUT")?.toLong() ?: 60000L, // 60 seconds
+    private val allowedMaxToolCalls: Int = System.getenv("OPEN_RESPONSES_MAX_TOOL_CALLS")?.toInt() ?: 30,
+    private val maxDuration: Long = System.getenv("OPEN_RESPONSES_MAX_STREAMING_TIMEOUT")?.toLong() ?: 300000L, // 300 seconds
     private val payloadFormatter: PayloadFormatter,
     private val objectMapper: ObjectMapper,
     private val telemetryService: TelemetryService,
@@ -342,6 +342,7 @@ class MasaicStreamingService(
                                         finalResponse,
                                         eventEmitter = { event -> trySend(event) },
                                         parentObservation,
+                                        client,
                                     )
                                 updatedParams =
                                     params
@@ -445,7 +446,7 @@ class MasaicStreamingService(
                     ResponseErrorEvent
                         .builder()
                         .message(
-                            "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.",
+                            "Too many tool calls. Increase the limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS environment variable.",
                         ).code("too_many_tool_calls")
                         .param(null)
                         .build(),
@@ -466,7 +467,7 @@ class MasaicStreamingService(
                     ResponseErrorEvent
                         .builder()
                         .message(
-                            "Timeout while processing. Increase the timeout limit by setting MASAIC_MAX_STREAMING_TIMEOUT environment variable.",
+                            "Timeout while processing. Increase the timeout limit by setting OPEN_RESPONSES_MAX_STREAMING_TIMEOUT environment variable.",
                         ).code("timeout")
                         .param(null)
                         .type(JsonValue.from("response.error"))

@@ -6,6 +6,8 @@ import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.search.HybridSearchService
+import ai.masaic.openresponses.api.service.search.HybridSearchService.ChunkForIndexing
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.FilterUtils
 import ai.masaic.openresponses.api.utils.IdGenerator
@@ -34,7 +36,8 @@ import java.io.InputStream
 class QdrantVectorSearchProvider(
     private val embeddingService: EmbeddingService,
     private val qdrantProperties: QdrantVectorProperties,
-    private val vectorSearchProperties: VectorSearchConfigProperties,
+    vectorSearchProperties: VectorSearchConfigProperties,
+    private val hybridSearchServiceHelper: HybridSearchServiceHelper,
     client: QdrantClient,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
@@ -94,6 +97,7 @@ class QdrantVectorSearchProvider(
         chunkingStrategy: ChunkingStrategy?,
         preDeleteIfExists: Boolean,
         attributes: Map<String, Any>?,
+        vectorStoreId: String,
     ): Boolean {
         try {
             // Check if we need to delete existing file vectors
@@ -131,43 +135,87 @@ class QdrantVectorSearchProvider(
             
             log.info("Created {} chunks for file: {}", textChunks.size, filename)
 
-            // Generate embeddings and store them
-            var indexingSuccessful = true
-            for (chunk in textChunks) {
-                try {
-                    // Generate embedding for the chunk
-                    val embedding = embeddingService.embedText(chunk.text)
-
-                    // Create metadata for this chunk
-                    val metadata =
-                        mutableMapOf<String, Any>(
-                            "file_id" to fileId,
-                            "filename" to filename,
-                            "chunk_index" to chunk.index,
-                            "chunk_id" to IdGenerator.generateChunkId(),
-                            "total_chunks" to textChunks.size,
-                        )
-                    
-                    // Add any additional user-provided attributes to the metadata
-                    if (attributes != null) {
-                        metadata.putAll(attributes)
-                    }
-
-                    // Store the embedding with metadata
-                    embeddingStore.add(
-                        Embedding.from(embedding),
-                        TextSegment.from(chunk.text, Metadata.from(metadata)),
+            // Prepare chunks for hybrid indexing
+            val chunksForIndexing = mutableListOf<ChunkForIndexing>()
+            
+            // Prepare batch embedding
+            val chunkTexts = textChunks.map { it.text }
+            val chunkMetadataList = mutableListOf<Map<String, Any>>()
+            val textSegments = mutableListOf<TextSegment>()
+            
+            // Generate metadata for each chunk first
+            for (i in textChunks.indices) {
+                val chunk = textChunks[i]
+                // Create metadata for this chunk
+                val metadata =
+                    mutableMapOf<String, Any>(
+                        "file_id" to fileId,
+                        "filename" to filename,
+                        "chunk_index" to chunk.index,
+                        "chunk_id" to IdGenerator.generateChunkId(),
+                        "vector_store_id" to vectorStoreId,
+                        "total_chunks" to textChunks.size,
                     )
+                
+                // Add any additional user-provided attributes to the metadata
+                if (attributes != null) {
+                    metadata.putAll(attributes)
+                }
+                
+                chunkMetadataList.add(metadata)
+                
+                // Add to hybrid indexing list
+                chunksForIndexing.add(
+                    ChunkForIndexing(
+                        chunkId = metadata["chunk_id"] as String,
+                        vectorStoreId = vectorStoreId,
+                        fileId = fileId,
+                        filename = filename,
+                        chunkIndex = chunk.index,
+                        content = chunk.text,
+                    ),
+                )
+                
+                // Create TextSegment for this chunk
+                textSegments.add(TextSegment.from(chunk.text, Metadata.from(metadata)))
+            }
+
+            try {
+                // Generate embeddings for all chunks in batch
+                log.debug("Generating batch embeddings for {} chunks", chunkTexts.size)
+                val embeddings = embeddingService.embedTexts(chunkTexts)
+                
+                // Convert to Embedding list for Qdrant
+                val embeddingList = embeddings.map { Embedding.from(it.toFloatArray()) }
+                
+                // Store all embeddings with metadata in a single batch operation
+                embeddingStore.addAll(embeddingList, textSegments)
+                log.info("Successfully stored {} embeddings in batch", embeddings.size)
+            } catch (e: Exception) {
+                log.error("Error generating or storing batch embeddings: {}", e.message, e)
+                deleteFile(fileId) // Rollback
+                return false
+            }
+            
+            // Index chunks for text search via hybrid service
+            if (chunksForIndexing.isNotEmpty()) {
+                try {
+                    kotlinx.coroutines.runBlocking {
+                        hybridSearchServiceHelper.indexChunks(chunksForIndexing)
+                    }
+                    log.info("Indexed {} chunks for hybrid search", chunksForIndexing.size)
                 } catch (e: Exception) {
-                    log.error("Error indexing chunk {} for file {}: {}", chunk.index, filename, e.message, e)
-                    indexingSuccessful = false
+                    log.error("Error indexing chunks for hybrid search: {}", e.message, e)
+                    deleteFile(fileId) // Rollback
+                    return false
                 }
             }
 
             log.info("Successfully indexed file: {} with {} chunks", filename, textChunks.size)
-            return indexingSuccessful
+            return true
         } catch (e: Exception) {
             log.error("Error indexing file {}: {}", filename, e.message, e)
+            deleteFile(fileId) // Rollback
             return false
         }
     }
@@ -181,7 +229,8 @@ class QdrantVectorSearchProvider(
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
         attributes: Map<String, Any>?,
-    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, attributes, vectorStoreId)
 
     /**
      * Indexes a file using the base interface method.
@@ -191,7 +240,8 @@ class QdrantVectorSearchProvider(
         inputStream: InputStream,
         filename: String,
         chunkingStrategy: ChunkingStrategy?,
-    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null)
+        vectorStoreId: String,
+    ): Boolean = indexFile(fileId, inputStream, filename, chunkingStrategy, true, null, vectorStoreId)
 
     /**
      * Searches for similar content in the vector store.
@@ -201,6 +251,7 @@ class QdrantVectorSearchProvider(
      * @param rankingOptions Optional ranking options for search
      * @param filter Optional structured filter object (new format)
      * @return List of search results
+     * @throws IllegalArgumentException if the filter cannot be properly applied
      */
     override fun searchSimilar(
         query: String,
@@ -221,7 +272,7 @@ class QdrantVectorSearchProvider(
             // Find relevant documents
             val minScore = rankingOptions?.scoreThreshold ?: qdrantProperties.minScore ?: 0.07
 
-            // Convert filter to Qdrant filter
+            // Convert filter to Qdrant filter - will throw exception if filter is invalid
             val qdrantFilter = filter?.let { FilterUtils.convertToQdrantFilter(it) }
             
             // Create search request
@@ -257,8 +308,12 @@ class QdrantVectorSearchProvider(
             log.debug("Found {} results for query", results.size)
             return results
         } catch (e: Exception) {
-            log.error("Error searching similar content: {}", e.message, e)
-            return emptyList()
+            log.error("Error searching for similar content: {}", e.message, e)
+            // Re-throw exceptions related to filter parsing
+            if (e is IllegalArgumentException && e.message?.contains("filter") == true) {
+                throw IllegalArgumentException("Error applying security filter: ${e.message}", e)
+            }
+            throw e
         }
     }
 
@@ -279,9 +334,26 @@ class QdrantVectorSearchProvider(
      */
     override fun deleteFile(fileId: String): Boolean {
         try {
+            // Get vector store ID if available
+            val fileMetadata = getFileMetadata(fileId)
+            val vectorStoreId = fileMetadata?.get("vector_store_id") as? String
+            
             // Delete points with matching fileId
             embeddingStore.removeAll(IsEqualTo("file_id", fileId))
             log.info("Deleted embeddings for file: {}", fileId)
+            
+            // Delete from text search indexes via hybrid service
+            if (vectorStoreId != null) {
+                kotlinx.coroutines.runBlocking {
+                    try {
+                        hybridSearchServiceHelper.deleteFileChunks(fileId, vectorStoreId)
+                        log.info("Deleted chunks for file {} from hybrid search indexes", fileId)
+                    } catch (e: Exception) {
+                        log.error("Error deleting file {} chunks from hybrid search indexes: {}", fileId, e.message, e)
+                    }
+                }
+            }
+            
             return true
         } catch (e: Exception) {
             log.error("Error deleting file {}: {}", fileId, e.message, e)

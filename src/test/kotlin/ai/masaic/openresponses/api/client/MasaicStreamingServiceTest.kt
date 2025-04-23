@@ -420,7 +420,7 @@ class MasaicStreamingServiceTest {
                         every { isResponseOutputMessage() } returns true
                     },
                 )
-            every { toolHandler.handleMasaicToolCall(ofType<ResponseCreateParams>(), ofType(), ofType()) } returns toolHandlerItems
+            every { toolHandler.handleMasaicToolCall(ofType<ResponseCreateParams>(), ofType(), ofType(), null, ofType()) } returns toolHandlerItems
 
             // 6) Now run the flow. This should trigger TWO iterations:
             val events =

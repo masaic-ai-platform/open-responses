@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.service.search.VectorStoreService
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.Tool
 import io.mockk.*
@@ -25,7 +26,7 @@ class NativeToolRegistryTest {
     @BeforeEach
     fun setUp() {
         vectorStoreService = mockk()
-        nativeToolRegistry = NativeToolRegistry()
+        nativeToolRegistry = NativeToolRegistry(jacksonObjectMapper())
         // Set vectorStoreService via reflection since it's private
         ReflectionTestUtils.setField(nativeToolRegistry, "vectorStoreService", vectorStoreService)
     }
@@ -58,9 +59,10 @@ class NativeToolRegistryTest {
         val tools = nativeToolRegistry.findAll()
 
         // Then
-        assertEquals(2, tools.size)
+        assertEquals(3, tools.size)
         assertTrue(tools.any { it.name == "think" })
         assertTrue(tools.any { it.name == "file_search" })
+        assertTrue(tools.any { it.name == "agentic_search" })
     }
 
     @Test
@@ -71,7 +73,7 @@ class NativeToolRegistryTest {
             val params = mockk<ResponseCreateParams>()
 
             // When
-            val result = nativeToolRegistry.executeTool("think", arguments, params)
+            val result = nativeToolRegistry.executeTool("think", arguments, params, mockk(), {}, mockk(relaxed = true))
 
             // Then
             assertEquals("Your thought has been logged.", result)
@@ -85,7 +87,15 @@ class NativeToolRegistryTest {
             val params = mockk<ResponseCreateParams>()
 
             // When
-            val result = nativeToolRegistry.executeTool("unknown_tool", arguments, params)
+            val result =
+                nativeToolRegistry.executeTool(
+                    "unknown_tool",
+                    arguments,
+                    params,
+                    mockk(),
+                    {},
+                    mockk(relaxed = true),
+                )
 
             // Then
             assertEquals(null, result)
@@ -107,6 +117,6 @@ class NativeToolRegistryTest {
             every { toolsOptional.orElse(null) } returns null
         
             // Just check that no error is thrown
-            nativeToolRegistry.executeTool("file_search", arguments, params)
+            nativeToolRegistry.executeTool("file_search", arguments, params, mockk(), {}, mockk(relaxed = true))
         }
 } 
