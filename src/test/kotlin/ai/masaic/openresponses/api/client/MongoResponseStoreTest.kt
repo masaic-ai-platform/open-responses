@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.mongodb.client.result.DeleteResult
 import com.openai.models.responses.Response
@@ -21,18 +22,20 @@ class MongoResponseStoreTest {
     private lateinit var responseStore: MongoResponseStore
     private lateinit var objectMapper: ObjectMapper
     private lateinit var mongoTemplate: ReactiveMongoTemplate
+    private lateinit var toolService: ToolService
 
     @BeforeEach
     fun setup() {
         objectMapper = mockk()
         mongoTemplate = mockk(relaxed = true)
+        toolService = mockk(relaxed = true)
         
         // Mock object mapper conversions
         every { objectMapper.convertValue(ofType<ResponseInputItem>(), InputMessageItem::class.java) } returns InputMessageItem()
         every { objectMapper.writeValueAsString(any<Response>()) } returns """{"id":"resp_123456"}"""
         every { objectMapper.readValue(any<String>(), Response::class.java) } returns mockk()
         
-        responseStore = MongoResponseStore(mongoTemplate, objectMapper)
+        responseStore = MongoResponseStore(mongoTemplate, objectMapper, toolService)
     }
 
     @Test

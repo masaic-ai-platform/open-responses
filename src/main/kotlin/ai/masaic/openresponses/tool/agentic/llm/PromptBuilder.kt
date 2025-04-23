@@ -153,6 +153,7 @@ object PromptBuilder {
         promptBuilder.append("\n   - Use more specific technical terms found in previous results")
         promptBuilder.append("\n   - Explore chronologically (older/newer documents if date attributes exist)")
         promptBuilder.append("\n   - Use context of previous iterations in your query(for example domain specific keywords)")
+        promptBuilder.append("\n   - If the document follows a specific structure, then you can use that structure to search for the information. For example, if the document is a csv or a json then you can try to search for the specific keys in the document.")
         promptBuilder.append("\n3. Recognize when you have sufficient information and TERMINATE rather than continuing with marginally different queries")
 
         // Add query novelty checklist to discourage duplicate re‑phrasing
