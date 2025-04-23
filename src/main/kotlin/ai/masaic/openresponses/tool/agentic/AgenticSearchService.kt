@@ -19,7 +19,9 @@ import com.openai.models.responses.ResponseCreateParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
+import java.util.UUID
 import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 import kotlin.math.min
@@ -29,7 +31,7 @@ import kotlin.random.Random
 class AgenticSearchService(
     store: VectorStoreService,
     private val mapper: ObjectMapper,
-    private val hybridSearchService: HybridSearchService,
+    hybridSearchService: HybridSearchService,
 ) {
     private val log = LoggerFactory.getLogger(AgenticSearchService::class.java)
     private val seeds = SeedStrategyFactory(store, hybridSearchService)
@@ -50,6 +52,8 @@ class AgenticSearchService(
         requestParams: ResponseCreateParams,
         initialSeedMultiplier: Int = 3,
         alpha: Double = 0.5,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): AgenticSearchResponse {
         require(params.query.isNotBlank()) { "Question must not be blank" }
         require(maxResults > 0) { "maxResults must be positive" }
@@ -184,6 +188,35 @@ class AgenticSearchService(
         
             // Main agentic search loop
             while (!shouldTerminate && iterationCount < maxIterations) {
+                eventEmitter.invoke(
+                    ServerSentEvent
+                        .builder<String>()
+                        .event("response.agentic_search.query_phase.iteration")
+                        .data(
+                            mapper.writeValueAsString(
+                                mapOf<String, Any>(
+                                    "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
+                                    "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
+                                    "type" to "response.agentic_search.query_phase.iteration",
+                                    "query" to currentQuery,
+                                    "iteration" to iterationCount + 1,
+                                    "remaining_iterations" to (maxIterations - iterationCount + 1),
+                                    "reasoning" to
+                                        if (iterations.isNotEmpty() && iterations.last().query.contains("##MEMORY##")) {
+                                            iterations
+                                                .last()
+                                                .query
+                                                .substringAfter("##MEMORY##")
+                                                .trim()
+                                        } else {
+                                            ""
+                                        },
+                                    "citations" to (searchBuffer.groupBy { it.filename }).map { it.key },
+                                ),
+                            ),
+                        ).build(),
+                )
+
                 iterationCount++
             
                 // We already recorded the LLM-driven query in the iterations list

@@ -73,6 +73,8 @@ class AgenticSearchServiceComprehensiveTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             assertTrue(response.data.isEmpty(), "Expected no data when initial buffer empty")
             assertEquals(1, response.search_iterations.size)
@@ -96,6 +98,8 @@ class AgenticSearchServiceComprehensiveTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             assertEquals(1, response.data.size)
             assertEquals(0.8, response.data.first().score)
@@ -117,6 +121,8 @@ class AgenticSearchServiceComprehensiveTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             // After two invalid, third TERMINATE
             assertTrue(response.knowledge_acquired?.contains("ok") == true)
@@ -140,6 +146,8 @@ class AgenticSearchServiceComprehensiveTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             // Should terminate due to repeat threshold
             assertTrue(response.search_iterations.find { it.termination_reason?.contains("repeated queries") == true } != null)
@@ -162,6 +170,8 @@ class AgenticSearchServiceComprehensiveTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             // Last iteration should be forced termination
             val last = response.search_iterations.last()
@@ -191,6 +201,8 @@ class AgenticSearchServiceComprehensiveTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             // Summary should include iteration with memory content
             assertTrue(response.knowledge_acquired?.contains("Iteration 1:") == true)

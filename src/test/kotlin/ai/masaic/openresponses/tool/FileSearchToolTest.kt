@@ -74,16 +74,25 @@ class FileSearchToolTest {
         }"""
         
             coEvery { 
-                nativeToolRegistry.executeTool(toolName, arguments, params, ofType())
+                nativeToolRegistry.executeTool(toolName, arguments, params, ofType(), any(), any())
             } returns responseJson
         
             // When
-            val result = toolService.executeTool(toolName, arguments, params, openAIClient)
+            val result = toolService.executeTool(toolName, arguments, params, openAIClient, {}, mockk())
         
             // Then
             assertNotNull(result)
             assertEquals(responseJson, result)
-            coVerify { nativeToolRegistry.executeTool(toolName, arguments, params, openAIClient) }
+            coVerify {
+                nativeToolRegistry.executeTool(
+                    toolName,
+                    arguments,
+                    params,
+                    openAIClient,
+                    any(),
+                    any(),
+                )
+            }
         }
 
     @Test

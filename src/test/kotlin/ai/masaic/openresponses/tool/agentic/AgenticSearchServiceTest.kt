@@ -41,6 +41,8 @@ class AgenticSearchServiceTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             }
         }
@@ -61,6 +63,8 @@ class AgenticSearchServiceTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             }
         }
@@ -81,6 +85,8 @@ class AgenticSearchServiceTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
             }
         }
@@ -105,6 +111,8 @@ class AgenticSearchServiceTest {
                     seedName = null,
                     openAIClient = openAIClient,
                     requestParams = responseParams,
+                    eventEmitter = {},
+                    toolMetadata = mapOf(),
                 )
 
             assertTrue(response.data.isEmpty(), "Expected no data in response when initial buffer is empty")

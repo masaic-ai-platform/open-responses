@@ -11,7 +11,9 @@ import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
+import java.util.UUID
 import kotlin.jvm.optionals.getOrDefault
 import kotlin.jvm.optionals.getOrNull
 
@@ -43,6 +45,8 @@ class NativeToolRegistry(
         arguments: String,
         params: ResponseCreateParams,
         client: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): String? {
         toolRepository[name] ?: return null
         log.debug("Executing tool $name with arguments: $arguments")
@@ -50,7 +54,7 @@ class NativeToolRegistry(
         return when (name) {
             "think" -> "Your thought has been logged."
             "file_search" -> executeFileSearch(arguments, params)
-            "agentic_search" -> executeAgenticSearch(arguments, params, client)
+            "agentic_search" -> executeAgenticSearch(arguments, params, client, eventEmitter, toolMetadata)
             else -> null
         }
     }
@@ -154,10 +158,28 @@ class NativeToolRegistry(
         arguments: String,
         requestParams: ResponseCreateParams,
         openAIClient: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): String {
         try {
             val paramsObj = objectMapper.readValue(arguments, AgenticSearchParams::class.java)
             log.info("Starting agentic search for question: '${paramsObj.query}'")
+
+            eventEmitter.invoke(
+                ServerSentEvent
+                    .builder<String>()
+                    .event("response.agentic_search.query_phase.started")
+                    .data(
+                        objectMapper.writeValueAsString(
+                            mapOf<String, Any>(
+                                "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
+                                "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
+                                "type" to "response.agentic_search.query_phase.started",
+                                "query" to paramsObj.query,
+                            ),
+                        ),
+                    ).build(),
+            )
             
             val functions = requestParams.tools().orElseThrow().filter { it.isWebSearch() }
             if (functions.isEmpty()) {
@@ -209,9 +231,26 @@ class NativeToolRegistry(
                     requestParams = requestParams,
                     alpha = alpha,
                     initialSeedMultiplier = initialSeedMultiplier,
+                    eventEmitter = eventEmitter,
+                    toolMetadata = toolMetadata,
                 )
-            
+
             log.info("AgenticSearch completed with ${response.data.size} results and ${response.search_iterations.size} iterations")
+            eventEmitter.invoke(
+                ServerSentEvent
+                    .builder<String>()
+                    .event("response.agentic_search.query_phase.completed")
+                    .data(
+                        objectMapper.writeValueAsString(
+                            mapOf<String, Any>(
+                                "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
+                                "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
+                                "type" to "response.agentic_search.query_phase.completed",
+                                "conclusion" to (response.knowledge_acquired ?: ""),
+                            ),
+                        ),
+                    ).build(),
+            )
             return objectMapper.writeValueAsString(response)
         } catch (e: Exception) {
             log.error("Error executing agentic search: ${e.message}", e)

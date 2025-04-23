@@ -58,7 +58,15 @@ class NativeToolRegistryAgenticSearchTest {
             every { toolsOptional.getOrNull() } returns null
 
             // When
-            val result = nativeToolRegistry.executeTool("agentic_search", arguments, params, openAIClient)
+            val result =
+                nativeToolRegistry.executeTool(
+                    "agentic_search",
+                    arguments,
+                    params,
+                    openAIClient,
+                    {},
+                    mockk(relaxed = true),
+                )
 
             // Then
             val response = objectMapper.readValue(result, AgenticSearchResponse::class.java)

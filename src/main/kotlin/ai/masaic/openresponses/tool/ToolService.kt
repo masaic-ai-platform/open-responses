@@ -16,6 +16,7 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.io.ResourceLoader
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.nio.charset.Charset
 
@@ -117,10 +118,12 @@ class ToolService(
         arguments: String,
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): String? {
         try {
             val tool = findToolByName(name) ?: return null
-            return executeToolByProtocol(tool, name, arguments, params, openAIClient)
+            return executeToolByProtocol(tool, name, arguments, params, openAIClient, eventEmitter, toolMetadata)
         } catch (e: Exception) {
             return handleToolExecutionError(name, arguments, e)
         }
@@ -149,10 +152,12 @@ class ToolService(
         arguments: String,
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
     ): String? {
         val toolResult =
             when (tool.protocol) {
-                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params, openAIClient)
+                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params, openAIClient, eventEmitter, toolMetadata)
                 ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
             }
         log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
