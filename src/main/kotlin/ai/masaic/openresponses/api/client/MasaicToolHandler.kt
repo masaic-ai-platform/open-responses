@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
+import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
@@ -43,6 +44,11 @@ class MasaicToolHandler(
         openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
+        
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = ToolRequestContext(aliasMap, params)
+        
         val responseInputItems =
             if (params.input().isResponse()) {
                 params.input().asResponse().toMutableList()
@@ -102,7 +108,7 @@ class MasaicToolHandler(
 
                 toolCalls.forEach { tool ->
                     val function = tool.function()
-                    if (toolService.getFunctionTool(function.name()) != null) {
+                    if (toolService.getFunctionTool(function.name(), context) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
 
                         // Add the function call to response items
@@ -119,7 +125,17 @@ class MasaicToolHandler(
                         )
 
                         // Execute the tool using the observation API
-                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), mapOf("toolId" to tool.id()), parentObservation, params, openAIClient, {}) { toolResult ->
+                        executeToolWithObservation(
+                            function.name(),
+                            function.arguments(),
+                            tool.id(),
+                            mapOf("toolId" to tool.id()),
+                            parentObservation,
+                            params,
+                            openAIClient,
+                            {},
+                            context,
+                        ) { toolResult ->
                             if (toolResult != null) {
                                 logger.debug { "Tool execution successful for ${function.name()}" }
                                 responseInputItems.add(
@@ -176,6 +192,7 @@ class MasaicToolHandler(
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
+        context: ToolRequestContext,
         resultHandler: (String?) -> Unit,
     ) {
         telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
@@ -183,7 +200,10 @@ class MasaicToolHandler(
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
-                val toolResult = runBlocking { toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata) }
+                val toolResult =
+                    runBlocking { 
+                        toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata, context) 
+                    }
                 resultHandler(toolResult)
             } catch (e: Exception) {
                 observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
@@ -209,6 +229,11 @@ class MasaicToolHandler(
         openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
+
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = ToolRequestContext(aliasMap, params)
+
         val responseInputItems =
             if (params.input().isResponse()) {
                 params.input().asResponse().toMutableList()
@@ -248,7 +273,7 @@ class MasaicToolHandler(
         functionCalls.forEachIndexed { index, tool ->
             val function = tool.asFunctionCall()
 
-            if (toolService.getFunctionTool(function.name()) != null) {
+            if (toolService.getFunctionTool(function.name(), context) != null) {
                 logger.info { "Executing tool: ${function.name()} with ID: ${function.id()}" }
 
                 val eventPrefix = "response.${function.name().lowercase().replace("^\\W".toRegex(), "_")}"
@@ -296,7 +321,7 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), parentObservation, params, openAIClient, eventEmitter) { toolResult ->
+                executeToolWithObservation(function.name(), function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), parentObservation, params, openAIClient, eventEmitter, context) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

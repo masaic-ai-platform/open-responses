@@ -4,6 +4,7 @@ import ai.masaic.openresponses.tool.mcp.MCPServerInfo
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
+import com.fasterxml.jackson.databind.ObjectMapper
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import io.mockk.every
 import io.mockk.mockk
@@ -39,7 +40,7 @@ class ToolServiceTest {
 
     @BeforeEach
     fun setUp() {
-        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry)
+        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry, ObjectMapper())
     }
 
     /**
@@ -153,6 +154,7 @@ class ToolServiceTest {
                     mockk(),
                     mockk(),
                     {},
+                    mockk(relaxed = true),
                     mockk(relaxed = true),
                 )
 

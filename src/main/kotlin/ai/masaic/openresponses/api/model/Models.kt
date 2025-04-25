@@ -44,6 +44,7 @@ data class FileSearchTool(
     val rankingOptions: RankingOptions? = null,
     @JsonProperty("vector_store_ids")
     val vectorStoreIds: List<String>? = null,
+    val alias: String? = type,
 ) : Tool
 
 /**
@@ -63,6 +64,7 @@ data class AgenticSeachTool(
     val vectorStoreIds: List<String>? = null,
     @JsonProperty("max_iterations")
     val maxIterations: Int = 5,
+    val alias: String? = type,
 ) : Tool
 
 /**

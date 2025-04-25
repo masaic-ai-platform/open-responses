@@ -3,6 +3,7 @@ package ai.masaic.openresponses.tool
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.*
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.core.io.ResourceLoader
+import java.util.Optional
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
@@ -33,7 +35,7 @@ class FileSearchToolTest {
         nativeToolRegistry = mockk()
         vectorStoreService = mockk()
         
-        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry)
+        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry, ObjectMapper())
     }
 
     @Test
@@ -48,12 +50,13 @@ class FileSearchToolTest {
         
             // Mock ResponseCreateParams with file search tool
             val params = mockk<ResponseCreateParams>()
+            every { params.tools() } returns Optional.empty()
 
             // Create a mock tool definition
             val toolDefinition = mockk<NativeToolDefinition>()
             every { toolDefinition.name } returns toolName
             every { toolDefinition.protocol } returns ToolProtocol.NATIVE
-        
+
             // Setup mock for findByName to return the tool definition
             every { nativeToolRegistry.findByName(toolName) } returns toolDefinition
 
@@ -72,13 +75,22 @@ class FileSearchToolTest {
                 }]
             }]
         }"""
-        
-            coEvery { 
-                nativeToolRegistry.executeTool(toolName, arguments, params, ofType(), any(), any())
+
+            coEvery {
+                nativeToolRegistry.executeTool(toolName, arguments, params, ofType(), any(), any(), any())
             } returns responseJson
         
             // When
-            val result = toolService.executeTool(toolName, arguments, params, openAIClient, {}, mockk())
+            val result =
+                toolService.executeTool(
+                    toolName,
+                    arguments,
+                    params,
+                    openAIClient,
+                    {},
+                    emptyMap(),
+                    ToolRequestContext(emptyMap(), params),
+                )
         
             // Then
             assertNotNull(result)
@@ -89,6 +101,7 @@ class FileSearchToolTest {
                     arguments,
                     params,
                     openAIClient,
+                    any(),
                     any(),
                     any(),
                 )

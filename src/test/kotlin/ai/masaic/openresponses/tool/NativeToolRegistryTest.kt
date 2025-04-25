@@ -73,7 +73,7 @@ class NativeToolRegistryTest {
             val params = mockk<ResponseCreateParams>()
 
             // When
-            val result = nativeToolRegistry.executeTool("think", arguments, params, mockk(), {}, mockk(relaxed = true))
+            val result = nativeToolRegistry.executeTool("think", arguments, params, mockk(), {}, mockk(relaxed = true), mockk(relaxed = true))
 
             // Then
             assertEquals("Your thought has been logged.", result)
@@ -94,6 +94,7 @@ class NativeToolRegistryTest {
                     params,
                     mockk(),
                     {},
+                    mockk(relaxed = true),
                     mockk(relaxed = true),
                 )
 
@@ -117,6 +118,6 @@ class NativeToolRegistryTest {
             every { toolsOptional.orElse(null) } returns null
         
             // Just check that no error is thrown
-            nativeToolRegistry.executeTool("file_search", arguments, params, mockk(), {}, mockk(relaxed = true))
+            nativeToolRegistry.executeTool("file_search", arguments, params, mockk(), {}, mockk(relaxed = true), mockk(relaxed = true))
         }
 } 

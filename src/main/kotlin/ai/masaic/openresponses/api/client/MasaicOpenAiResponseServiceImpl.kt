@@ -2,6 +2,8 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
+import ai.masaic.openresponses.tool.ToolRequestContext
+import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
@@ -37,6 +39,7 @@ class MasaicOpenAiResponseServiceImpl(
     private val streamingService: MasaicStreamingService,
     private val responseStore: ResponseStore,
     private val telemetryService: TelemetryService,
+    private val toolService: ToolService,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
 
@@ -182,7 +185,12 @@ class MasaicOpenAiResponseServiceImpl(
                         ),
                     )
                 }
-            responseStore.storeResponse(response, inputItems)
+
+            // Create context with alias mappings
+            val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+            val context = ToolRequestContext(aliasMap, params)
+
+            responseStore.storeResponse(response, inputItems, context)
             logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
         }
     }

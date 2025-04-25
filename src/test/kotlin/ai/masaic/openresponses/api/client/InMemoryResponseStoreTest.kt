@@ -37,7 +37,7 @@ class InMemoryResponseStoreTest {
             val inputItems = listOf(mockk<ResponseInputItem>())
 
             // Act
-            responseStore.storeResponse(mockResponse, inputItems)
+            responseStore.storeResponse(mockResponse, inputItems, mockk(relaxed = true))
             val retrievedResponse = responseStore.getResponse(responseId)
 
             // Assert
@@ -71,7 +71,7 @@ class InMemoryResponseStoreTest {
                 )
 
             // Act
-            responseStore.storeResponse(mockResponse, inputItems)
+            responseStore.storeResponse(mockResponse, inputItems, mockk(relaxed = true))
             val retrievedItems = responseStore.getInputItems(responseId)
 
             // Assert
@@ -99,7 +99,7 @@ class InMemoryResponseStoreTest {
 
             val inputItems = listOf(mockk<ResponseInputItem>())
 
-            responseStore.storeResponse(mockResponse, inputItems)
+            responseStore.storeResponse(mockResponse, inputItems, mockk(relaxed = true))
 
             // Act
             val deleted = responseStore.deleteResponse(responseId)

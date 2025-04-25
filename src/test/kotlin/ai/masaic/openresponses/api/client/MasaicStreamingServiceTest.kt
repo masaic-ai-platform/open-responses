@@ -199,7 +199,7 @@ class MasaicStreamingServiceTest {
                 mockk {
                     every { chat() } returns mockChat
                 }
-            coEvery { responseStore.storeResponse(any(), any()) } just runs
+            coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
@@ -256,9 +256,10 @@ class MasaicStreamingServiceTest {
                 mockk {
                     every { chat() } returns mockChat
                 }
-            coEvery { responseStore.storeResponse(any(), any()) } just runs
+            coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
+            every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
 
             // When
             val flow = streamingService.createCompletionStream(openAIClient, params, metadata)
@@ -270,7 +271,7 @@ class MasaicStreamingServiceTest {
             // And a COMPLETED event for the STOP
             assertTrue(events.any { it.data()?.contains("response.completed") == true })
 
-            coVerify { responseStore.storeResponse(any(), any()) }
+            coVerify { responseStore.storeResponse(any(), any(), any()) }
         }
 
     /**
@@ -292,6 +293,7 @@ class MasaicStreamingServiceTest {
             every { originalParams.temperature() } returns Optional.of(0.7)
             every { originalParams._parallelToolCalls() } returns JsonValue.from(false)
             every { originalParams._tools() } returns JsonValue.from(listOf<Tool>())
+            every { originalParams.tools() } returns Optional.empty()
             every { originalParams.topP() } returns Optional.of(1.0)
             every { originalParams.maxOutputTokens() } returns Optional.of(512)
             every { originalParams.reasoning() } returns Optional.empty()
@@ -392,13 +394,14 @@ class MasaicStreamingServiceTest {
             val mockCompletions = mockk<ChatCompletionServiceAsync>(relaxed = false)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
 
-            coEvery { responseStore.storeResponse(any(), any()) } just runs
+            coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
 
             // The parameterConverter returns a prepared completion for any iteration:
             coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             // We'll say toolService recognizes \"my_function\"
-            every { toolService.getFunctionTool("my_function") } returns FunctionTool(name = "my_function")
+            every { toolService.getFunctionTool("my_function", any()) } returns FunctionTool(name = "my_function")
+            every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
 
             // Now stub the openAIClient usage
             every { openAIClient.async() } returns
@@ -449,6 +452,7 @@ class MasaicStreamingServiceTest {
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList<Tool>())
+        every { params.tools() } returns Optional.empty()
         every { params.toolChoice() } returns Optional.empty()
         every { params.topP() } returns Optional.of(1.0)
         every { params.maxOutputTokens() } returns Optional.of(512)

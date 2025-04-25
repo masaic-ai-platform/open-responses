@@ -67,7 +67,7 @@ class MongoResponseStoreTest {
                 )
 
             // Act
-            responseStore.storeResponse(mockResponse, inputItems)
+            responseStore.storeResponse(mockResponse, inputItems, mockk(relaxed = true))
 
             // Assert
             coVerify { mongoTemplate.save(any<MongoResponseStore.ResponseDocument>(), "responses") }

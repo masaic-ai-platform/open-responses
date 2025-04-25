@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
@@ -46,6 +47,7 @@ class InMemoryResponseStore(
     override suspend fun storeResponse(
         response: Response,
         inputItems: List<ResponseInputItem>,
+        context: ToolRequestContext,
     ) {
         val responseId = response.id()
         logger.debug { "Storing response with ID: $responseId" }
@@ -65,7 +67,7 @@ class InMemoryResponseStore(
                             objectMapper.convertValue(outputItem.message().get(), InputMessageItem::class.java)
                         }
                         // Handle function calls
-                        outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name()) == null) -> {
+                        outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name(), context) == null) -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
                                 id = functionCall.id(),

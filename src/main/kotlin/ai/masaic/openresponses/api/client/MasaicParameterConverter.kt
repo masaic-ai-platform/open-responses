@@ -373,6 +373,7 @@ class MasaicParameterConverter(
             when {
                 responseTool.isFunction() -> {
                     val functionTool = responseTool.asFunction()
+                    val toolName = functionTool._additionalProperties()["alias"]?.toString() ?: functionTool.name()
                     logger.trace { "Converting function tool: ${functionTool.name()}" }
 
                     result.add(
@@ -382,7 +383,7 @@ class MasaicParameterConverter(
                             .function(
                                 FunctionDefinition
                                     .builder()
-                                    .name(functionTool.name())
+                                    .name(toolName)
                                     .description(functionTool._description())
                                     .parameters(
                                         objectMapper.readValue(
@@ -396,7 +397,8 @@ class MasaicParameterConverter(
                 responseTool.isWebSearch() -> {
                     if (responseTool.asWebSearch().type().toString() == "agentic_search") {
                         val nativeTool = nativeToolRegistry.findByName("agentic_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
-                        logger.trace { "Converting file search tool" }
+                        val toolName = responseTool.asWebSearch()._additionalProperties()["alias"]?.toString() ?: nativeTool.name
+                        logger.trace { "Converting agentic search tool: $toolName" }
                         result.add(
                             ChatCompletionTool
                                 .builder()
@@ -404,7 +406,7 @@ class MasaicParameterConverter(
                                 .function(
                                     FunctionDefinition
                                         .builder()
-                                        .name(nativeTool.name)
+                                        .name(toolName)
                                         .description(nativeTool.description)
                                         .parameters(
                                             objectMapper.readValue(
@@ -433,7 +435,8 @@ class MasaicParameterConverter(
                 }
                 responseTool.isFileSearch() -> {
                     val nativeTool = nativeToolRegistry.findByName("file_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
-                    logger.trace { "Converting file search tool" }
+                    val toolName = responseTool.asWebSearch()._additionalProperties()["alias"]?.toString() ?: nativeTool.name
+                    logger.trace { "Converting file search tool: $toolName" }
                     result.add(
                         ChatCompletionTool
                             .builder()
@@ -441,7 +444,7 @@ class MasaicParameterConverter(
                             .function(
                                 FunctionDefinition
                                     .builder()
-                                    .name(nativeTool.name)
+                                    .name(toolName)
                                     .description(nativeTool.description)
                                     .parameters(
                                         objectMapper.readValue(
