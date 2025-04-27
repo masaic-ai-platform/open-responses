@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
@@ -291,6 +292,7 @@ class MasaicStreamingService(
                             responseOutputItemAccumulator,
                             internalToolItemIds,
                             functionNameAccumulator,
+                            params,
                         )
 
                         // If we detect tool_calls:
@@ -550,6 +552,7 @@ class MasaicStreamingService(
         responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
         internalToolItemIds: MutableSet<String>,
         functionNameAccumulator: MutableMap<Long, Pair<String, String>>,
+        params: ResponseCreateParams,
     ) {
         completion.toResponseStreamEvent().forEach { event ->
             when {
@@ -557,7 +560,7 @@ class MasaicStreamingService(
                     handleFunctionCallDelta(event, functionCallAccumulator, internalToolItemIds, completion)
                 }
                 event.isOutputItemAdded() && event.asOutputItemAdded().item().isFunctionCall() -> {
-                    handleOutputItemAdded(event, functionNameAccumulator, responseOutputItemAccumulator, internalToolItemIds)
+                    handleOutputItemAdded(event, functionNameAccumulator, responseOutputItemAccumulator, internalToolItemIds, params)
                 }
                 event.isOutputTextDelta() -> {
                     handleOutputTextDelta(event, textAccumulator)
@@ -603,6 +606,7 @@ class MasaicStreamingService(
         functionNameAccumulator: MutableMap<Long, Pair<String, String>>,
         responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
         internalToolItemIds: MutableSet<String>,
+        params: ResponseCreateParams,
     ) {
         val functionCall = event.asOutputItemAdded().item().asFunctionCall()
         val functionName = functionCall.name()
@@ -610,8 +614,12 @@ class MasaicStreamingService(
 
         functionNameAccumulator[outputIndex] = Pair(functionName, functionCall.callId())
 
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = ToolRequestContext(aliasMap, params)
+
         // If a recognized function, mark internal
-        if (toolService.getFunctionTool(functionName) != null) {
+        if (toolService.getFunctionTool(functionName, context) != null) {
             internalToolItemIds.add(functionCall.id())
         }
 
@@ -721,7 +729,12 @@ class MasaicStreamingService(
                         ),
                     )
                 }
-            responseStore.storeResponse(response, inputItems)
+
+            // Create context with alias mappings
+            val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+            val context = ToolRequestContext(aliasMap, params)
+
+            responseStore.storeResponse(response, inputItems, context)
             logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
         }
     }

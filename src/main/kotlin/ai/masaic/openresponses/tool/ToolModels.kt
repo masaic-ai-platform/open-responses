@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.model.FunctionTool
+import com.openai.models.responses.ResponseCreateParams
 import java.util.*
 
 /**
@@ -76,3 +77,14 @@ data class NativeToolDefinition(
             )
     }
 }
+
+/**
+ * Context for tool execution that includes alias mappings and original request parameters.
+ *
+ * @property aliasMap Mapping of alias names to actual tool names
+ * @property originalParams The original request parameters
+ */
+data class ToolRequestContext(
+    val aliasMap: Map<String, String> = emptyMap(),
+    val originalParams: ResponseCreateParams? = null,
+)

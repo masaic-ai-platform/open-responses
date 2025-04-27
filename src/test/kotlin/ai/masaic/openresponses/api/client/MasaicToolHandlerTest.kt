@@ -13,12 +13,14 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import io.mockk.*
+import io.mockk.every
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.http.codec.ServerSentEvent
+import java.util.Optional
 
 class MasaicToolHandlerTest {
     // Tool service mock
@@ -119,6 +121,8 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
         val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true), mockk(relaxed = true))
@@ -182,12 +186,16 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+
         // Let's pretend the toolService recognizes and executes "myToolFunction"
-        every { toolService.getFunctionTool("myToolFunction") } returns mockk()
+        every { toolService.getFunctionTool("myToolFunction", any()) } returns mockk()
         coEvery {
             toolService.executeTool(
                 "myToolFunction",
                 "{\"key\":\"value\"}",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -275,7 +283,7 @@ class MasaicToolHandlerTest {
         every { toolService.getFunctionTool("errorTool") } returns mockk()
 
         // Setup direct exception throw when the tool executes
-        coEvery { toolService.executeTool("errorTool", any(), any(), mockk(), any(), any()) } throws RuntimeException("Tool execution failed")
+        coEvery { toolService.executeTool("errorTool", any(), any(), mockk(), any(), any(), any()) } throws RuntimeException("Tool execution failed")
 
         // Manually set the error attribute for testing purposes since we're using a mock
         capturedAttributes[errorTypeKey] = "RuntimeException"
@@ -335,6 +343,8 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
         val items = handler.handleMasaicToolCall(params, response, mockk(), mockk(), mockk())
@@ -413,12 +423,16 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+
         // Let’s pretend the toolService recognizes and executes "myToolFunction"
-        every { toolService.getFunctionTool("myToolFunction") } returns mockk()
+        every { toolService.getFunctionTool("myToolFunction", any()) } returns mockk()
         coEvery {
             toolService.executeTool(
                 "myToolFunction",
                 "{\"foo\":\"bar\"}",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -499,9 +513,11 @@ class MasaicToolHandlerTest {
         // Mocking
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
+        every { params.tools() } returns Optional.empty()
         every { params.input().asText() } returns "User message"
         // Return null to indicate unsupported tool
-        every { toolService.getFunctionTool("unsupportedTool") } returns null
+        every { toolService.getFunctionTool("unsupportedTool", any()) } returns null
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
         val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
@@ -578,12 +594,14 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
 
         // Configure tools
-        every { toolService.getFunctionTool("toolOne") } returns mockk()
-        every { toolService.getFunctionTool("toolTwo") } returns mockk()
-        coEvery { toolService.executeTool("toolOne", "{\"param\":\"value1\"}", any(), any(), any(), any()) } returns "Result from tool one"
-        coEvery { toolService.executeTool("toolTwo", "{\"param\":\"value2\"}", any(), any(), any(), any()) } returns "Result from tool two"
+        every { toolService.getFunctionTool("toolOne", any()) } returns mockk()
+        every { toolService.getFunctionTool("toolTwo", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+        coEvery { toolService.executeTool("toolOne", "{\"param\":\"value1\"}", any(), any(), any(), any(), any()) } returns "Result from tool one"
+        coEvery { toolService.executeTool("toolTwo", "{\"param\":\"value2\"}", any(), any(), any(), any(), any()) } returns "Result from tool two"
 
         // Manually set the attributes for testing purposes
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
@@ -655,10 +673,12 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
 
         // Return null from tool execution
-        every { toolService.getFunctionTool("nullResultTool") } returns mockk()
-        coEvery { toolService.executeTool("nullResultTool", any(), any(), any(), any(), any()) } returns null
+        every { toolService.getFunctionTool("nullResultTool", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+        coEvery { toolService.executeTool("nullResultTool", any(), any(), any(), any(), any(), any()) } returns null
 
         // Set attributes for testing
         capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
@@ -738,13 +758,16 @@ class MasaicToolHandlerTest {
         every { params.input() } returns inputMock
         every { inputMock.isResponse() } returns true
         every { inputMock.asResponse() } returns existingItems
+        every { params.tools() } returns Optional.empty()
 
         // Let's pretend the toolService recognizes and executes "newFunction"
-        every { toolService.getFunctionTool("newFunction") } returns mockk()
+        every { toolService.getFunctionTool("newFunction", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
         coEvery {
             toolService.executeTool(
                 "newFunction",
                 "{\"param\":\"new\"}",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -823,10 +846,12 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
 
         // Configure tool service
-        every { toolService.getFunctionTool("telemetryTool") } returns mockk()
-        coEvery { toolService.executeTool("telemetryTool", any(), any(), any(), any(), any()) } returns "Telemetry result"
+        every { toolService.getFunctionTool("telemetryTool", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+        coEvery { toolService.executeTool("telemetryTool", any(), any(), any(), any(), any(), any()) } returns "Telemetry result"
 
         // Create a spy telemetry service to verify attributes
         val telemetrySpy = spyk(telemetryService)
@@ -884,7 +909,8 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-
+        every { params.tools() } returns Optional.empty()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
         // When
         val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(), mockk())
 
@@ -942,13 +968,16 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
 
         // Mock tool service
-        every { toolService.getFunctionTool("mixedContentTool") } returns mockk()
+        every { toolService.getFunctionTool("mixedContentTool", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
         coEvery {
             toolService.executeTool(
                 "mixedContentTool",
                 "{\"param\":\"mixed\"}",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -1011,9 +1040,11 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
+        every { params.tools() } returns Optional.empty()
 
         // Mock event emitter function
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
         val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
@@ -1079,11 +1110,16 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        every { toolService.getFunctionTool("parentObsTool") } returns mockk()
+        every { toolService.getFunctionTool("parentObsTool", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+
+        every { params.tools() } returns Optional.empty()
+
         coEvery {
             toolService.executeTool(
                 "parentObsTool",
                 "{\"param\":\"parentTest\"}",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -1159,13 +1195,16 @@ class MasaicToolHandlerTest {
         val params = mockk<ResponseCreateParams>()
         every { params.input().isResponse() } returns false
         every { params.input().asText() } returns "User message"
-        every { toolService.getFunctionTool("malformedArgsTool") } returns mockk()
+        every { toolService.getFunctionTool("malformedArgsTool", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+        every { params.tools() } returns Optional.empty()
 
         // Tool service throws error when parsing malformed JSON
         coEvery {
             toolService.executeTool(
                 "malformedArgsTool",
                 "{invalid json",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -1253,13 +1292,17 @@ class MasaicToolHandlerTest {
         every { params.input() } returns inputMock
         every { inputMock.isResponse() } returns true
         every { inputMock.asResponse() } returns existingItems
+        every { params.tools() } returns Optional.empty()
 
         // Tool configuration
-        every { toolService.getFunctionTool("preserveFunction") } returns mockk()
+        every { toolService.getFunctionTool("preserveFunction", any()) } returns mockk()
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
+
         coEvery {
             toolService.executeTool(
                 "preserveFunction",
                 "{\"preserve\":\"existing\"}",
+                any(),
                 any(),
                 any(),
                 any(),
@@ -1269,6 +1312,7 @@ class MasaicToolHandlerTest {
 
         // Mock event emitter function
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
+        every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
         val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())

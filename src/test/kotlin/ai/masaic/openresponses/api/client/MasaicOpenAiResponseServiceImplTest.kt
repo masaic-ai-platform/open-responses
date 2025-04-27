@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
+import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonField
 import com.openai.core.RequestOptions
@@ -27,6 +28,7 @@ class MasaicOpenAiResponseServiceImplTest {
     private lateinit var responseStore: ResponseStore
     private lateinit var telemetryService: TelemetryService
     private lateinit var serviceImpl: MasaicOpenAiResponseServiceImpl
+    private lateinit var toolService: ToolService
 
     @BeforeEach
     fun setup() {
@@ -34,6 +36,7 @@ class MasaicOpenAiResponseServiceImplTest {
         toolHandler = mockk(relaxed = true)
         streamingService = mockk(relaxed = true)
         responseStore = mockk(relaxed = true)
+        toolService = mockk(relaxed = true)
 
         // Create observation and meter registries
         val observationRegistry = ObservationRegistry.create()
@@ -49,6 +52,7 @@ class MasaicOpenAiResponseServiceImplTest {
                 streamingService = streamingService,
                 responseStore = responseStore,
                 telemetryService = telemetryService,
+                toolService = toolService,
             )
     }
 

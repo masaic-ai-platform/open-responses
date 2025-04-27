@@ -47,11 +47,13 @@ class NativeToolRegistry(
         client: OpenAIClient,
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
+        context: ToolRequestContext,
     ): String? {
-        toolRepository[name] ?: return null
-        log.debug("Executing tool $name with arguments: $arguments")
+        val resolvedName = context.aliasMap[name] ?: name
+        toolRepository[resolvedName] ?: return null
+        log.debug("Executing tool alias '$name' (resolved to '$resolvedName') with arguments: $arguments")
 
-        return when (name) {
+        return when (resolvedName) {
             "think" -> "Your thought has been logged."
             "file_search" -> executeFileSearch(arguments, params)
             "agentic_search" -> executeAgenticSearch(arguments, params, client, eventEmitter, toolMetadata)

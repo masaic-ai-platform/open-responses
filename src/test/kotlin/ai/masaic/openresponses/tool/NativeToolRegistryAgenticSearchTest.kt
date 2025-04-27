@@ -66,6 +66,7 @@ class NativeToolRegistryAgenticSearchTest {
                     openAIClient,
                     {},
                     mockk(relaxed = true),
+                    mockk(relaxed = true),
                 )
 
             // Then
