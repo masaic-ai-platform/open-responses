@@ -18,6 +18,7 @@ import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
 import reactor.core.publisher.Mono
+import java.io.File
 import java.io.IOException
 import java.net.MalformedURLException
 import java.nio.ByteBuffer
@@ -335,6 +336,21 @@ class LocalFileStorageService(
                 throw FileStorageException("Failed to store file part", e)
             }
         }
+
+    fun store(
+        fileName: String,
+        content: List<String>,
+    ): String {
+        val directory = File("$rootDir/evals/conversations")
+        if (!directory.exists()) {
+            directory.mkdirs()
+        }
+
+        val file = File(directory, fileName)
+        // Write each message on a new line
+        file.writeText(content.joinToString("\n"))
+        return file.absolutePath
+    }
 }
 
 class FileStorageException : IOException {

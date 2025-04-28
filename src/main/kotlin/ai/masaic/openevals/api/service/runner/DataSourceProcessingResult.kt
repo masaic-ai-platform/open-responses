@@ -34,4 +34,5 @@ class JsonlDataResult(
  */
 class EmptyProcessingResult(
     val reason: String,
+    val dataSourceClassName: String = "",
 ) : DataSourceProcessingResult() 

@@ -415,4 +415,44 @@ class EvalRunControllerTest {
             coVerify(exactly = 1) { evalRunService.getEvalRun(runId) }
             coVerify(exactly = 1) { evalRunService.deleteEvalRun(runId) }
         }
+
+    @Test
+    fun `createEvalRun should handle stored completions data source request`() =
+        runBlocking {
+            // Arrange
+            val evalId = "eval-123"
+            val fileDataSource = FileDataSource(id = "open-responses-file_680745493e4781000000.jsonl")
+            val dataSource =
+                StoredCompletionsRunDataSource(
+                    source = fileDataSource,
+                )
+            
+            val request =
+                CreateEvalRunRequest(
+                    name = "Agent handovers Taxonomy Labelling Run",
+                    dataSource = dataSource,
+                    metadata = mapOf("key" to "value"),
+                )
+
+            val expectedEvalRun =
+                EvalRun(
+                    apiKey = "test-api-key",
+                    id = "run-123",
+                    evalId = evalId,
+                    name = request.name,
+                    dataSource = dataSource,
+                    model = null, // No model for StoredCompletionsRunDataSource
+                    metadata = request.metadata,
+                )
+
+            coEvery { evalRunService.createEvalRun(headers, evalId, request) } returns expectedEvalRun
+
+            // Act
+            val response = evalRunController.createEvalRun(headers, evalId, request)
+
+            // Assert
+            assertEquals(HttpStatus.CREATED, response.statusCode)
+            assertEquals(expectedEvalRun, response.body)
+            coVerify(exactly = 1) { evalRunService.createEvalRun(headers, evalId, request) }
+        }
 } 

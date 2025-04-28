@@ -65,8 +65,15 @@ class EvalService(
                     // Create the data source config
                     CustomDataSourceConfig(schema)
                 }
+                dataSourceConfigRequest is StoredCompletionsDataSourceConfigRequest -> {
+                    StoredCompletionsDataSourceConfig(
+                        metadata = dataSourceConfigRequest.metadata,
+                    )
+                }
+
                 dataSourceConfigRequest is StoredCompletionsDataSourceConfig -> {
-                    StoredCompletionsDataSourceConfig(dataSourceConfigRequest.metadata)
+                    // Use the config as is
+                    dataSourceConfigRequest
                 }
                 else -> {
                     throw UnsupportedOperationException("Only CustomDataSourceConfigRequest and StoredCompletionsDataSourceConfig type of dataSourceConfig supported")
@@ -89,6 +96,11 @@ class EvalService(
                     is TextSimilarityGrader ->
                         criterion.copy(
                             id = "${criterion.name}-${UUID.randomUUID()}",
+                        )
+                    is ModelAnnotator ->
+                        criterion.copy(
+                            id = "${criterion.name}-${UUID.randomUUID()}",
+                            apiKey = EvalRunService.extractApiKey(headers),
                         )
                     else -> throw UnsupportedOperationException("Unknown testing criterion type: ${criterion.javaClass.simpleName}")
                 }

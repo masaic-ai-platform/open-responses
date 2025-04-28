@@ -3,6 +3,7 @@ package ai.masaic.openevals.api.service.runner
 import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.repository.EvalRunRepository
+import ai.masaic.openresponses.api.service.storage.LocalFileStorageService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -18,6 +19,7 @@ class EvalRunner(
     private val generationServices: List<GenerationService>,
     private val criterionEvaluatorFactory: CriterionEvaluatorFactory,
     private val resultProcessor: ResultProcessor,
+    private val localFileStorageService: LocalFileStorageService,
 ) {
     private val logger = LoggerFactory.getLogger(EvalRunner::class.java)
 
@@ -199,16 +201,28 @@ class EvalRunner(
             }
             
             is EmptyProcessingResult -> {
-                // Handle empty result
-                logger.warn("Empty processing result [evalRunId=${evalRun.id}]: ${processingResult.reason}")
-                evalRun.copy(
-                    status = EvalRunStatus.FAILED,
-                    error =
-                        EvalRunError(
-                            code = "processing_error",
-                            message = "Empty processing result for evaluation run ${evalRun.id}: ${processingResult.reason}",
-                        ),
-                )
+                if (processingResult.dataSourceClassName == StoredCompletionsRunDataSource::class.simpleName) {
+                    evaluateStoredCompletions(evalRun, eval, jsonLines)
+                        ?: evalRun.copy(
+                            status = EvalRunStatus.FAILED,
+                            error =
+                                EvalRunError(
+                                    code = "processing_error",
+                                    message = "Failed to process stored messages for evaluation run ${evalRun.id}",
+                                ),
+                        )
+                } else {
+                    // Handle empty result
+                    logger.warn("Empty processing result [evalRunId=${evalRun.id}]: ${processingResult.reason}")
+                    evalRun.copy(
+                        status = EvalRunStatus.FAILED,
+                        error =
+                            EvalRunError(
+                                code = "processing_error",
+                                message = "Empty processing result for evaluation run ${evalRun.id}: ${processingResult.reason}",
+                            ),
+                    )
+                }
             }
         }
     }
@@ -331,6 +345,103 @@ class EvalRunner(
     }
 
     /**
+     * Process completion messages for evaluation.
+     *
+     * @param completionResult The completion messages result
+     * @param evalRun The evaluation run
+     * @param eval The evaluation definition
+     * @param jsonLines The original JSON lines
+     * @return Updated evaluation run, or null if processing failed
+     */
+    private suspend fun evaluateStoredCompletions(
+        evalRun: EvalRun,
+        eval: Eval,
+        jsonLines: List<String>,
+    ): EvalRun? {
+        try {
+            // Validate data source type
+            if (evalRun.dataSource !is StoredCompletionsRunDataSource) {
+                logger.error("StoredCompletionsRunDataSource received but evalRun.dataSource is not CompletionsRunDataSource [evalRunId=${evalRun.id}]")
+                return evalRun.copy(
+                    status = EvalRunStatus.FAILED,
+                    error =
+                        EvalRunError(
+                            code = "invalid_configuration",
+                            message = "Invalid data source type for completion messages in evaluation run ${evalRun.id}",
+                        ),
+                )
+            }
+
+            // Evaluate testing criteria
+            logger.info("Evaluating testing criteria [evalRunId=${evalRun.id}, criteriaCount=${eval.testingCriteria.size}]")
+
+            val testingResults =
+                evaluateStoredCompletions(
+                    jsonLines,
+                    eval.testingCriteria,
+                    evalRun.id,
+                )
+
+            logger.info("Testing criteria evaluation completed [evalRunId=${evalRun.id}]")
+
+            // Calculate result counts
+            val resultCounts = resultProcessor.calculateResultCounts(testingResults)
+            val perCriteriaResults = resultProcessor.calculatePerCriteriaResults(testingResults, eval.testingCriteria)
+            logger.info("Results calculated [evalRunId=${evalRun.id}, passed=${resultCounts.passed}, failed=${resultCounts.failed}, errored=${resultCounts.errored}]")
+
+            // Check if we have any results at all
+            if (testingResults.isEmpty()) {
+                logger.warn("No testing results were produced [evalRunId=${evalRun.id}]")
+                return evalRun.copy(
+                    status = EvalRunStatus.COMPLETED,
+                    resultCounts = resultCounts,
+                    perTestingCriteriaResults = perCriteriaResults,
+                    error =
+                        EvalRunError(
+                            code = "no_results",
+                            message = "Evaluation completed but no results were produced for evaluation run ${evalRun.id}",
+                        ),
+                )
+            }
+
+            val resultsFileName = writeAnnotationResult(eval.testingCriteria.first(), testingResults[0]?.values?.toList() ?: throw IllegalStateException("annotations are not available."))
+
+            // Return updated eval run
+            return evalRun.copy(
+                status = EvalRunStatus.COMPLETED,
+                resultCounts = resultCounts,
+                perTestingCriteriaResults = perCriteriaResults,
+                reportUrl = resultsFileName,
+            )
+        } catch (e: Exception) {
+            logger.error("Error processing completion messages [evalRunId=${evalRun.id}]: ${e.message}", e)
+            return evalRun.copy(
+                status = EvalRunStatus.FAILED,
+                error =
+                    EvalRunError(
+                        code = "processing_error",
+                        message = "Error during completion message processing for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
+                    ),
+            )
+        }
+    }
+
+    private fun writeAnnotationResult(
+        testingCriterion: TestingCriterion,
+        criterionResults: List<CriterionEvaluator.CriterionResult>,
+    ): String {
+        // Create the CSV file with messages
+        try {
+            val fileName = "${testingCriterion.id.replace(" ", "-")}.jsonl"
+            val messages = criterionResults.mapNotNull { it.message?.replace("\n", "") }
+            return localFileStorageService.store(fileName, messages)
+        } catch (e: Exception) {
+            logger.error("Error creating CSV file for criterion ${testingCriterion.id}: ${e.message}", e)
+            return "not_available"
+        }
+    }
+
+    /**
      * Evaluate testing criteria for each completion result.
      *
      * @param resultMap Map of completion results by index
@@ -375,11 +486,11 @@ class EvalRunner(
                     // Pass completion result as actual and original data as reference
                     val result =
                         criterionEvaluatorFactory.evaluate(
-                            criterion, 
-                            actualJson = completionResult.contentJson, 
+                            criterion,
+                            actualJson = completionResult.contentJson,
                             referenceJson = jsonLine,
                         )
-                    
+
                     criteriaResults[criterion.name] = result
                     logger.debug("Criterion '${criterion.name}' evaluated, result=${result.passed} [evalRunId=$evalRunId, index=$index]")
                 } catch (e: Exception) {
@@ -395,6 +506,62 @@ class EvalRunner(
             }
 
             results[index] = criteriaResults
+        }
+
+        // Log summary
+        val totalItems = results.size
+        val totalCriteria = testingCriteria.size
+        val totalTests = totalItems * totalCriteria
+        val passedTests = results.values.sumOf { criteriaMap -> criteriaMap.values.count { it.passed } }
+
+        logger.info("Testing criteria evaluation: $passedTests/$totalTests tests passed across $totalItems items [evalRunId=$evalRunId]")
+
+        return results
+    }
+
+    /**
+     * Evaluate testing criteria for each completion result.
+     *
+     * @param resultMap Map of completion results by index
+     * @param jsonLines Original JSON lines from the file
+     * @param testingCriteria List of testing criteria to evaluate
+     * @param evalRunId The evaluation run ID for logging
+     * @return Map of testing criteria results by index and criteria
+     */
+    private fun evaluateStoredCompletions(
+        jsonLines: List<String>,
+        testingCriteria: List<TestingCriterion>,
+        evalRunId: String,
+    ): Map<Int, Map<String, CriterionEvaluator.CriterionResult>> {
+        val results = mutableMapOf<Int, Map<String, CriterionEvaluator.CriterionResult>>()
+        // Evaluate each testing criterion with individual error handling
+        testingCriteria.forEachIndexed { criteriaNumber, criterion ->
+            val criteriaResults = mutableMapOf<String, CriterionEvaluator.CriterionResult>()
+            jsonLines.forEachIndexed { index, jsonLine ->
+                logger.debug("Evaluating stored messages at index $index against ${testingCriteria.size} criteria [evalRunId=$evalRunId]")
+                try {
+                    // Pass completion result as actual and original data as reference
+                    val result =
+                        criterionEvaluatorFactory.evaluate(
+                            criterion,
+                            actualJson = jsonLine,
+                            referenceJson = jsonLine,
+                        )
+
+                    criteriaResults["$index"] = result
+                    logger.debug("Criterion '${criterion.name}' evaluated, result=${result.passed} [evalRunId=$evalRunId, index=$index]")
+                } catch (e: Exception) {
+                    // Record the error but continue with other criteria
+                    logger.error("Error evaluating criterion '${criterion.name}' for index $index [evalRunId=$evalRunId]: ${e.message}", e)
+                    criteriaResults[criterion.name] =
+                        CriterionEvaluator.CriterionResult(
+                            id = criterion.id,
+                            passed = false,
+                            message = "Error: ${e.message ?: "Unknown error during evaluation"}",
+                        )
+                }
+            }
+            results[criteriaNumber] = criteriaResults
         }
 
         // Log summary

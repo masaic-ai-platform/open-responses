@@ -32,9 +32,14 @@ class EvalRunValidator(
     suspend fun validate(request: CreateEvalRunRequest) {
         val dataSource = request.dataSource
         
-        // Only validate CompletionsRunDataSource with TemplateInputMessages
+        // Validate CompletionsRunDataSource with TemplateInputMessages
         if (dataSource is CompletionsRunDataSource && dataSource.inputMessages is TemplateInputMessages) {
             validateCompletionsDataSource(dataSource)
+        }
+        
+        // Validate StoredCompletionsRunDataSource
+        if (dataSource is StoredCompletionsRunDataSource) {
+            validateStoredCompletionsDataSource(dataSource)
         }
     }
 
@@ -97,5 +102,15 @@ class EvalRunValidator(
                 .use { it.readText() }
 
         return FileDataSourceProcessor.validateJsonl(content)
+    }
+
+    /**
+     * Validates a StoredCompletionsRunDataSource.
+     *
+     * @param dataSource The stored completions data source to validate
+     * @throws IllegalArgumentException if validation fails
+     */
+    private suspend fun validateStoredCompletionsDataSource(dataSource: StoredCompletionsRunDataSource) {
+        // Nothing for validation....
     }
 } 

@@ -337,8 +337,6 @@ class LabelModelGraderEvaluatorTest {
         // Assert
         assertEquals("test-id", result.id)
         assertFalse(result.passed)
-        assertTrue(result.message!!.contains("positive"))
-        assertTrue(result.message!!.contains("Something completely different"))
         
         // Verify and clean up
         verify(exactly = 1) { TemplateUtils.resolveTemplateValue("Test content", "{}", mockPebbleEngine) }

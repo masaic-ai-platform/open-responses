@@ -137,6 +137,7 @@ data class ModelUsage(
 @JsonSubTypes(
 //    JsonSubTypes.Type(value = JsonlRunDataSource::class, name = "jsonl"),
     JsonSubTypes.Type(value = CompletionsRunDataSource::class, name = "completions"),
+    JsonSubTypes.Type(value = StoredCompletionsRunDataSource::class, name = "stored_completions"),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 interface RunDataSource {
@@ -150,7 +151,6 @@ interface RunDataSource {
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = FileDataSource::class, name = "file_id"),
-//    JsonSubTypes.Type(value = CSVFileDataSource::class, name = "csv")
 )
 interface DataSource
 
@@ -224,4 +224,9 @@ data class CompletionResult(
     @JsonProperty("content_json")
     val contentJson: String,
     val error: String? = null,
-) 
+)
+
+// Stored Completions Run Data Source
+data class StoredCompletionsRunDataSource(
+    override val source: DataSource,
+) : RunDataSource

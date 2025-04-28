@@ -3,6 +3,7 @@ package ai.masaic.openevals.api.validation
 import ai.masaic.openevals.api.model.CustomDataSourceConfigRequest
 import ai.masaic.openevals.api.model.DataSourceConfig
 import ai.masaic.openevals.api.model.StoredCompletionsDataSourceConfig
+import ai.masaic.openevals.api.model.StoredCompletionsDataSourceConfigRequest
 
 /**
  * Validator for DataSourceConfig objects.
@@ -18,6 +19,7 @@ class DataSourceConfigValidator {
     fun validate(dataSourceConfig: DataSourceConfig) {
         when (dataSourceConfig) {
             is CustomDataSourceConfigRequest -> validateCustomDataSourceConfig(dataSourceConfig)
+            is StoredCompletionsDataSourceConfigRequest -> validateStoredCompletionsDataSourceConfig(dataSourceConfig)
             is StoredCompletionsDataSourceConfig -> {
                 // No additional validation for StoredCompletionsDataSourceConfig at this time
             }
@@ -60,5 +62,15 @@ class DataSourceConfigValidator {
         if (matchingKeys.isEmpty()) {
             throw IllegalArgumentException("At least one value in item_schema.required must match a key in item_schema.properties")
         }
+    }
+
+    /**
+     * Validates a stored completions data source configuration.
+     *
+     * @param config The stored completions data source configuration to validate
+     * @throws IllegalArgumentException if validation fails
+     */
+    private fun validateStoredCompletionsDataSourceConfig(config: StoredCompletionsDataSourceConfigRequest) {
+        // Nothing needed for now.
     }
 } 

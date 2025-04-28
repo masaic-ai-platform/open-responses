@@ -46,6 +46,9 @@ class FileDataSourceProcessor(
             return processCompletionsDataSource(dataSource)
         }
 
+        if (dataSource is StoredCompletionsRunDataSource) {
+            return EmptyProcessingResult("Data will be retrieved from stored completions", dataSource.javaClass.simpleName)
+        }
         // Add support for other data source types here as needed
         // Example: if (dataSource is JsonlRunDataSource) { ... }
 

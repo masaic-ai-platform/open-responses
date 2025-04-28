@@ -29,8 +29,7 @@ data class Eval(
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = CustomDataSourceConfigRequest::class, name = "custom"),
-//    JsonSubTypes.Type(value = CustomDataSourceConfig::class, name = "custom"),
-    JsonSubTypes.Type(value = StoredCompletionsDataSourceConfig::class, name = "stored_completions"),
+    JsonSubTypes.Type(value = StoredCompletionsDataSourceConfigRequest::class, name = "stored_completions"),
 )
 @JsonIgnoreProperties(ignoreUnknown = true)
 interface DataSourceConfig
@@ -50,8 +49,14 @@ data class CustomDataSourceConfig(
 ) : DataSourceConfig
 
 // Stored Completions Data Source Config
+@JsonTypeName("stored_completions")
 data class StoredCompletionsDataSourceConfig(
-    val metadata: Map<String, String>,
+    val metadata: Map<String, String> = emptyMap(),
+) : DataSourceConfig
+
+data class StoredCompletionsDataSourceConfigRequest(
+    @JsonProperty("item_schema")
+    val metadata: Map<String, String> = emptyMap(),
 ) : DataSourceConfig
 
 // Testing Criterion
@@ -62,6 +67,7 @@ data class StoredCompletionsDataSourceConfig(
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = LabelModelGrader::class, name = "label_model"),
+    JsonSubTypes.Type(value = ModelAnnotator::class, name = "annotate_model"),
     JsonSubTypes.Type(value = StringCheckGrader::class, name = "string_check"),
     JsonSubTypes.Type(value = TextSimilarityGrader::class, name = "text_similarity"),
 )
@@ -86,6 +92,17 @@ data class LabelModelGrader(
     @field:Valid
     @JsonProperty("passing_labels")
     val passingLabels: List<String>,
+    @JsonIgnore
+    val apiKey: String = "",
+) : TestingCriterion
+
+data class ModelAnnotator(
+    override val name: String,
+    override val id: String = "",
+    val model: String,
+    @field:NotEmpty @field:Size(min = 1, message = "at least one input object with role, content must be provided")
+    @field:Valid
+    val input: List<SimpleInputMessage>,
     @JsonIgnore
     val apiKey: String = "",
 ) : TestingCriterion

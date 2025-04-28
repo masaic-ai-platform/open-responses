@@ -3,6 +3,7 @@ package ai.masaic.openevals.api.service.runner
 import ai.masaic.openevals.api.model.*
 import ai.masaic.openevals.api.repository.EvalRepository
 import ai.masaic.openevals.api.repository.EvalRunRepository
+import ai.masaic.openresponses.api.service.storage.LocalFileStorageService
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -15,6 +16,7 @@ class EvalRunnerTest {
     private lateinit var generationService: GenerationService
     private lateinit var criterionEvaluatorFactory: CriterionEvaluatorFactory
     private lateinit var resultProcessor: ResultProcessor
+    private lateinit var localFileStorageService: LocalFileStorageService
     private lateinit var evalRunner: EvalRunner
 
     @BeforeEach
@@ -26,6 +28,7 @@ class EvalRunnerTest {
         generationService = mockk()
         criterionEvaluatorFactory = mockk()
         resultProcessor = mockk()
+        localFileStorageService = mockk(relaxed = true)
         
         // Create the service with mocked dependencies
         evalRunner =
@@ -36,6 +39,7 @@ class EvalRunnerTest {
                 listOf(generationService),
                 criterionEvaluatorFactory,
                 resultProcessor,
+                localFileStorageService,
             )
     }
 

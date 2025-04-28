@@ -84,6 +84,8 @@ dependencies {
     implementation("org.apache.lucene:lucene-core:9.9.0")
     implementation("org.apache.lucene:lucene-analysis-common:9.9.0")
     implementation("org.apache.lucene:lucene-queryparser:9.9.0")
+
+    implementation("com.google.cloud:google-cloud-translate:2.60.0")
 }
 
 kotlin {
