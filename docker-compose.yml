@@ -262,7 +262,7 @@ services:
       - |
         ollama serve &
         sleep 5
-        ollama pull gemma3:1b
+        ollama pull qwen3:4b
         tail -f /dev/null
    # 9. open-responses with Ollama
   open-responses-with-ollama:
