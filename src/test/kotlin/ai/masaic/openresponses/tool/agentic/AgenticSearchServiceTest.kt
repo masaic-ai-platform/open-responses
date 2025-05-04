@@ -3,7 +3,9 @@ package ai.masaic.openresponses.tool.agentic
 import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.AgenticSearchParams
+import ai.masaic.openresponses.tool.ResponseParamsAdapter
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.coEvery
@@ -40,7 +42,7 @@ class AgenticSearchServiceTest {
                     maxIterations = 5,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -62,7 +64,7 @@ class AgenticSearchServiceTest {
                     maxIterations = 5,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -84,7 +86,7 @@ class AgenticSearchServiceTest {
                     maxIterations = 0,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -110,7 +112,7 @@ class AgenticSearchServiceTest {
                     maxIterations = 5,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )

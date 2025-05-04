@@ -14,7 +14,9 @@ import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.responses.ResponseCreateParams
+import kotlinx.serialization.Serializable
 import java.util.*
+import kotlin.jvm.optionals.getOrDefault
 import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 
@@ -165,7 +167,7 @@ class ResponseParamsAdapter(
 ) : ToolParamsAccessor {
     override fun getModel(): String = params.model().toString()
 
-    override fun getDefaultTemperature(): Double? = params.temperature().getOrNull()
+    override fun getDefaultTemperature(): Double? = params.temperature().getOrDefault(1.0)
 
     override fun getTools(): List<Tool> =
         params.tools().getOrElse { emptyList<com.openai.models.responses.Tool>() }.mapNotNull { it ->
@@ -301,6 +303,7 @@ class ChatCompletionParamsAdapter(
 /**
  * Metadata about a tool.
  */
+@Serializable
 data class ToolMetadata(
     val id: String,
     val name: String,

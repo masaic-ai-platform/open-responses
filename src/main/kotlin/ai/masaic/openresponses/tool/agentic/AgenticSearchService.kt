@@ -174,7 +174,7 @@ class AgenticSearchService(
                         log.info("LLM suggested refined query: '$currentQuery'")
                     
                         if (decision.filters != null) {
-                            log.debug("LLM provided initial filters: ${decision.filters}")
+                            log.debug("LLM provided initial filters: {}", decision.filters)
                             currentFilters = decision.filters
                             log.info("LLM suggested filters for initial iteration: $currentFilters")
                         }
@@ -224,7 +224,12 @@ class AgenticSearchService(
             
                 // We already recorded the LLM-driven query in the iterations list
                 // from the previous iteration or initial decision
-                log.debug("==== Iteration $iterationCount: Starting search with query: '$currentQuery' and filters: $currentFilters ====")
+                log.debug(
+                    "==== Iteration {}: Starting search with query: '{}' and filters: {} ====",
+                    iterationCount,
+                    currentQuery,
+                    currentFilters,
+                )
                 
                 // Get the current iteration record
                 val currentIterationRecord = if (iterations.isNotEmpty()) iterations.last() else null
@@ -509,7 +514,7 @@ class AgenticSearchService(
     /**
      * Call LLM to make a decision on the next search action
      */
-    private suspend fun callLlmForDecision(
+    suspend fun callLlmForDecision(
         question: String,
         buffer: List<VectorStoreSearchResult>,
         iterations: List<AgenticSearchIteration>,

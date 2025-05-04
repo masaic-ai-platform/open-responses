@@ -6,7 +6,10 @@ import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.AgenticSearchIteration
 import ai.masaic.openresponses.tool.AgenticSearchParams
+import ai.masaic.openresponses.tool.ResponseParamsAdapter
+import ai.masaic.openresponses.tool.ToolParamsAccessor
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.coEvery
@@ -52,7 +55,7 @@ class AgenticSearchServiceComprehensiveTest {
             maxIter: Int,
             maxResults: Int,
             isInitial: Boolean,
-            params: ResponseCreateParams,
+            paramsAccessor: ToolParamsAccessor,
             openAIClient: OpenAIClient,
             hyperParams: LlHyperParams,
         ): String = if (decisions.isNotEmpty()) decisions.removeAt(0) else "TERMINATE"
@@ -72,7 +75,7 @@ class AgenticSearchServiceComprehensiveTest {
                     maxIterations = 3,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -97,7 +100,7 @@ class AgenticSearchServiceComprehensiveTest {
                     maxIterations = 1,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -120,7 +123,7 @@ class AgenticSearchServiceComprehensiveTest {
                     maxIterations = 5,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -145,7 +148,7 @@ class AgenticSearchServiceComprehensiveTest {
                     maxIterations = 5,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -169,7 +172,7 @@ class AgenticSearchServiceComprehensiveTest {
                     maxIterations = 2,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
@@ -200,7 +203,7 @@ class AgenticSearchServiceComprehensiveTest {
                     maxIterations = 2,
                     seedName = null,
                     openAIClient = openAIClient,
-                    requestParams = responseParams,
+                    paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
                 )
