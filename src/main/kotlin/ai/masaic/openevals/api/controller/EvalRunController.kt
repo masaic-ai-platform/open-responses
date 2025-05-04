@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException
  * Controller for handling evaluation run API requests.
  * Uses coroutines with suspend functions for non-blocking operations.
  */
+@CrossOrigin("*")
 @RestController
 @RequestMapping("/v1/evals")
 class EvalRunController(

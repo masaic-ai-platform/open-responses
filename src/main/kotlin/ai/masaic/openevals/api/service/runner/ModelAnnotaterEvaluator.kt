@@ -160,9 +160,9 @@ class ModelAnnotaterEvaluator(
             .model(criterion.model)
         addSimpleInputMessagesToBuilder(builder, inputs)
 
-        runBlocking {
-            delay(30 * 1000)
-        }
+//        runBlocking {
+//            delay(30 * 1000)
+//        }
 
         val completionResult =
             modelClientService.executeWithClientAndErrorHandling(

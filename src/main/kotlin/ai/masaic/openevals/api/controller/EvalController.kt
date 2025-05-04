@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException
  * Controller for handling evaluation API requests.
  * Uses coroutines with suspend functions for non-blocking operations.
  */
+@CrossOrigin("*")
 @RestController
 @RequestMapping("/v1/evals")
 class EvalController(
@@ -69,7 +70,7 @@ class EvalController(
         @RequestParam(required = false, defaultValue = "desc") order: String,
         @RequestParam(required = false) after: String?,
         @RequestParam(required = false) before: String?,
-        @RequestParam(required = false) metadata: Map<String, String>?,
+        @RequestParam(name = "metadata", required = false) metadata: Map<String,String>?
     ): ResponseEntity<EvalListResponse> {
         // Validate parameters
         if (limit < 1 || limit > 100) {
