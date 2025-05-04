@@ -8,7 +8,11 @@ import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
+import com.openai.core.JsonValue
+import com.openai.models.FunctionDefinition
+import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.responses.ResponseCreateParams
 import dev.langchain4j.mcp.client.McpClient
 import dev.langchain4j.model.chat.request.json.*
@@ -188,6 +192,22 @@ class ToolService(
         return when {
             toolDefinition is NativeToolDefinition -> NativeToolDefinition.toFunctionTool(toolDefinition)
             else -> (toolDefinition as McpToolDefinition).toFunctionTool()
+        }
+    }
+
+    /**
+     * Retrieves a tool as a FunctionTool by name using the Completion context.
+     *
+     * @param name Name of the tool to retrieve
+     * @return FunctionTool representation if found, null otherwise
+     */
+    fun getChatCompletionTool(
+        name: String,
+    ): ChatCompletionTool? {
+        val toolDefinition = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
+        return when {
+            toolDefinition is NativeToolDefinition -> NativeToolDefinition.toChatCompletionTool(toolDefinition, objectMapper)
+            else -> (toolDefinition as McpToolDefinition).toChatCompletionTool(objectMapper)
         }
     }
 
@@ -468,6 +488,48 @@ class ToolService(
             parameters = parametersMap,
             strict = false,
         )
+    }
+
+    /**
+     * Converts an MCP tool definition to a FunctionTool.
+     *
+     * @return FunctionTool representation of this MCP tool definition
+     */
+    private fun McpToolDefinition.toChatCompletionTool(objectMapper: ObjectMapper): ChatCompletionTool {
+        // Convert JsonObjectSchema to MutableMap<String, Any>
+        val parametersMap = mutableMapOf<String, Any>()
+
+        // Add type and required properties
+        parametersMap["type"] = "object"
+
+        // Add properties
+        val propertiesMap = mutableMapOf<String, Any>()
+        this.parameters.properties().forEach { (name, schema) ->
+            propertiesMap[name] = mapJsonSchemaToMap(schema)
+        }
+
+        parametersMap["properties"] = propertiesMap
+
+        // Add required fields if present
+        this.parameters.required()?.let {
+            if (it.isNotEmpty()) {
+                parametersMap["required"] = it
+            }
+        }
+
+        // Create and return the FunctionTool
+        return ChatCompletionTool
+            .builder()
+            .type(JsonValue.from("function"))
+            .function(
+                FunctionDefinition
+                    .builder()
+                    .name(this.name)
+                    .description(this.description)
+                    .parameters(
+                        objectMapper.convertValue(parametersMap, FunctionParameters::class.java),
+                    ).build(),
+            ).build()
     }
 
     /**

@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.utils
 
+import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.model.MasaicManagedTool
 import ai.masaic.openresponses.api.model.Tool
@@ -8,12 +9,14 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
+import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseStreamEvent
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Component
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
+import java.util.Optional
 
 @Component
 class PayloadFormatter(
@@ -22,6 +25,10 @@ class PayloadFormatter(
 ) {
     internal fun formatResponseRequest(request: CreateResponseRequest) {
         request.tools = updateToolsInRequest(request.tools)
+    }
+
+    internal fun formatCompletionRequest(request: CreateCompletionRequest) {
+        request.tools = updateToolsInCompletionRequest(request.tools)
     }
 
     /**
@@ -37,6 +44,26 @@ class PayloadFormatter(
                     toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Define tool ${tool.type} properly",
+                    )
+                } else {
+                    tool
+                }
+            }?.toMutableList()
+
+    /**
+     * Updates the tools in the request with proper tool definitions from the tool service.
+     *
+     * @param tools The original list of tools in the request
+     * @return The updated list of tools
+     */
+    private fun updateToolsInCompletionRequest(tools: List<ChatCompletionTool>?): MutableList<ChatCompletionTool>? =
+        tools
+            ?.map { tool ->
+                val toolMeta = Optional.ofNullable(toolService.getAvailableTool(tool._type().toString()))
+                if (toolMeta.isPresent) {
+                    toolService.getChatCompletionTool(tool._type().toString()) ?: throw ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Define tool ${tool._type()} properly",
                     )
                 } else {
                     tool

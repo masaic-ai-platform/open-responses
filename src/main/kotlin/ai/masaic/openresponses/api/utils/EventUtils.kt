@@ -3,14 +3,13 @@ package ai.masaic.openresponses.api.utils
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.openai.core.http.AsyncStreamResponse
+import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.responses.ResponseStreamEvent
 import io.micrometer.observation.Observation
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -93,7 +92,7 @@ class EventUtils {
          * Converts a chat completion streaming response to server-sent events.
          */
         fun convertChatCompletionStreamToServerSentEvents(
-            response: AsyncStreamResponse<ChatCompletionChunk>,
+            response: StreamResponse<ChatCompletionChunk>,
             objectMapper: ObjectMapper,
             observation: Observation? = null,
             metadata: CreateResponseMetadataInput? = null,
@@ -101,7 +100,7 @@ class EventUtils {
         ): Flow<ServerSentEvent<String>> =
             callbackFlow {
                 val subscription =
-                    response.subscribe { chunk ->
+                    response.stream().forEach { chunk ->
                         try {
                             val jsonChunk = objectMapper.writeValueAsString(chunk)
                             val event = 
@@ -121,7 +120,6 @@ class EventUtils {
 
                 launch {
                     try {
-                        subscription.onCompleteFuture().await()
                         logger.debug("Streaming response completed successfully")
                     
                         // Send a [DONE] message when stream completes
@@ -132,15 +130,18 @@ class EventUtils {
                                 .data("[DONE]")
                                 .build()
                         send(doneEvent)
+                        // Explicitly close the channel after sending DONE
+                        close()
                     } catch (e: Exception) {
                         logger.error("Error in streaming response completion", e)
+                        // Close with error if sending DONE failed
+                        close(e)
                     }
                 }
 
                 awaitClose {
                     try {
                         logger.debug("Cancelling streaming subscription")
-                        subscription.onCompleteFuture().cancel(false)
                     } catch (e: Exception) {
                         logger.warn("Error cancelling streaming subscription", e)
                     }

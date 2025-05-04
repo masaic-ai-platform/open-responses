@@ -1,22 +1,27 @@
 package ai.masaic.openresponses.api.controller
 
+import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
+import ai.masaic.openresponses.api.service.CompletionNotFoundException
 import ai.masaic.openresponses.api.service.MasaicCompletionService
 import ai.masaic.openresponses.api.utils.CoroutineMDCContext
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.chat.completions.ChatCompletion
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.util.MultiValueMap
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.server.ResponseStatusException
 import org.springframework.web.server.ServerWebExchange
 
 @RestController
@@ -26,7 +31,7 @@ import org.springframework.web.server.ServerWebExchange
 class CompletionController(
     private val masaicCompletionService: MasaicCompletionService,
     private val payloadFormatter: PayloadFormatter,
-    // private val completionStore: CompletionStore,
+    private val completionStore: CompletionStore,
 ) {
     private val log = LoggerFactory.getLogger(CompletionController::class.java)
     val mapper = jacksonObjectMapper()
@@ -52,39 +57,38 @@ class CompletionController(
         // Extract trace ID from exchange
         val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
 
+        payloadFormatter.formatCompletionRequest(request)
         // Use our custom coroutine-aware MDC context
-        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-            val requestBodyJson = mapper.writeValueAsString(request)
-            log.debug("Request body: $requestBodyJson")
+        val requestBodyJson = mapper.writeValueAsString(request)
+        log.debug("Request body: $requestBodyJson")
 
-            // If streaming is requested, set the appropriate content type and return a flow
-            if (request.stream == true) {
-                return@withContext ResponseEntity
-                    .ok()
-                    .contentType(MediaType.TEXT_EVENT_STREAM)
-                    .body(
-                        masaicCompletionService.createStreamingCompletion(
-                            request,
-                            headers,
-                            queryParams,
-                        ),
-                    )
-            } else {
-                // For non-streaming, return a regular response
-                val completionObj =
-                    masaicCompletionService.createCompletion(
+        // If streaming is requested, set the appropriate content type and return a flow
+        if (request.stream == true) {
+            return ResponseEntity
+                .ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(
+                    masaicCompletionService.createStreamingCompletion(
                         request,
                         headers,
                         queryParams,
-                    )
+                    ),
+                )
+        } else {
+            // For non-streaming, return a regular response
+            val completionObj =
+                masaicCompletionService.createCompletion(
+                    request,
+                    headers,
+                    queryParams,
+                )
 
-                log.debug("Response Body: $completionObj")
-                return@withContext ResponseEntity.ok(completionObj)
-            }
+            log.debug("Response Body: {}", completionObj)
+            return ResponseEntity.ok(completionObj)
         }
     }
 
-    /*@GetMapping("/chat/completions/{completionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    @GetMapping("/chat/completions/{completionId}", produces = [MediaType.APPLICATION_JSON_VALUE])
     @Operation(
         summary = "Retrieves a chat completion",
         description = "Retrieves a chat completion with the given ID.",
@@ -118,9 +122,9 @@ class CompletionController(
                 throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
             }
         }
-    }*/
+    }
 
-    /*@DeleteMapping("/chat/completions/{completionId}")
+    @DeleteMapping("/chat/completions/{completionId}")
     @Operation(
         summary = "Deletes a chat completion",
         description = "Deletes a chat completion with the given ID.",
@@ -147,5 +151,5 @@ class CompletionController(
                 "object" to "chat.completion",
             ),
         )
-    }*/
+    }
 } 

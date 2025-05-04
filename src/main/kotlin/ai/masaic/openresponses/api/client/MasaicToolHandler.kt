@@ -71,7 +71,7 @@ class MasaicToolHandler(
 
         val updatedMessages = params.messages().toMutableList()
         // Add assistant's message WITH the tool_calls request
-        assistantMessage.toChatCompletionMessageParam(objectMapper)?.let { updatedMessages.add(it) }
+        assistantMessage.toChatCompletionMessageParam(objectMapper).let { updatedMessages.add(it) }
 
         val toolCalls = assistantMessage.toolCalls().get()
         var nonNativeToolsFound = false

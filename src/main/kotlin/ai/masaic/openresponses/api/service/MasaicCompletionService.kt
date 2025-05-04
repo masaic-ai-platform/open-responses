@@ -1,9 +1,9 @@
 package ai.masaic.openresponses.api.service
 
+import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.client.MasaicOpenAiCompletionServiceImpl
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
-import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -17,7 +17,6 @@ import com.openai.models.ResponseFormatText
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
-import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -41,7 +40,7 @@ private val logger = KotlinLogging.logger {}
 @Service
 class MasaicCompletionService(
     private val openAICompletionService: MasaicOpenAiCompletionServiceImpl,
-    // private val completionStore: CompletionStore,
+    private val completionStore: CompletionStore,
     private val objectMapper: ObjectMapper,
 ) {
     companion object {
@@ -244,7 +243,7 @@ class MasaicCompletionService(
      * @return The completion from the store
      * @throws CompletionNotFoundException If the completion cannot be found
      */
-    /*suspend fun getCompletion(completionId: String): ChatCompletion =
+    suspend fun getCompletion(completionId: String): ChatCompletion =
         try {
             completionStore.getCompletion(completionId) ?: throw CompletionNotFoundException("Completion not found with ID: $completionId")
         } catch (e: Exception) {
@@ -252,7 +251,7 @@ class MasaicCompletionService(
                 is CompletionNotFoundException -> throw e
                 else -> throw CompletionProcessingException("Error retrieving completion: ${e.message}")
             }
-        }*/
+        }
 
     /**
      * Creates a headers builder with authorization headers.
@@ -389,16 +388,11 @@ class MasaicCompletionService(
         request.stream?.let { builder.additionalBodyProperties(mapOf("stream" to JsonValue.from(true))) }
         request.temperature?.let { builder.temperature(it) }
         request.top_p?.let { builder.topP(it) }
+        request.store.let { builder.store(it) }
         
         // Handle tools if provided
         if (!request.tools.isNullOrEmpty()) {
-            val typeReference = object : TypeReference<List<ChatCompletionTool>>() {}
-            builder.tools(
-                objectMapper.convertValue(
-                    request.tools,
-                    typeReference,
-                ),
-            )
+            builder.tools(request.tools!!)
         }
         
         // Handle tool_choice if provided

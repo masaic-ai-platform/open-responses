@@ -99,5 +99,6 @@ fun ChatCompletionMessage.toChatCompletionMessageParam(objectMapper: ObjectMappe
             .builder()
             .role(this._role())
             .content(objectMapper.convertValue(this._content(), ChatCompletionAssistantMessageParam.Content::class.java))
+            .toolCalls(this._toolCalls())
             .build(),
     )

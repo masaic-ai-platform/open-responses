@@ -8,7 +8,11 @@ import ai.masaic.openresponses.api.model.Tool
 import ai.masaic.openresponses.api.model.UserLocation
 import ai.masaic.openresponses.api.model.WebSearchTool
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.core.JsonValue
+import com.openai.models.FunctionDefinition
+import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.responses.ResponseCreateParams
 import java.util.*
 import kotlin.jvm.optionals.getOrElse
@@ -85,6 +89,22 @@ data class NativeToolDefinition(
                 parameters = toolDefinition.parameters,
                 strict = true,
             )
+
+        fun toChatCompletionTool(
+            toolDefinition: NativeToolDefinition,
+            objectMapper: ObjectMapper,
+        ): ChatCompletionTool =
+            ChatCompletionTool
+                .builder()
+                .type(JsonValue.from("function"))
+                .function(
+                    FunctionDefinition
+                        .builder()
+                        .name(toolDefinition.name)
+                        .description(toolDefinition.description)
+                        .parameters(objectMapper.convertValue(toolDefinition.parameters, FunctionParameters::class.java))
+                        .build(),
+                ).build()
     }
 }
 

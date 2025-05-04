@@ -8,7 +8,7 @@ import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
-import com.openai.core.http.AsyncStreamResponse
+import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.*
 import io.micrometer.observation.Observation
 import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
@@ -22,6 +22,7 @@ import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
 import kotlin.coroutines.coroutineContext
+import kotlin.jvm.optionals.getOrDefault
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -33,7 +34,7 @@ import kotlin.jvm.optionals.getOrNull
 class MasaicOpenAiCompletionServiceImpl(
     private val toolHandler: MasaicToolHandler,
     private val streamingService: MasaicStreamingService,
-    // private val completionStore: CompletionStore,
+    private val completionStore: CompletionStore,
     private val telemetryService: TelemetryService,
     private val toolService: ToolService,
     private val objectMapper: ObjectMapper,
@@ -86,14 +87,33 @@ class MasaicOpenAiCompletionServiceImpl(
                 if (hasToolCalls(completion)) {
                     logger.info { "Tool calls detected in completion ${completion.id()}, initiating tool handling flow." }
                     // Call handleToolCalls which will recursively call create if needed
-                    return@withClientObservation runBlocking { handleToolCalls(completion, params, parentObservation, client, metadata) }
-                }
+                    val response = runBlocking { handleToolCalls(completion, params, parentObservation, client, metadata) }
 
+                    // Store final completion if no tool calls needed further handling
+                    if (params.store().getOrDefault(false)) {
+                        runBlocking { storeCompletion(response, params) }
+                    }
+                    return@withClientObservation response // Return the final completion
+                }
+                // Store final completion if no tool calls needed further handling
+                if (params.store().getOrDefault(false)) {
+                    runBlocking { storeCompletion(completion, params) }
+                }
                 completion
             }
 
-        // Store the completion and its messages
-        storeCompletion(chatCompletion, params)
+        // If the main block returned directly (no tool calls initially),
+        // the chatCompletion object here holds the final result.
+        // The storeCompletion call inside the block handles storing when tool calls are resolved.
+        // However, we need to ensure it's stored if there were NO tool calls at all.
+        // The logic above inside the block handles this now.
+        // No, wait. If there are no tool calls, the block returns completion, then storeCompletion outside is called.
+        // If there ARE tool calls, handleToolCalls is called. handleToolCalls will call storeCompletion only if it returns early due to non-native tools.
+        // If handleToolCalls proceeds recursively, the FINAL recursive call's observation block will eventually store the very last completion.
+        // This seems correct. The external call below might be redundant.
+
+        // Let's remove the potentially redundant external call and rely on the logic within the observation block and handleToolCalls.
+        // storeCompletion(chatCompletion, params)
         return chatCompletion
     }
 
@@ -125,7 +145,9 @@ class MasaicOpenAiCompletionServiceImpl(
             logger.info { "Non-native tool calls requiring client handling detected for completion ID: ${chatCompletion.id()}. Returning original completion." }
             // Store the completion *before* returning, as it contains the tool calls the client needs
             // Note: params here are the *original* params, not the updated ones
-            storeCompletion(chatCompletion, params)
+            if (params.store().getOrDefault(false)) {
+                storeCompletion(chatCompletion, params)
+            }
             return chatCompletion // Return the original completion for client handling
         }
 
@@ -184,7 +206,6 @@ class MasaicOpenAiCompletionServiceImpl(
             // Create the streaming response
             val response =
                 client
-                    .async()
                     .chat()
                     .completions()
                     .createStreaming(streamingParams)
@@ -214,7 +235,7 @@ class MasaicOpenAiCompletionServiceImpl(
      * Converts a chat completion streaming response to server-sent events.
      */
     private fun streamChatCompletionToServerSentEvents(
-        response: AsyncStreamResponse<ChatCompletionChunk>,
+        response: StreamResponse<ChatCompletionChunk>,
         observation: Observation,
         metadata: CreateResponseMetadataInput,
     ): Flow<ServerSentEvent<String>> =
@@ -233,17 +254,17 @@ class MasaicOpenAiCompletionServiceImpl(
         completion: ChatCompletion,
         params: ChatCompletionCreateParams,
     ) {
-        // Check if we should store the completion (always true for now)
-        // TODO: Add configuration flag for storing completions
+        // For now, assume we always store if this method is called.
+        // Add conditional logic here based on where the 'store' flag comes from.
+        // Example: if (metadata.store == true || params.shouldStore() /* hypothetical */ ) { ... }
+        logger.info { "Storing completion ID: ${completion.id()}" }
         val messages = params.messages()
-        
-        // Create context with alias mappings for tools
         val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
         val context = CompletionToolRequestContext(aliasMap, params)
 
-        // TODO : Uncomment and implement completion storage
-        // completionStore.storeCompletion(completion, messages, context)
-        logger.debug { "Stored chat completion with ID: ${completion.id()} and ${messages.size} messages" }
+        // Use the injected completionStore
+        completionStore.storeCompletion(completion, messages, context)
+        // logger.debug moved into the store implementations
     }
 
     /**
