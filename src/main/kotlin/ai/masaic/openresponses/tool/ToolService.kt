@@ -8,6 +8,7 @@ import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.ResponseCreateParams
 import dev.langchain4j.mcp.client.McpClient
 import dev.langchain4j.model.chat.request.json.*
@@ -125,6 +126,18 @@ class ToolService(
     ): String = context.aliasMap[name] ?: name
 
     /**
+     * Resolves a tool name to its actual implementation name using the completion context.
+     *
+     * @param name The name to resolve (could be an alias)
+     * @param context The completion tool request context
+     * @return The resolved tool name
+     */
+    fun resolveToolName(
+        name: String,
+        context: CompletionToolRequestContext,
+    ): String = context.aliasMap[name] ?: name
+
+    /**
      * Retrieves a tool as a FunctionTool by name.
      *
      * @param name Name of the tool to retrieve
@@ -144,12 +157,33 @@ class ToolService(
     }
 
     /**
-     * Retrieves a tool as a FunctionTool by name.
+     * Retrieves a tool as a FunctionTool by name using the Completion context.
+     *
+     * @param name Name of the tool to retrieve
+     * @param context The completion tool request context
+     * @return FunctionTool representation if found, null otherwise
+     */
+    fun getFunctionTool(
+        name: String,
+        context: CompletionToolRequestContext,
+    ): FunctionTool? {
+        val resolvedName = resolveToolName(name, context)
+        val toolDefinition = nativeToolRegistry.findByName(resolvedName) ?: mcpToolRegistry.findByName(resolvedName) ?: return null
+        return when {
+            toolDefinition is NativeToolDefinition -> NativeToolDefinition.toFunctionTool(toolDefinition)
+            else -> (toolDefinition as McpToolDefinition).toFunctionTool()
+        }
+    }
+
+    /**
+     * Retrieves a tool as a FunctionTool by name using the Completion context.
      *
      * @param name Name of the tool to retrieve
      * @return FunctionTool representation if found, null otherwise
      */
-    fun getFunctionTool(name: String): FunctionTool? {
+    fun getFunctionTool(
+        name: String,
+    ): FunctionTool? {
         val toolDefinition = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
         return when {
             toolDefinition is NativeToolDefinition -> NativeToolDefinition.toFunctionTool(toolDefinition)
@@ -158,16 +192,7 @@ class ToolService(
     }
 
     /**
-     * Executes a tool with the provided arguments.
-     *
-     * @param name Name of the tool to execute
-     * @param arguments JSON string containing the arguments for tool execution
-     * @param params Request parameters
-     * @param openAIClient OpenAI client
-     * @param eventEmitter Event emitter for tool execution events
-     * @param toolMetadata Additional metadata for tool execution
-     * @param context The tool request context
-     * @return Result of the tool execution as a string, or null if the tool isn't found
+     * Executes a tool with the provided arguments (Response Flow).
      */
     suspend fun executeTool(
         name: String,
@@ -181,7 +206,40 @@ class ToolService(
         try {
             val resolvedName = resolveToolName(name, context)
             val tool = findToolByName(resolvedName) ?: return null
-            return executeToolByProtocol(tool, name, arguments, params, openAIClient, eventEmitter, toolMetadata + mapOf("originalName" to name), context)
+
+            // Create unified context and parameter accessor
+            val unifiedContext = UnifiedToolContext(context.aliasMap)
+            val paramsAccessor = ResponseParamsAdapter(params, objectMapper)
+
+            // Call executeToolByProtocol without wrapper
+            return executeToolByProtocol(tool, resolvedName, arguments, paramsAccessor, openAIClient, eventEmitter, toolMetadata + mapOf("originalName" to name), unifiedContext)
+        } catch (e: Exception) {
+            return handleToolExecutionError(name, arguments, e)
+        }
+    }
+
+    /**
+     * Executes a tool with the provided arguments for the Completion flow.
+     */
+    suspend fun executeTool(
+        name: String,
+        arguments: String,
+        params: ChatCompletionCreateParams,
+        openAIClient: OpenAIClient,
+        eventEmitter: (ServerSentEvent<String>) -> Unit,
+        toolMetadata: Map<String, Any>,
+        context: CompletionToolRequestContext,
+    ): String? {
+        try {
+            val resolvedName = resolveToolName(name, context)
+            val tool = findToolByName(resolvedName) ?: return null
+
+            // Create unified context and parameter accessor
+            val unifiedContext = UnifiedToolContext(context.aliasMap)
+            val paramsAccessor = ChatCompletionParamsAdapter(params, objectMapper)
+
+            // Call executeToolByProtocol without wrapper
+            return executeToolByProtocol(tool, resolvedName, arguments, paramsAccessor, openAIClient, eventEmitter, toolMetadata + mapOf("originalName" to name), unifiedContext)
         } catch (e: Exception) {
             return handleToolExecutionError(name, arguments, e)
         }
@@ -189,37 +247,38 @@ class ToolService(
 
     /**
      * Finds a tool by its name.
-     *
-     * @param name The name of the tool to find
-     * @return The tool definition if found, null otherwise
      */
     private fun findToolByName(name: String): ToolDefinition? = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name)
 
     /**
-     * Executes a tool based on its protocol.
+     * Executes a tool based on its protocol, using unified context/params.
      *
      * @param tool The tool definition
-     * @param name The name of the tool
+     * @param resolvedName The resolved name of the tool
      * @param arguments The arguments for tool execution
-     * @param params Request
+     * @param paramsAccessor Unified accessor for tool configuration and basic params
+     * @param openAIClient OpenAI client
+     * @param eventEmitter Event emitter
+     * @param toolMetadata Additional metadata
+     * @param context Unified tool context
      * @return The result of tool execution
      */
     private suspend fun executeToolByProtocol(
         tool: ToolDefinition,
-        name: String,
+        resolvedName: String,
         arguments: String,
-        params: ResponseCreateParams,
+        paramsAccessor: ToolParamsAccessor,
         openAIClient: OpenAIClient,
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
-        context: ToolRequestContext,
+        context: UnifiedToolContext,
     ): String? {
         val toolResult =
             when (tool.protocol) {
-                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(name, arguments, params, openAIClient, eventEmitter, toolMetadata, context)
+                ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(resolvedName, arguments, paramsAccessor, openAIClient, eventEmitter, toolMetadata, context)
                 ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
             }
-        log.debug("tool $name executed with arguments: $arguments gave result: $toolResult")
+        log.debug("tool ${toolMetadata["originalName"]} (resolved: $resolvedName) executed with arguments: $arguments gave result: $toolResult")
         return toolResult
     }
 

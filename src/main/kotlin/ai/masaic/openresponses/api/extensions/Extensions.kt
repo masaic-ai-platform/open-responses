@@ -3,6 +3,9 @@ package ai.masaic.openresponses.api.extensions
 import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.chat.completions.ChatCompletionMessage
+import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.responses.EasyInputMessage
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -89,3 +92,12 @@ suspend fun ResponseCreateParams.Builder.fromBody(
 
     return this
 }
+
+fun ChatCompletionMessage.toChatCompletionMessageParam(objectMapper: ObjectMapper): ChatCompletionMessageParam =
+    ChatCompletionMessageParam.ofAssistant(
+        ChatCompletionAssistantMessageParam
+            .builder()
+            .role(this._role())
+            .content(objectMapper.convertValue(this._content(), ChatCompletionAssistantMessageParam.Content::class.java))
+            .build(),
+    )

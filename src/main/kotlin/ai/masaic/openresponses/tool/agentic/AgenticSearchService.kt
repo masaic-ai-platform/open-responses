@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.tool.agentic
 
+import ai.masaic.openresponses.api.model.AgenticSeachTool
 import ai.masaic.openresponses.api.model.ComparisonFilter
 import ai.masaic.openresponses.api.model.CompoundFilter
 import ai.masaic.openresponses.api.model.Filter
@@ -7,6 +8,7 @@ import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.*
+import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.agentic.llm.DecisionParser
 import ai.masaic.openresponses.tool.agentic.llm.LlmDecision
 import ai.masaic.openresponses.tool.agentic.llm.PromptBuilder
@@ -15,15 +17,12 @@ import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
-import com.openai.models.responses.ResponseCreateParams
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
-import kotlin.jvm.optionals.getOrElse
-import kotlin.jvm.optionals.getOrNull
 import kotlin.math.min
 import kotlin.random.Random
 
@@ -49,7 +48,7 @@ class AgenticSearchService(
         maxIterations: Int,
         seedName: String?,
         openAIClient: OpenAIClient,
-        requestParams: ResponseCreateParams,
+        paramsAccessor: ToolParamsAccessor,
         initialSeedMultiplier: Int = 3,
         alpha: Double = 0.5,
         eventEmitter: (ServerSentEvent<String>) -> Unit,
@@ -86,23 +85,27 @@ class AgenticSearchService(
             // Track initial results in the allRelevantChunks set
             allRelevantChunks.addAll(searchBuffer)
 
+            // Extract default hyperParams using the accessor
+            val defaultTemp = paramsAccessor.getDefaultTemperature() ?: 0.6
+            val defaultTopP = 0.85 // Currently topP isn't in accessor, using fixed default
+            // TODO: Consider adding getTopP() to accessor if needed
+
+            val hyperParams =
+                LlHyperParams(
+                    temperature = defaultTemp,
+                    topP = defaultTopP, // Use fixed or accessor-derived value
+                )
+
             // …later, right before you compute avgRel in your tuning routine:
             val maxPossibleScore =
                 if (allRelevantChunks.isNotEmpty()) {
-                    // Use the highest score we’ve seen so far across all iterations
+                    // Use the highest score we've seen so far across all iterations
                     allRelevantChunks.maxOf { it.score }
                 } else {
                     // Fall back to the default
                     DEFAULT_MAX_SCORE
                 }
 
-            val hyperParams =
-                LlHyperParams(
-                    temperature = requestParams.temperature().getOrElse { 0.6 },
-                    topP = requestParams.topP().getOrElse { 0.85 },
-                )
-
-            // Now normalize your average relevance:
             val avgRel =
                 searchBuffer
                     .take(10)
@@ -146,8 +149,8 @@ class AgenticSearchService(
                         maxIter = maxIterations,
                         maxResults = maxResults,
                         isInitial = true,
+                        paramsAccessor = paramsAccessor,
                         openAIClient = openAIClient,
-                        params = requestParams,
                         hyperParams = hyperParams,
                     )
             
@@ -295,7 +298,7 @@ class AgenticSearchService(
                 // …later, right before you compute avgRel in your tuning routine:
                 val maxPossibleScore =
                     if (allRelevantChunks.isNotEmpty()) {
-                        // Use the highest score we’ve seen so far across all iterations
+                        // Use the highest score we've seen so far across all iterations
                         allRelevantChunks.maxOf { it.score }
                     } else {
                         // Fall back to the default
@@ -344,8 +347,9 @@ class AgenticSearchService(
                             iterationNumber = iterationCount,
                             maxIter = maxIterations,
                             maxResults = maxResults,
+                            isInitial = false,
+                            paramsAccessor = paramsAccessor,
                             openAIClient = openAIClient,
-                            params = requestParams,
                             hyperParams = hyperParams,
                         )
                 
@@ -505,7 +509,7 @@ class AgenticSearchService(
     /**
      * Call LLM to make a decision on the next search action
      */
-    suspend fun callLlmForDecision(
+    private suspend fun callLlmForDecision(
         question: String,
         buffer: List<VectorStoreSearchResult>,
         iterations: List<AgenticSearchIteration>,
@@ -514,7 +518,7 @@ class AgenticSearchService(
         maxIter: Int = 5,
         maxResults: Int = 20,
         isInitial: Boolean = false,
-        params: ResponseCreateParams,
+        paramsAccessor: ToolParamsAccessor,
         openAIClient: OpenAIClient,
         hyperParams: LlHyperParams = LlHyperParams(),
     ): String {
@@ -538,14 +542,14 @@ class AgenticSearchService(
         // Log the prompt for debugging purposes
         log.debug("Generated prompt: $promptContent")
         
-        // Call LLM with this prompt
         val messageWithContent =
             ChatCompletionMessageParam.ofUser(
                 ChatCompletionUserMessageParam.builder().content(promptContent).build(),
             )
 
-        // Extract model name from request
-        val modelName = params.model().toString()
+        // Extract info using the accessor
+        val modelName = paramsAccessor.getModel()
+        val defaultTemperature = paramsAccessor.getDefaultTemperature()
 
         val chatCompletionRequestBuilder =
             ChatCompletionCreateParams
@@ -559,37 +563,24 @@ class AgenticSearchService(
                     },
                 )
 
+        // Get tuning flags using ToolParamsAccessor
         var usePresencePenalty = false
         var useFrequencyPenalty = false
         var useTemperature = false
         var useTopP = false
-        params
-            .tools()
-            .getOrNull()
-            ?.find { it.asWebSearch().type().toString() == "agentic_search" }
-            ?.let { tool ->
-                usePresencePenalty = tool
-                    .asWebSearch()
-                    ._additionalProperties()["enable_presence_penalty_tuning"]
-                    ?.toString()
-                    ?.toBoolean() == true
-                useFrequencyPenalty = tool
-                    .asWebSearch()
-                    ._additionalProperties()["enable_frequency_penalty_tuning"]
-                    ?.toString()
-                    ?.toBoolean() == true
-                useTemperature = tool
-                    .asWebSearch()
-                    ._additionalProperties()["enable_temperature_tuning"]
-                    ?.toString()
-                    ?.toBoolean() == true
-                useTopP = tool
-                    .asWebSearch()
-                    ._additionalProperties()["enable_top_p_tuning"]
-                    ?.toString()
-                    ?.toBoolean() == true
-            }
 
+        // Get the unified AgenticSearchTool config
+        val agenticToolConfig = paramsAccessor.getSpecificToolConfig("agentic_search", AgenticSeachTool::class.java)
+
+        // Use the properties from the common model
+        agenticToolConfig?.let {
+            usePresencePenalty = it.enablePresencePenaltyTuning == true
+            useFrequencyPenalty = it.enableFrequencyPenaltyTuning == true
+            useTemperature = it.enableTemperatureTuning == true
+            useTopP = it.enableTopPTuning == true
+        }
+
+        // Apply hyperParams based on flags
         if (useTopP) {
             log.debug("Using top_p for LLM decision")
             chatCompletionRequestBuilder.topP(hyperParams.topP)
@@ -599,8 +590,8 @@ class AgenticSearchService(
             log.debug("Using temperature for LLM decision")
             chatCompletionRequestBuilder.temperature(hyperParams.temperature)
         } else {
-            log.debug("Not using temperature for LLM decision")
-            chatCompletionRequestBuilder.temperature(params.temperature())
+            log.debug("Not using temperature tuning, using default temperature for LLM decision")
+            chatCompletionRequestBuilder.temperature(defaultTemperature ?: 0.6) 
         }
 
         if (usePresencePenalty) {
@@ -608,9 +599,10 @@ class AgenticSearchService(
             chatCompletionRequestBuilder.presencePenalty(hyperParams.presence)
         }
         if (useFrequencyPenalty) {
-            log.debug("Not using presence penalty for LLM decision")
+            log.debug("Using frequency penalty for LLM decision")
             chatCompletionRequestBuilder.frequencyPenalty(hyperParams.frequency)
         }
+        
         try {
             val response = openAIClient.chat().completions().create(chatCompletionRequestBuilder.build())
             val content =

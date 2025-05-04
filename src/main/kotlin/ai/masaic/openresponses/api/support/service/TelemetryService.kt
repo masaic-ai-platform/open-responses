@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.support.service
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import com.openai.core.jsonMapper
 import com.openai.models.chat.completions.ChatCompletion
+import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
@@ -679,4 +680,121 @@ class TelemetryService(
     }
 
     fun getCurrentObservation(): Observation? = observationRegistry.currentObservation
+
+    fun recordTokenUsageForChatCompletion(
+        metadata: CreateResponseMetadataInput,
+        chatCompletionChunk: ChatCompletionChunk,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val responseModel = chatCompletionChunk.model()
+        tokenUsage(metadata, responseModel, responseModel, tokenType, tokenCount)
+    }
+
+    /**
+     * Records token usage for chat completions.
+     */
+    fun recordChatCompletionTokenUsage(
+        metadata: CreateResponseMetadataInput,
+        chatCompletion: ChatCompletion,
+        params: ChatCompletionCreateParams,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val requestModel = params.model().toString()
+        val responseModel = chatCompletion.model()
+        tokenUsage(metadata, responseModel, requestModel, tokenType, tokenCount)
+    }
+
+    /**
+     * Records token usage for chat completion streaming chunks.
+     */
+    fun recordChatCompletionChunkTokenUsage(
+        metadata: CreateResponseMetadataInput,
+        chatCompletionChunk: ChatCompletionChunk,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val responseModel = chatCompletionChunk.model()
+        tokenUsage(metadata, responseModel, responseModel, tokenType, tokenCount)
+    }
+
+    /**
+     * Creates a timer for chat completion operations.
+     */
+    fun <T> withChatCompletionTimer(
+        params: ChatCompletionCreateParams,
+        metadata: CreateResponseMetadataInput,
+        block: () -> T,
+    ): T {
+        val timerBuilder =
+            Timer
+                .builder(GenAIObsAttributes.OPERATION_DURATION)
+                .description("GenAI operation duration")
+                .tags(GenAIObsAttributes.OPERATION_NAME, "chat", GenAIObsAttributes.SYSTEM, metadata.genAISystem)
+                .tag(GenAIObsAttributes.REQUEST_MODEL, params.model().toString())
+                .tag(GenAIObsAttributes.RESPONSE_MODEL, params.model().toString())
+                .tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
+        val timer = timerBuilder.register(meterRegistry)
+        val sample = Timer.start(meterRegistry)
+        try {
+            return block()
+        } catch (ex: Exception) {
+            timerBuilder.tag(GenAIObsAttributes.ERROR_TYPE, "${ex.javaClass}")
+            throw ex
+        } finally {
+            sample.stop(timer)
+        }
+    }
+
+    /**
+     * Sets all observation attributes for a chat completion.
+     */
+    fun setChatCompletionObservationAttributes(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+        params: ChatCompletionCreateParams,
+        metadata: CreateResponseMetadataInput,
+    ) {
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "chat")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SYSTEM, metadata.genAISystem ?: "not_available")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OUTPUT_TYPE, "text")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.REQUEST_MODEL, params.model().toString())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_MODEL, chatCompletion.model())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress ?: "not_available")
+        observation.highCardinalityKeyValue(GenAIObsAttributes.RESPONSE_ID, chatCompletion.id())
+
+        params.temperature().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TEMPERATURE, it.toString()) }
+        params.maxCompletionTokens().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_MAX_TOKENS, it.toString()) }
+        params.topP().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TOP_P, it.toString()) }
+
+        chatCompletion.usage().ifPresent { usage ->
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_INPUT_TOKENS, usage.promptTokens().toString())
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_OUTPUT_TOKENS, usage.completionTokens().toString())
+        }
+
+        setChatCompletionFinishReasons(observation, chatCompletion)
+    }
+
+    /**
+     * Sets finish reasons for a chat completion observation.
+     */
+    private fun setChatCompletionFinishReasons(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+    ) {
+        val finishReasons =
+            chatCompletion
+                .choices()
+                .mapNotNull {
+                    it
+                        .finishReason()
+                        .value()
+                        ?.name
+                        ?.lowercase()
+                }.distinct()
+        if (finishReasons.isNotEmpty()) {
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_FINISH_REASONS, finishReasons.joinToString(","))
+        }
+    }
 }
