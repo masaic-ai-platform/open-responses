@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.store
 
+import ai.masaic.openevals.api.repository.CompletionDocumentRepository
 import ai.masaic.openresponses.api.client.CompletionStore // Import interface
 import ai.masaic.openresponses.tool.CompletionToolRequestContext
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -12,9 +13,7 @@ import mu.KotlinLogging
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.mapping.Document
-import org.springframework.data.mongodb.repository.ReactiveMongoRepository
 import org.springframework.stereotype.Component
-import org.springframework.stereotype.Repository
 
 @Document(collection = "chat_completions")
 data class CompletionDocument(
@@ -25,9 +24,6 @@ data class CompletionDocument(
     val aliasMapJson: String, // Store alias map as JSON string
     val createdAt: Long = System.currentTimeMillis(), // Optional timestamp
 )
-
-@Repository
-interface CompletionDocumentRepository : ReactiveMongoRepository<CompletionDocument, String>
 
 @Component
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "mongodb")
