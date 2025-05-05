@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.model.EmbeddingData
 import ai.masaic.openresponses.api.model.EmbeddingResponse
 import ai.masaic.openresponses.api.model.EmbeddingUsage
 import ai.masaic.openresponses.api.service.embedding.OpenAIProxyEmbeddingService
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.knuddels.jtokkit.Encodings
 import com.knuddels.jtokkit.api.Encoding
 import com.knuddels.jtokkit.api.EncodingType
@@ -35,6 +36,7 @@ import java.util.Base64
 class EmbeddingsController(
     private val embeddingService: OpenAIProxyEmbeddingService,
     private val encoding: Encoding = Encodings.newLazyEncodingRegistry().getEncoding(EncodingType.CL100K_BASE),
+    private val telemetryService: TelemetryService,
 ) {
     private val log = LoggerFactory.getLogger(EmbeddingsController::class.java)
 
@@ -58,24 +60,37 @@ class EmbeddingsController(
             ),
         ],
     )
-    fun createEmbedding(
+    suspend fun createEmbedding(
         @Parameter(description = "The embedding request", required = true)
         @RequestBody request: CreateEmbeddingRequest,
         @Parameter(description = "API key for authentication", required = true)
         @RequestHeader("Authorization") authHeader: String,
     ): ResponseEntity<EmbeddingResponse> {
+        // Start observation for embeddings operation with OpenTelemetry
+        val observation = telemetryService.startObservation("gen_ai.embeddings")
+        
         try {
+            // Set required OpenTelemetry attributes for GenAI spans
+            observation.lowCardinalityKeyValue("gen_ai.operation.name", "embeddings") // Required attribute
+            
             // Extract API key from Authorization header (format: "Bearer API_KEY")
             val apiKey = authHeader.removePrefix("Bearer ").trim()
             if (apiKey.isBlank()) {
+                observation.lowCardinalityKeyValue("error.type", "authentication_error")
+                observation.error(ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid API key"))
                 throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid API key")
             }
 
             // Validate encoding format
             if (request.encodingFormat !in listOf("float", "base64")) {
+                observation.lowCardinalityKeyValue("error.type", "invalid_encoding_format")
+                observation.error(IllegalArgumentException("encoding_format must be either 'float' or 'base64'"))
                 throw IllegalArgumentException("encoding_format must be either 'float' or 'base64'")
             }
 
+            // Record encoding formats as an attribute
+            observation.lowCardinalityKeyValue("gen_ai.request.encoding_formats", request.encodingFormat)
+            
             // Process input based on type
             val inputTexts =
                 when (request.input) {
@@ -83,6 +98,16 @@ class EmbeddingsController(
                     is List<*> -> request.input.map { it.toString() }
                     else -> throw IllegalArgumentException("Input must be a string or an array of strings")
                 }
+
+            // Parse provider and model from the request.model (format: "provider@model")
+            val (provider, modelName) = parseProviderAndModel(request.model)
+            
+            // Set model and server address attributes
+            observation.lowCardinalityKeyValue("gen_ai.request.model", request.model)
+            provider?.let {
+                val baseUrl = embeddingService.providers[it] ?: it
+                observation.lowCardinalityKeyValue("server.address", baseUrl)
+            }
 
             // Calculate embeddings
             val embeddings = embeddingService.embedTexts(inputTexts, apiKey, request.model)
@@ -95,16 +120,17 @@ class EmbeddingsController(
                             "base64" -> encodeToBase64(embedding)
                             else -> embedding // "float" is the default
                         }
-                
+                    
                     EmbeddingData(
                         embedding = encodedEmbedding,
                         index = index,
                     )
                 }
 
-            val tokenEstimate =
-                encoding
-                    .countTokens(request.input.toString())
+            // Calculate token usage and set as attribute
+            val tokenEstimate = encoding.countTokens(request.input.toString())
+            observation.lowCardinalityKeyValue("gen_ai.usage.input_tokens", tokenEstimate.toString())
+            
             val response =
                 EmbeddingResponse(
                     data = embeddingDataList,
@@ -118,11 +144,17 @@ class EmbeddingsController(
 
             return ResponseEntity.ok(response)
         } catch (e: IllegalArgumentException) {
+            observation.error(e)
+            observation.lowCardinalityKeyValue("error.type", e.javaClass.simpleName)
             log.error("Error processing embedding request: ${e.message}")
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, e.message)
         } catch (e: Exception) {
+            observation.error(e)
+            observation.lowCardinalityKeyValue("error.type", e.javaClass.simpleName)
             log.error("Error generating embeddings", e)
             throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error generating embeddings: ${e.message}")
+        } finally {
+            observation.stop()
         }
     }
 
@@ -135,4 +167,18 @@ class EmbeddingsController(
         embedding.forEach { byteBuffer.putFloat(it) }
         return Base64.getEncoder().encodeToString(byteBuffer.array())
     }
+
+    /**
+     * Parse provider and model from the model name string.
+     * The format is expected to be "provider@model".
+     */
+    private fun parseProviderAndModel(modelString: String): Pair<String?, String> =
+        if (modelString == "default") {
+            Pair(null, "default")
+        } else if (!modelString.contains("@")) {
+            Pair(null, modelString)
+        } else {
+            val parts = modelString.split("@", limit = 2)
+            Pair(parts[0], parts[1])
+        }
 }
