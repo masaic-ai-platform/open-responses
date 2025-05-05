@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.model.FunctionTool
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.PayloadFormatter
@@ -45,7 +45,7 @@ class MasaicStreamingServiceTest {
     private lateinit var payloadFormatter: PayloadFormatter
     private lateinit var objectMapper: ObjectMapper
     private lateinit var telemetryService: TelemetryService
-    private val metadata = CreateResponseMetadataInput()
+    private val metadata = InstrumentationMetadataInput()
     private val mockObservation = mockk<Observation>()
     private val mockSample = mockk<Sample>()
     private val mockResponse = mockk<Response>()
@@ -81,7 +81,7 @@ class MasaicStreamingServiceTest {
             )
 
         every { telemetryService.genAiDurationSample() } returns mockSample
-        coEvery { telemetryService.startObservation(any()) } returns mockObservation
+        coEvery { telemetryService.startObservation(any(), "") } returns mockObservation
         every { telemetryService.stopObservation(any(), any(), any(), any()) } just runs
         every { telemetryService.stopGenAiDurationSample(any(), any(), any()) } just runs
         every { telemetryService.emitModelOutputEvents(any(), mockResponse, any()) } just runs

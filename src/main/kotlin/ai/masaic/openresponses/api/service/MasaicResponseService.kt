@@ -3,7 +3,7 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.extensions.fromBody
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.api.utils.PayloadFormatter
@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.withTimeout
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
@@ -37,7 +36,6 @@ import org.springframework.util.MultiValueMap
 import java.net.URI
 import java.time.Duration
 import java.util.concurrent.TimeoutException
-import kotlin.coroutines.coroutineContext
 
 private val logger = KotlinLogging.logger {}
 
@@ -164,36 +162,6 @@ class MasaicResponseService(
     private val requestTimeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS
 
     /**
-     * Gets the trace ID from both headers and reactor context for proper tracing.
-     *
-     * @param headers HTTP headers
-     * @return The trace ID or "unknown" if not found
-     */
-    private suspend fun getTraceId(headers: MultiValueMap<String, String>): String {
-        // First check if we have it in the reactor context
-        val contextTraceId = getTraceIdFromContext()
-        if (contextTraceId != null && contextTraceId != "unknown") {
-            return contextTraceId
-        }
-
-        // Fall back to headers if not in context
-        return headers.getFirst("X-B3-TraceId")
-            ?: headers.getFirst("X-Trace-ID")
-            ?: "unknown"
-    }
-
-    /**
-     * Retrieves trace ID from Reactor context if available
-     */
-    private suspend fun getTraceIdFromContext(): String? =
-        try {
-            coroutineContext[ReactorContext]?.context?.getOrEmpty<String>("traceId")?.orElse(null)
-        } catch (e: Exception) {
-            logger.debug { "Could not retrieve traceId from context: ${e.message}" }
-            null
-        }
-
-    /**
      * Creates a response from the OpenAI API with enhanced error handling and timeout.
      *
      * @param request The request body containing parameters for the response
@@ -208,19 +176,7 @@ class MasaicResponseService(
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
     ): Response {
-        val traceId = getTraceId(headers)
-        // Use safe accessor for model property
-        val model =
-            try {
-                request.javaClass.getDeclaredField("model").let {
-                    it.isAccessible = true
-                    it.get(request)?.toString() ?: "unknown"
-                }
-            } catch (e: Exception) {
-                "unknown"
-            }
-
-        logger.info { "Creating response with traceId: $traceId, model: $model" }
+        logger.info { "Creating response with model: ${request.model().asString()}" }
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
@@ -236,23 +192,23 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
-                    responseMetadataInput(headers, request),
+                    instrumentationMetadataInput(headers, request),
                 )
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            logger.error { "Request timed out after $requestTimeoutSeconds seconds - traceId: $traceId" }
+            logger.error { "Request timed out after $requestTimeoutSeconds seconds" }
             throw ResponseTimeoutException("Request timed out after $requestTimeoutSeconds seconds")
         } catch (e: TimeoutException) {
-            logger.error { "Request timed out after $requestTimeoutSeconds seconds - traceId: $traceId" }
+            logger.error { "Request timed out after $requestTimeoutSeconds seconds" }
             throw ResponseTimeoutException("Request timed out after $requestTimeoutSeconds seconds")
         } catch (e: CancellationException) {
-            logger.warn { "Request was cancelled - traceId: $traceId" }
+            logger.warn { "Request was cancelled" }
             throw e // Let cancellation exceptions propagate
         } catch (e: OpenAIException) {
-            logger.error(e) { "Error creating response - traceId: $traceId" }
+            logger.error(e) { "Error creating response" }
             throw e
         } catch (e: Exception) {
-            logger.error(e) { "Error creating response - traceId: $traceId" }
+            logger.error(e) { "Error creating response" }
             throw ResponseProcessingException("Error processing response: ${e.message}")
         }
     }
@@ -270,20 +226,7 @@ class MasaicResponseService(
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
     ): Flow<ServerSentEvent<String>> {
-        val traceId = getTraceId(headers)
-
-        // Use safe accessor for model property
-        val model =
-            try {
-                request.javaClass.getDeclaredField("model").let {
-                    it.isAccessible = true
-                    it.get(request)?.toString() ?: "unknown"
-                }
-            } catch (e: Exception) {
-                "unknown"
-            }
-
-        logger.info { "Creating streaming response with traceId: $traceId, model: $model" }
+        logger.info { "Creating streaming response with model: ${request.model().asString()}" }
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
@@ -298,11 +241,11 @@ class MasaicResponseService(
                         headerBuilder,
                         queryBuilder,
                     ),
-                    responseMetadataInput(headers, request),
+                    instrumentationMetadataInput(headers, request),
                 )
                 // Add error handling to the flow
                 .catch { error ->
-                    logger.error(error) { "Error in streaming response - traceId: $traceId" }
+                    logger.error(error) { "Error in streaming response" }
 
                     val errorEvent =
                         EventUtils.convertEvent(
@@ -322,13 +265,13 @@ class MasaicResponseService(
                     throw ResponseStreamingException("Error in streaming response: ${error.message}", error)
                 }.onCompletion { error ->
                     if (error != null) {
-                        logger.error(error) { "Stream completed with error - traceId: $traceId" }
+                        logger.error(error) { "Stream completed with error" }
                     } else {
-                        logger.info { "Stream completed successfully - traceId: $traceId" }
+                        logger.info { "Stream completed successfully" }
                     }
                 }
         } catch (e: Exception) {
-            logger.error(e) { "Failed to create streaming response - traceId: $traceId" }
+            logger.error(e) { "Failed to create streaming response" }
             throw ResponseStreamingException("Failed to create streaming response: ${e.message}", e)
         }
     }
@@ -515,37 +458,31 @@ class MasaicResponseService(
             }
 
         // Extract model name for base URL determination
-        val modelName =
-            try {
-                request.javaClass.getDeclaredField("model").let {
-                    it.isAccessible = true
-                    it.get(request)?.toString()
-                }
-            } catch (e: Exception) {
-                null
-            }
-
         return OpenAIOkHttpClient
             .builder()
             .credential(credential)
-            .baseUrl(getApiBaseUri(headers, modelName).toURL().toString())
+            .baseUrl(getApiBaseUri(headers, request.model().asString()).toURL().toString())
             .build()
     }
 
-    private fun responseMetadataInput(
+    private fun instrumentationMetadataInput(
         headers: MultiValueMap<String, String>,
         request: ResponseCreateParams.Body,
-    ): CreateResponseMetadataInput {
-        val modelName =
-            try {
-                request.javaClass.getDeclaredField("model").let {
-                    it.isAccessible = true
-                    it.get(request)?.toString()
-                }
-            } catch (e: Exception) {
-                null
+    ): InstrumentationMetadataInput {
+        val modelName = request.model().asString()
+        val parts = modelName.split("@", limit = 2)
+
+        var genAiSystem = "UNKNOWN"
+        var actualModelName = modelName
+        if(parts.size == 2) {
+            if(!(parts[0].startsWith("http://") || parts[0].startsWith("https://"))) {
+                genAiSystem = parts[0]
             }
-        return CreateResponseMetadataInput("openai", getApiBaseUri(headers, modelName).host)
+            actualModelName = parts[1]
+        }
+
+        val url = getApiBaseUri(headers, request.model().asString())
+        return InstrumentationMetadataInput(genAiSystem, actualModelName, url.host, url.port.toString())
     }
 }
 

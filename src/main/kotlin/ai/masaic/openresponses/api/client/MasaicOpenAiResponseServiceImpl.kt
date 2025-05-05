@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
@@ -78,15 +78,10 @@ class MasaicOpenAiResponseServiceImpl(
     suspend fun create(
         client: OpenAIClient,
         params: ResponseCreateParams,
-        metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
+        metadata: InstrumentationMetadataInput = InstrumentationMetadataInput(),
     ): Response {
-        val parentObservation =
-            coroutineContext[ReactorContext]?.context?.get<Observation>(
-                ObservationThreadLocalAccessor.KEY,
-            )
-
         val responseOrCompletions =
-            telemetryService.withClientObservation("open.responses.create", parentObservation) { observation ->
+            telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
                 val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
@@ -113,7 +108,7 @@ class MasaicOpenAiResponseServiceImpl(
             return responseOrCompletions
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, parentObservation, client)
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, client)
         val updatedParams =
             params
                 .toBuilder()
@@ -205,7 +200,7 @@ class MasaicOpenAiResponseServiceImpl(
     suspend fun createCompletionStream(
         client: OpenAIClient,
         initialParams: ResponseCreateParams,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
         return streamingService.createCompletionStream(client, initialParams, metadata)

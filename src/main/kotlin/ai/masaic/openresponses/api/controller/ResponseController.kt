@@ -55,13 +55,7 @@ class ResponseController(
         @RequestBody request: CreateResponseRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-//        exchange: ServerWebExchange,
     ): ResponseEntity<*> {
-        // Extract trace ID from exchange
-//        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-
-        // Use our custom coroutine-aware MDC context
-//        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
         payloadFormatter.formatResponseRequest(request)
         request.parseInput(mapper)
         val requestBodyJson = mapper.writeValueAsString(request)
@@ -97,7 +91,6 @@ class ResponseController(
             log.debug("Response Body: $responseObj")
             return ResponseEntity.ok(payloadFormatter.formatResponse(responseObj))
         }
-//        }
     }
 
     @GetMapping("/responses/{responseId}", produces = [MediaType.APPLICATION_JSON_VALUE])
@@ -123,16 +116,10 @@ class ResponseController(
         @RequestParam queryParams: MultiValueMap<String, String>,
         exchange: ServerWebExchange,
     ): ResponseEntity<*> {
-        // Extract trace ID from exchange
-        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-
-        // Use our custom coroutine-aware MDC context
-        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-            try {
-                ResponseEntity.ok(payloadFormatter.formatResponse(masaicResponseService.getResponse(responseId)))
-            } catch (e: ResponseNotFoundException) {
-                throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
-            }
+        try {
+            return ResponseEntity.ok(payloadFormatter.formatResponse(masaicResponseService.getResponse(responseId)))
+        } catch (e: ResponseNotFoundException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }
     }
 

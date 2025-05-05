@@ -6,6 +6,7 @@ package ai.masaic.openresponses.api.support.service
 object GenAIObsAttributes {
     const val OPERATION_NAME = "gen_ai.operation.name"
     const val TOOL_NAME = "gen_ai.tool.name"
+    const val TOOL_DESCRIPTION = "gen_ai.tool.description"
     const val SYSTEM = "gen_ai.system"
     const val REQUEST_MODEL = "gen_ai.request.model"
     const val REQUEST_TEMPERATURE = "gen_ai.request.temperature"
@@ -19,6 +20,8 @@ object GenAIObsAttributes {
     const val OUTPUT_TYPE = "gen_ai.output.type"
     const val ERROR_TYPE = "error.type"
     const val SERVER_ADDRESS = "server.address"
+    const val SERVER_PORT = "server.port"
+    const val SPAN_KIND= "span.kind"
     const val OPERATION_DURATION = "gen_ai.client.operation.duration"
     const val TOOL_CALL_ID = "gen_ai.tool.call.id"
     const val USER_MESSAGE = "gen_ai.user.message"

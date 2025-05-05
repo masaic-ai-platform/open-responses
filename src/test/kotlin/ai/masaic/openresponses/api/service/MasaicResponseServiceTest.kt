@@ -2,7 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.client.ResponseStore
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
@@ -186,7 +186,7 @@ class MasaicResponseServiceTest {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                    metadata = InstrumentationMetadataInput("openai", "api.groq.com"),
                 )
             } returns expectedFlow
 
@@ -203,7 +203,7 @@ class MasaicResponseServiceTest {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                    metadata = InstrumentationMetadataInput("openai", "api.groq.com"),
                 )
             }
             confirmVerified(openAIResponseService)
