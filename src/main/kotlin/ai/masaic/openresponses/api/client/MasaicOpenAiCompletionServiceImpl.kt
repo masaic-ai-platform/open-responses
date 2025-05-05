@@ -66,10 +66,9 @@ class MasaicOpenAiCompletionServiceImpl(
                 logger.debug { "Creating chat completion with model: ${params.model()}" }
                 
                 telemetryService.emitModelInputEvents(observation, params, metadata)
-                // TODO : Uncomment and implement telemetryService.withChatCompletionTimer
-                // var completion = telemetryService.withChatCompletionTimer(params, metadata) { client.chat().completions().create(params) }
-                var completion = client.chat().completions().create(params)
-                
+
+                var completion = telemetryService.withChatCompletionTimer(params, metadata) { client.chat().completions().create(params) }
+
                 // Generate ID if missing
                 if (completion._id().isMissing()) {
                     completion = completion.toBuilder().id(UUID.randomUUID().toString()).build()
@@ -102,19 +101,7 @@ class MasaicOpenAiCompletionServiceImpl(
                 }
                 completion
             }
-
-        // If the main block returned directly (no tool calls initially),
-        // the chatCompletion object here holds the final result.
-        // The storeCompletion call inside the block handles storing when tool calls are resolved.
-        // However, we need to ensure it's stored if there were NO tool calls at all.
-        // The logic above inside the block handles this now.
-        // No, wait. If there are no tool calls, the block returns completion, then storeCompletion outside is called.
-        // If there ARE tool calls, handleToolCalls is called. handleToolCalls will call storeCompletion only if it returns early due to non-native tools.
-        // If handleToolCalls proceeds recursively, the FINAL recursive call's observation block will eventually store the very last completion.
-        // This seems correct. The external call below might be redundant.
-
-        // Let's remove the potentially redundant external call and rely on the logic within the observation block and handleToolCalls.
-        // storeCompletion(chatCompletion, params)
+        logger.debug { "Final chat completion ID: ${chatCompletion.id()}" }
         return chatCompletion
     }
 
@@ -159,8 +146,6 @@ class MasaicOpenAiCompletionServiceImpl(
         val updatedMessages = toolHandlingResult.updatedMessages
 
         // Check if max tool calls reached *after* processing this round
-        // *** IMPORTANT: Need to adjust exceedsMaxToolCalls logic ***
-        // It should probably count ASSISTANT messages with tool_calls, not TOOL messages.
         if (exceedsMaxToolCalls(updatedMessages)) {
             val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
             logger.error { errorMsg }
@@ -694,8 +679,6 @@ class MasaicOpenAiCompletionServiceImpl(
                         .getOrNull()
                         ?.isNotEmpty() == true
             }
-        // Or perhaps count the number of TOOL messages if that's the intended limit?
-        // val toolExecutionTurns = messages.count { it.role() == ChatCompletionMessage.Role.TOOL }
 
         val maxAllowed = getAllowedMaxToolCalls()
         // Using toolCallTurns seems more aligned with preventing infinite loops

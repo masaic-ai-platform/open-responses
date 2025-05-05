@@ -114,7 +114,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .model("gpt-model")
                     .choices(listOf(choice))
                     .build()
-            every { client.chat().completions().create(any<ChatCompletionCreateParams>()) } returns chatCompletion
+            every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
 
             val params =
                 ChatCompletionCreateParams
@@ -162,7 +162,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .model("gpt-model")
                     .choices(listOf(choice))
                     .build()
-            every { client.chat().completions().create(any<ChatCompletionCreateParams>()) } returns chatCompletion
+            every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
 
             val params =
                 ChatCompletionCreateParams
@@ -238,7 +238,8 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .model("gpt-model")
                     .choices(listOf(choice))
                     .build()
-            every { client.chat().completions().create(any<ChatCompletionCreateParams>()) } returns chatCompletion
+
+            every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
             // Stub handler to indicate unresolved client tools
             every {
                 toolHandler.handleCompletionToolCall(
@@ -308,7 +309,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .model("gpt-model")
                     .choices(listOf(choice))
                     .build()
-            every { client.chat().completions().create(any<ChatCompletionCreateParams>()) } returns chatCompletion
+            every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
             every {
                 toolHandler.handleCompletionToolCall(chatCompletion, any(), any(), client)
             } returns
