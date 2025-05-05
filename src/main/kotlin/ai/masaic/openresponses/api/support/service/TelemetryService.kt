@@ -18,6 +18,7 @@ import kotlinx.coroutines.reactor.ReactorContext
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
 import kotlin.coroutines.coroutineContext
+import kotlin.jvm.optionals.getOrNull
 
 @Service
 class TelemetryService(
@@ -42,7 +43,12 @@ class TelemetryService(
                             .assistant()
                             .get()
                             .content()
-                            .isPresent ->
+                            .isPresent &&
+                        message
+                            .assistant()
+                            .get()
+                            .toolCalls()
+                            .isEmpty ->
                         Triple("assistant", GenAIObsAttributes.ASSISTANT_MESSAGE, message.assistant().get().content())
                     message.isAssistant() &&
                         message
@@ -146,17 +152,12 @@ class TelemetryService(
     ) {
         val mapper = jsonMapper()
         chatCompletion.choices().forEach { choice ->
-            if (choice.message().content().isPresent) {
-                val eventData =
-                    mapOf(
-                        "gen_ai.system" to metadata.genAISystem,
-                        "role" to "assistant",
-                        "content" to choice.message().content().get(),
-                    )
-                observation.event(
-                    Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+            val eventData: MutableMap<String, Any?> =
+                mutableMapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "role" to "assistant",
+                    "content" to (choice.message().content().getOrNull() ?: ""),
                 )
-            }
             if (choice.finishReason().asString() == "tool_calls") {
                 val toolCalls =
                     choice.message().toolCalls().get().map { tool ->
@@ -170,17 +171,19 @@ class TelemetryService(
                                 ),
                         )
                     }
-                val eventData =
+                eventData.putAll(
                     mapOf(
                         "gen_ai.system" to metadata.genAISystem,
                         "finish_reason" to choice.finishReason().asString(),
                         "index" to choice.index(),
-                        "tool_calls" to toolCalls,
-                    )
-                observation.event(
-                    Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+                        "tool_calls" to mapper.writeValueAsString(toolCalls),
+                    ),
                 )
             }
+
+            observation.event(
+                Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+            )
         }
     }
 
