@@ -100,7 +100,7 @@ class EmbeddingsController(
                 }
 
             // Parse provider and model from the request.model (format: "provider@model")
-            val (provider, modelName) = parseProviderAndModel(request.model)
+            val (provider, _) = parseProviderAndModel(request.model)
             
             // Set model and server address attributes
             observation.lowCardinalityKeyValue("gen_ai.request.model", request.model)
@@ -147,12 +147,12 @@ class EmbeddingsController(
             observation.error(e)
             observation.lowCardinalityKeyValue("error.type", e.javaClass.simpleName)
             log.error("Error processing embedding request: ${e.message}")
-            throw ResponseStatusException(HttpStatus.BAD_REQUEST, e.message)
+            throw e
         } catch (e: Exception) {
             observation.error(e)
             observation.lowCardinalityKeyValue("error.type", e.javaClass.simpleName)
             log.error("Error generating embeddings", e)
-            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error generating embeddings: ${e.message}")
+            throw e
         } finally {
             observation.stop()
         }
