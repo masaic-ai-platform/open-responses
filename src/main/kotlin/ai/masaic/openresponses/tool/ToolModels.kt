@@ -196,7 +196,7 @@ class ResponseParamsAdapter(
                 val props = it.asWebSearch()._additionalProperties()
                 AgenticSeachTool(
                     type = "agentic_search", // Map type correctly
-                    vectorStoreIds = props["vector_store_ids"]?.convert(List::class.java) as? List<String>,
+                    vectorStoreIds = props["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() },
                     filters = props["filters"]?.convert(Filter::class.java),
                     maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
                     maxIterations = props["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
@@ -251,36 +251,72 @@ class ChatCompletionParamsAdapter(
                 }
 
             when (toolName) {
-                "file_search" ->
+                "file_search" -> {
+                    val additionalProps =
+                        params
+                            .tools()
+                            .getOrDefault(emptyList())
+                            .first { it.function().name() == "file_search" }
+                            ._additionalProperties()
                     FileSearchTool(
                         type = "file_search",
-                        vectorStoreIds = props["vector_store_ids"] as? List<String>, // Extract from parameters map
-                        filters = props["filters"], // Extract from parameters map
-                        maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
-                        alias = props["alias"]?.toString(),
+                        vectorStoreIds = additionalProps["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() }, // Extract from parameters map
+                        filters = additionalProps["filters"], // Extract from parameters map
+                        maxNumResults = additionalProps["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
+                        alias = additionalProps["alias"]?.toString(),
                     )
-                "agentic_search" ->
+                }
+                "agentic_search" -> {
+                    val additionalProps =
+                        params
+                            .tools()
+                            .getOrDefault(emptyList())
+                            .first { it.function().name() == "agentic_search" }
+                            ._additionalProperties()
                     AgenticSeachTool(
                         type = "agentic_search",
-                        vectorStoreIds = props["vector_store_ids"] as? List<String>,
-                        filters = props["filters"],
-                        maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
-                        maxIterations = props["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
-                        alias = props["alias"]?.toString(),
+                        vectorStoreIds = additionalProps["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() },
+                        filters = additionalProps["filters"],
+                        maxNumResults = additionalProps["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
+                        maxIterations = additionalProps["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
+                        alias = additionalProps["alias"]?.toString(),
                         // Extract tuning flags from parameters map
-                        enablePresencePenaltyTuning = props["enable_presence_penalty_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                        enableFrequencyPenaltyTuning = props["enable_frequency_penalty_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                        enableTemperatureTuning = props["enable_temperature_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                        enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
+                        enablePresencePenaltyTuning =
+                            additionalProps["enable_presence_penalty_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableFrequencyPenaltyTuning =
+                            additionalProps["enable_frequency_penalty_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableTemperatureTuning =
+                            additionalProps["enable_temperature_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableTopPTuning = additionalProps["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
                     )
-                "web_search" ->
+                }
+                "web_search" -> {
+                    val additionalProps =
+                        params
+                            .tools()
+                            .getOrDefault(emptyList())
+                            .first { it.function().name() == "web_search_preview" }
+                            ._additionalProperties()
                     WebSearchTool(
-                        type = "web_search",
-                        userLocation = props["user_location"]?.let { objectMapper.convertValue(it, UserLocation::class.java) },
-                        searchContextSize = props["search_context_size"]?.toString() ?: "medium",
-                        // domains = props["domains"] as? List<String> // Extract domains if present
+                        type = "web_search_preview",
+                        userLocation =
+                            additionalProps["user_location"]?.let {
+                                objectMapper.convertValue(
+                                    it,
+                                    UserLocation::class.java,
+                                )
+                            },
+                        searchContextSize = additionalProps["search_context_size"]?.toString() ?: "medium",
+                        domains = additionalProps["domains"] as? List<String> ?: emptyList(), // Extract domains if present
                         // alias = props["alias"]?.toString(),
                     )
+                }
                 // Default case for other function tools
                 else ->
                     FunctionTool(

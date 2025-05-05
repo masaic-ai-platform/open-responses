@@ -18,6 +18,7 @@ import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionStreamOptions
+import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -401,7 +402,17 @@ class MasaicCompletionService(
         
         // Handle tools if provided
         if (!request.tools.isNullOrEmpty()) {
-            builder.tools(request.tools!!)
+            val tools =
+                request.tools
+                    ?.map { tool ->
+                        val completionTool =
+                            objectMapper.convertValue(
+                                tool,
+                                ChatCompletionTool::class.java,
+                            )
+                        completionTool.toBuilder().type(JsonValue.from("function")).build()
+                    }?.toList() ?: emptyList()
+            builder.tools(tools)
         }
         
         // Handle tool_choice if provided

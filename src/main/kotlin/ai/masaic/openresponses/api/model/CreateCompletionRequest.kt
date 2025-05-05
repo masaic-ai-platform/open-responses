@@ -3,7 +3,6 @@ package ai.masaic.openresponses.api.model
 import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.chat.completions.ChatCompletionMessageParam
-import com.openai.models.chat.completions.ChatCompletionTool
 import java.util.*
 
 data class CreateCompletionRequest(
@@ -22,7 +21,7 @@ data class CreateCompletionRequest(
     val stream: Boolean = false,
     val temperature: Double? = null,
     val top_p: Double? = null,
-    var tools: List<ChatCompletionTool>? = null,
+    var tools: List<Map<String, Any>>? = null,
     val tool_choice: Any? = null,
     val user: String? = null,
     val store: Boolean = false,

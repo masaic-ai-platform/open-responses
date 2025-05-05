@@ -5,11 +5,12 @@ import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.model.MasaicManagedTool
 import ai.masaic.openresponses.api.model.Tool
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
-import com.openai.models.chat.completions.ChatCompletionTool
+import com.openai.core.JsonValue
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseStreamEvent
 import org.springframework.http.HttpStatus
@@ -56,19 +57,33 @@ class PayloadFormatter(
      * @param tools The original list of tools in the request
      * @return The updated list of tools
      */
-    private fun updateToolsInCompletionRequest(tools: List<ChatCompletionTool>?): MutableList<ChatCompletionTool>? =
-        tools
-            ?.map { tool ->
-                val toolMeta = Optional.ofNullable(toolService.getAvailableTool(tool._type().toString()))
-                if (toolMeta.isPresent) {
-                    toolService.getChatCompletionTool(tool._type().toString()) ?: throw ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Define tool ${tool._type()} properly",
-                    )
-                } else {
-                    tool
-                }
-            }?.toMutableList()
+    private fun updateToolsInCompletionRequest(tools: List<Map<String, Any>>?): List<Map<String, Any>>? {
+        val typeReference = object : TypeReference<List<Map<String, Any>>>() {}
+        val tools =
+            tools
+                ?.filter { it["type"] != "function" }
+                ?.map { tool ->
+                    val toolMeta = Optional.ofNullable(toolService.getAvailableTool(tool["type"].toString()))
+                    if (toolMeta.isPresent) {
+                        val completionTool =
+                            toolService.getChatCompletionTool(tool["type"].toString()) ?: throw ResponseStatusException(
+                                HttpStatus.BAD_REQUEST,
+                                "Define tool ${tool["type"]} properly",
+                            )
+                        completionTool
+                            .toBuilder()
+                            .putAllAdditionalProperties(
+                                tool.mapValues {
+                                    JsonValue.from(it.value)
+                                },
+                            ).build()
+                    } else {
+                        tool
+                    }
+                }?.toMutableList()
+
+        return mapper.convertValue(tools, typeReference)
+    }
 
     /**
      * Updates the tools in the response to replace function tools with Masaic managed tools.
