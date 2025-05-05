@@ -354,11 +354,14 @@ class MasaicOpenAiCompletionServiceImpl(
                 .build(),
         )
         
+        // Fix for smart cast: Capture the potentially null completionId
+        val finalCompletionId = completionId
+        
         // If we detected tool calls, reconstruct a ChatCompletion
         val reconstructedCompletion =
-            if (hasToolCallsFinishReason && completionId != null) {
+            if (hasToolCallsFinishReason && finalCompletionId != null) {
                 reconstructChatCompletion(
-                    completionId,
+                    finalCompletionId, // Use the captured non-null value
                     contentBuffers,
                     toolCallBuffers,
                     params,
