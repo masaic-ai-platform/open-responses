@@ -255,14 +255,18 @@ class TelemetryService(
         }
     }
 
-    suspend fun startObservation(obsName: String): Observation {
-        val parentObservation =
-            coroutineContext[ReactorContext]?.context?.get<Observation>(
-                ObservationThreadLocalAccessor.KEY,
-            )
+    suspend fun startObservation(
+        obsName: String,
+        parentObservation: Observation? = null,
+    ): Observation {
+        val actualParent =
+            parentObservation
+                ?: coroutineContext[ReactorContext]?.context?.get<Observation>(
+                    ObservationThreadLocalAccessor.KEY,
+                )
         val observation = Observation.createNotStarted(obsName, observationRegistry)
-        if (parentObservation?.isNoop != true) {
-            observation.parentObservation(parentObservation)
+        if (actualParent?.isNoop != true) {
+            observation.parentObservation(actualParent)
         }
         observation.start()
         return observation

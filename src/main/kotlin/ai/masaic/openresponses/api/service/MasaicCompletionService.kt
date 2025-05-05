@@ -17,6 +17,7 @@ import com.openai.models.ResponseFormatText
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -385,7 +386,15 @@ class MasaicCompletionService(
                 ),
             )
         }
-        request.stream?.let { builder.additionalBodyProperties(mapOf("stream" to JsonValue.from(true))) }
+        if (request.stream) {
+            builder.additionalBodyProperties(mapOf("stream" to JsonValue.from(true)))
+            request.stream_options?.let {
+                builder.streamOptions(
+                    ChatCompletionStreamOptions.builder().includeUsage(it["include_usage"] as? Boolean == true).build(),
+                )
+            }
+        }
+
         request.temperature?.let { builder.temperature(it) }
         request.top_p?.let { builder.topP(it) }
         request.store.let { builder.store(it) }

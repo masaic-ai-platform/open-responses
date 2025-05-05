@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.tool.CompletionToolRequestContext
@@ -10,6 +11,7 @@ import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.*
+import com.openai.models.completions.CompletionUsage
 import io.micrometer.observation.Observation
 import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
@@ -147,7 +149,7 @@ class MasaicOpenAiCompletionServiceImpl(
 
         // Check if max tool calls reached *after* processing this round
         if (exceedsMaxToolCalls(updatedMessages)) {
-            val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
+            val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS."
             logger.error { errorMsg }
             throw IllegalStateException(errorMsg)
         }
@@ -175,22 +177,28 @@ class MasaicOpenAiCompletionServiceImpl(
         params: ChatCompletionCreateParams,
         metadata: CreateResponseMetadataInput,
     ): Flow<ServerSentEvent<String>> {
-        logger.debug { "Creating streaming chat completion with model: ${params.model()}" }
-        
         val parentObservation =
             coroutineContext[ReactorContext]?.context?.get<Observation>(
                 ObservationThreadLocalAccessor.KEY,
             )
+
+        // Start observation manually
+        val observation = telemetryService.startObservation("openai.chat.completions.stream", parentObservation)
+        logger.debug { "Started observation ${observation.context.name} for streaming chat completion with model: ${params.model()}" }
         
-        return telemetryService.withClientObservation("openai.chat.completions.stream", parentObservation) { observation ->
-            logger.debug { "Streaming chat completion with model: ${params.model()}" }
-            
+        // Variable to hold the final reconstructed completion
+        var finalCompletion: ChatCompletion? = null
+        
+        try {
             telemetryService.emitModelInputEvents(observation, params, metadata)
             
             // Process the streaming request with tool call handling
-            flow {
+            return flow {
                 // Process the initial streaming segment
                 val streamResult = processStreamSegment(client, params, observation, metadata)
+                
+                // Store the completion from this segment if available
+                streamResult.completion?.let { finalCompletion = it }
                 
                 // Emit all the chunks from the first segment
                 emitAll(streamResult.chunks)
@@ -202,7 +210,7 @@ class MasaicOpenAiCompletionServiceImpl(
                     // Call the wrapper function to handle tool calls and prepare for possible next step
                     val handlingResult =
                         handleToolCallsAndPrepareNextStep(
-                            streamResult.completion,
+                            streamResult.completion, // Use completion from this segment
                             params,
                             parentObservation,
                             client,
@@ -215,11 +223,13 @@ class MasaicOpenAiCompletionServiceImpl(
                             // Client needs to handle these tool calls, we're done (already emitted all chunks)
                             logger.info { "Non-native tool calls detected for completion ${streamResult.completion.id()}, returning to client for handling" }
                             // No further actions needed - chunks were already emitted above
+                            // The finalCompletion still holds the result with tool calls for client
                         }
                         handlingResult.updatedParams != null -> {
                             // We have new parameters after handling native tools, make a recursive call
                             logger.info { "Native tools handled successfully, continuing with updated conversation for completion ${streamResult.completion.id()}" }
                             // Call createCompletionStream recursively and emit all its events
+                            // The recursive call's flow will eventually update finalCompletion in its onCompletion
                             emitAll(createCompletionStream(client, handlingResult.updatedParams, metadata))
                         }
                         else -> {
@@ -228,8 +238,11 @@ class MasaicOpenAiCompletionServiceImpl(
                         }
                     }
                 }
+                // If no tool calls, the flow just finishes here after emitting chunks.
+                // The 'finalCompletion' variable holds the result from processStreamSegment.
             }.catch { error ->
-                logger.error(error) { "Error in streaming chat completion with tool handling" }
+                logger.error(error) { "[OBS:${observation.context.name}] Error in streaming chat completion flow" }
+                observation.error(error) // Record error in observation
                 emit(
                     ServerSentEvent
                         .builder<String>()
@@ -238,12 +251,56 @@ class MasaicOpenAiCompletionServiceImpl(
                         .build(),
                 )
             }.onCompletion { error ->
-                if (error != null) {
-                    logger.error(error) { "Stream completed with error" }
+                if (error == null) {
+                    logger.info { "Stream completed successfully. Processing final telemetry." }
+                    // Process final telemetry only if the stream completed without errors
+                    finalCompletion?.let { completion ->
+                        logger.debug { "Emitting final telemetry for completion ID: ${completion.id()}" }
+                        // Emit output events
+                        telemetryService.emitModelOutputEvents(observation, completion, metadata)
+
+                        // Set final observation attributes
+                        telemetryService.setChatCompletionObservationAttributes(observation, completion, params, metadata)
+
+                        // Record token usage if available
+                        if (completion.usage().isPresent) {
+                            val usage = completion.usage().get()
+                            // Note: We might not have accurate prompt tokens from the stream reconstructed object
+                            // Using the value from usage if present, otherwise might need alternative tracking
+                            telemetryService.recordChatCompletionTokenUsage(metadata, completion, params, "input", usage.promptTokens())
+                            telemetryService.recordChatCompletionTokenUsage(metadata, completion, params, "output", usage.completionTokens())
+                        } else {
+                            logger.warn { "Usage data not found in final reconstructed completion for ID: ${completion.id()}" }
+                        }
+
+                        // Store final completion AFTER telemetry
+                        if (params.store().getOrDefault(false)) {
+                            // Ensure storage happens within a suspend context if needed by the store implementation
+                            // Use runBlocking if storeCompletion is not suspend and needs blocking context
+                            runBlocking { storeCompletion(completion, params) }
+                        }
+                    } ?: run {
+                        logger.warn { "Final reconstructed completion was null, cannot record final telemetry." }
+                        // Optionally set some basic attributes if completion is null but stream succeeded
+                        observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "unknown")
+                    }
                 } else {
-                    logger.info { "Stream completed successfully" }
+                    logger.error(error) { "[OBS:${observation.context.name}] Stream completed with error. Final telemetry potentially incomplete." }
+                    // Error already recorded in catch block
+                    observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "error")
                 }
+                // Stop the observation here, after all final attributes/events are set
+                observation.stop()
+                logger.debug { "[OBS:${observation.context.name}] Observation stopped in onCompletion." }
             }
+        } catch (e: Exception) {
+            // Handle exceptions during flow creation/initialization
+            logger.error(e) { "[OBS:${observation.context.name}] Error during stream setup before flow execution." }
+            observation.error(e)
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, e.javaClass.simpleName)
+            observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "error")
+            observation.stop() // Ensure observation is stopped on creation error
+            throw e
         }
     }
 
@@ -280,6 +337,8 @@ class MasaicOpenAiCompletionServiceImpl(
         var completionId: String? = null
         val contentBuffers = mutableMapOf<Int, StringBuilder>()
         val toolCallBuffers = mutableMapOf<Int, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>()
+        val finishReasons = mutableMapOf<Int, ChatCompletionChunk.Choice.FinishReason>() // Store finish reason per choice index
+        var usage: CompletionUsage? = null // Store usage data
         
         // Collect all chunks and detect tool call finish reason
         response.stream().forEach { chunk ->
@@ -314,19 +373,23 @@ class MasaicOpenAiCompletionServiceImpl(
                     }
                 }
                 
-                // Check for tool_calls finish reason
-                if (choice.finishReason().isPresent && 
-                    choice
-                        .finishReason()
-                        .get()
-                        .value()
-                        .name ==
-                    ChatCompletion.Choice.FinishReason.TOOL_CALLS
-                        .value()
-                        .name
-                ) {
-                    hasToolCallsFinishReason = true
+                // Check for finish reason and store it
+                if (choice.finishReason().isPresent) {
+                    val reason = choice.finishReason().get()
+                    finishReasons[index] = reason // Store the specific finish reason
+                    if (reason.value().name ==
+                        ChatCompletion.Choice.FinishReason.TOOL_CALLS
+                            .value()
+                            .name
+                    ) {
+                        hasToolCallsFinishReason = true
+                    }
                 }
+            }
+            
+            // Capture usage data if present (usually in the last chunk)
+            if (chunk.usage().isPresent) {
+                usage = chunk.usage().get()
             }
         }
         
@@ -344,12 +407,14 @@ class MasaicOpenAiCompletionServiceImpl(
         
         // If we detected tool calls, reconstruct a ChatCompletion
         val reconstructedCompletion =
-            if (hasToolCallsFinishReason && finalCompletionId != null) {
+            if (finalCompletionId != null) { // Reconstruct always if we have an ID
                 reconstructChatCompletion(
-                    finalCompletionId, // Use the captured non-null value
+                    finalCompletionId,
                     contentBuffers,
                     toolCallBuffers,
+                    finishReasons, // Pass finish reasons
                     params,
+                    usage, // Pass usage data
                 )
             } else {
                 null
@@ -377,104 +442,109 @@ class MasaicOpenAiCompletionServiceImpl(
         completionId: String,
         contentBuffers: Map<Int, StringBuilder>,
         toolCallBuffers: Map<Int, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>,
+        finishReasons: Map<Int, ChatCompletionChunk.Choice.FinishReason>, // Added finish reasons map
         params: ChatCompletionCreateParams,
+        usage: CompletionUsage?, // Added usage data
     ): ChatCompletion? {
         try {
             // Create choices from buffers
             val choices = mutableListOf<ChatCompletion.Choice>()
             
             // Process each choice index
-            val allIndices = (contentBuffers.keys + toolCallBuffers.keys).toSet()
+            val allIndices = (contentBuffers.keys + toolCallBuffers.keys + finishReasons.keys).toSet()
             
             for (index in allIndices) {
                 // Get content
-                val content = contentBuffers[index]?.toString() ?: ""
+                val content = contentBuffers[index]?.toString()
                 
                 // Get tool calls for this choice
                 val deltaTookCalls = toolCallBuffers[index]
                 
-                // Skip choices without valid tool calls if we're completing a tool call sequence
-                if (deltaTookCalls.isNullOrEmpty()) {
-                    // Only add text content if we have some
-                    if (content.isNotBlank()) {
-                        val textMessage =
-                            ChatCompletionMessage
-                                .builder()
-                                .role(JsonValue.from("assistant"))
-                                .content(content)
-                                .build()
-                            
-                        choices.add(
-                            ChatCompletion.Choice
-                                .builder()
-                                .index(index.toLong())
-                                .message(textMessage)
-                                .finishReason(ChatCompletion.Choice.FinishReason.STOP)
-                                .build(),
-                        )
-                    }
+                // Get finish reason, default to STOP if not present for this index but content/tools are
+                val finishReason = finishReasons[index] ?: ChatCompletion.Choice.FinishReason.STOP
+                
+                // Determine if this choice involves tool calls
+                val hasToolCallsForIndex = !deltaTookCalls.isNullOrEmpty()
+                
+                // Skip choice if it has no content, no tool calls, and no explicit finish reason
+                if (content.isNullOrEmpty() && !hasToolCallsForIndex && !finishReasons.containsKey(index)) {
                     continue
                 }
                 
-                // Consolidate tool calls by ID to handle partial updates
-                val consolidatedToolCalls = mutableMapOf<String, MutableMap<String, String>>()
-                
-                // First pass: collect all tool call information
-                for (toolCall in deltaTookCalls) {
-                    if (!toolCall.function().isPresent) continue
-                    
-                    val id = toolCall.id().getOrNull() ?: continue
-                    val function = toolCall.function().get()
-                    
-                    val toolInfo = consolidatedToolCalls.getOrPut(id) { mutableMapOf() }
-                    
-                    // Update name if present
-                    if (function.name().isPresent) {
-                        toolInfo["name"] = function.name().get()
-                    }
-                    
-                    // Update arguments if present
-                    if (function.arguments().isPresent) {
-                        val newArgs = function.arguments().get()
-                        val currentArgs = toolInfo["arguments"] ?: ""
-                        toolInfo["arguments"] = currentArgs + newArgs
-                    }
-                }
-                
-                // Build the complete tool calls
+                // Consolidate tool calls by ID
                 val completedToolCalls = mutableListOf<ChatCompletionMessageToolCall>()
-                for ((id, toolInfo) in consolidatedToolCalls) {
-                    // Skip tool calls with missing information
-                    val name = toolInfo["name"] ?: continue
-                    val arguments = toolInfo["arguments"] ?: ""
+                if (hasToolCallsForIndex) {
+                    val consolidatedToolCalls = mutableMapOf<String, MutableMap<String, String>>()
+                    // First pass: collect all tool call information
+                    deltaTookCalls?.forEach { toolCall ->
+                        if (!toolCall.function().isPresent) return@forEach
+                        
+                        val id = toolCall.id().getOrNull() ?: return@forEach
+                        val function = toolCall.function().get()
+                        
+                        val toolInfo = consolidatedToolCalls.getOrPut(id) { mutableMapOf() }
+                        
+                        // Update name if present
+                        if (function.name().isPresent) {
+                            toolInfo["name"] = function.name().get()
+                        }
+                        
+                        // Update arguments if present
+                        if (function.arguments().isPresent) {
+                            val newArgs = function.arguments().get()
+                            val currentArgs = toolInfo["arguments"] ?: ""
+                            toolInfo["arguments"] = currentArgs + newArgs
+                        }
+                    }
                     
-                    completedToolCalls.add(
-                        ChatCompletionMessageToolCall
-                            .builder()
-                            .id(id)
-                            .function(
-                                ChatCompletionMessageToolCall.Function
-                                    .builder()
-                                    .name(name)
-                                    .arguments(arguments)
-                                    .build(),
-                            ).build(),
-                    )
+                    // Build the complete tool calls
+                    for ((id, toolInfo) in consolidatedToolCalls) {
+                        // Skip tool calls with missing information
+                        val name = toolInfo["name"] ?: continue
+                        val arguments = toolInfo["arguments"] ?: ""
+                        
+                        completedToolCalls.add(
+                            ChatCompletionMessageToolCall
+                                .builder()
+                                .id(id)
+                                .function(
+                                    ChatCompletionMessageToolCall.Function
+                                        .builder()
+                                        .name(name)
+                                        .arguments(arguments)
+                                        .build(),
+                                ).build(),
+                        )
+                    }
                 }
                 
-                // Only proceed if we have valid tool calls
-                if (completedToolCalls.isEmpty()) continue
-                
-                // Create the message with tool calls
-                val message =
+                // Build the message
+                val messageBuilder =
                     ChatCompletionMessage
                         .builder()
                         .role(JsonValue.from("assistant"))
                         .refusal(null)
-                        .content("")
                 
-                // Add all completed tool calls
-                completedToolCalls.forEach { message.addToolCall(it) }
+                // Add content if present
+                content?.let { messageBuilder.content(it) }
+                
+                // Add tool calls if present
+                if (completedToolCalls.isNotEmpty()) {
+                    completedToolCalls.forEach { messageBuilder.addToolCall(it) }
+                    // If content is null/empty but we have tool calls, set content to empty string if needed by builder
+                    if (content.isNullOrEmpty()) {
+                        messageBuilder.content("")
+                    }
+                } else if (content.isNullOrEmpty()) {
+                    // If no content AND no tool calls, this choice might be invalid unless there's a finish reason only
+                    // If finishReason is STOP, allow empty content. If TOOL_CALLS, it's inconsistent.
+                    if (finishReason == ChatCompletion.Choice.FinishReason.STOP) {
+                        messageBuilder.content("") // Ensure content is non-null for the builder
+                    } else {
+                        logger.warn { "Skipping choice index $index: No content or tool calls, but finish reason is $finishReason" }
+                        continue // Skip this potentially inconsistent choice
+                    }
+                }
                 
                 // Create the choice
                 choices.add(
@@ -482,25 +552,33 @@ class MasaicOpenAiCompletionServiceImpl(
                         .builder()
                         .index(index.toLong())
                         .logprobs(null)
-                        .message(message.build())
-                        .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                        .message(messageBuilder.build())
+                        .finishReason(ChatCompletion.Choice.FinishReason.of(finishReason.toString())) // Use the stored finish reason
                         .build(),
                 )
             }
             
             // Only proceed if we have valid choices
-            if (choices.isEmpty()) return null
+            if (choices.isEmpty()) {
+                logger.warn { "Reconstruction resulted in zero valid choices for completion ID: $completionId" }
+                return null
+            }
             
             // Build the complete ChatCompletion
-            return ChatCompletion
-                .builder()
-                .id(completionId)
-                .created(System.currentTimeMillis() / 1000) // Current time in seconds
-                .model(params.model().toString())
-                .choices(choices)
-                .build()
+            val completionBuilder =
+                ChatCompletion
+                    .builder()
+                    .id(completionId)
+                    .created(System.currentTimeMillis() / 1000) // Current time in seconds
+                    .model(params.model().toString()) // Use request model as fallback
+                    .choices(choices)
+            
+            // Add usage if available
+            usage?.let { completionBuilder.usage(it) }
+            
+            return completionBuilder.build()
         } catch (e: Exception) {
-            logger.error(e) { "Failed to reconstruct ChatCompletion from stream chunks" }
+            logger.error(e) { "Failed to reconstruct ChatCompletion from stream chunks for ID: $completionId" }
             return null
         }
     }
@@ -586,7 +664,7 @@ class MasaicOpenAiCompletionServiceImpl(
         
         // Check if max tool calls reached
         if (exceedsMaxToolCalls(updatedMessages)) {
-            val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
+            val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS."
             logger.error { errorMsg }
             throw IllegalStateException(errorMsg)
         }
@@ -678,13 +756,14 @@ class MasaicOpenAiCompletionServiceImpl(
                         .toolCalls()
                         .getOrNull()
                         ?.isNotEmpty() == true
-            }
+            } + // Also count tool messages as part of a turn
+                messages.count { it.isTool() } / 2 // Approximately, as each tool call usually gets one tool response
 
         val maxAllowed = getAllowedMaxToolCalls()
         // Using toolCallTurns seems more aligned with preventing infinite loops
         val exceeds = toolCallTurns >= maxAllowed
         if (exceeds) {
-            logger.warn { "Detected $toolCallTurns assistant tool call requests, which meets or exceeds the limit of $maxAllowed." }
+            logger.warn { "Detected $toolCallTurns tool call turns, which meets or exceeds the limit of $maxAllowed." }
         }
         return exceeds
     }

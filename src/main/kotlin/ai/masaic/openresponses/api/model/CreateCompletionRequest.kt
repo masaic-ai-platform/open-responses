@@ -19,13 +19,14 @@ data class CreateCompletionRequest(
     val response_format: Map<String, String>? = null,
     val seed: Long? = null,
     val stop: Any? = null,
-    val stream: Boolean? = null,
+    val stream: Boolean = false,
     val temperature: Double? = null,
     val top_p: Double? = null,
     var tools: List<ChatCompletionTool>? = null,
     val tool_choice: Any? = null,
     val user: String? = null,
     val store: Boolean = false,
+    val stream_options: Map<String, Any>? = null,
     @JsonAlias("extra_body")
     val extraBody: Map<String, Any>? = null,
 ) {

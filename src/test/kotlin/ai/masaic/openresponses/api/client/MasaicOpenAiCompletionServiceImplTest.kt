@@ -375,7 +375,7 @@ class MasaicOpenAiCompletionServiceImplTest {
             val events = service.createCompletionStream(client, params, metadata).toList()
 
             // Then: telemetry invoked and a DONE event is emitted
-            verify(exactly = 1) { telemetryService.withClientObservation<kotlinx.coroutines.flow.Flow<ServerSentEvent<String>>>("openai.chat.completions.stream", any(), any()) }
+            coVerify(exactly = 1) { telemetryService.startObservation("openai.chat.completions.stream", any()) }
             // Expect only the 'done' event
             assertEquals(1, events.size)
             val doneEvent = events.first()
