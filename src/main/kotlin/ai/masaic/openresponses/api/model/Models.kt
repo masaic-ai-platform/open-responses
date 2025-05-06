@@ -54,6 +54,12 @@ data class FileSearchTool(
  * @property filters Optional filters to apply to the search
  * @property maxNumResults Maximum number of results to return
  * @property vectorStoreIds List of vector store IDs to search in
+ * @property maxIterations Maximum number of search iterations
+ * @property alias Optional alias for the tool
+ * @property enablePresencePenaltyTuning Optional flag to enable tuning
+ * @property enableFrequencyPenaltyTuning Optional flag to enable tuning
+ * @property enableTemperatureTuning Optional flag to enable tuning
+ * @property enableTopPTuning Optional flag to enable tuning
  */
 data class AgenticSeachTool(
     override val type: String,
@@ -65,6 +71,14 @@ data class AgenticSeachTool(
     @JsonProperty("max_iterations")
     val maxIterations: Int = 5,
     val alias: String? = type,
+    @JsonProperty("enable_presence_penalty_tuning")
+    val enablePresencePenaltyTuning: Boolean? = null,
+    @JsonProperty("enable_frequency_penalty_tuning")
+    val enableFrequencyPenaltyTuning: Boolean? = null,
+    @JsonProperty("enable_temperature_tuning")
+    val enableTemperatureTuning: Boolean? = null,
+    @JsonProperty("enable_top_p_tuning")
+    val enableTopPTuning: Boolean? = null,
 ) : Tool
 
 /**

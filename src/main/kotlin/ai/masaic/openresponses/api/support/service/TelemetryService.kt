@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.support.service
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import com.openai.core.jsonMapper
 import com.openai.models.chat.completions.ChatCompletion
+import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
@@ -16,6 +17,7 @@ import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.Duration
+import kotlin.jvm.optionals.getOrDefault
 
 @Service
 class TelemetryService(
@@ -52,24 +54,6 @@ class TelemetryService(
                         message
                             .assistant()
                             .get()
-                            .content()
-                            .isPresent ->
-                        Triple(
-                            "assistant",
-                            GenAIObsAttributes.ASSISTANT_MESSAGE,
-                            messageContent(
-                                message
-                                    .assistant()
-                                    .get()
-                                    .content()
-                                    .get()
-                                    .asText(),
-                            ),
-                        )
-                    message.isAssistant() &&
-                        message
-                            .assistant()
-                            .get()
                             .toolCalls()
                             .isPresent -> {
                         val tools =
@@ -82,8 +66,40 @@ class TelemetryService(
                                     "function" to map,
                                 )
                             }
-                        Triple("assistant", GenAIObsAttributes.ASSISTANT_MESSAGE, mapOf("tool_calls" to tools))
+                        val finalMap =
+                            mapOf(
+                                "gen_ai.system" to metadata.genAISystem,
+                                "role" to "assistant",
+                                "tool_calls" to tools,
+                            )
+                        observation.event(
+                            Observation.Event.of(GenAIObsAttributes.ASSISTANT_MESSAGE, mapper.writeValueAsString(finalMap)),
+                        )
+                        Triple("", "", "") // TODO:: to be fixed properly... workaround for tool calls message
                     }
+                    message.isAssistant() &&
+                        message
+                            .assistant()
+                            .get()
+                            .content()
+                            .isPresent &&
+                        message
+                            .assistant()
+                            .get()
+                            .toolCalls()
+                            .isEmpty ->
+                        Triple(
+                            "assistant",
+                            GenAIObsAttributes.ASSISTANT_MESSAGE,
+                            messageContent(
+                                message
+                                    .assistant()
+                                    .get()
+                                    .content()
+                                    .get()
+                                    .asText(),
+                            ),
+                        )
                     message.isTool() -> {
                         val map = mutableMapOf("id" to message.tool().get().toolCallId())
                         putIfNotEmpty(
@@ -97,11 +113,16 @@ class TelemetryService(
                                     .asText(),
                             ),
                         )
-                        Triple(
-                            "tool",
-                            GenAIObsAttributes.TOOL_MESSAGE,
-                            map,
+                        val finalMap =
+                            mapOf(
+                                "gen_ai.system" to metadata.genAISystem,
+                                "role" to "tool",
+                                "tool_calls" to map,
+                            )
+                        observation.event(
+                            Observation.Event.of(GenAIObsAttributes.TOOL_MESSAGE, mapper.writeValueAsString(finalMap)),
                         )
+                        Triple("", "", "") // TODO:: to be fixed properly... workaround for tool message
                     }
                     message.isSystem() && message.system().isPresent ->
                         Triple(
@@ -146,9 +167,11 @@ class TelemetryService(
                         "content" to content,
                     )
                 }
-            observation.event(
-                Observation.Event.of(eventName, mapper.writeValueAsString(eventData)),
-            )
+            if (!(role.isEmpty() && (content is String && content.isEmpty()) && eventName.isEmpty())) {
+                observation.event(
+                    Observation.Event.of(eventName, mapper.writeValueAsString(eventData)),
+                )
+            }
         }
     }
 
@@ -212,17 +235,16 @@ class TelemetryService(
     ) {
         val mapper = jsonMapper()
         chatCompletion.choices().forEach { choice ->
-            if (choice.message().content().isPresent) {
-                val eventData =
-                    mutableMapOf(
-                        "gen_ai.system" to metadata.genAISystem,
-                        "role" to "assistant",
-                    )
-                putIfNotEmpty(eventData, "content", messageContent(choice.message().content().get()))
-                observation.event(
-                    Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+            val eventData: MutableMap<String, Any?> =
+                mutableMapOf(
+                    "gen_ai.system" to metadata.genAISystem,
+                    "role" to "assistant",
                 )
+            val content = messageContent(choice.message().content().getOrDefault(""))
+            if (content.isNotEmpty()) {
+                eventData["content"] = content
             }
+
             if (choice.finishReason().asString() == "tool_calls") {
                 val toolCalls =
                     choice.message().toolCalls().get().map { tool ->
@@ -234,17 +256,20 @@ class TelemetryService(
                             "function" to functionDetailsMap,
                         )
                     }
-                val eventData =
+                val tooCallMap =
                     mapOf(
                         "gen_ai.system" to metadata.genAISystem,
                         "finish_reason" to choice.finishReason().asString(),
-                        "index" to choice.index(),
+                        "index" to choice.index().toString(),
                         "tool_calls" to toolCalls,
                     )
-                observation.event(
-                    Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
-                )
+
+                eventData.putAll(tooCallMap)
             }
+
+            observation.event(
+                Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
+            )
         }
     }
 
@@ -263,7 +288,6 @@ class TelemetryService(
         observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_PORT, metadata.modelProviderPort)
         observation.highCardinalityKeyValue(GenAIObsAttributes.RESPONSE_ID, response.id())
         observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_FINISH_REASONS, finishReason)
-//        observation.highCardinalityKeyValue(GenAIObsAttributes.SPAN_KIND, "client")
 
         params.temperature().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TEMPERATURE, it.toString()) }
         params.maxOutputTokens().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_MAX_TOKENS, it.toString()) }
@@ -289,7 +313,6 @@ class TelemetryService(
         observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress)
         observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_PORT, metadata.modelProviderPort)
         observation.highCardinalityKeyValue(GenAIObsAttributes.RESPONSE_ID, chatCompletion.id())
-//        observation.highCardinalityKeyValue(GenAIObsAttributes.SPAN_KIND, "client")
 
         params.temperature().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TEMPERATURE, it.toString()) }
         params.maxOutputTokens().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_MAX_TOKENS, it.toString()) }
@@ -821,6 +844,156 @@ class TelemetryService(
             }
         } finally {
             observation.stop()
+        }
+    }
+
+    fun recordTokenUsageForChatCompletion(
+        metadata: InstrumentationMetadataInput,
+        chatCompletionChunk: ChatCompletionChunk,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val responseModel = chatCompletionChunk.model()
+        tokenUsage(metadata, responseModel, responseModel, tokenType, tokenCount)
+    }
+
+    /**
+     * Records token usage for chat completions.
+     */
+    fun recordChatCompletionTokenUsage(
+        metadata: InstrumentationMetadataInput,
+        chatCompletion: ChatCompletion,
+        params: ChatCompletionCreateParams,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val requestModel = params.model().toString()
+        val responseModel = chatCompletion.model()
+        tokenUsage(metadata, responseModel, requestModel, tokenType, tokenCount)
+    }
+
+    /**
+     * Records token usage for chat completion streaming chunks.
+     */
+    fun recordChatCompletionChunkTokenUsage(
+        metadata: InstrumentationMetadataInput,
+        chatCompletionChunk: ChatCompletionChunk,
+        tokenType: String,
+        tokenCount: Long,
+    ) {
+        val responseModel = chatCompletionChunk.model()
+        tokenUsage(metadata, responseModel, responseModel, tokenType, tokenCount)
+    }
+
+    /**
+     * Creates a timer for chat completion operations.
+     */
+    fun <T> withChatCompletionTimer(
+        params: ChatCompletionCreateParams,
+        metadata: InstrumentationMetadataInput,
+        block: () -> T,
+    ): T {
+        val timerBuilder =
+            Timer
+                .builder(GenAIObsAttributes.OPERATION_DURATION)
+                .description("GenAI operation duration")
+                .tags(GenAIObsAttributes.OPERATION_NAME, "chat", GenAIObsAttributes.SYSTEM, metadata.genAISystem)
+                .tag(GenAIObsAttributes.REQUEST_MODEL, params.model().toString())
+                .tag(GenAIObsAttributes.RESPONSE_MODEL, params.model().toString())
+                .tag(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress)
+        setSlo(timerBuilder)
+        val timer = timerBuilder.register(meterRegistry)
+        val sample = Timer.start(meterRegistry)
+        try {
+            return block()
+        } catch (ex: Exception) {
+            timerBuilder.tag(GenAIObsAttributes.ERROR_TYPE, "${ex.javaClass}")
+            throw ex
+        } finally {
+            sample.stop(timer)
+        }
+    }
+
+    /**
+     * Sets all observation attributes for a chat completion.
+     */
+    fun setChatCompletionObservationAttributes(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+        params: ChatCompletionCreateParams,
+        metadata: InstrumentationMetadataInput,
+    ) {
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "chat")
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SYSTEM, metadata.genAISystem)
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.REQUEST_MODEL, params.model().toString())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_MODEL, chatCompletion.model())
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_ADDRESS, metadata.modelProviderAddress)
+        observation.lowCardinalityKeyValue(GenAIObsAttributes.SERVER_PORT, metadata.modelProviderPort)
+        observation.highCardinalityKeyValue(GenAIObsAttributes.RESPONSE_ID, chatCompletion.id())
+
+        params.temperature().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TEMPERATURE, it.toString()) }
+        params.maxCompletionTokens().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_MAX_TOKENS, it.toString()) }
+        params.topP().ifPresent { observation.highCardinalityKeyValue(GenAIObsAttributes.REQUEST_TOP_P, it.toString()) }
+
+        chatCompletion.usage().ifPresent { usage ->
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_INPUT_TOKENS, usage.promptTokens().toString())
+            observation.highCardinalityKeyValue(GenAIObsAttributes.USAGE_OUTPUT_TOKENS, usage.completionTokens().toString())
+        }
+
+        setChatCompletionFinishReasons(observation, chatCompletion)
+        setOutputType(observation, params)
+    }
+
+    private fun setOutputType(
+        observation: Observation,
+        params: ChatCompletionCreateParams,
+    ) {
+        if (params.responseFormat().isPresent &&
+            params
+                .responseFormat()
+                .isPresent
+        ) {
+            val responseFormatConfig =
+                params
+                    .responseFormat()
+                    .get()
+            val format =
+                if (responseFormatConfig.isText()) {
+                    responseFormatConfig
+                        .asText()
+                        ._type()
+                        .toString()
+                } else if (responseFormatConfig.isJsonObject()) {
+                    responseFormatConfig
+                        .asJsonObject()
+                        ._type()
+                        .toString()
+                } else {
+                    responseFormatConfig.asJsonSchema()._type().toString()
+                }
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.OUTPUT_TYPE, format)
+        }
+    }
+
+    /**
+     * Sets finish reasons for a chat completion observation.
+     */
+    private fun setChatCompletionFinishReasons(
+        observation: Observation,
+        chatCompletion: ChatCompletion,
+    ) {
+        val finishReasons =
+            chatCompletion
+                .choices()
+                .mapNotNull {
+                    it
+                        .finishReason()
+                        .value()
+                        ?.name
+                        ?.lowercase()
+                }.distinct()
+        if (finishReasons.isNotEmpty()) {
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.RESPONSE_FINISH_REASONS, finishReasons.joinToString(","))
         }
     }
 

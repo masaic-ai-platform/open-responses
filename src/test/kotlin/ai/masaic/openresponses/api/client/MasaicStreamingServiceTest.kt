@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.model.FunctionTool
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -418,7 +419,7 @@ class MasaicStreamingServiceTest {
             coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
             // We'll say toolService recognizes \"my_function\"
-            every { toolService.getFunctionTool("my_function", any()) } returns FunctionTool(name = "my_function")
+            every { toolService.getFunctionTool("my_function", ofType<ToolRequestContext>()) } returns FunctionTool(name = "my_function")
             every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
 
             // Now stub the openAIClient usage

@@ -6,7 +6,6 @@ import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.Tool
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -21,7 +20,6 @@ import kotlin.test.assertTrue
 class NativeToolRegistryTest {
     private lateinit var nativeToolRegistry: NativeToolRegistry
     private lateinit var vectorStoreService: VectorStoreService
-    private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
     fun setUp() {
@@ -70,10 +68,9 @@ class NativeToolRegistryTest {
         runTest {
             // Given
             val arguments = """{"thought": "I am thinking about vectors"}"""
-            val params = mockk<ResponseCreateParams>()
 
             // When
-            val result = nativeToolRegistry.executeTool("think", arguments, params, mockk(), {}, mockk(relaxed = true), mockk(relaxed = true))
+            val result = nativeToolRegistry.executeTool("think", arguments, mockk(relaxed = true), mockk(), {}, mockk(relaxed = true), mockk(relaxed = true))
 
             // Then
             assertEquals("Your thought has been logged.", result)
@@ -84,14 +81,13 @@ class NativeToolRegistryTest {
         runTest {
             // Given
             val arguments = "{}"
-            val params = mockk<ResponseCreateParams>()
 
             // When
             val result =
                 nativeToolRegistry.executeTool(
                     "unknown_tool",
                     arguments,
-                    params,
+                    mockk(relaxed = true),
                     mockk(),
                     {},
                     mockk(relaxed = true),
@@ -115,9 +111,10 @@ class NativeToolRegistryTest {
             // we're just verifying the code doesn't throw exceptions when tools aren't found
             val toolsOptional = mockk<Optional<List<Tool>>>()
             every { params.tools() } returns toolsOptional
+            every { toolsOptional.isPresent } returns false
             every { toolsOptional.orElse(null) } returns null
         
             // Just check that no error is thrown
-            nativeToolRegistry.executeTool("file_search", arguments, params, mockk(), {}, mockk(relaxed = true), mockk(relaxed = true))
+            nativeToolRegistry.executeTool("file_search", arguments, ResponseParamsAdapter(params, jacksonObjectMapper()), mockk(), {}, mockk(relaxed = true), mockk(relaxed = true))
         }
 } 

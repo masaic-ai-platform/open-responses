@@ -62,7 +62,7 @@ class NativeToolRegistryAgenticSearchTest {
                 nativeToolRegistry.executeTool(
                     "agentic_search",
                     arguments,
-                    params,
+                    mockk(relaxed = true),
                     openAIClient,
                     {},
                     mockk(relaxed = true),

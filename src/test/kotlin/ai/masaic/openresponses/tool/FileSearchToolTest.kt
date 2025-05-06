@@ -8,7 +8,6 @@ import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
 import io.mockk.*
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -25,7 +24,6 @@ class FileSearchToolTest {
     private lateinit var nativeToolRegistry: NativeToolRegistry
     private lateinit var vectorStoreService: VectorStoreService
     private val openAIClient = mockk<OpenAIClient>()
-    private val json = Json { ignoreUnknownKeys = true }
 
     @BeforeEach
     fun setUp() {
@@ -77,7 +75,7 @@ class FileSearchToolTest {
         }"""
 
             coEvery {
-                nativeToolRegistry.executeTool(toolName, arguments, params, ofType(), any(), any(), any())
+                nativeToolRegistry.executeTool(toolName, arguments, any(), any(), ofType(), any(), any())
             } returns responseJson
         
             // When
@@ -99,7 +97,7 @@ class FileSearchToolTest {
                 nativeToolRegistry.executeTool(
                     toolName,
                     arguments,
-                    params,
+                    any(),
                     openAIClient,
                     any(),
                     any(),
@@ -131,12 +129,12 @@ class FileSearchToolTest {
         
         // Then
         assertNotNull(result)
-        assertEquals(toolName, result?.name)
-        assertEquals("Search through vector stores for relevant file content", result?.description)
+        assertEquals(toolName, result.name)
+        assertEquals("Search through vector stores for relevant file content", result.description)
         
         // Parameters should be preserved
         @Suppress("UNCHECKED_CAST")
-        val properties = result?.parameters?.get("properties") as? Map<String, Any>
+        val properties = result.parameters["properties"] as? Map<String, Any>
         assertNotNull(properties)
         assertTrue(properties.containsKey("query"))
     }
