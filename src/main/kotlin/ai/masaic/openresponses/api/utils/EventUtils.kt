@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.utils
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.http.StreamResponse
@@ -95,7 +95,7 @@ class EventUtils {
             response: StreamResponse<ChatCompletionChunk>,
             objectMapper: ObjectMapper,
             observation: Observation? = null,
-            metadata: CreateResponseMetadataInput? = null,
+            metadata: InstrumentationMetadataInput? = null,
             telemetryService: TelemetryService? = null,
         ): Flow<ServerSentEvent<String>> =
             callbackFlow {

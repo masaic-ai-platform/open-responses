@@ -5,7 +5,6 @@ import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
-import ai.masaic.openresponses.api.utils.CoroutineMDCContext
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.responses.Response
@@ -17,7 +16,6 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
-import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -55,13 +53,7 @@ class ResponseController(
         @RequestBody request: CreateResponseRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-//        exchange: ServerWebExchange,
     ): ResponseEntity<*> {
-        // Extract trace ID from exchange
-//        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-
-        // Use our custom coroutine-aware MDC context
-//        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
         payloadFormatter.formatResponseRequest(request)
         request.parseInput(mapper)
         val requestBodyJson = mapper.writeValueAsString(request)
@@ -97,7 +89,6 @@ class ResponseController(
             log.debug("Response Body: $responseObj")
             return ResponseEntity.ok(payloadFormatter.formatResponse(responseObj))
         }
-//        }
     }
 
     @GetMapping("/responses/{responseId}", produces = [MediaType.APPLICATION_JSON_VALUE])
@@ -123,16 +114,10 @@ class ResponseController(
         @RequestParam queryParams: MultiValueMap<String, String>,
         exchange: ServerWebExchange,
     ): ResponseEntity<*> {
-        // Extract trace ID from exchange
-        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-
-        // Use our custom coroutine-aware MDC context
-        return withContext(CoroutineMDCContext(mapOf("traceId" to traceId))) {
-            try {
-                ResponseEntity.ok(payloadFormatter.formatResponse(masaicResponseService.getResponse(responseId)))
-            } catch (e: ResponseNotFoundException) {
-                throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
-            }
+        try {
+            return ResponseEntity.ok(payloadFormatter.formatResponse(masaicResponseService.getResponse(responseId)))
+        } catch (e: ResponseNotFoundException) {
+            throw ResponseStatusException(HttpStatus.NOT_FOUND, e.message)
         }
     }
 

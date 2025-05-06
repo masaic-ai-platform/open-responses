@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.EventUtils
@@ -56,15 +56,10 @@ class MasaicOpenAiCompletionServiceImpl(
     suspend fun create(
         client: OpenAIClient,
         params: ChatCompletionCreateParams,
-        metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
+        metadata: InstrumentationMetadataInput = InstrumentationMetadataInput(),
     ): ChatCompletion {
-        val parentObservation =
-            coroutineContext[ReactorContext]?.context?.get<Observation>(
-                ObservationThreadLocalAccessor.KEY,
-            )
-
         val chatCompletion =
-            telemetryService.withClientObservation("openai.chat.completions.create", parentObservation) { observation ->
+            telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
                 logger.debug { "Creating chat completion with model: ${params.model()}" }
                 
                 telemetryService.emitModelInputEvents(observation, params, metadata)
@@ -89,7 +84,7 @@ class MasaicOpenAiCompletionServiceImpl(
                 if (hasToolCalls(completion)) {
                     logger.info { "Tool calls detected in completion ${completion.id()}, initiating tool handling flow." }
                     // Call handleToolCalls which will recursively call create if needed
-                    val response = runBlocking { handleToolCalls(completion, params, parentObservation, client, metadata) }
+                    val response = runBlocking { handleToolCalls(completion, params, client, metadata) }
 
                     // Store final completion if no tool calls needed further handling
                     if (params.store().getOrDefault(false)) {
@@ -115,9 +110,8 @@ class MasaicOpenAiCompletionServiceImpl(
     private suspend fun handleToolCalls(
         chatCompletion: ChatCompletion,
         params: ChatCompletionCreateParams,
-        parentObservation: Observation?,
         client: OpenAIClient,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): ChatCompletion {
         logger.info { "Handling tool calls for completion ID: ${chatCompletion.id()}" }
 
@@ -126,7 +120,6 @@ class MasaicOpenAiCompletionServiceImpl(
             toolHandler.handleCompletionToolCall(
                 chatCompletion = chatCompletion,
                 params = params,
-                parentObservation = parentObservation,
                 openAIClient = client,
             )
 
@@ -175,7 +168,7 @@ class MasaicOpenAiCompletionServiceImpl(
     suspend fun createCompletionStream(
         client: OpenAIClient,
         params: ChatCompletionCreateParams,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): Flow<ServerSentEvent<String>> {
         val parentObservation =
             coroutineContext[ReactorContext]?.context?.get<Observation>(
@@ -183,7 +176,7 @@ class MasaicOpenAiCompletionServiceImpl(
             )
 
         // Start observation manually
-        val observation = telemetryService.startObservation("openai.chat.completions.stream", parentObservation)
+        val observation = telemetryService.startObservation("chat", metadata.modelName)
         logger.debug { "Started observation ${observation.context.name} for streaming chat completion with model: ${params.model()}" }
         
         // Variable to hold the final reconstructed completion
@@ -212,7 +205,6 @@ class MasaicOpenAiCompletionServiceImpl(
                         handleToolCallsAndPrepareNextStep(
                             streamResult.completion, // Use completion from this segment
                             params,
-                            parentObservation,
                             client,
                             metadata,
                         )
@@ -319,7 +311,7 @@ class MasaicOpenAiCompletionServiceImpl(
         client: OpenAIClient,
         params: ChatCompletionCreateParams,
         observation: Observation,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): StreamSegmentResult {
         logger.debug { "Processing stream segment with model: ${params.model()}" }
         
@@ -597,9 +589,8 @@ class MasaicOpenAiCompletionServiceImpl(
     private suspend fun handleToolCallsAndPrepareNextStep(
         chatCompletion: ChatCompletion,
         params: ChatCompletionCreateParams,
-        parentObservation: Observation?,
         client: OpenAIClient,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): ToolHandlingStreamResult {
         val completionId = chatCompletion.id()
         logger.info { "Handling tool calls for streaming completion ID: $completionId" }
@@ -635,7 +626,6 @@ class MasaicOpenAiCompletionServiceImpl(
             toolHandler.handleCompletionToolCall(
                 chatCompletion = chatCompletion,
                 params = params,
-                parentObservation = parentObservation,
                 openAIClient = client,
             )
         
@@ -686,7 +676,7 @@ class MasaicOpenAiCompletionServiceImpl(
     private fun streamChatCompletionToServerSentEvents(
         response: StreamResponse<ChatCompletionChunk>,
         observation: Observation,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): Flow<ServerSentEvent<String>> =
         EventUtils.convertChatCompletionStreamToServerSentEvents(
             response,

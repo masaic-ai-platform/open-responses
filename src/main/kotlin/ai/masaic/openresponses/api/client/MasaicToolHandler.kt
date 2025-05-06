@@ -53,7 +53,6 @@ class MasaicToolHandler(
     fun handleCompletionToolCall(
         chatCompletion: ChatCompletion,
         params: ChatCompletionCreateParams,
-        parentObservation: Observation? = null,
         openAIClient: OpenAIClient,
     ): CompletionToolHandlingResult {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
@@ -90,10 +89,10 @@ class MasaicToolHandler(
                 val toolResult =
                     executeToolWithObservationForCompletion(
                         toolName = toolName,
+                        toolDescription = toolService.getAvailableTool(toolName)?.description ?: "not_available",
                         arguments = function.arguments(),
                         toolId = toolCallId,
                         toolMetadata = mapOf("toolCallId" to toolCallId),
-                        parentObservation = parentObservation,
                         params = params,
                         openAIClient = openAIClient,
                         context = context,
@@ -149,17 +148,18 @@ class MasaicToolHandler(
      */
     private fun executeToolWithObservationForCompletion(
         toolName: String,
+        toolDescription: String,
         arguments: String,
         toolId: String,
         toolMetadata: Map<String, Any>,
-        parentObservation: Observation? = null,
         params: ChatCompletionCreateParams,
         openAIClient: OpenAIClient,
         context: CompletionToolRequestContext,
     ): String? =
-        telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
-            observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool_completion")
+        telemetryService.withClientObservation("execute_tool") { observation ->
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_DESCRIPTION, toolDescription)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
                 // Use runBlocking to call the suspending function from a synchronous context
@@ -184,7 +184,6 @@ class MasaicToolHandler(
     fun handleMasaicToolCall(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
-        parentObservation: Observation? = null,
         openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
@@ -271,10 +270,11 @@ class MasaicToolHandler(
                         // Execute the tool using the observation API
                         executeToolWithObservation(
                             function.name(),
+                            toolService.getAvailableTool(function.name())?.description ?: "not_available",
                             function.arguments(),
                             tool.id(),
                             mapOf("toolId" to tool.id()),
-                            parentObservation,
+//                            parentObservation,
                             params,
                             openAIClient,
                             {},
@@ -329,19 +329,21 @@ class MasaicToolHandler(
      */
     private fun executeToolWithObservation(
         toolName: String,
+        toolDescription: String,
         arguments: String,
         toolId: String,
         toolMetadata: Map<String, Any>,
-        parentObservation: Observation? = null,
+//        parentObservation: Observation? = null,
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
         context: ToolRequestContext,
         resultHandler: (String?) -> Unit,
     ) {
-        telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
+        telemetryService.withClientObservation("execute_tool") { observation ->
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_DESCRIPTION, toolDescription)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
                 val toolResult =
@@ -465,7 +467,17 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), parentObservation, params, openAIClient, eventEmitter, context) { toolResult ->
+                executeToolWithObservation(
+                    function.name(),
+                    toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                    function.arguments(),
+                    function.id(),
+                    mapOf("toolId" to function.id(), "eventIndex" to index),
+                    params,
+                    openAIClient,
+                    eventEmitter,
+                    context,
+                ) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

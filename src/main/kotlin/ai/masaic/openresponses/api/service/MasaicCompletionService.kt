@@ -3,7 +3,8 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.client.MasaicOpenAiCompletionServiceImpl
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
+import ai.masaic.openresponses.api.service.MasaicResponseService.Companion
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -20,6 +21,7 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
+import com.openai.models.responses.ResponseCreateParams
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.reactor.ReactorContext
@@ -185,7 +187,7 @@ class MasaicCompletionService(
             val timeoutMillis = Duration.ofSeconds(requestTimeoutSeconds).toMillis()
             withTimeout(timeoutMillis) {
                 val params = createChatCompletionParams(request, messages, headerBuilder, queryBuilder)
-                val metadata = createMetadataInput(headers, request.model)
+                val metadata = instrumentationMetadataInput(headers, request)
                 
                 val completion = openAICompletionService.create(client, params, metadata)
                 // completionStore.storeCompletion(completion, messages)
@@ -229,7 +231,7 @@ class MasaicCompletionService(
 
         try {
             val params = createChatCompletionParams(request, messages, headerBuilder, queryBuilder)
-            val metadata = createMetadataInput(headers, request.model)
+            val metadata = instrumentationMetadataInput(headers, request)
             
             return openAICompletionService.createCompletionStream(client, params, metadata)
         } catch (e: Exception) {
@@ -430,13 +432,25 @@ class MasaicCompletionService(
         return builder.build()
     }
 
-    /**
-     * Creates metadata input for telemetry.
-     */
-    private fun createMetadataInput(
+    private fun instrumentationMetadataInput(
         headers: MultiValueMap<String, String>,
-        modelName: String,
-    ): CreateResponseMetadataInput = CreateResponseMetadataInput("openai", getApiBaseUri(headers, modelName).host)
+        request: CreateCompletionRequest,
+    ): InstrumentationMetadataInput {
+        val modelName = request.model
+        val parts = modelName.split("@", limit = 2)
+
+        var genAiSystem = "UNKNOWN"
+        var actualModelName = modelName
+        if (parts.size == 2) {
+            if (!(parts[0].startsWith("http://") || parts[0].startsWith("https://"))) {
+                genAiSystem = parts[0]
+            }
+            actualModelName = parts[1]
+        }
+
+        val url = MasaicResponseService.getApiBaseUri(headers, request.model)
+        return InstrumentationMetadataInput(genAiSystem, actualModelName, url.host, url.port.toString())
+    }
 }
 
 /**

@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
@@ -96,7 +96,7 @@ class MasaicOpenAiResponseServiceImplTest {
     fun `test recordTokenUsage`() {
         // Setup
         val metadata =
-            CreateResponseMetadataInput(
+            InstrumentationMetadataInput(
                 genAISystem = "openai",
                 modelProviderAddress = "api.openai.com",
             )
@@ -124,7 +124,7 @@ class MasaicOpenAiResponseServiceImplTest {
 
             every { streamingService.createCompletionStream(client, params, any()) } returns flowMock
 
-            val resultFlow = serviceImpl.createCompletionStream(client, params, CreateResponseMetadataInput())
+            val resultFlow = serviceImpl.createCompletionStream(client, params, InstrumentationMetadataInput())
             assertSame(flowMock, resultFlow)
             verify { streamingService.createCompletionStream(client, params, any()) }
         }
