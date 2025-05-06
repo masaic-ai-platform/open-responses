@@ -5,7 +5,6 @@ import ai.masaic.openresponses.api.model.CreateResponseRequest
 import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
-import ai.masaic.openresponses.api.utils.CoroutineMDCContext
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.responses.Response
@@ -17,7 +16,6 @@ import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
-import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType

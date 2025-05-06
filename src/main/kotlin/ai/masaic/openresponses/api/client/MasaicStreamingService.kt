@@ -120,187 +120,100 @@ class MasaicStreamingService(
         var updatedParams = params
         var inProgressFired = alreadyInProgressEventFired
 
-            // We'll collect SSE events from the streaming call:
-            val genAiSample = telemetryService.genAiDurationSample()
-            callbackFlow {
-                val observation = telemetryService.startObservation("chat", metadata.modelName)
-                val createParams = parameterConverter.prepareCompletion(params)
-                telemetryService.emitModelInputEvents(observation, createParams, metadata)
+        // We'll collect SSE events from the streaming call:
+        val genAiSample = telemetryService.genAiDurationSample()
+        callbackFlow {
+            val observation = telemetryService.startObservation("chat", metadata.modelName)
+            val createParams = parameterConverter.prepareCompletion(params)
+            telemetryService.emitModelInputEvents(observation, createParams, metadata)
 
-                val subscription =
-                    client
-                        .chat()
-                        .completions()
-                        .createStreaming(createParams)
+            val subscription =
+                client
+                    .chat()
+                    .completions()
+                    .createStreaming(createParams)
 
-                val functionCallAccumulator = mutableMapOf<Long, MutableList<ResponseStreamEvent>>()
-                val textAccumulator = mutableMapOf<Long, MutableList<ResponseStreamEvent>>()
-                val responseOutputItemAccumulator = mutableListOf<ResponseOutputItem>()
-                val internalToolItemIds = mutableSetOf<String>()
-                val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
+            val functionCallAccumulator = mutableMapOf<Long, MutableList<ResponseStreamEvent>>()
+            val textAccumulator = mutableMapOf<Long, MutableList<ResponseStreamEvent>>()
+            val responseOutputItemAccumulator = mutableListOf<ResponseOutputItem>()
+            val internalToolItemIds = mutableSetOf<String>()
+            val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
-                subscription.stream().forEach { completionResponse ->
+            subscription.stream().forEach { completionResponse ->
 
-                    val completion =
-                        if (completionResponse._id().isMissing()) { // special handling for gemini
-                            val builder = completionResponse.toBuilder()
-                            builder.id(UUID.randomUUID().toString())
-                            builder.build()
-                        } else {
-                            completionResponse
-                        }
+                val completion =
+                    if (completionResponse._id().isMissing()) { // special handling for gemini
+                        val builder = completionResponse.toBuilder()
+                        builder.id(UUID.randomUUID().toString())
+                        builder.build()
+                    } else {
+                        completionResponse
+                    }
 
-                    if (!completion._choices().isMissing()) {
-                        // Fire in-progress event if we haven't:
-                        if (!inProgressFired) {
-                            trySend(
-                                EventUtils.convertEvent(
-                                    ResponseStreamEvent.ofInProgress(
-                                        ResponseInProgressEvent
-                                            .builder()
-                                            .response(
-                                                ChatCompletionConverter.buildIntermediateResponse(
-                                                    params,
-                                                    ResponseStatus.IN_PROGRESS,
-                                                    responseId,
-                                                ),
-                                            ).build(),
-                                    ),
-                                    payloadFormatter,
-                                    objectMapper,
+                if (!completion._choices().isMissing()) {
+                    // Fire in-progress event if we haven't:
+                    if (!inProgressFired) {
+                        trySend(
+                            EventUtils.convertEvent(
+                                ResponseStreamEvent.ofInProgress(
+                                    ResponseInProgressEvent
+                                        .builder()
+                                        .response(
+                                            ChatCompletionConverter.buildIntermediateResponse(
+                                                params,
+                                                ResponseStatus.IN_PROGRESS,
+                                                responseId,
+                                            ),
+                                        ).build(),
                                 ),
-                            ).isSuccess
-                            inProgressFired = true
+                                payloadFormatter,
+                                objectMapper,
+                            ),
+                        ).isSuccess
+                        inProgressFired = true
+                    }
+
+                    // Check if we have a stop/length/content_filter reason
+                    if (completion.choices().any { choice ->
+                            choice.finishReason().isPresent &&
+                                listOf("stop", "length", "content_filter")
+                                    .contains(choice.finishReason().get().asString())
+                        }
+                    ) {
+                        if (!completion._choices().isMissing()) {
+                            completion.choices().mapIndexed { index, choice ->
+                                choice.delta().content().ifPresent {
+                                    textAccumulator
+                                        .getOrPut(choice.index()) { mutableListOf() }
+                                        .add(
+                                            ResponseStreamEvent.ofOutputTextDelta(
+                                                ResponseTextDeltaEvent
+                                                    .builder()
+                                                    .delta(it)
+                                                    .outputIndex(choice.index())
+                                                    .contentIndex(index.toLong())
+                                                    .itemId(completion.id())
+                                                    .putAllAdditionalProperties(choice._additionalProperties())
+                                                    .build(),
+                                            ),
+                                        )
+                                }
+                            }
                         }
 
-                        // Check if we have a stop/length/content_filter reason
-                        if (completion.choices().any { choice ->
-                                choice.finishReason().isPresent &&
-                                        listOf("stop", "length", "content_filter")
-                                            .contains(choice.finishReason().get().asString())
-                            }
-                        ) {
-                            if (!completion._choices().isMissing()) {
-                                completion.choices().mapIndexed { index, choice ->
-                                    choice.delta().content().ifPresent {
-                                        textAccumulator
-                                            .getOrPut(choice.index()) { mutableListOf() }
-                                            .add(
-                                                ResponseStreamEvent.ofOutputTextDelta(
-                                                    ResponseTextDeltaEvent
-                                                        .builder()
-                                                        .delta(it)
-                                                        .outputIndex(choice.index())
-                                                        .contentIndex(index.toLong())
-                                                        .itemId(completion.id())
-                                                        .putAllAdditionalProperties(choice._additionalProperties())
-                                                        .build(),
-                                                ),
-                                            )
-                                    }
-                                }
-                            }
+                        // Process any text so far:
+                        handleTextCompletion(textAccumulator, responseOutputItemAccumulator)
 
-                            // Process any text so far:
-                            handleTextCompletion(textAccumulator, responseOutputItemAccumulator)
-
-                            // Evaluate which finish reason we have:
-                            val finishReason =
-                                completion
-                                    .choices()
-                                    .find { it.finishReason().isPresent }
-                                    ?.finishReason()
-                                    ?.get()
-                                    ?.asString()
-                            when (finishReason) {
-                                "stop" -> {
-                                    val finalResponse =
-                                        ChatCompletionConverter.buildFinalResponse(
-                                            params,
-                                            ResponseStatus.COMPLETED,
-                                            responseId,
-                                            responseOutputItemAccumulator,
-                                        )
-
-                                    // Store the response in the response store
-                                    runBlocking { storeResponseWithInputItems(finalResponse, params) }
-
-                                    nextIteration = false
-                                    trySend(
-                                        EventUtils.convertEvent(
-                                            ResponseStreamEvent.ofCompleted(
-                                                ResponseCompletedEvent
-                                                    .builder()
-                                                    .response(finalResponse)
-                                                    .build(),
-                                            ),
-                                            payloadFormatter,
-                                            objectMapper,
-                                        ),
-                                    )
-
-                                    logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
-                                    telemetryService.stopObservation(observation, finalResponse, params, metadata)
-                                    telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
-                                }
-                                "length", "content_filter" -> {
-                                    val incompleteDetails =
-                                        if (finishReason == "length") {
-                                            Response.IncompleteDetails
-                                                .builder()
-                                                .reason(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS)
-                                                .build()
-                                        } else {
-                                            Response.IncompleteDetails
-                                                .builder()
-                                                .reason(Response.IncompleteDetails.Reason.CONTENT_FILTER)
-                                                .build()
-                                        }
-                                    val finalResponse =
-                                        ChatCompletionConverter.buildFinalResponse(
-                                            params,
-                                            ResponseStatus.INCOMPLETE,
-                                            responseId,
-                                            responseOutputItemAccumulator,
-                                            incompleteDetails,
-                                        )
-                                    // Store the incomplete response in the response store
-                                    runBlocking { storeResponseWithInputItems(finalResponse, params) }
-                                    trySend(
-                                        EventUtils.convertEvent(
-                                            ResponseStreamEvent.ofIncomplete(
-                                                ResponseIncompleteEvent
-                                                    .builder()
-                                                    .response(finalResponse)
-                                                    .build(),
-                                            ),
-                                            payloadFormatter,
-                                            objectMapper,
-                                        ),
-                                    )
-                                }
-                            }
-                            nextIteration = false
-                        } else {
-                            // Ongoing streaming chunks
-                            convertAndPublish(
-                                completion,
-                                functionCallAccumulator,
-                                textAccumulator,
-                                responseOutputItemAccumulator,
-                                internalToolItemIds,
-                                functionNameAccumulator,
-                                params,
-                            )
-
-                            // If we detect tool_calls:
-                            if (completion.choices().any { choice ->
-                                    choice.finishReason().isPresent && choice.finishReason().get().asString() == "tool_calls"
-                                }
-                            ) {
-                                // Process text so far, put it at the beginning
-                                handleTextCompletion(textAccumulator, responseOutputItemAccumulator, prepend = true)
-
+                        // Evaluate which finish reason we have:
+                        val finishReason =
+                            completion
+                                .choices()
+                                .find { it.finishReason().isPresent }
+                                ?.finishReason()
+                                ?.get()
+                                ?.asString()
+                        when (finishReason) {
+                            "stop" -> {
                                 val finalResponse =
                                     ChatCompletionConverter.buildFinalResponse(
                                         params,
@@ -308,66 +221,153 @@ class MasaicStreamingService(
                                         responseId,
                                         responseOutputItemAccumulator,
                                     )
+
+                                // Store the response in the response store
                                 runBlocking { storeResponseWithInputItems(finalResponse, params) }
+
+                                nextIteration = false
+                                trySend(
+                                    EventUtils.convertEvent(
+                                        ResponseStreamEvent.ofCompleted(
+                                            ResponseCompletedEvent
+                                                .builder()
+                                                .response(finalResponse)
+                                                .build(),
+                                        ),
+                                        payloadFormatter,
+                                        objectMapper,
+                                    ),
+                                )
 
                                 logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
                                 telemetryService.stopObservation(observation, finalResponse, params, metadata)
                                 telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
-
-                                if (internalToolItemIds.isEmpty()) {
-                                    // No calls to actually handle
-                                    logger.info { "Response completed for id: ${finalResponse.id()}" }
-                                    nextIteration = false
-                                    trySend(
-                                        EventUtils.convertEvent(
-                                            ResponseStreamEvent.ofCompleted(
-                                                ResponseCompletedEvent
-                                                    .builder()
-                                                    .response(finalResponse)
-                                                    .build(),
-                                            ),
-                                            payloadFormatter,
-                                            objectMapper,
-                                        ),
-                                    )
-                                } else {
-                                    val parentObservation =
-                                        coroutineContext[ReactorContext]?.context?.get<Observation>(
-                                            ObservationThreadLocalAccessor.KEY,
-                                        )
-                                    // Actually handle these calls
-                                    val toolResponseItems =
-                                        toolHandler.handleMasaicToolCall(
-                                            params,
-                                            finalResponse,
-                                            eventEmitter = { event -> trySend(event) },
-                                            parentObservation,
-                                            client,
-                                        )
-                                    updatedParams =
-                                        params
-                                            .toBuilder()
-                                            .input(ResponseCreateParams.Input.ofResponse(toolResponseItems))
+                            }
+                            "length", "content_filter" -> {
+                                val incompleteDetails =
+                                    if (finishReason == "length") {
+                                        Response.IncompleteDetails
+                                            .builder()
+                                            .reason(Response.IncompleteDetails.Reason.MAX_OUTPUT_TOKENS)
                                             .build()
+                                    } else {
+                                        Response.IncompleteDetails
+                                            .builder()
+                                            .reason(Response.IncompleteDetails.Reason.CONTENT_FILTER)
+                                            .build()
+                                    }
+                                val finalResponse =
+                                    ChatCompletionConverter.buildFinalResponse(
+                                        params,
+                                        ResponseStatus.INCOMPLETE,
+                                        responseId,
+                                        responseOutputItemAccumulator,
+                                        incompleteDetails,
+                                    )
+                                // Store the incomplete response in the response store
+                                runBlocking { storeResponseWithInputItems(finalResponse, params) }
+                                trySend(
+                                    EventUtils.convertEvent(
+                                        ResponseStreamEvent.ofIncomplete(
+                                            ResponseIncompleteEvent
+                                                .builder()
+                                                .response(finalResponse)
+                                                .build(),
+                                        ),
+                                        payloadFormatter,
+                                        objectMapper,
+                                    ),
+                                )
+                            }
+                        }
+                        nextIteration = false
+                    } else {
+                        // Ongoing streaming chunks
+                        convertAndPublish(
+                            completion,
+                            functionCallAccumulator,
+                            textAccumulator,
+                            responseOutputItemAccumulator,
+                            internalToolItemIds,
+                            functionNameAccumulator,
+                            params,
+                        )
 
-                                    // We'll do another iteration
-                                    nextIteration = true
-                                    close()
-                                }
+                        // If we detect tool_calls:
+                        if (completion.choices().any { choice ->
+                                choice.finishReason().isPresent && choice.finishReason().get().asString() == "tool_calls"
+                            }
+                        ) {
+                            // Process text so far, put it at the beginning
+                            handleTextCompletion(textAccumulator, responseOutputItemAccumulator, prepend = true)
+
+                            val finalResponse =
+                                ChatCompletionConverter.buildFinalResponse(
+                                    params,
+                                    ResponseStatus.COMPLETED,
+                                    responseId,
+                                    responseOutputItemAccumulator,
+                                )
+                            runBlocking { storeResponseWithInputItems(finalResponse, params) }
+
+                            logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
+                            telemetryService.stopObservation(observation, finalResponse, params, metadata)
+                            telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
+
+                            if (internalToolItemIds.isEmpty()) {
+                                // No calls to actually handle
+                                logger.info { "Response completed for id: ${finalResponse.id()}" }
+                                nextIteration = false
+                                trySend(
+                                    EventUtils.convertEvent(
+                                        ResponseStreamEvent.ofCompleted(
+                                            ResponseCompletedEvent
+                                                .builder()
+                                                .response(finalResponse)
+                                                .build(),
+                                        ),
+                                        payloadFormatter,
+                                        objectMapper,
+                                    ),
+                                )
+                            } else {
+                                val parentObservation =
+                                    coroutineContext[ReactorContext]?.context?.get<Observation>(
+                                        ObservationThreadLocalAccessor.KEY,
+                                    )
+                                // Actually handle these calls
+                                val toolResponseItems =
+                                    toolHandler.handleMasaicToolCall(
+                                        params,
+                                        finalResponse,
+                                        eventEmitter = { event -> trySend(event) },
+                                        parentObservation,
+                                        client,
+                                    )
+                                updatedParams =
+                                    params
+                                        .toBuilder()
+                                        .input(ResponseCreateParams.Input.ofResponse(toolResponseItems))
+                                        .build()
+
+                                // We'll do another iteration
+                                nextIteration = true
+                                close()
                             }
                         }
                     }
                 }
-
-                launch {
-                    close()
-                }
-
-                awaitClose {
-                }
-            }.collect { event ->
-                emit(event)
             }
+
+            launch {
+                close()
+            }
+
+            awaitClose {
+            }
+        }.collect { event ->
+            emit(event)
+        }
 
         return IterationResult(
             shouldContinue = nextIteration,

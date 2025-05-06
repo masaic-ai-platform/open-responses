@@ -37,14 +37,35 @@ class TelemetryService(
             val (role, eventName, content) =
                 when {
                     message.isUser() ->
-                        Triple("user", GenAIObsAttributes.USER_MESSAGE, messageContent(message.user().get().content().asText()))
+                        Triple(
+                            "user",
+                            GenAIObsAttributes.USER_MESSAGE,
+                            messageContent(
+                                message
+                                    .user()
+                                    .get()
+                                    .content()
+                                    .asText(),
+                            ),
+                        )
                     message.isAssistant() &&
                         message
                             .assistant()
                             .get()
                             .content()
                             .isPresent ->
-                        Triple("assistant", GenAIObsAttributes.ASSISTANT_MESSAGE, messageContent(message.assistant().get().content().get().asText()))
+                        Triple(
+                            "assistant",
+                            GenAIObsAttributes.ASSISTANT_MESSAGE,
+                            messageContent(
+                                message
+                                    .assistant()
+                                    .get()
+                                    .content()
+                                    .get()
+                                    .asText(),
+                            ),
+                        )
                     message.isAssistant() &&
                         message
                             .assistant()
@@ -54,17 +75,28 @@ class TelemetryService(
                         val tools =
                             message.assistant().get().toolCalls().get().map { tool ->
                                 val map = mutableMapOf("name" to tool.function().name())
-                                putIfNotEmpty(map,"arguments", messageContent(tool.function().arguments()))
+                                putIfNotEmpty(map, "arguments", messageContent(tool.function().arguments()))
 
                                 mapOf(
                                     "id" to tool.id(),
-                                    "function" to map)
+                                    "function" to map,
+                                )
                             }
                         Triple("assistant", GenAIObsAttributes.ASSISTANT_MESSAGE, mapOf("tool_calls" to tools))
                     }
                     message.isTool() -> {
                         val map = mutableMapOf("id" to message.tool().get().toolCallId())
-                        putIfNotEmpty(map, "content", messageContent(message.tool().get().content().asText()))
+                        putIfNotEmpty(
+                            map,
+                            "content",
+                            messageContent(
+                                message
+                                    .tool()
+                                    .get()
+                                    .content()
+                                    .asText(),
+                            ),
+                        )
                         Triple(
                             "tool",
                             GenAIObsAttributes.TOOL_MESSAGE,
@@ -72,26 +104,47 @@ class TelemetryService(
                         )
                     }
                     message.isSystem() && message.system().isPresent ->
-                        Triple("system", GenAIObsAttributes.SYSTEM_MESSAGE, messageContent(message.system().get().content().asText()))
+                        Triple(
+                            "system",
+                            GenAIObsAttributes.SYSTEM_MESSAGE,
+                            messageContent(
+                                message
+                                    .system()
+                                    .get()
+                                    .content()
+                                    .asText(),
+                            ),
+                        )
                     message.isDeveloper() && message.developer().isPresent ->
-                        Triple("system", GenAIObsAttributes.SYSTEM_MESSAGE, messageContent(message.developer().get().content().asText()))
+                        Triple(
+                            "system",
+                            GenAIObsAttributes.SYSTEM_MESSAGE,
+                            messageContent(
+                                message
+                                    .developer()
+                                    .get()
+                                    .content()
+                                    .asText(),
+                            ),
+                        )
                     else -> null
                 } ?: return@forEach
 
             val eventData =
-                if(content is String) {
-                    val map = mutableMapOf(
-                        "gen_ai.system" to metadata.genAISystem,
-                        "role" to role)
-                    putIfNotEmpty(map, "content" , content)
+                if (content is String) {
+                    val map =
+                        mutableMapOf(
+                            "gen_ai.system" to metadata.genAISystem,
+                            "role" to role,
+                        )
+                    putIfNotEmpty(map, "content", content)
                     map
-                } else{
-
-                mapOf(
-                    "gen_ai.system" to metadata.genAISystem,
-                    "role" to role,
-                    "content" to content,
-                )
+                } else {
+                    mapOf(
+                        "gen_ai.system" to metadata.genAISystem,
+                        "role" to role,
+                        "content" to content,
+                    )
                 }
             observation.event(
                 Observation.Event.of(eventName, mapper.writeValueAsString(eventData)),
@@ -116,7 +169,7 @@ class TelemetryService(
                     }
                     eventData["gen_ai.system"] = metadata.genAISystem ?: "not_available"
                     eventData["role"] = "assistant"
-                    if(captureMessageContent) {
+                    if (captureMessageContent) {
                         eventData["content"] = output.asMessage().content()
                     }
 
@@ -129,7 +182,7 @@ class TelemetryService(
                     val toolCall = output.asFunctionCall()
 
                     val functionDetailsMap = mutableMapOf("name" to toolCall.name())
-                    putIfNotEmpty(functionDetailsMap,"arguments" , messageContent(toolCall.arguments()))
+                    putIfNotEmpty(functionDetailsMap, "arguments", messageContent(toolCall.arguments()))
 
                     toolCallMap["id"] = toolCall.id()
                     toolCallMap["type"] = "function"
@@ -160,9 +213,12 @@ class TelemetryService(
         val mapper = jsonMapper()
         chatCompletion.choices().forEach { choice ->
             if (choice.message().content().isPresent) {
-                val eventData = mutableMapOf( "gen_ai.system" to metadata.genAISystem,
-                    "role" to "assistant")
-                putIfNotEmpty(eventData, "content" , messageContent(choice.message().content().get()))
+                val eventData =
+                    mutableMapOf(
+                        "gen_ai.system" to metadata.genAISystem,
+                        "role" to "assistant",
+                    )
+                putIfNotEmpty(eventData, "content", messageContent(choice.message().content().get()))
                 observation.event(
                     Observation.Event.of(GenAIObsAttributes.CHOICE, mapper.writeValueAsString(eventData)),
                 )
@@ -171,11 +227,11 @@ class TelemetryService(
                 val toolCalls =
                     choice.message().toolCalls().get().map { tool ->
                         val functionDetailsMap = mutableMapOf("name" to tool.function().name())
-                        putIfNotEmpty(functionDetailsMap,"arguments" , messageContent(tool.function().arguments()))
+                        putIfNotEmpty(functionDetailsMap, "arguments", messageContent(tool.function().arguments()))
                         mapOf(
                             "id" to tool.id(),
                             "type" to "function",
-                            "function" to functionDetailsMap
+                            "function" to functionDetailsMap,
                         )
                     }
                 val eventData =
@@ -248,12 +304,37 @@ class TelemetryService(
         setOutputType(observation, params)
     }
 
-    private fun setOutputType(observation: Observation, params: ResponseCreateParams) {
-        if(params.text().isPresent && params.text().get().format().isPresent) {
-            val responseFormatConfig = params.text().get().format().get()
-            val format = if (responseFormatConfig.isText()) responseFormatConfig.asText()._type()
-                .toString() else if (responseFormatConfig.isJsonObject()) responseFormatConfig.asJsonObject()._type()
-                .toString() else responseFormatConfig.asJsonSchema()._type().toString()
+    private fun setOutputType(
+        observation: Observation,
+        params: ResponseCreateParams,
+    ) {
+        if (params.text().isPresent &&
+            params
+                .text()
+                .get()
+                .format()
+                .isPresent
+        ) {
+            val responseFormatConfig =
+                params
+                    .text()
+                    .get()
+                    .format()
+                    .get()
+            val format =
+                if (responseFormatConfig.isText()) {
+                    responseFormatConfig
+                        .asText()
+                        ._type()
+                        .toString()
+                } else if (responseFormatConfig.isJsonObject()) {
+                    responseFormatConfig
+                        .asJsonObject()
+                        ._type()
+                        .toString()
+                } else {
+                    responseFormatConfig.asJsonSchema()._type().toString()
+                }
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OUTPUT_TYPE, format)
         }
     }
@@ -277,7 +358,10 @@ class TelemetryService(
         }
     }
 
-    suspend fun startObservation(operationName: String, modelName: String): Observation {
+    suspend fun startObservation(
+        operationName: String,
+        modelName: String,
+    ): Observation {
         val observation = Observation.createNotStarted("$operationName $modelName", observationRegistry)
         observation.highCardinalityKeyValue(GenAIObsAttributes.SPAN_KIND, "client")
         observation.start()
@@ -374,11 +458,21 @@ class TelemetryService(
                     metadata.genAISystem ?: "not_available",
                     "gen_ai.token.type",
                     tokenType,
-                )
-                .serviceLevelObjectives(
-                    1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0,
-                    16384.0, 65536.0, 262144.0, 1048576.0,
-                    4194304.0, 16777216.0, 67108864.0
+                ).serviceLevelObjectives(
+                    1.0,
+                    4.0,
+                    16.0,
+                    64.0,
+                    256.0,
+                    1024.0,
+                    4096.0,
+                    16384.0,
+                    65536.0,
+                    262144.0,
+                    1048576.0,
+                    4194304.0,
+                    16777216.0,
+                    67108864.0,
                 )
         summaryBuilder.tag(GenAIObsAttributes.REQUEST_MODEL, requestModel)
         summaryBuilder.tag(GenAIObsAttributes.RESPONSE_MODEL, responseMode)
@@ -443,20 +537,20 @@ class TelemetryService(
 
     private fun setSlo(timerBuilder: Timer.Builder) {
         timerBuilder.serviceLevelObjectives(
-            Duration.ofMillis((0.01*1000).toLong()),
-            Duration.ofMillis((0.02*1000).toLong()),
-            Duration.ofMillis((0.04*1000).toLong()),
-            Duration.ofMillis((0.08*1000).toLong()),
-            Duration.ofMillis((0.16*1000).toLong()),
-            Duration.ofMillis((0.32*1000).toLong()),
-            Duration.ofMillis((0.64*1000).toLong()),
+            Duration.ofMillis((0.01 * 1000).toLong()),
+            Duration.ofMillis((0.02 * 1000).toLong()),
+            Duration.ofMillis((0.04 * 1000).toLong()),
+            Duration.ofMillis((0.08 * 1000).toLong()),
+            Duration.ofMillis((0.16 * 1000).toLong()),
+            Duration.ofMillis((0.32 * 1000).toLong()),
+            Duration.ofMillis((0.64 * 1000).toLong()),
             Duration.ofSeconds(1.28.toLong()),
             Duration.ofSeconds(2.56.toLong()),
             Duration.ofSeconds(5.12.toLong()),
             Duration.ofSeconds(10.24.toLong()),
             Duration.ofSeconds(20.48.toLong()),
             Duration.ofSeconds(40.96.toLong()),
-            Duration.ofSeconds(81.92.toLong())
+            Duration.ofSeconds(81.92.toLong()),
         )
     }
 
@@ -736,9 +830,13 @@ class TelemetryService(
         }
     }
 
-    private fun messageContent(content: String) = if(captureMessageContent) content else ""
+    private fun messageContent(content: String) = if (captureMessageContent) content else ""
 
-    private fun putIfNotEmpty(map: MutableMap<String, String>, key: String, value: String?) {
+    private fun putIfNotEmpty(
+        map: MutableMap<String, String>,
+        key: String,
+        value: String?,
+    ) {
         if (!value.isNullOrEmpty()) {
             map[key] = value
         }

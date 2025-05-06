@@ -2,8 +2,8 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.client.ResponseStore
-import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.JsonNode

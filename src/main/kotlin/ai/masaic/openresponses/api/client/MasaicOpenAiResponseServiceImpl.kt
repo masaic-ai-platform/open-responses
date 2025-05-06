@@ -12,16 +12,12 @@ import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
-import io.micrometer.observation.Observation
-import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
-import kotlin.coroutines.coroutineContext
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.

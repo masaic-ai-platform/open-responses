@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.model.FunctionTool
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService

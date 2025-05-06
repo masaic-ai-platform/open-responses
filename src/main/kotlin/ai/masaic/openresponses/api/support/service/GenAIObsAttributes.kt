@@ -21,7 +21,7 @@ object GenAIObsAttributes {
     const val ERROR_TYPE = "error.type"
     const val SERVER_ADDRESS = "server.address"
     const val SERVER_PORT = "server.port"
-    const val SPAN_KIND= "span.kind"
+    const val SPAN_KIND = "span.kind"
     const val OPERATION_DURATION = "gen_ai.client.operation.duration"
     const val TOOL_CALL_ID = "gen_ai.tool.call.id"
     const val USER_MESSAGE = "gen_ai.user.message"

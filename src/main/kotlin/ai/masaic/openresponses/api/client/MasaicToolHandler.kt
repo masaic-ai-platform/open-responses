@@ -126,7 +126,7 @@ class MasaicToolHandler(
                         // Execute the tool using the observation API
                         executeToolWithObservation(
                             function.name(),
-                            toolService.getAvailableTool(function.name())?.description?: "not_available",
+                            toolService.getAvailableTool(function.name())?.description ?: "not_available",
                             function.arguments(),
                             tool.id(),
                             mapOf("toolId" to tool.id()),
@@ -323,7 +323,7 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), toolService.getAvailableTool(function.name())?.description?: "not_available", function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), params, openAIClient, eventEmitter, context) { toolResult ->
+                executeToolWithObservation(function.name(), toolService.getAvailableTool(function.name())?.description ?: "not_available", function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), params, openAIClient, eventEmitter, context) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

@@ -474,8 +474,8 @@ class MasaicResponseService(
 
         var genAiSystem = "UNKNOWN"
         var actualModelName = modelName
-        if(parts.size == 2) {
-            if(!(parts[0].startsWith("http://") || parts[0].startsWith("https://"))) {
+        if (parts.size == 2) {
+            if (!(parts[0].startsWith("http://") || parts[0].startsWith("https://"))) {
                 genAiSystem = parts[0]
             }
             actualModelName = parts[1]
