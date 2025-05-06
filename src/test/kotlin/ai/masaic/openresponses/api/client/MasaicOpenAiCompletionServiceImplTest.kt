@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.CompletionToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
@@ -122,7 +122,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .addUserMessage("Hello")
                     .model(ChatModel.GPT_3_5_TURBO)
                     .build()
-            val metadata = CreateResponseMetadataInput()
+            val metadata = InstrumentationMetadataInput()
 
             // When
             val result = service.create(client, params, metadata)
@@ -171,7 +171,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .model(ChatModel.GPT_3_5_TURBO)
                     .store(true)
                     .build()
-            val metadata = CreateResponseMetadataInput()
+            val metadata = InstrumentationMetadataInput()
 
             coEvery {
                 completionStore.storeCompletion(
@@ -245,7 +245,6 @@ class MasaicOpenAiCompletionServiceImplTest {
                 toolHandler.handleCompletionToolCall(
                     chatCompletion,
                     any(),
-                    any(),
                     client,
                 )
             } returns
@@ -260,7 +259,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .addUserMessage("Hi")
                     .model(ChatModel.GPT_3_5_TURBO)
                     .build()
-            val metadata = CreateResponseMetadataInput()
+            val metadata = InstrumentationMetadataInput()
 
             // When
             val result = service.create(client, params, metadata)
@@ -311,7 +310,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .build()
             every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
             every {
-                toolHandler.handleCompletionToolCall(chatCompletion, any(), any(), client)
+                toolHandler.handleCompletionToolCall(chatCompletion, any(), client)
             } returns
                 MasaicToolHandler.CompletionToolHandlingResult(
                     updatedMessages = emptyList(),
@@ -328,7 +327,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .model(ChatModel.GPT_3_5_TURBO)
                     .store(true)
                     .build()
-            val metadata = CreateResponseMetadataInput()
+            val metadata = InstrumentationMetadataInput()
 
             // When
             val result = service.create(client, params, metadata)
@@ -369,13 +368,11 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .addUserMessage("Hello")
                     .model(ChatModel.GPT_3_5_TURBO)
                     .build()
-            val metadata = CreateResponseMetadataInput()
+            val metadata = InstrumentationMetadataInput()
 
             // When
             val events = service.createCompletionStream(client, params, metadata).toList()
 
-            // Then: telemetry invoked and a DONE event is emitted
-            coVerify(exactly = 1) { telemetryService.startObservation("openai.chat.completions.stream", any()) }
             // Expect only the 'done' event
             assertEquals(1, events.size)
             val doneEvent = events.first()

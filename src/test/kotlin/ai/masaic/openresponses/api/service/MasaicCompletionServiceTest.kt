@@ -3,7 +3,7 @@ package ai.masaic.openresponses.api.service
 import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.client.MasaicOpenAiCompletionServiceImpl
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
@@ -91,7 +91,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedCompletion = mockk<ChatCompletion>(relaxed = true)
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.openai.com")
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", defaultModel, "api.groq.com", "-1")
 
                 coEvery {
                     openAICompletionService.create(
@@ -133,7 +133,7 @@ class MasaicCompletionServiceTest {
                 val request = createDefaultRequest()
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.openai.com")
+                val expectedMetadata = InstrumentationMetadataInput("openai", "api.openai.com")
 
                 coEvery {
                     openAICompletionService.create(
@@ -156,7 +156,7 @@ class MasaicCompletionServiceTest {
                 val request = createDefaultRequest()
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.openai.com")
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", "gpt-4o", "api.groq.com", "-1")
 
                 coEvery {
                     openAICompletionService.create(
@@ -179,7 +179,7 @@ class MasaicCompletionServiceTest {
                 val request = createDefaultRequest()
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.openai.com")
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", "gpt-4o", "api.groq.com", "-1")
                 val exception = RuntimeException("Something went wrong")
 
                 coEvery {
@@ -224,7 +224,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedCompletion = mockk<ChatCompletion>(relaxed = true)
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.groq.com") // Base URL derived from provider
+                val expectedMetadata = InstrumentationMetadataInput("groq", "llama3-8b-8192", "api.groq.com", "-1") // Base URL derived from provider
 
                 coEvery {
                     openAICompletionService.create(any(), any(), expectedMetadata)
@@ -253,7 +253,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedCompletion = mockk<ChatCompletion>(relaxed = true)
-                val expectedMetadata = CreateResponseMetadataInput("openai", "localhost") // Base URL derived from URL
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", expectedModelName, "localhost", "11434")
 
                 coEvery {
                     openAICompletionService.create(any(), any(), expectedMetadata)
@@ -283,7 +283,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedFlow = flowOf(ServerSentEvent.builder("data").build())
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.openai.com")
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", "gpt-4o", "api.groq.com", "-1")
 
                 coEvery {
                     openAICompletionService.createCompletionStream(
@@ -324,7 +324,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val exception = RuntimeException("Stream failed")
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.openai.com")
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", "gpt-4o", "api.groq.com", "-1")
 
                 coEvery {
                     openAICompletionService.createCompletionStream(
@@ -369,7 +369,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedFlow = flowOf(ServerSentEvent.builder("data").build())
-                val expectedMetadata = CreateResponseMetadataInput("openai", "api.groq.com") // Base URL derived from provider
+                val expectedMetadata = InstrumentationMetadataInput("groq", expectedModelName, "api.groq.com", "-1") // Base URL derived from provider
 
                 coEvery {
                     openAICompletionService.createCompletionStream(any(), any(), expectedMetadata)
@@ -398,7 +398,7 @@ class MasaicCompletionServiceTest {
                 val headers = createDefaultHeaders()
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedFlow = flowOf(ServerSentEvent.builder("data").build())
-                val expectedMetadata = CreateResponseMetadataInput("openai", "localhost") // Base URL derived from URL
+                val expectedMetadata = InstrumentationMetadataInput("UNKNOWN", "local-model", "localhost", "11434") // Base URL derived from URL
 
                 coEvery {
                     openAICompletionService.createCompletionStream(any(), any(), expectedMetadata)

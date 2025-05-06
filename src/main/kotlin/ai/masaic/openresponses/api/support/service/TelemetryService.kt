@@ -17,9 +17,7 @@ import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
 import java.time.Duration
-import kotlin.coroutines.coroutineContext
 import kotlin.jvm.optionals.getOrDefault
-import kotlin.jvm.optionals.getOrNull
 
 @Service
 class TelemetryService(
@@ -53,11 +51,11 @@ class TelemetryService(
                             ),
                         )
                     message.isAssistant() &&
-                            message
-                                .assistant()
-                                .get()
-                                .toolCalls()
-                                .isPresent -> {
+                        message
+                            .assistant()
+                            .get()
+                            .toolCalls()
+                            .isPresent -> {
                         val tools =
                             message.assistant().get().toolCalls().get().map { tool ->
                                 val map = mutableMapOf("name" to tool.function().name())
@@ -68,15 +66,16 @@ class TelemetryService(
                                     "function" to map,
                                 )
                             }
-                        val finalMap = mapOf(
-                            "gen_ai.system" to metadata.genAISystem,
-                            "role" to "assistant",
-                            "tool_calls" to tools,
-                        )
+                        val finalMap =
+                            mapOf(
+                                "gen_ai.system" to metadata.genAISystem,
+                                "role" to "assistant",
+                                "tool_calls" to tools,
+                            )
                         observation.event(
                             Observation.Event.of(GenAIObsAttributes.ASSISTANT_MESSAGE, mapper.writeValueAsString(finalMap)),
                         )
-                        Triple("", "", "")//TODO:: to be fixed properly... workaround for tool calls message
+                        Triple("", "", "") // TODO:: to be fixed properly... workaround for tool calls message
                     }
                     message.isAssistant() &&
                         message
@@ -114,15 +113,16 @@ class TelemetryService(
                                     .asText(),
                             ),
                         )
-                        val finalMap = mapOf(
-                            "gen_ai.system" to metadata.genAISystem,
-                            "role" to "tool",
-                            "tool_calls" to map,
-                        )
+                        val finalMap =
+                            mapOf(
+                                "gen_ai.system" to metadata.genAISystem,
+                                "role" to "tool",
+                                "tool_calls" to map,
+                            )
                         observation.event(
                             Observation.Event.of(GenAIObsAttributes.TOOL_MESSAGE, mapper.writeValueAsString(finalMap)),
                         )
-                        Triple("", "", "") //TODO:: to be fixed properly... workaround for tool message
+                        Triple("", "", "") // TODO:: to be fixed properly... workaround for tool message
                     }
                     message.isSystem() && message.system().isPresent ->
                         Triple(
@@ -167,7 +167,7 @@ class TelemetryService(
                         "content" to content,
                     )
                 }
-            if(!(role.isEmpty() && (content is String && content.isEmpty()) && eventName.isEmpty())) {
+            if (!(role.isEmpty() && (content is String && content.isEmpty()) && eventName.isEmpty())) {
                 observation.event(
                     Observation.Event.of(eventName, mapper.writeValueAsString(eventData)),
                 )
@@ -238,10 +238,12 @@ class TelemetryService(
             val eventData: MutableMap<String, Any?> =
                 mutableMapOf(
                     "gen_ai.system" to metadata.genAISystem,
-                    "role" to "assistant")
+                    "role" to "assistant",
+                )
             val content = messageContent(choice.message().content().getOrDefault(""))
-            if(content.isNotEmpty())
+            if (content.isNotEmpty()) {
                 eventData["content"] = content
+            }
 
             if (choice.finishReason().asString() == "tool_calls") {
                 val toolCalls =
@@ -254,11 +256,13 @@ class TelemetryService(
                             "function" to functionDetailsMap,
                         )
                     }
-                val tooCallMap = mapOf(
-                    "gen_ai.system" to metadata.genAISystem,
-                    "finish_reason" to choice.finishReason().asString(),
-                    "index" to choice.index().toString(),
-                    "tool_calls" to toolCalls)
+                val tooCallMap =
+                    mapOf(
+                        "gen_ai.system" to metadata.genAISystem,
+                        "finish_reason" to choice.finishReason().asString(),
+                        "index" to choice.index().toString(),
+                        "tool_calls" to toolCalls,
+                    )
 
                 eventData.putAll(tooCallMap)
             }

@@ -4,7 +4,6 @@ import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.client.MasaicOpenAiCompletionServiceImpl
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
-import ai.masaic.openresponses.api.service.MasaicResponseService.Companion
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -21,10 +20,8 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
-import com.openai.models.responses.ResponseCreateParams
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.withTimeout
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
@@ -34,7 +31,6 @@ import org.springframework.util.MultiValueMap
 import java.net.URI
 import java.time.Duration
 import java.util.concurrent.TimeoutException
-import kotlin.coroutines.coroutineContext
 
 private val logger = KotlinLogging.logger {}
 
@@ -131,36 +127,6 @@ class MasaicCompletionService(
     private val requestTimeoutSeconds: Long = DEFAULT_TIMEOUT_SECONDS
 
     /**
-     * Gets the trace ID from both headers and reactor context for proper tracing.
-     *
-     * @param headers HTTP headers
-     * @return The trace ID or "unknown" if not found
-     */
-    private suspend fun getTraceId(headers: MultiValueMap<String, String>): String {
-        // First check if we have it in the reactor context
-        val contextTraceId = getTraceIdFromContext()
-        if (contextTraceId != null && contextTraceId != "unknown") {
-            return contextTraceId
-        }
-
-        // Fall back to headers if not in context
-        return headers.getFirst("X-B3-TraceId")
-            ?: headers.getFirst("X-Trace-ID")
-            ?: "unknown"
-    }
-
-    /**
-     * Retrieves trace ID from Reactor context if available
-     */
-    private suspend fun getTraceIdFromContext(): String? =
-        try {
-            coroutineContext[ReactorContext]?.context?.getOrEmpty<String>("traceId")?.orElse(null)
-        } catch (e: Exception) {
-            logger.debug { "Could not retrieve traceId from context: ${e.message}" }
-            null
-        }
-
-    /**
      * Creates a completion from the OpenAI API with enhanced error handling and timeout.
      *
      * @param request The request body containing parameters for the completion
@@ -175,8 +141,7 @@ class MasaicCompletionService(
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
     ): ChatCompletion {
-        val traceId = getTraceId(headers)
-        logger.info { "Creating completion with traceId: $traceId, model: ${request.model}" }
+        logger.info { "Creating completion with, model: ${request.model}" }
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
@@ -194,16 +159,16 @@ class MasaicCompletionService(
                 completion
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            logger.error { "Request timed out after $requestTimeoutSeconds seconds - traceId: $traceId" }
+            logger.error { "Request timed out after $requestTimeoutSeconds seconds" }
             throw CompletionTimeoutException("Request timed out after $requestTimeoutSeconds seconds")
         } catch (e: TimeoutException) {
-            logger.error { "Request timed out after $requestTimeoutSeconds seconds - traceId: $traceId" }
+            logger.error { "Request timed out after $requestTimeoutSeconds seconds" }
             throw CompletionTimeoutException("Request timed out after $requestTimeoutSeconds seconds")
         } catch (e: CancellationException) {
-            logger.warn { "Request was cancelled - traceId: $traceId" }
+            logger.warn { "Request was cancelled" }
             throw e // Let cancellation exceptions propagate
         } catch (e: Exception) {
-            logger.error(e) { "Error creating completion - traceId: $traceId" }
+            logger.error(e) { "Error creating completion" }
             throw CompletionProcessingException("Error processing completion: ${e.message}")
         }
     }
@@ -221,8 +186,7 @@ class MasaicCompletionService(
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
     ): Flow<ServerSentEvent<String>> {
-        val traceId = getTraceId(headers)
-        logger.info { "Creating streaming completion with traceId: $traceId, model: ${request.model}" }
+        logger.info { "Creating streaming completion with, model: ${request.model}" }
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
@@ -235,7 +199,7 @@ class MasaicCompletionService(
             
             return openAICompletionService.createCompletionStream(client, params, metadata)
         } catch (e: Exception) {
-            logger.error(e) { "Failed to create streaming completion - traceId: $traceId" }
+            logger.error(e) { "Failed to create streaming completion" }
             throw CompletionStreamingException("Failed to create streaming completion: ${e.message}", e)
         }
     }
