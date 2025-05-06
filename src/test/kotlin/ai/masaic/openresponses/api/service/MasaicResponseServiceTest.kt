@@ -182,11 +182,18 @@ class MasaicResponseServiceTest {
                     ServerSentEvent.builder("data2").build(),
                 )
 
+            val actualMetadata =
+                InstrumentationMetadataInput(
+                    genAISystem = "UNKNOWN",
+                    modelName = "gpt-4o",
+                    modelProviderAddress = "api.groq.com",
+                    modelProviderPort = "-1",
+                )
             coEvery {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = InstrumentationMetadataInput("openai", "api.groq.com"),
+                    metadata = eq(actualMetadata),
                 )
             } returns expectedFlow
 
@@ -203,7 +210,7 @@ class MasaicResponseServiceTest {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = InstrumentationMetadataInput("openai", "api.groq.com"),
+                    metadata = eq(actualMetadata),
                 )
             }
             confirmVerified(openAIResponseService)

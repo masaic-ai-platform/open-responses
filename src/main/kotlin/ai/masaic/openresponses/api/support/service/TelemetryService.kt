@@ -384,20 +384,14 @@ class TelemetryService(
     fun <T> withClientObservation(
         operationName: String,
         modelName: String,
-//        parentObservation: Observation? = null,
         block: (Observation) -> T,
-    ): T {
-//        return withClientObservation("$operationName $modelName", parentObservation, block)
-        return withClientObservation("$operationName $modelName", block)
-    }
+    ): T = withClientObservation("$operationName $modelName", block)
 
     fun <T> withClientObservation(
         obsName: String,
-//        parentObservation: Observation? = null,
         block: (Observation) -> T,
     ): T {
         val observation = Observation.createNotStarted(obsName, observationRegistry)
-//        if (parentObservation != null) observation.parentObservation(parentObservation)
         observation.start()
         return try {
             block(observation)
