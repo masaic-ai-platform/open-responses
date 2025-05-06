@@ -13,8 +13,6 @@ services:
       - "4318:4318"   # OTLP HTTP receiver
       - "8889:8889"   # Prometheus exporter
       - "8888:8888"   # Metrics endpoint
-    depends_on:
-      - jaeger
     networks:
       - observability-network
 

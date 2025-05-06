@@ -357,7 +357,9 @@ data class InputMessageItemContent(
     val annotations: ResponseOutputText.Annotation? = null,
 )
 
-data class CreateResponseMetadataInput(
-    val genAISystem: String? = null,
-    val modelProviderAddress: String? = null,
+data class InstrumentationMetadataInput(
+    val genAISystem: String = "UNKNOWN",
+    val modelName: String = "UNKNOWN",
+    val modelProviderAddress: String = "UNKNOWN",
+    val modelProviderPort: String = "UNKNOWN",
 )

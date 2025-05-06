@@ -7,6 +7,7 @@ import org.springframework.boot.autoconfigure.mongo.MongoReactiveAutoConfigurati
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan
 import org.springframework.boot.runApplication
 import org.springframework.scheduling.annotation.EnableScheduling
+import reactor.core.publisher.Hooks
 
 /**
  * Main application class for the OpenResponses Spring Boot application.
@@ -33,5 +34,6 @@ class OpenResponsesApplication
  * @param args Command line arguments passed to the application
  */
 fun main(args: Array<String>) {
+    Hooks.enableAutomaticContextPropagation()
     runApplication<OpenResponsesApplication>(*args)
 }

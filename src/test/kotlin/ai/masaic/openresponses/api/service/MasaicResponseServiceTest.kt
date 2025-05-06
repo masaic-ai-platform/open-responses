@@ -2,8 +2,8 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.MasaicOpenAiResponseServiceImpl
 import ai.masaic.openresponses.api.client.ResponseStore
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.utils.PayloadFormatter
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.JsonNode
@@ -182,11 +182,18 @@ class MasaicResponseServiceTest {
                     ServerSentEvent.builder("data2").build(),
                 )
 
+            val actualMetadata =
+                InstrumentationMetadataInput(
+                    genAISystem = "UNKNOWN",
+                    modelName = "gpt-4o",
+                    modelProviderAddress = "api.groq.com",
+                    modelProviderPort = "-1",
+                )
             coEvery {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                    metadata = eq(actualMetadata),
                 )
             } returns expectedFlow
 
@@ -203,7 +210,7 @@ class MasaicResponseServiceTest {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = CreateResponseMetadataInput("openai", "api.groq.com"),
+                    metadata = eq(actualMetadata),
                 )
             }
             confirmVerified(openAIResponseService)

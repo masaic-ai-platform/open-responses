@@ -6,7 +6,7 @@
     <!-- Human-readable console output -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
-            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [trace:%X{traceId:-unknown}] [span:%X{spanId:-}] %cyan(%logger{36}) - %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight(%-5level) [%thread] [%X{traceId:-unknown}] [%X{spanId:-unknown}] %cyan(%logger{36}) - %msg%n</pattern>
             <charset>UTF-8</charset>
         </encoder>
     </appender>
