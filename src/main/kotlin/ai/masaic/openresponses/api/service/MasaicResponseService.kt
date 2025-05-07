@@ -65,7 +65,6 @@ class MasaicResponseService(
                 "gemini" to "https://generativelanguage.googleapis.com/v1beta/openai/",
                 "google" to "https://generativelanguage.googleapis.com/v1beta/openai/",
                 "deepseek" to "https://api.deepseek.com",
-                "ollama" to "http://localhost:11434/v1",
                 "xai" to "https://api.x.ai/v1",
             )
 

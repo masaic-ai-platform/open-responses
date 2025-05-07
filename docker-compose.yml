@@ -245,6 +245,41 @@ services:
       - qdrant-mongodb
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    networks:
+      - observability-network
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=/models
+    entrypoint:
+      - bash
+      - -c
+      - |
+        ollama serve &
+        sleep 5
+        ollama pull qwen3:1.7b
+        tail -f /dev/null
+   # 9. open-responses with Ollama
+  open-responses-with-ollama:
+        <<: *open_responses
+        ports:
+        - "8080:8080"
+        environment:
+        - MODEL_BASE_URL=http://ollama:11434/v1
+        networks:
+        - observability-network
+        depends_on:
+        - ollama
+        profiles:
+        - ollama
+        restart: unless-stopped
+
+
 networks:
   observability-network:
     name: observability-network
@@ -252,3 +287,4 @@ networks:
 volumes:
   mongodb_data:
   qdrant_data:
+  ollama_data:
