@@ -60,12 +60,12 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Bad request",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
@@ -75,10 +75,10 @@ class GlobalExceptionHandler(
                         type = "api_error",
                         message = ex.message ?: "Bad request",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else if (ex is PermissionDeniedException) {
             val status = HttpStatus.valueOf(ex.statusCode())
@@ -86,12 +86,12 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Permission denied",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
@@ -101,10 +101,10 @@ class GlobalExceptionHandler(
                         type = "api_error",
                         message = ex.message ?: "Permission denied",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else if (ex is NotFoundException) {
             val status = HttpStatus.valueOf(ex.statusCode())
@@ -112,27 +112,25 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Not found",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
             } catch (e: Exception) {
-                val status = HttpStatus.valueOf(ex.statusCode())
-                logError(status, ex, "OpenAI API error: ${ex.message}")
                 val errorResponse =
                     ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Not found",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else if (ex is UnprocessableEntityException) {
             val status = HttpStatus.valueOf(ex.statusCode())
@@ -140,12 +138,12 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Unprocessable entity",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
@@ -155,10 +153,10 @@ class GlobalExceptionHandler(
                         type = "api_error",
                         message = ex.message ?: "Unprocessable entity",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else if (ex is RateLimitException) {
             val status = HttpStatus.valueOf(ex.statusCode())
@@ -166,12 +164,12 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Rate limit exceeded",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
@@ -181,10 +179,10 @@ class GlobalExceptionHandler(
                         type = "api_error",
                         message = ex.message ?: "Rate limit exceeded",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else if (ex is UnexpectedStatusCodeException) {
             val status = HttpStatus.valueOf(ex.statusCode())
@@ -192,12 +190,12 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Unexpected status code",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
@@ -207,10 +205,10 @@ class GlobalExceptionHandler(
                         type = "api_error",
                         message = ex.message ?: "Unexpected status code",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else if (ex is UnauthorizedException) {
             val status = HttpStatus.valueOf(ex.statusCode())
@@ -218,12 +216,12 @@ class GlobalExceptionHandler(
             try {
                 val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
                 val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(
+                return ResponseEntity.status(status).body(
                     errorResponse["error"] ?: ErrorResponse(
                         type = "api_error",
                         message = ex.message ?: "Unauthorized",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     ),
                 )
@@ -233,54 +231,56 @@ class GlobalExceptionHandler(
                         type = "api_error",
                         message = ex.message ?: "Unauthorized",
                         param = ex.body().toString(),
-                        code = ex.statusCode().toString(),
+                        code = status.value().toString(),
                         timestamp = System.currentTimeMillis(),
                     )
-                return ResponseEntity.status(HttpStatus.valueOf(ex.statusCode())).body(errorResponse)
+                return ResponseEntity.status(status).body(errorResponse)
             }
         } else {
-            val status = HttpStatus.valueOf(500)
+            val status = HttpStatus.INTERNAL_SERVER_ERROR
             logError(status, ex, "OpenAI API error: ${ex.message}")
             val errorResponse =
                 ErrorResponse(
                     type = "api_error",
                     message = ex.message ?: "An unexpected error occurred",
                     param = null,
-                    code = "internal_server_error",
+                    code = status.value().toString(),
                     timestamp = System.currentTimeMillis(),
                 )
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+            return ResponseEntity.status(status).body(errorResponse)
         }
     }
 
     @ExceptionHandler(ResponseNotFoundException::class)
     fun handleResponseNotFoundException(ex: ResponseNotFoundException): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.NOT_FOUND, ex, "Response not found: ${ex.message}")
+        val status = HttpStatus.NOT_FOUND
+        logError(status, ex, "Response not found: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "not_found",
                 message = ex.message ?: "Response not found",
                 param = null,
-                code = null,
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(ResponseTimeoutException::class)
     fun handleResponseTimeoutException(ex: ResponseTimeoutException): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.REQUEST_TIMEOUT, ex, "Request timed out: ${ex.message}")
+        val status = HttpStatus.REQUEST_TIMEOUT
+        logError(status, ex, "Request timed out: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "timeout_error",
                 message = ex.message ?: "Request timed out",
                 param = null,
-                code = "408",
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.REQUEST_TIMEOUT).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(ResponseProcessingException::class)
@@ -289,17 +289,18 @@ class GlobalExceptionHandler(
             return handleOpenAIException(ex.cause as OpenAIException)
         }
 
-        logError(HttpStatus.INTERNAL_SERVER_ERROR, ex, "Error processing response: ${ex.message}")
+        val status = HttpStatus.INTERNAL_SERVER_ERROR
+        logError(status, ex, "Error processing response: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "processing_error",
                 message = ex.message ?: "Error processing response",
                 param = null,
-                code = "500",
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(ResponseStreamingException::class)
@@ -308,76 +309,81 @@ class GlobalExceptionHandler(
             return handleOpenAIException(ex.cause as OpenAIException)
         }
 
-        logError(HttpStatus.INTERNAL_SERVER_ERROR, ex, "Streaming error: ${ex.message}")
+        val status = HttpStatus.INTERNAL_SERVER_ERROR
+        logError(status, ex, "Streaming error: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "streaming_error",
                 message = ex.message ?: "Error in streaming response",
                 param = null,
-                code = "500",
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(IllegalArgumentException::class)
     fun handleIllegalArgumentException(ex: IllegalArgumentException): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.BAD_REQUEST, ex, "Illegal argument: ${ex.message}")
+        val status = HttpStatus.BAD_REQUEST
+        logError(status, ex, "Illegal argument: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "invalid_request",
                 message = ex.message ?: "Invalid request",
                 param = null,
-                code = "400",
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(ResponseStatusException::class)
     fun handleResponseStatusException(ex: ResponseStatusException): ResponseEntity<ErrorResponse> {
         if (ex is ServerWebInputException) {
-            logError(HttpStatus.BAD_REQUEST, ex, "Invalid request input: ${ex.body.title}")
+            val status = HttpStatus.BAD_REQUEST
+            logError(status, ex, "Invalid request input: ${ex.body.title}")
 
             val errorResponse =
                 ErrorResponse(
                     type = "invalid_request",
                     message = ex.body.title ?: "Invalid request",
                     param = null,
-                    code = "400",
+                    code = status.value().toString(),
                     timestamp = System.currentTimeMillis(),
                 )
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
+            return ResponseEntity.status(status).body(errorResponse)
         }
 
-        logError(HttpStatus.valueOf(ex.statusCode.value()), ex, "Response status error: ${ex.message}")
+        val status = HttpStatus.valueOf(ex.statusCode.value())
+        logError(status, ex, "Response status error: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "api_error",
                 message = ex.message,
                 param = null,
-                code = ex.statusCode.toString(),
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(ex.statusCode).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(MismatchedInputException::class)
     fun handleMismatchedInputException(ex: MismatchedInputException): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.BAD_REQUEST, ex, "Mismatched input: ${ex.message}")
+        val status = HttpStatus.BAD_REQUEST
+        logError(status, ex, "Mismatched input: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "api_error",
                 message = "Invalid request. Please check your input.",
                 param = null,
-                code = "bad_request",
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     /**
@@ -388,18 +394,19 @@ class GlobalExceptionHandler(
         ex: ResourceNotFoundException,
         request: WebRequest,
     ): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.NOT_FOUND, ex, "Resource not found: ${ex.message}")
+        val status = HttpStatus.NOT_FOUND
+        logError(status, ex, "Resource not found: ${ex.message}")
         
         val errorResponse =
             ErrorResponse(
                 type = "not_found",
                 message = ex.message ?: "Resource not found",
                 param = request.getDescription(false).substringAfter("uri="),
-                code = HttpStatus.NOT_FOUND.value().toString(),
+                code = status.value().toString(),
                 timestamp = Instant.now().toEpochMilli(),
             )
         
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     /**
@@ -410,18 +417,19 @@ class GlobalExceptionHandler(
         ex: FileStorageException,
         request: WebRequest,
     ): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.INTERNAL_SERVER_ERROR, ex, "File storage error: ${ex.message}")
+        val status = HttpStatus.INTERNAL_SERVER_ERROR
+        logError(status, ex, "File storage error: ${ex.message}")
         
         val errorResponse =
             ErrorResponse(
                 type = "storage_error",
                 message = ex.message ?: "File storage error",
                 param = request.getDescription(false).substringAfter("uri="),
-                code = HttpStatus.INTERNAL_SERVER_ERROR.value().toString(),
+                code = status.value().toString(),
                 timestamp = Instant.now().toEpochMilli(),
             )
         
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     /**
@@ -432,18 +440,19 @@ class GlobalExceptionHandler(
         ex: VectorStoreException,
         request: WebRequest,
     ): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.INTERNAL_SERVER_ERROR, ex, "Vector store error: ${ex.message}")
+        val status = HttpStatus.INTERNAL_SERVER_ERROR
+        logError(status, ex, "Vector store error: ${ex.message}")
         
         val errorResponse =
             ErrorResponse(
                 type = "vector_store_error",
                 message = ex.message ?: "Vector store error",
                 param = request.getDescription(false).substringAfter("uri="),
-                code = HttpStatus.INTERNAL_SERVER_ERROR.value().toString(),
+                code = status.value().toString(),
                 timestamp = Instant.now().toEpochMilli(),
             )
         
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     /**
@@ -454,7 +463,6 @@ class GlobalExceptionHandler(
         ex: OpenResponsesException,
         request: WebRequest,
     ): ResponseEntity<ErrorResponse> {
-        // Determine HTTP status from the exception
         val status =
             when (ex) {
                 is FileNotFoundException -> HttpStatus.NOT_FOUND
@@ -485,8 +493,8 @@ class GlobalExceptionHandler(
     fun handleValidationErrors(
         ex: WebExchangeBindException,
     ): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.BAD_REQUEST, ex, "Validation exception: ${ex.message}")
-        // first (or all) field‑level errors from Bean‑Validation
+        val status = HttpStatus.BAD_REQUEST
+        logError(status, ex, "Validation exception: ${ex.message}")
         val first = ex.bindingResult.fieldErrors.firstOrNull()
 
         val fieldPath = first?.field ?: "request"
@@ -496,21 +504,22 @@ class GlobalExceptionHandler(
             ErrorResponse(
                 type = "invalid_request",
                 message = "$fieldPath $defaultMessage",
-                code = HttpStatus.BAD_REQUEST.value().toString(),
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+        return ResponseEntity.status(status).body(error)
     }
 
     @ExceptionHandler(ServerWebInputException::class)
     fun handleJsonBindingErrors(
         ex: ServerWebInputException,
     ): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.BAD_REQUEST, ex, "Json binding errors: ${ex.message}")
+        val status = HttpStatus.BAD_REQUEST
+        logError(status, ex, "Json binding errors: ${ex.message}")
         val missing =
             (ex.cause?.cause as? MismatchedInputException)
-                ?.humanReadablePath() // e.g. "testing_criteria[0].name"
+                ?.humanReadablePath()
 
         val error =
             ErrorResponse(
@@ -519,12 +528,11 @@ class GlobalExceptionHandler(
                     missing
                         ?.let { "Missing required parameter: '$it'" }
                         ?: "Malformed JSON payload",
-                // fallback if path is absent
-                code = HttpStatus.BAD_REQUEST.value().toString(),
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
 
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error)
+        return ResponseEntity.status(status).body(error)
     }
 
     @ExceptionHandler(Exception::class)
@@ -532,20 +540,21 @@ class GlobalExceptionHandler(
         ex: Exception,
         request: WebRequest? = null,
     ): ResponseEntity<ErrorResponse> {
-        logError(HttpStatus.INTERNAL_SERVER_ERROR, ex, "Unhandled exception: ${ex.message}")
+        val status = HttpStatus.INTERNAL_SERVER_ERROR
+        logError(status, ex, "Unhandled exception: ${ex.message}")
 
         val errorResponse =
             ErrorResponse(
                 type = "api_error",
                 message = ex.message ?: "An unexpected error occurred",
                 param = request?.getDescription(false)?.substringAfter("uri="),
-                code = "internal_server_error",
+                code = status.value().toString(),
                 timestamp = System.currentTimeMillis(),
             )
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(errorResponse)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
-    /** Converts Jackson’s path list to dot‑plus‑bracket notation, e.g.
+    /** Converts Jackson's path list to dot-plus-bracket notation, e.g.
      *  /testing_criteria/0/name  ->  testing_criteria[0].name
      */
     private fun JsonMappingException.humanReadablePath(): String =
