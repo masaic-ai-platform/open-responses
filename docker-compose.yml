@@ -167,12 +167,12 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
     environment:
-      - SPRING_PROFILES_ACTIVE=otel
+      - OTEL_SDK_DISABLED=false
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
       - OPEN_RESPONSES_TOOLS_MCP_ENABLED=true
       - GITHUB_TOKEN=${GITHUB_TOKEN}
       - BRAVE_API_KEY=${BRAVE_API_KEY}
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-      - MANAGEMENT_OTLP_METRICS_EXPORT_URL=http://otel-collector:4318/v1/metrics
     networks:
       - observability-network
     depends_on:
