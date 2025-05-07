@@ -544,7 +544,7 @@ class MasaicCompletionServiceTest {
 
         @Test
         fun `should return default OpenAI URL if no prefix and no header`() {
-            // Assuming MODEL_BASE_URL env var is not set or mocked to null
+            // Assuming OPENAI_BASE_URL env var is not set or mocked to null
             val headers = LinkedMultiValueMap<String, String>()
             val modelName = "gpt-4o"
             val expectedUri = URI(MasaicCompletionService.MODEL_DEFAULT_BASE_URL)
@@ -577,8 +577,8 @@ class MasaicCompletionServiceTest {
             assertEquals(expectedUri, result)
         }
 
-        // Add a test case for MODEL_BASE_URL environment variable if possible to set/mock it
+        // Add a test case for OPENAI_BASE_URL environment variable if possible to set/mock it
         // @Test
-        // fun `should return URL from MODEL_BASE_URL env var if no prefix/header`() { ... }
+        // fun `should return URL from OPENAI_BASE_URL env var if no prefix/header`() { ... }
     }
 } 
