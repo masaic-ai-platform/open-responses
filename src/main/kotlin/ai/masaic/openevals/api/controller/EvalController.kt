@@ -70,7 +70,7 @@ class EvalController(
         @RequestParam(required = false, defaultValue = "desc") order: String,
         @RequestParam(required = false) after: String?,
         @RequestParam(required = false) before: String?,
-        @RequestParam(name = "metadata", required = false) metadata: Map<String,String>?
+        @RequestParam(name = "metadata", required = false) metadata: Map<String, String>?,
     ): ResponseEntity<EvalListResponse> {
         // Validate parameters
         if (limit < 1 || limit > 100) {

@@ -2,7 +2,6 @@ package ai.masaic.openevals.api.repository
 
 import ai.masaic.openevals.api.model.AnnotationResult
 import kotlinx.coroutines.reactive.awaitFirst
-import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import mu.KotlinLogging
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
@@ -10,7 +9,6 @@ import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.find
 import org.springframework.data.mongodb.core.index.Index
-import org.springframework.data.mongodb.core.index.IndexDefinition
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.stereotype.Repository
@@ -87,10 +85,12 @@ class MongoAnnotationResultRepository(
                 return emptyList()
             }
 
-            val savedResults = Flux.fromIterable(annotationResults)
-                .flatMap { reactiveMongoTemplate.save(it, ANNOTATION_RESULT_COLLECTION) }
-                .collectList()
-                .awaitSingle()
+            val savedResults =
+                Flux
+                    .fromIterable(annotationResults)
+                    .flatMap { reactiveMongoTemplate.save(it, ANNOTATION_RESULT_COLLECTION) }
+                    .collectList()
+                    .awaitSingle()
 
             logger.info { "Saved ${savedResults.size} annotation results" }
             return savedResults
@@ -108,10 +108,12 @@ class MongoAnnotationResultRepository(
      */
     override suspend fun findByEvalRunId(evalRunId: String): List<AnnotationResult> {
         try {
-            val query = Query(Criteria.where("evalRunId").`is`(evalRunId))
-                .with(Sort.by(Sort.Direction.ASC, "createdAt"))
+            val query =
+                Query(Criteria.where("evalRunId").`is`(evalRunId))
+                    .with(Sort.by(Sort.Direction.ASC, "createdAt"))
             
-            return reactiveMongoTemplate.find<AnnotationResult>(query, ANNOTATION_RESULT_COLLECTION)
+            return reactiveMongoTemplate
+                .find<AnnotationResult>(query, ANNOTATION_RESULT_COLLECTION)
                 .collectList()
                 .awaitSingle()
                 .also {
@@ -130,14 +132,22 @@ class MongoAnnotationResultRepository(
      * @param criterionId The criterion ID
      * @return List of annotation results for the specified evaluation run and criterion
      */
-    override suspend fun findByEvalRunIdAndCriterionId(evalRunId: String, criterionId: String): List<AnnotationResult> {
+    override suspend fun findByEvalRunIdAndCriterionId(
+        evalRunId: String,
+        criterionId: String,
+    ): List<AnnotationResult> {
         try {
-            val query = Query(
-                Criteria.where("evalRunId").`is`(evalRunId)
-                    .and("criterionId").`is`(criterionId)
-            ).with(Sort.by(Sort.Direction.ASC, "createdAt"))
+            val query =
+                Query(
+                    Criteria
+                        .where("evalRunId")
+                        .`is`(evalRunId)
+                        .and("criterionId")
+                        .`is`(criterionId),
+                ).with(Sort.by(Sort.Direction.ASC, "createdAt"))
             
-            return reactiveMongoTemplate.find<AnnotationResult>(query, ANNOTATION_RESULT_COLLECTION)
+            return reactiveMongoTemplate
+                .find<AnnotationResult>(query, ANNOTATION_RESULT_COLLECTION)
                 .collectList()
                 .awaitSingle()
                 .also {
@@ -162,16 +172,22 @@ class MongoAnnotationResultRepository(
         evalRunId: String,
         criterionId: String,
         attributeName: String,
-        attributeValue: Any
+        attributeValue: Any,
     ): List<AnnotationResult> {
         try {
-            val query = Query(
-                Criteria.where("evalRunId").`is`(evalRunId)
-                    .and("criterionId").`is`(criterionId)
-                    .and("annotationAttributes.$attributeName").`is`(attributeValue)
-            ).with(Sort.by(Sort.Direction.ASC, "createdAt"))
+            val query =
+                Query(
+                    Criteria
+                        .where("evalRunId")
+                        .`is`(evalRunId)
+                        .and("criterionId")
+                        .`is`(criterionId)
+                        .and("annotationAttributes.$attributeName")
+                        .`is`(attributeValue),
+                ).with(Sort.by(Sort.Direction.ASC, "createdAt"))
 
-            return reactiveMongoTemplate.find<AnnotationResult>(query, ANNOTATION_RESULT_COLLECTION)
+            return reactiveMongoTemplate
+                .find<AnnotationResult>(query, ANNOTATION_RESULT_COLLECTION)
                 .collectList()
                 .awaitSingle()
                 .also {

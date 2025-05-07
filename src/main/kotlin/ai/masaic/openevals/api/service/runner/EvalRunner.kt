@@ -54,10 +54,10 @@ class EvalRunner(
                 updatedEvalRun.copy(
                     status = EvalRunStatus.FAILED,
                     error =
-                    EvalRunError(
-                        code = "processing_error",
-                        message = e.message ?: "Unknown error occurred during evaluation run processing",
-                    ),
+                        EvalRunError(
+                            code = "processing_error",
+                            message = e.message ?: "Unknown error occurred during evaluation run processing",
+                        ),
                 )
         } finally {
             // Always update the run status in the database, even if processing fails
@@ -131,7 +131,7 @@ class EvalRunner(
         } catch (e: Exception) {
             logger.error(
                 "Error reading data lines [evalRunId=${evalRun.id}, dataSourceType=${evalRun.dataSource.source.javaClass.simpleName}]: ${e.message}",
-                e
+                e,
             )
             throw IllegalStateException("Failed to read data from source for evaluation run ${evalRun.id}: ${e.message}")
         }
@@ -183,10 +183,10 @@ class EvalRunner(
                     ?: evalRun.copy(
                         status = EvalRunStatus.FAILED,
                         error =
-                        EvalRunError(
-                            code = "processing_error",
-                            message = "Failed to process completion messages for evaluation run ${evalRun.id}",
-                        ),
+                            EvalRunError(
+                                code = "processing_error",
+                                message = "Failed to process completion messages for evaluation run ${evalRun.id}",
+                            ),
                     )
             }
 
@@ -196,10 +196,10 @@ class EvalRunner(
                 evalRun.copy(
                     status = EvalRunStatus.FAILED,
                     error =
-                    EvalRunError(
-                        code = "unsupported_operation",
-                        message = "JSONL data processing not yet implemented for evaluation run ${evalRun.id}",
-                    ),
+                        EvalRunError(
+                            code = "unsupported_operation",
+                            message = "JSONL data processing not yet implemented for evaluation run ${evalRun.id}",
+                        ),
                 )
             }
 
@@ -209,10 +209,10 @@ class EvalRunner(
                         ?: evalRun.copy(
                             status = EvalRunStatus.FAILED,
                             error =
-                            EvalRunError(
-                                code = "processing_error",
-                                message = "Failed to process stored messages for evaluation run ${evalRun.id}",
-                            ),
+                                EvalRunError(
+                                    code = "processing_error",
+                                    message = "Failed to process stored messages for evaluation run ${evalRun.id}",
+                                ),
                         )
                 } else {
                     // Handle empty result
@@ -220,10 +220,10 @@ class EvalRunner(
                     evalRun.copy(
                         status = EvalRunStatus.FAILED,
                         error =
-                        EvalRunError(
-                            code = "processing_error",
-                            message = "Empty processing result for evaluation run ${evalRun.id}: ${processingResult.reason}",
-                        ),
+                            EvalRunError(
+                                code = "processing_error",
+                                message = "Empty processing result for evaluation run ${evalRun.id}: ${processingResult.reason}",
+                            ),
                     )
                 }
             }
@@ -252,10 +252,10 @@ class EvalRunner(
                 return evalRun.copy(
                     status = EvalRunStatus.FAILED,
                     error =
-                    EvalRunError(
-                        code = "invalid_configuration",
-                        message = "Invalid data source type for completion messages in evaluation run ${evalRun.id}",
-                    ),
+                        EvalRunError(
+                            code = "invalid_configuration",
+                            message = "Invalid data source type for completion messages in evaluation run ${evalRun.id}",
+                        ),
                 )
             }
 
@@ -288,10 +288,10 @@ class EvalRunner(
                     return evalRun.copy(
                         status = EvalRunStatus.FAILED,
                         error =
-                        EvalRunError(
-                            code = "generation_error",
-                            message = "Error generating completions for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
-                        ),
+                            EvalRunError(
+                                code = "generation_error",
+                                message = "Error generating completions for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
+                            ),
                     )
                 }
 
@@ -321,10 +321,10 @@ class EvalRunner(
                     resultCounts = resultCounts,
                     perTestingCriteriaResults = perCriteriaResults,
                     error =
-                    EvalRunError(
-                        code = "no_results",
-                        message = "Evaluation completed but no results were produced for evaluation run ${evalRun.id}",
-                    ),
+                        EvalRunError(
+                            code = "no_results",
+                            message = "Evaluation completed but no results were produced for evaluation run ${evalRun.id}",
+                        ),
                 )
             }
 
@@ -339,10 +339,10 @@ class EvalRunner(
             return evalRun.copy(
                 status = EvalRunStatus.FAILED,
                 error =
-                EvalRunError(
-                    code = "processing_error",
-                    message = "Error during completion message processing for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
-                ),
+                    EvalRunError(
+                        code = "processing_error",
+                        message = "Error during completion message processing for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
+                    ),
             )
         }
     }
@@ -368,10 +368,10 @@ class EvalRunner(
                 return evalRun.copy(
                     status = EvalRunStatus.FAILED,
                     error =
-                    EvalRunError(
-                        code = "invalid_configuration",
-                        message = "Invalid data source type for completion messages in evaluation run ${evalRun.id}",
-                    ),
+                        EvalRunError(
+                            code = "invalid_configuration",
+                            message = "Invalid data source type for completion messages in evaluation run ${evalRun.id}",
+                        ),
                 )
             }
 
@@ -400,18 +400,19 @@ class EvalRunner(
                     resultCounts = resultCounts,
                     perTestingCriteriaResults = perCriteriaResults,
                     error =
-                    EvalRunError(
-                        code = "no_results",
-                        message = "Evaluation completed but no results were produced for evaluation run ${evalRun.id}",
-                    ),
+                        EvalRunError(
+                            code = "no_results",
+                            message = "Evaluation completed but no results were produced for evaluation run ${evalRun.id}",
+                        ),
                 )
             }
 
-            val resultsFileName = saveAnnotationResult(
-                eval.testingCriteria.first(),
-                testingResults[0]?.values?.toList() ?: throw IllegalStateException("annotations are not available."),
-                evalRun.id
-            )
+            val resultsFileName =
+                saveAnnotationResult(
+                    eval.testingCriteria.first(),
+                    testingResults[0]?.values?.toList() ?: throw IllegalStateException("annotations are not available."),
+                    evalRun.id,
+                )
 
             // Return updated eval run
             return evalRun.copy(
@@ -425,10 +426,10 @@ class EvalRunner(
             return evalRun.copy(
                 status = EvalRunStatus.FAILED,
                 error =
-                EvalRunError(
-                    code = "processing_error",
-                    message = "Error during completion message processing for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
-                ),
+                    EvalRunError(
+                        code = "processing_error",
+                        message = "Error during completion message processing for evaluation run ${evalRun.id}: ${e.message ?: "Unknown error"}",
+                    ),
             )
         }
     }
@@ -436,20 +437,21 @@ class EvalRunner(
     private suspend fun saveAnnotationResult(
         testingCriterion: TestingCriterion,
         criterionResults: List<CriterionEvaluator.CriterionResult>,
-        evalRunId: String
+        evalRunId: String,
     ): String {
         try {
             val messages = criterionResults.mapNotNull { it.message?.replace("\n", "") }
             
             // Save to database only
-            val annotationResults = messages.map { message ->
-                // Try to parse the message as JSON to extract attributes
-                AnnotationResult.fromJsonString(evalRunId, testingCriterion.id, message)
-            }
+            val annotationResults =
+                messages.map { message ->
+                    // Try to parse the message as JSON to extract attributes
+                    AnnotationResult.fromJsonString(evalRunId, testingCriterion.id, message)
+                }
             
             annotationResultRepository.saveAnnotationResults(annotationResults)
 
-            return "database://${evalRunId}/${testingCriterion.id}" // Return a reference to where the data is stored
+            return "database://$evalRunId/${testingCriterion.id}" // Return a reference to where the data is stored
         } catch (e: Exception) {
             logger.error("Error saving annotation results for criterion ${testingCriterion.id}: ${e.message}", e)
             return "not_available"
@@ -483,11 +485,11 @@ class EvalRunner(
                 results[index] =
                     testingCriteria.associate { criterion ->
                         criterion.name to
-                                CriterionEvaluator.CriterionResult(
-                                    id = criterion.id,
-                                    passed = false,
-                                    message = "Error: Missing reference data for index $index"
-                                )
+                            CriterionEvaluator.CriterionResult(
+                                id = criterion.id,
+                                passed = false,
+                                message = "Error: Missing reference data for index $index",
+                            )
                     }
                 return@forEach
             }
@@ -512,13 +514,13 @@ class EvalRunner(
                     // Record the error but continue with other criteria
                     logger.error(
                         "Error evaluating criterion '${criterion.name}' for index $index [evalRunId=$evalRunId]: ${e.message}",
-                        e
+                        e,
                     )
                     criteriaResults[criterion.name] =
                         CriterionEvaluator.CriterionResult(
                             id = criterion.id,
                             passed = false,
-                            message = "Error: ${e.message ?: "Unknown error during evaluation"}"
+                            message = "Error: ${e.message ?: "Unknown error during evaluation"}",
                         )
                 }
             }
@@ -571,13 +573,13 @@ class EvalRunner(
                     // Record the error but continue with other criteria
                     logger.error(
                         "Error evaluating criterion '${criterion.name}' for index $index [evalRunId=$evalRunId]: ${e.message}",
-                        e
+                        e,
                     )
                     criteriaResults[criterion.name] =
                         CriterionEvaluator.CriterionResult(
                             id = criterion.id,
                             passed = false,
-                            message = "Error: ${e.message ?: "Unknown error during evaluation"}"
+                            message = "Error: ${e.message ?: "Unknown error during evaluation"}",
                         )
                 }
             }

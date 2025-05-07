@@ -8,7 +8,7 @@ data class AnnotationAggregationResponse(
     val runId: String,
     val testId: String,
     val annotationsCount: Int,
-    val aggregations: List<Level1Aggregation>
+    val aggregations: List<Level1Aggregation>,
 )
 
 /**
@@ -17,7 +17,7 @@ data class AnnotationAggregationResponse(
 data class Level1Aggregation(
     val name: String,
     val count: Int,
-    val level2: List<Level2Aggregation>? = null
+    val level2: List<Level2Aggregation>? = null,
 )
 
 /**
@@ -25,5 +25,5 @@ data class Level1Aggregation(
  */
 data class Level2Aggregation(
     val name: String,
-    val count: Int
+    val count: Int,
 ) 

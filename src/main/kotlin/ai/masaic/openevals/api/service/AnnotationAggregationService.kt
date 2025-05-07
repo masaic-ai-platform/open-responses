@@ -6,14 +6,13 @@ import ai.masaic.openevals.api.model.Level1Aggregation
 import ai.masaic.openevals.api.model.Level2Aggregation
 import ai.masaic.openevals.api.repository.AnnotationResultRepository
 import org.slf4j.LoggerFactory
-import org.springframework.stereotype.Service
 
 /**
  * Service for aggregating annotation results.
  */
-@Service
+// @Service
 class AnnotationAggregationService(
-    private val annotationResultRepository: AnnotationResultRepository
+    private val annotationResultRepository: AnnotationResultRepository,
 ) {
     private val logger = LoggerFactory.getLogger(AnnotationAggregationService::class.java)
     
@@ -32,7 +31,7 @@ class AnnotationAggregationService(
     suspend fun getAggregatedAnnotations(
         evalId: String,
         runId: String,
-        testId: String
+        testId: String,
     ): AnnotationAggregationResponse {
         logger.info("Getting aggregated annotations for eval=$evalId, run=$runId, test=$testId")
         
@@ -51,10 +50,10 @@ class AnnotationAggregationService(
             runId = runId,
             testId = testId,
             annotationsCount = annotations.size,
-            aggregations = createLevel1Aggregations(annotations)
+            aggregations = createLevel1Aggregations(annotations),
         )
     }
-    
+
     /**
      * Create level 1 aggregations from annotation results.
      *
@@ -62,7 +61,7 @@ class AnnotationAggregationService(
      * @return A list of level 1 aggregations
      */
     private fun createLevel1Aggregations(
-        annotations: List<AnnotationResult>
+        annotations: List<AnnotationResult>,
     ): List<Level1Aggregation> {
         if (annotations.isEmpty()) {
             return emptyList()
@@ -85,17 +84,18 @@ class AnnotationAggregationService(
         }
         
         // Convert the map to a list of Level1Aggregation objects
-        return level1Aggregations.map { (level1Value, level2Counts) ->
-            val level1Count = level2Counts.values.sum()
+        return level1Aggregations
+            .map { (level1Value, level2Counts) ->
+                val level1Count = level2Counts.values.sum()
             
-            Level1Aggregation(
-                name = level1Value,
-                count = level1Count,
-                level2 = createLevel2Aggregations(level2Counts)
-            )
-        }.sortedByDescending { it.count } // Sort by count (highest first)
+                Level1Aggregation(
+                    name = level1Value,
+                    count = level1Count,
+                    level2 = createLevel2Aggregations(level2Counts),
+                )
+            }.sortedByDescending { it.count } // Sort by count (highest first)
     }
-    
+
     /**
      * Create level 2 aggregations from a map of level 2 values to counts.
      *
@@ -103,32 +103,32 @@ class AnnotationAggregationService(
      * @return A list of level 2 aggregations
      */
     private fun createLevel2Aggregations(
-        level2Counts: Map<String, Int>
+        level2Counts: Map<String, Int>,
     ): List<Level2Aggregation>? {
         if (level2Counts.isEmpty()) {
             return null
         }
         
         // Convert the map to a list of Level2Aggregation objects
-        return level2Counts.map { (level2Value, count) ->
-            Level2Aggregation(
-                name = level2Value,
-                count = count
-            )
-        }.sortedByDescending { it.count } // Sort by count (highest first)
+        return level2Counts
+            .map { (level2Value, count) ->
+                Level2Aggregation(
+                    name = level2Value,
+                    count = count,
+                )
+            }.sortedByDescending { it.count } // Sort by count (highest first)
     }
-    
+
     /**
      * Sample method to demonstrate how to process the provided test data.
      * This method shows how the sample data would be processed.
      */
-    fun processSampleData(sampleData: List<AnnotationResult>): AnnotationAggregationResponse {
-        return AnnotationAggregationResponse(
+    fun processSampleData(sampleData: List<AnnotationResult>): AnnotationAggregationResponse =
+        AnnotationAggregationResponse(
             evalId = "sample",
             runId = sampleData.firstOrNull()?.evalRunId ?: "unknown",
             testId = sampleData.firstOrNull()?.criterionId ?: "unknown",
             annotationsCount = sampleData.size,
-            aggregations = createLevel1Aggregations(sampleData)
+            aggregations = createLevel1Aggregations(sampleData),
         )
-    }
 } 

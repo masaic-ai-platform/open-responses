@@ -7,17 +7,15 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ResponseStatusException
 
 /**
  * Controller for annotation aggregation endpoints.
  */
-@RestController
-@RequestMapping("/evals")
+// @RestController
+// @RequestMapping("/v1/evals")
 class AnnotationAggregationController(
-    private val annotationAggregationService: AnnotationAggregationService
+    private val annotationAggregationService: AnnotationAggregationService,
 ) {
     private val logger = LoggerFactory.getLogger(AnnotationAggregationController::class.java)
 
@@ -34,7 +32,7 @@ class AnnotationAggregationController(
     suspend fun getAggregatedAnnotations(
         @PathVariable("eval_id") evalId: String,
         @PathVariable("run_id") runId: String,
-        @PathVariable("test_id") testId: String
+        @PathVariable("test_id") testId: String,
     ): ResponseEntity<AnnotationAggregationResponse> {
         logger.info("Request for aggregated annotations: eval=$evalId, run=$runId, test=$testId")
         
@@ -45,7 +43,7 @@ class AnnotationAggregationController(
             if (response.annotationsCount == 0) {
                 throw ResponseStatusException(
                     HttpStatus.NOT_FOUND,
-                    "No annotations found for eval_id=$evalId, run_id=$runId, test_id=$testId"
+                    "No annotations found for eval_id=$evalId, run_id=$runId, test_id=$testId",
                 )
             }
             
@@ -62,7 +60,7 @@ class AnnotationAggregationController(
             logger.error("Error getting aggregated annotations", e)
             throw ResponseStatusException(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                "Error processing annotation aggregation: ${e.message}"
+                "Error processing annotation aggregation: ${e.message}",
             )
         }
     }
