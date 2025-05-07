@@ -205,10 +205,10 @@ class MasaicResponseService(
             logger.warn { "Request was cancelled" }
             throw e // Let cancellation exceptions propagate
         } catch (e: OpenAIException) {
-            logger.error(e) { "Error creating response" }
+            logger.error { "Error creating response" }
             throw e
         } catch (e: Exception) {
-            logger.error(e) { "Error creating response" }
+            logger.error { "Error creating response" }
             throw ResponseProcessingException("Error processing response: ${e.message}")
         }
     }
@@ -245,7 +245,7 @@ class MasaicResponseService(
                 )
                 // Add error handling to the flow
                 .catch { error ->
-                    logger.error(error) { "Error in streaming response" }
+                    logger.error { "Error in streaming response" }
 
                     val errorEvent =
                         EventUtils.convertEvent(
@@ -265,13 +265,13 @@ class MasaicResponseService(
                     throw ResponseStreamingException("Error in streaming response: ${error.message}", error)
                 }.onCompletion { error ->
                     if (error != null) {
-                        logger.error(error) { "Stream completed with error" }
+                        logger.error { "Stream completed with error" }
                     } else {
                         logger.info { "Stream completed successfully" }
                     }
                 }
         } catch (e: Exception) {
-            logger.error(e) { "Failed to create streaming response" }
+            logger.error { "Failed to create streaming response" }
             throw ResponseStreamingException("Failed to create streaming response: ${e.message}", e)
         }
     }
@@ -368,7 +368,7 @@ class MasaicResponseService(
                             logger.warn { "Failed to send streaming event to client" }
                         }
                     } catch (e: Exception) {
-                        logger.error(e) { "Error processing streaming event" }
+                        logger.error { "Error processing streaming event" }
                     }
                 }
 
@@ -377,7 +377,7 @@ class MasaicResponseService(
                     subscription.onCompleteFuture().await()
                     logger.debug { "Streaming response completed successfully" }
                 } catch (e: Exception) {
-                    logger.error(e) { "Error in streaming response completion" }
+                    logger.error { "Error in streaming response completion" }
                 }
             }
 
@@ -386,7 +386,7 @@ class MasaicResponseService(
                     logger.debug { "Cancelling streaming subscription" }
                     subscription.onCompleteFuture().cancel(false)
                 } catch (e: Exception) {
-                    logger.warn(e) { "Error cancelling streaming subscription" }
+                    logger.warn { "Error cancelling streaming subscription" }
                 }
             }
         }
