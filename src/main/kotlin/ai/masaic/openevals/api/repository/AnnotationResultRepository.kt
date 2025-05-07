@@ -22,7 +22,7 @@ interface AnnotationResultRepository {
      * Save multiple annotation results in a batch.
      *
      * @param annotationResults The list of annotation results to save
-     * @return The list of saved annotation results
+     * @return The list of save d annotation results
      */
     suspend fun saveAnnotationResults(annotationResults: List<AnnotationResult>): List<AnnotationResult>
 
