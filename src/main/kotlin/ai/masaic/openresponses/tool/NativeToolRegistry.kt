@@ -1,21 +1,19 @@
 package ai.masaic.openresponses.tool
 
+import ai.masaic.openresponses.api.model.AgenticSeachTool
+import ai.masaic.openresponses.api.model.FileSearchTool
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.agentic.AgenticSearchService
-import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
-import com.openai.models.responses.ResponseCreateParams
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
-import kotlin.jvm.optionals.getOrDefault
-import kotlin.jvm.optionals.getOrNull
 
 @Component
 class NativeToolRegistry(
@@ -40,22 +38,39 @@ class NativeToolRegistry(
 
     fun findAll(): List<ToolDefinition> = toolRepository.values.toList()
 
+    /**
+     * Executes a native tool using unified context and parameters.
+     *
+     * @param resolvedName The resolved (non-alias) name of the tool
+     * @param arguments JSON string arguments
+     * @param paramsAccessor Accessor for unified tool configuration and basic params
+     * @param client OpenAIClient instance
+     * @param eventEmitter Server-Sent Event emitter
+     * @param toolMetadata Additional metadata
+     * @param context UnifiedToolContext
+     * @return Result string or null if tool not found/fails
+     */
     suspend fun executeTool(
-        name: String,
+        resolvedName: String,
         arguments: String,
-        params: ResponseCreateParams,
+        paramsAccessor: ToolParamsAccessor,
         client: OpenAIClient,
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
+        context: UnifiedToolContext,
     ): String? {
-        toolRepository[name] ?: return null
-        log.debug("Executing tool $name with arguments: $arguments")
+        toolRepository[resolvedName] ?: return null
+        val originalName = toolMetadata["originalName"] as? String ?: resolvedName
+        log.debug("Executing native tool '$originalName' (resolved to '$resolvedName') with arguments: $arguments")
 
-        return when (name) {
+        return when (resolvedName) {
             "think" -> "Your thought has been logged."
-            "file_search" -> executeFileSearch(arguments, params)
-            "agentic_search" -> executeAgenticSearch(arguments, params, client, eventEmitter, toolMetadata)
-            else -> null
+            "file_search" -> executeFileSearch(arguments, paramsAccessor, resolvedName, toolMetadata, context)
+            "agentic_search" -> executeAgenticSearch(arguments, paramsAccessor, client, resolvedName, eventEmitter, toolMetadata, context)
+            else -> {
+                log.warn("Attempted to execute unknown native tool: $resolvedName")
+                null
+            }
         }
     }
 
@@ -63,39 +78,37 @@ class NativeToolRegistry(
      * Executes a file search operation using the vector store service.
      *
      * @param arguments JSON string containing the search parameters
-     * @param requestParams Optional metadata from the request
+     * @param paramsAccessor Accessor for unified tool configuration
+     * @param resolvedToolName The resolved name of the tool being executed
+     * @param toolMetadata Additional metadata
+     * @param context UnifiedToolContext
      * @return JSON string containing the search results
      */
     private suspend fun executeFileSearch(
         arguments: String,
-        requestParams: ResponseCreateParams,
+        paramsAccessor: ToolParamsAccessor,
+        resolvedToolName: String,
+        toolMetadata: Map<String, Any>,
+        context: UnifiedToolContext,
     ): String {
         val params = objectMapper.readValue(arguments, FileSearchParams::class.java)
 
-        val function =
-            requestParams
-                .tools()
-                .getOrNull()
-                ?.filter { it.isFileSearch() }
-                ?.map { it.asFileSearch() } ?: return objectMapper.writeValueAsString(FileSearchResponse(emptyList()))
+        val fileSearchToolConfig = paramsAccessor.getSpecificToolConfig(resolvedToolName, FileSearchTool::class.java)
+        
+        if (fileSearchToolConfig == null) {
+            log.error("Could not find or parse FileSearchTool configuration in parameters for tool '$resolvedToolName'")
+            return objectMapper.writeValueAsString(FileSearchResponse(emptyList()))
+        }
 
-        val vectorStoreIds = function.first().vectorStoreIds()
-        val filters =
-            if (function.first().filters().isPresent) {
-                val filterJson = function.first().filters().get()
-                filterJson._json().get().convert(Filter::class.java)
-            } else {
-                null
-            }
+        val vectorStoreIds = fileSearchToolConfig.vectorStoreIds ?: emptyList()
+        val filters = fileSearchToolConfig.filters?.let { objectMapper.convertValue(it, Filter::class.java) }
+        val maxResults = fileSearchToolConfig.maxNumResults
 
-        val maxResults =
-            function
-                .first()
-                .maxNumResults()
-                .getOrDefault(20)
-                .toInt()
+        if (vectorStoreIds.isEmpty()) {
+            log.error("No vector store IDs provided for file_search tool '$resolvedToolName'")
+            return objectMapper.writeValueAsString(FileSearchResponse(emptyList()))
+        }
 
-        // Search each vector store and combine results
         val allResults = mutableListOf<VectorStoreSearchResult>()
         for (vectorStoreId in vectorStoreIds) {
             try {
@@ -112,18 +125,15 @@ class NativeToolRegistry(
             }
         }
 
-        // Sort results by score and limit to max_num_results
         val sortedResults =
             allResults
                 .sortedByDescending { it.score }
                 .take(maxResults)
 
-        // Convert results to JSON with file citations
         val response =
             FileSearchResponse(
                 data =
                     sortedResults.map { result ->
-                        // Get chunk index from metadata
                         val chunkIndex = result.attributes?.get("chunk_index")
 
                         FileSearchResult(
@@ -151,15 +161,22 @@ class NativeToolRegistry(
      * Executes an agentic search operation.
      *
      * @param arguments JSON string containing the search parameters
-     * @param requestParams Optional metadata from the request
+     * @param paramsAccessor Accessor for unified tool configuration and basic params
+     * @param client OpenAIClient instance
+     * @param resolvedToolName The resolved name of the tool being executed
+     * @param eventEmitter Server-Sent Event emitter
+     * @param toolMetadata Additional metadata
+     * @param context UnifiedToolContext
      * @return JSON string containing the search results
      */
     private suspend fun executeAgenticSearch(
         arguments: String,
-        requestParams: ResponseCreateParams,
-        openAIClient: OpenAIClient,
+        paramsAccessor: ToolParamsAccessor,
+        client: OpenAIClient,
+        resolvedToolName: String,
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
+        context: UnifiedToolContext,
     ): String {
         try {
             val paramsObj = objectMapper.readValue(arguments, AgenticSearchParams::class.java)
@@ -180,46 +197,31 @@ class NativeToolRegistry(
                         ),
                     ).build(),
             )
-            
-            val functions = requestParams.tools().orElseThrow().filter { it.isWebSearch() }
-            if (functions.isEmpty()) {
-                log.error("No web search function available in request parameters")
-                return objectMapper.writeValueAsString(AgenticSearchResponse(emptyList(), emptyList(), "Error: No web search function available"))
-            }
-            
-            val function = functions.first().asWebSearch()
-            
-            // Debug log to help identify what's in the additional properties
-            log.debug("WebSearch function additional properties: {}", function._additionalProperties().keys)
-            
-            // Try to extract vector_store_ids with improved debugging and fallbacks
-            val typeReference =
-                object : TypeReference<List<String>>() {}
-            val vectorStoreIds = function._additionalProperties()["vector_store_ids"]?.convert(typeReference) ?: throw IllegalArgumentException("No vector store IDs found in properties")
 
-            if (vectorStoreIds.isEmpty()) {
-                log.error("No vector store IDs found in properties: ${function._additionalProperties()}")
-                return objectMapper.writeValueAsString(
-                    AgenticSearchResponse(
-                        emptyList(), 
-                        emptyList(), 
-                        "Error: No vector store IDs provided. Available properties: ${function._additionalProperties().keys}",
-                    ),
-                )
+            val agenticToolConfig = paramsAccessor.getSpecificToolConfig(resolvedToolName, AgenticSeachTool::class.java)
+
+            if (agenticToolConfig == null) {
+                log.error("Could not find or parse AgenticSeachTool configuration in parameters for tool '$resolvedToolName'")
+                return objectMapper.writeValueAsString(AgenticSearchResponse(emptyList(), emptyList(), "Error: No agentic_search configuration available"))
             }
+
+            val vectorStoreIds = agenticToolConfig.vectorStoreIds ?: emptyList()
+            val userFilter = agenticToolConfig.filters?.convert(Filter::class.java, objectMapper)
+            val maxResults = agenticToolConfig.maxNumResults
+            val maxIterations = agenticToolConfig.maxIterations
+            val seedStrategy = "default"
+            val alpha = 0.5
+            val initialSeedMultiplier = 3
             
+            if (vectorStoreIds.isEmpty()) {
+                log.error("No vector store IDs provided for agentic_search tool '$resolvedToolName'")
+                return objectMapper.writeValueAsString(AgenticSearchResponse(emptyList(), emptyList(), "Error: No vector store IDs provided"))
+            }
+
             log.info("Using vector store IDs: $vectorStoreIds")
-            
-            val maxResults = function._additionalProperties()["max_num_results"]?.toString()?.toInt() ?: 5
-            val maxIterations = function._additionalProperties()["max_iterations"]?.toString()?.toInt() ?: 10
-            val seedStrategy = function._additionalProperties()["seed_strategy"]?.toString() ?: "default"
-            val alpha = function._additionalProperties()["alpha"]?.toString()?.toDouble() ?: 0.5
-            val initialSeedMultiplier = function._additionalProperties()["initial_seed_multiplier"]?.toString()?.toInt() ?: 3
-            val userFilter = function._additionalProperties()["filters"]?.convert(Filter::class.java)
-            
             log.info("AgenticSearch parameters: maxResults=$maxResults, maxIterations=$maxIterations, seedStrategy=$seedStrategy")
             
-            val response =
+            val response = 
                 agenticSearchService.run(
                     params = paramsObj,
                     vectorStoreIds = vectorStoreIds,
@@ -227,8 +229,8 @@ class NativeToolRegistry(
                     maxResults = maxResults,
                     maxIterations = maxIterations,
                     seedName = seedStrategy,
-                    openAIClient = openAIClient,
-                    requestParams = requestParams,
+                    paramsAccessor = paramsAccessor,
+                    openAIClient = client,
                     alpha = alpha,
                     initialSeedMultiplier = initialSeedMultiplier,
                     eventEmitter = eventEmitter,
@@ -352,4 +354,17 @@ class NativeToolRegistry(
             parameters = parameters,
         )
     }
+
+    private fun Any?.convert(
+        klass: Class<Filter>,
+        objectMapper: ObjectMapper,
+    ): Filter? =
+        this?.let {
+            try {
+                objectMapper.convertValue(it, klass)
+            } catch (e: Exception) {
+                log.error("Failed to convert filter object: $it", e)
+                null
+            }
+        }
 }

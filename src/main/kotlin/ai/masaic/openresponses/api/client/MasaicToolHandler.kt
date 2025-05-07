@@ -1,12 +1,18 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.extensions.toChatCompletionMessageParam
 import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
+import ai.masaic.openresponses.tool.CompletionToolRequestContext
+import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
+import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.responses.*
 import io.micrometer.observation.Observation
 import kotlinx.coroutines.runBlocking
@@ -28,6 +34,145 @@ class MasaicToolHandler(
 ) {
     private val logger = KotlinLogging.logger {}
 
+    data class CompletionToolHandlingResult(
+        val updatedMessages: List<ChatCompletionMessageParam>,
+        val hasUnresolvedClientTools: Boolean,
+    )
+
+    /**
+     * Processes tool calls from a chat completion and executes relevant tools.
+     * Each tool execution is recorded using the telemetry observation API.
+     * Handles both native tools (executed server-side) and non-native tools (parked for client).
+     *
+     * @param chatCompletion The ChatCompletion containing potential tool calls
+     * @param params The original request parameters for the chat completion
+     * @param parentObservation Optional parent observation for telemetry.
+     * @param openAIClient The OpenAI client instance.
+     * @return List of ChatCompletionMessageParam including original messages, assistant message with tool calls, and tool output messages.
+     */
+    fun handleCompletionToolCall(
+        chatCompletion: ChatCompletion,
+        params: ChatCompletionCreateParams,
+        openAIClient: OpenAIClient,
+    ): CompletionToolHandlingResult {
+        logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
+
+        val assistantMessage = chatCompletion.choices().firstOrNull()?.message()
+        if (assistantMessage == null || !assistantMessage.toolCalls().isPresent || assistantMessage.toolCalls().get().isEmpty()) {
+            logger.warn { "No tool calls found in ChatCompletion: ${chatCompletion.id()}. Returning original messages." }
+            // Return original messages plus the assistant message if it exists
+            val messages = params.messages() + listOfNotNull(assistantMessage?.toChatCompletionMessageParam(objectMapper))
+            return CompletionToolHandlingResult(messages, false) // No unresolved tools here
+        }
+
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = CompletionToolRequestContext(aliasMap, params)
+
+        val updatedMessages = params.messages().toMutableList()
+        // Add assistant's message WITH the tool_calls request
+        assistantMessage.toChatCompletionMessageParam(objectMapper).let { updatedMessages.add(it) }
+
+        val toolCalls = assistantMessage.toolCalls().get()
+        var nonNativeToolsFound = false
+        var nativeToolsExecuted = 0
+
+        logger.debug { "Processing ${toolCalls.size} tool calls from assistant message" }
+
+        toolCalls.forEach { toolCall ->
+            val function = toolCall.function()
+            val toolName = function.name()
+            val toolCallId = toolCall.id()
+
+            if (toolService.getFunctionTool(toolName, context) != null) {
+                // Native tool: Execute and add output
+                logger.info { "Executing native tool: $toolName with ID: $toolCallId" }
+                val toolResult =
+                    executeToolWithObservationForCompletion(
+                        toolName = toolName,
+                        toolDescription = toolService.getAvailableTool(toolName)?.description ?: "not_available",
+                        arguments = function.arguments(),
+                        toolId = toolCallId,
+                        toolMetadata = mapOf("toolCallId" to toolCallId),
+                        params = params,
+                        openAIClient = openAIClient,
+                        context = context,
+                    )
+
+                val toolOutputMessage =
+                    ChatCompletionMessageParam.ofTool(
+                        ChatCompletionToolMessageParam
+                            .builder()
+                            .toolCallId(toolCallId)
+                            .content(toolResult ?: "Tool execution resulted in null.")
+                            .build(),
+                    )
+                updatedMessages.add(toolOutputMessage)
+                nativeToolsExecuted++
+                logger.debug { "Added tool output message for native tool: $toolName" }
+            } else {
+                // Non-native tool: Log, set flag, DO NOT add a message
+                logger.info { "Non-native tool requested: $toolName with ID: $toolCallId. Parking for client." }
+                nonNativeToolsFound = true
+            }
+        }
+
+        // Sanity check (optional): Compare counts explicitly
+        if (nativeToolsExecuted < toolCalls.size && !nonNativeToolsFound) {
+            logger.warn("Tool count mismatch: ${toolCalls.size} calls requested, but only $nativeToolsExecuted native outputs generated, yet no non-native tools were flagged.")
+            // Decide how critical this is - perhaps force nonNativeToolsFound = true?
+        }
+        if (nativeToolsExecuted == toolCalls.size && nonNativeToolsFound) {
+            logger.warn("Tool count mismatch: All ${toolCalls.size} calls generated native outputs, but non-native tools were somehow flagged.")
+            // Decide how critical this is - perhaps force nonNativeToolsFound = false?
+        }
+
+        return CompletionToolHandlingResult(
+            updatedMessages = updatedMessages,
+            hasUnresolvedClientTools = nonNativeToolsFound,
+        )
+    }
+
+    /**
+     * Executes a tool using the telemetry observation API specifically for the Completion flow.
+     * Does not involve SSE emitters.
+     *
+     * @param toolName The name of the tool to execute
+     * @param arguments The arguments to pass to the tool
+     * @param toolId The ID of the tool call
+     * @param toolMetadata Additional metadata for the tool execution.
+     * @param parentObservation Optional parent observation for telemetry.
+     * @param params The original request parameters for the chat completion.
+     * @param openAIClient The OpenAI client instance.
+     * @param context The context for tool execution, containing alias maps and original params.
+     * @return The string result of the tool execution, or null if execution fails or returns null.
+     */
+    private fun executeToolWithObservationForCompletion(
+        toolName: String,
+        toolDescription: String,
+        arguments: String,
+        toolId: String,
+        toolMetadata: Map<String, Any>,
+        params: ChatCompletionCreateParams,
+        openAIClient: OpenAIClient,
+        context: CompletionToolRequestContext,
+    ): String? =
+        telemetryService.withClientObservation("execute_tool") { observation ->
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
+            observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_DESCRIPTION, toolDescription)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
+            try {
+                // Use runBlocking to call the suspending function from a synchronous context
+                runBlocking {
+                    toolService.executeTool(toolName, arguments, params, openAIClient, {}, toolMetadata, context)
+                }
+            } catch (e: Exception) {
+                observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
+                logger.error(e) { "Error executing tool $toolName for completion: ${e.message}" }
+                throw e
+            }
+        }
+
     /**
      * Processes tool calls from a chat completion and executes relevant tools.
      * Each tool execution is recorded using the telemetry observation API.
@@ -39,10 +184,14 @@ class MasaicToolHandler(
     fun handleMasaicToolCall(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
-        parentObservation: Observation? = null,
         openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
+        
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = ToolRequestContext(aliasMap, params)
+        
         val responseInputItems =
             if (params.input().isResponse()) {
                 params.input().asResponse().toMutableList()
@@ -102,7 +251,7 @@ class MasaicToolHandler(
 
                 toolCalls.forEach { tool ->
                     val function = tool.function()
-                    if (toolService.getFunctionTool(function.name()) != null) {
+                    if (toolService.getFunctionTool(function.name(), context) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
 
                         // Add the function call to response items
@@ -119,7 +268,18 @@ class MasaicToolHandler(
                         )
 
                         // Execute the tool using the observation API
-                        executeToolWithObservation(function.name(), function.arguments(), tool.id(), mapOf("toolId" to tool.id()), parentObservation, params, openAIClient, {}) { toolResult ->
+                        executeToolWithObservation(
+                            function.name(),
+                            toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                            function.arguments(),
+                            tool.id(),
+                            mapOf("toolId" to tool.id()),
+//                            parentObservation,
+                            params,
+                            openAIClient,
+                            {},
+                            context,
+                        ) { toolResult ->
                             if (toolResult != null) {
                                 logger.debug { "Tool execution successful for ${function.name()}" }
                                 responseInputItems.add(
@@ -169,21 +329,27 @@ class MasaicToolHandler(
      */
     private fun executeToolWithObservation(
         toolName: String,
+        toolDescription: String,
         arguments: String,
         toolId: String,
         toolMetadata: Map<String, Any>,
-        parentObservation: Observation? = null,
+//        parentObservation: Observation? = null,
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
+        context: ToolRequestContext,
         resultHandler: (String?) -> Unit,
     ) {
-        telemetryService.withClientObservation("builtin.tool.execute", parentObservation) { observation ->
+        telemetryService.withClientObservation("execute_tool") { observation ->
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
+            observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_DESCRIPTION, toolDescription)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
-                val toolResult = runBlocking { toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata) }
+                val toolResult =
+                    runBlocking { 
+                        toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata, context) 
+                    }
                 resultHandler(toolResult)
             } catch (e: Exception) {
                 observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
@@ -209,6 +375,11 @@ class MasaicToolHandler(
         openAIClient: OpenAIClient,
     ): List<ResponseInputItem> {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
+
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = ToolRequestContext(aliasMap, params)
+
         val responseInputItems =
             if (params.input().isResponse()) {
                 params.input().asResponse().toMutableList()
@@ -248,7 +419,7 @@ class MasaicToolHandler(
         functionCalls.forEachIndexed { index, tool ->
             val function = tool.asFunctionCall()
 
-            if (toolService.getFunctionTool(function.name()) != null) {
+            if (toolService.getFunctionTool(function.name(), context) != null) {
                 logger.info { "Executing tool: ${function.name()} with ID: ${function.id()}" }
 
                 val eventPrefix = "response.${function.name().lowercase().replace("^\\W".toRegex(), "_")}"
@@ -296,7 +467,17 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(function.name(), function.arguments(), function.id(), mapOf("toolId" to function.id(), "eventIndex" to index), parentObservation, params, openAIClient, eventEmitter) { toolResult ->
+                executeToolWithObservation(
+                    function.name(),
+                    toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                    function.arguments(),
+                    function.id(),
+                    mapOf("toolId" to function.id(), "eventIndex" to index),
+                    params,
+                    openAIClient,
+                    eventEmitter,
+                    context,
+                ) { toolResult ->
                     if (toolResult != null) {
                         logger.debug { "Tool execution successful for ${function.name()}" }
                         responseInputItems.add(

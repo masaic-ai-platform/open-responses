@@ -1,7 +1,18 @@
 package ai.masaic.openresponses.api.utils
 
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
+import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.core.http.StreamResponse
+import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.responses.ResponseStreamEvent
+import io.micrometer.observation.Observation
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import org.springframework.http.codec.ServerSentEvent
 
 /**
@@ -10,6 +21,7 @@ import org.springframework.http.codec.ServerSentEvent
 class EventUtils {
     companion object {
         private const val SPACE = " "
+        private val logger: Logger = LoggerFactory.getLogger(EventUtils::class.java)
 
         /**
          * Converts a ResponseStreamEvent to a ServerSentEvent.
@@ -74,6 +86,66 @@ class EventUtils {
                 event.isWebSearchCallInProgress() -> event.asWebSearchCallInProgress()._type().asStringOrThrow()
                 event.isWebSearchCallSearching() -> event.asWebSearchCallSearching()._type().asStringOrThrow()
                 else -> throw IllegalArgumentException("Unknown event type")
+            }
+
+        /**
+         * Converts a chat completion streaming response to server-sent events.
+         */
+        fun convertChatCompletionStreamToServerSentEvents(
+            response: StreamResponse<ChatCompletionChunk>,
+            objectMapper: ObjectMapper,
+            observation: Observation? = null,
+            metadata: InstrumentationMetadataInput? = null,
+            telemetryService: TelemetryService? = null,
+        ): Flow<ServerSentEvent<String>> =
+            callbackFlow {
+                val subscription =
+                    response.stream().forEach { chunk ->
+                        try {
+                            val jsonChunk = objectMapper.writeValueAsString(chunk)
+                            val event = 
+                                ServerSentEvent
+                                    .builder<String>()
+                                    .id(chunk.id())
+                                    .event("chunk")
+                                    .data(jsonChunk)
+                                    .build()
+                            if (!trySend(event).isSuccess) {
+                                logger.warn("Failed to send streaming event to client")
+                            }
+                        } catch (e: Exception) {
+                            logger.error("Error processing streaming event", e)
+                        }
+                    }
+
+                launch {
+                    try {
+                        logger.debug("Streaming response completed successfully")
+                    
+                        // Send a [DONE] message when stream completes
+                        val doneEvent = 
+                            ServerSentEvent
+                                .builder<String>()
+                                .event("done")
+                                .data("[DONE]")
+                                .build()
+                        send(doneEvent)
+                        // Explicitly close the channel after sending DONE
+                        close()
+                    } catch (e: Exception) {
+                        logger.error("Error in streaming response completion", e)
+                        // Close with error if sending DONE failed
+                        close(e)
+                    }
+                }
+
+                awaitClose {
+                    try {
+                        logger.debug("Cancelling streaming subscription")
+                    } catch (e: Exception) {
+                        logger.warn("Error cancelling streaming subscription", e)
+                    }
+                }
             }
     }
 }

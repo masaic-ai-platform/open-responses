@@ -4,6 +4,9 @@ import ai.masaic.openresponses.tool.mcp.MCPServerInfo
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
 import ai.masaic.openresponses.tool.mcp.McpToolDefinition
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.client.OpenAIClient
+import com.openai.models.responses.ResponseCreateParams
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import io.mockk.every
 import io.mockk.mockk
@@ -39,7 +42,7 @@ class ToolServiceTest {
 
     @BeforeEach
     fun setUp() {
-        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry)
+        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry, ObjectMapper())
     }
 
     /**
@@ -150,10 +153,11 @@ class ToolServiceTest {
                             "action" to "navigate to link and search the bill details like due date, bill amount of customer CUS10001",
                         ),
                     ),
-                    mockk(),
-                    mockk(),
+                    mockk<ResponseCreateParams>(),
+                    mockk<OpenAIClient>(),
                     {},
-                    mockk(relaxed = true),
+                    mockk(),
+                    mockk<ToolRequestContext>(),
                 )
 
             // Assert result is not null and not empty

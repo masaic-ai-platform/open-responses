@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "ai.masaic"
-version = "0.1.4-M2"
+version = "0.2.0-M2"
 
 java {
     toolchain {
@@ -58,7 +58,6 @@ dependencies {
     // Micrometer for metrics
     implementation("io.micrometer:micrometer-core")
     implementation("io.micrometer:micrometer-observation")
-    implementation("io.micrometer:micrometer-registry-otlp")
 
     // Apache Tika dependencies for document parsing
     implementation("org.apache.tika:tika-core:3.1.0")

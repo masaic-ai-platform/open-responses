@@ -1,9 +1,10 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
@@ -53,7 +53,7 @@ class MasaicStreamingService(
     fun createCompletionStream(
         client: OpenAIClient,
         initialParams: ResponseCreateParams,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): Flow<ServerSentEvent<String>> =
         flow {
             var currentParams = initialParams
@@ -114,19 +114,21 @@ class MasaicStreamingService(
         params: ResponseCreateParams,
         responseId: String,
         alreadyInProgressEventFired: Boolean,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): IterationResult {
         var nextIteration = false
         var updatedParams = params
         var inProgressFired = alreadyInProgressEventFired
 
         // We'll collect SSE events from the streaming call:
-        val createParams = parameterConverter.prepareCompletion(params)
         val genAiSample = telemetryService.genAiDurationSample()
         callbackFlow {
+            val observation = telemetryService.startObservation("chat", metadata.modelName)
+            val createParams = parameterConverter.prepareCompletion(params)
+            telemetryService.emitModelInputEvents(observation, createParams, metadata)
+
             val subscription =
                 client
-                    .async()
                     .chat()
                     .completions()
                     .createStreaming(createParams)
@@ -137,10 +139,7 @@ class MasaicStreamingService(
             val internalToolItemIds = mutableSetOf<String>()
             val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
-            val observation = telemetryService.startObservation("open.responses.createStream")
-            telemetryService.emitModelInputEvents(observation, createParams, metadata)
-
-            subscription.subscribe { completionResponse ->
+            subscription.stream().forEach { completionResponse ->
 
                 val completion =
                     if (completionResponse._id().isMissing()) { // special handling for gemini
@@ -291,6 +290,7 @@ class MasaicStreamingService(
                             responseOutputItemAccumulator,
                             internalToolItemIds,
                             functionNameAccumulator,
+                            params,
                         )
 
                         // If we detect tool_calls:
@@ -360,12 +360,10 @@ class MasaicStreamingService(
             }
 
             launch {
-                subscription.onCompleteFuture().await()
                 close()
             }
 
             awaitClose {
-                subscription.onCompleteFuture().cancel(true)
             }
         }.collect { event ->
             emit(event)
@@ -550,6 +548,7 @@ class MasaicStreamingService(
         responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
         internalToolItemIds: MutableSet<String>,
         functionNameAccumulator: MutableMap<Long, Pair<String, String>>,
+        params: ResponseCreateParams,
     ) {
         completion.toResponseStreamEvent().forEach { event ->
             when {
@@ -557,7 +556,7 @@ class MasaicStreamingService(
                     handleFunctionCallDelta(event, functionCallAccumulator, internalToolItemIds, completion)
                 }
                 event.isOutputItemAdded() && event.asOutputItemAdded().item().isFunctionCall() -> {
-                    handleOutputItemAdded(event, functionNameAccumulator, responseOutputItemAccumulator, internalToolItemIds)
+                    handleOutputItemAdded(event, functionNameAccumulator, responseOutputItemAccumulator, internalToolItemIds, params)
                 }
                 event.isOutputTextDelta() -> {
                     handleOutputTextDelta(event, textAccumulator)
@@ -603,6 +602,7 @@ class MasaicStreamingService(
         functionNameAccumulator: MutableMap<Long, Pair<String, String>>,
         responseOutputItemAccumulator: MutableList<ResponseOutputItem>,
         internalToolItemIds: MutableSet<String>,
+        params: ResponseCreateParams,
     ) {
         val functionCall = event.asOutputItemAdded().item().asFunctionCall()
         val functionName = functionCall.name()
@@ -610,8 +610,12 @@ class MasaicStreamingService(
 
         functionNameAccumulator[outputIndex] = Pair(functionName, functionCall.callId())
 
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+        val context = ToolRequestContext(aliasMap, params)
+
         // If a recognized function, mark internal
-        if (toolService.getFunctionTool(functionName) != null) {
+        if (toolService.getFunctionTool(functionName, context) != null) {
             internalToolItemIds.add(functionCall.id())
         }
 
@@ -721,7 +725,12 @@ class MasaicStreamingService(
                         ),
                     )
                 }
-            responseStore.storeResponse(response, inputItems)
+
+            // Create context with alias mappings
+            val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+            val context = ToolRequestContext(aliasMap, params)
+
+            responseStore.storeResponse(response, inputItems, context)
             logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
         }
     }

@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
+import ai.masaic.openresponses.tool.ToolRequestContext
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
 
@@ -19,6 +20,7 @@ interface ResponseStore {
     suspend fun storeResponse(
         response: Response,
         inputItems: List<ResponseInputItem>,
+        context: ToolRequestContext,
     )
 
     /**

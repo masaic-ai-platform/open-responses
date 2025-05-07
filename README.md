@@ -77,6 +77,8 @@ For detailed implementation instructions, see our [Quick Start Guide](https://op
 
 The API implements the following OpenAI-compatible endpoints:
 
+### Responses API
+
 | Endpoint | Description |
 |----------|-------------|
 | `POST /v1/responses` | Create a new model response | 
@@ -84,13 +86,59 @@ The API implements the following OpenAI-compatible endpoints:
 | `DELETE /v1/responses/{responseId}` | Delete a response | 
 | `GET /v1/responses/{responseId}/input_items` | List input items for a response | 
 
+### Completions API
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/chat/completions` | Create a chat completion (OpenAI compatible) |
+| `GET /v1/chat/completions/{completionId}` | Retrieve a specific chat completion |
+| `DELETE /v1/chat/completions/{completionId}` | Delete a chat completion |
+
+### File Management
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/files` | Upload a file |
+| `GET /v1/files` | List uploaded files |
+| `GET /v1/files/{file_id}` | Retrieve file metadata |
+| `DELETE /v1/files/{file_id}` | Delete a file |
+| `GET /v1/files/{file_id}/content` | Retrieve file content |
+
+### Vector Store Operations
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/vector_stores` | Create a vector store |
+| `GET /v1/vector_stores` | List vector stores |
+| `GET /v1/vector_stores/{vector_store_id}` | Retrieve a vector store |
+| `POST /v1/vector_stores/{vector_store_id}` | Modify a vector store |
+| `DELETE /v1/vector_stores/{vector_store_id}` | Delete a vector store |
+| `POST /v1/vector_stores/{vector_store_id}/search` | Search a vector store |
+| `POST /v1/vector_stores/{vector_store_id}/files` | Add a file to a vector store |
+| `GET /v1/vector_stores/{vector_store_id}/files` | List files in a vector store |
+| `GET /v1/vector_stores/{vector_store_id}/files/{file_id}` | Retrieve a vector store file |
+| `GET /v1/vector_stores/{vector_store_id}/files/{file_id}/content` | Retrieve vector store file content |
+| `POST /v1/vector_stores/{vector_store_id}/files/{file_id}` | Update vector store file attributes |
+| `DELETE /v1/vector_stores/{vector_store_id}/files/{file_id}` | Delete a file from a vector store |
+
+### Evaluations API
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /v1/evals` | Create a new evaluation |
+| `GET /v1/evals/{evalId}` | Retrieve a specific evaluation |
+| `GET /v1/evals` | List evaluations with pagination and filtering |
+| `DELETE /v1/evals/{evalId}` | Delete an evaluation |
+| `POST /v1/evals/{evalId}` | Update an evaluation |
+| `POST /v1/evals/{evalId}/runs` | Create a new evaluation run |
+| `GET /v1/evals/{evalId}/runs/{runId}` | Retrieve a specific evaluation run |
+| `GET /v1/evals/{evalId}/runs` | List evaluation runs for a specific evaluation |
+| `DELETE /v1/evals/{evalId}/runs/{runId}` | Delete an evaluation run |
+
 ## 📚 Documentation
 
 Explore our comprehensive [documentation](https://openresponses.masaic.ai/) to learn more about OpenResponses features and setup.
 
-## ⚠️ Production Use
-
->  **Alpha Release Disclaimer**: This project is currently in alpha stage. The API and features are subject to breaking changes as we continue to evolve and improve the platform. While we strive to maintain stability, please be aware that updates may require modifications to your integration code.
 
 ## 🤝 Contributing
 

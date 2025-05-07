@@ -6,20 +6,6 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import kotlinx.serialization.Serializable
 
 /**
- * Data class representing metadata about a tool.
- *
- * @property id Unique identifier for the tool
- * @property name Human-readable name of the tool
- * @property description Detailed description of what the tool does
- */
-@Serializable
-data class ToolMetadata(
-    val id: String,
-    val name: String,
-    val description: String,
-)
-
-/**
  * Data class representing metadata about AI models.
  *
  * @property models List of AI model information

@@ -1,7 +1,9 @@
 package ai.masaic.openresponses.api.client
 
-import ai.masaic.openresponses.api.model.CreateResponseMetadataInput
+import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import ai.masaic.openresponses.api.support.service.TelemetryService
+import ai.masaic.openresponses.tool.ToolRequestContext
+import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
@@ -10,16 +12,12 @@ import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
-import io.micrometer.observation.Observation
-import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
-import kotlin.coroutines.coroutineContext
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.
@@ -37,6 +35,7 @@ class MasaicOpenAiResponseServiceImpl(
     private val streamingService: MasaicStreamingService,
     private val responseStore: ResponseStore,
     private val telemetryService: TelemetryService,
+    private val toolService: ToolService,
 ) : ResponseService {
     private val logger = KotlinLogging.logger {}
 
@@ -75,15 +74,10 @@ class MasaicOpenAiResponseServiceImpl(
     suspend fun create(
         client: OpenAIClient,
         params: ResponseCreateParams,
-        metadata: CreateResponseMetadataInput = CreateResponseMetadataInput(),
+        metadata: InstrumentationMetadataInput = InstrumentationMetadataInput(),
     ): Response {
-        val parentObservation =
-            coroutineContext[ReactorContext]?.context?.get<Observation>(
-                ObservationThreadLocalAccessor.KEY,
-            )
-
         val responseOrCompletions =
-            telemetryService.withClientObservation("open.responses.create", parentObservation) { observation ->
+            telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
                 logger.debug { "Creating completion with model: ${params.model()}" }
                 val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
@@ -110,7 +104,7 @@ class MasaicOpenAiResponseServiceImpl(
             return responseOrCompletions
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, parentObservation, client)
+        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, client)
         val updatedParams =
             params
                 .toBuilder()
@@ -182,7 +176,12 @@ class MasaicOpenAiResponseServiceImpl(
                         ),
                     )
                 }
-            responseStore.storeResponse(response, inputItems)
+
+            // Create context with alias mappings
+            val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
+            val context = ToolRequestContext(aliasMap, params)
+
+            responseStore.storeResponse(response, inputItems, context)
             logger.debug { "Stored response with ID: ${response.id()} and ${inputItems.size} input items" }
         }
     }
@@ -197,7 +196,7 @@ class MasaicOpenAiResponseServiceImpl(
     suspend fun createCompletionStream(
         client: OpenAIClient,
         initialParams: ResponseCreateParams,
-        metadata: CreateResponseMetadataInput,
+        metadata: InstrumentationMetadataInput,
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
         return streamingService.createCompletionStream(client, initialParams, metadata)
