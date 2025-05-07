@@ -44,7 +44,7 @@ class MasaicCompletionService(
     private val objectMapper: ObjectMapper,
 ) {
     companion object {
-        const val MODEL_BASE_URL = "MODEL_BASE_URL"
+        const val OPENAI_BASE_URL = "OPENAI_BASE_URL"
         const val MODEL_DEFAULT_BASE_URL = "https://api.openai.com/v1"
         private const val DEFAULT_TIMEOUT_SECONDS = 120L
 
@@ -118,7 +118,7 @@ class MasaicCompletionService(
             val provider = headers.getFirst("x-model-provider")?.lowercase()
             return when {
                 provider != null -> URI(PROVIDER_BASE_URLS[provider] ?: MODEL_DEFAULT_BASE_URL)
-                else -> URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
+                else -> URI(System.getenv(OPENAI_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
             }
         }
     }

@@ -120,7 +120,7 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - MODEL_BASE_URL=${MODEL_BASE_URL}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
     networks:
       - observability-network
     profiles:
