@@ -59,6 +59,20 @@
     <logger name="org.springframework" level="WARN" />
     <logger name="io.netty" level="WARN" />
     <logger name="reactor.netty" level="WARN" />
+    
+    <!-- Suppress specific Netty error logs for already committed responses -->
+    <logger name="reactor.netty.http.server.HttpServerOperations" level="ERROR" additivity="false">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>DENY</onMatch>
+        </filter>
+    </logger>
+    <logger name="org.springframework.web.server.adapter.HttpWebHandlerAdapter" level="ERROR" additivity="false">
+        <filter class="ch.qos.logback.classic.filter.LevelFilter">
+            <level>ERROR</level>
+            <onMatch>DENY</onMatch>
+        </filter>
+    </logger>
 
     <!-- Micrometer and Observation related logging -->
     <logger name="io.micrometer.observation" level="INFO" />

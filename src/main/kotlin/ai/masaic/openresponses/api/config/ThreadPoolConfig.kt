@@ -1,6 +1,9 @@
 package ai.masaic.openresponses.api.config
 
 import io.netty.buffer.PooledByteBufAllocator
+import io.netty.channel.ChannelDuplexHandler
+import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelOption
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
@@ -117,6 +120,25 @@ class ThreadPoolConfig : WebFluxConfigurer {
                             spec.maxChunkSize(10 * 1024 * 1024) // 10MB chunks
                             spec.validateHeaders(true)
                             spec.initialBufferSize(1024 * 128) // 128KB
+                        }.doOnChannelInit { _, channel, _ ->
+                            channel.pipeline().addLast(
+                                ChannelDuplexHandler(),
+                                object : ChannelInboundHandlerAdapter() {
+                                    override fun exceptionCaught(
+                                        ctx: ChannelHandlerContext,
+                                        cause: Throwable,
+                                    ) {
+                                        if (cause is UnsupportedOperationException && 
+                                            cause.message?.contains("already committed") == true
+                                        ) {
+                                            // Silently handle already committed response errors
+                                            ctx.close()
+                                        } else {
+                                            ctx.fireExceptionCaught(cause)
+                                        }
+                                    }
+                                },
+                            )
                         }.wiretap(false) // Set to true for debugging HTTP traffic
             }
         factory.addServerCustomizers(serverCustomizer)
