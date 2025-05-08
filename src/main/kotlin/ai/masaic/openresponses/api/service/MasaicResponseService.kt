@@ -51,7 +51,7 @@ class MasaicResponseService(
     private val objectMapper: ObjectMapper,
 ) {
     companion object {
-        const val MODEL_BASE_URL = "MODEL_BASE_URL"
+        const val OPENAI_BASE_URL = "OPENAI_BASE_URL"
         const val MODEL_DEFAULT_BASE_URL = "https://api.groq.com/openai/v1"
         private const val DEFAULT_TIMEOUT_SECONDS = 120L
 
@@ -65,7 +65,6 @@ class MasaicResponseService(
                 "gemini" to "https://generativelanguage.googleapis.com/v1beta/openai/",
                 "google" to "https://generativelanguage.googleapis.com/v1beta/openai/",
                 "deepseek" to "https://api.deepseek.com",
-                "ollama" to "http://localhost:11434/v1",
                 "xai" to "https://api.x.ai/v1",
             )
 
@@ -150,12 +149,12 @@ class MasaicResponseService(
             val provider = headers.getFirst("x-model-provider")?.lowercase()
             return when {
                 provider != null -> URI(PROVIDER_BASE_URLS[provider] ?: MODEL_DEFAULT_BASE_URL)
-                else -> URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
+                else -> URI(System.getenv(OPENAI_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
             }
         }
 
         @JvmStatic
-        fun getDefaultApiUri(): URI = URI(System.getenv(MODEL_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
+        fun getDefaultApiUri(): URI = URI(System.getenv(OPENAI_BASE_URL) ?: MODEL_DEFAULT_BASE_URL)
     }
 
     @Value("\${api.request.timeout:$DEFAULT_TIMEOUT_SECONDS}")
@@ -205,10 +204,10 @@ class MasaicResponseService(
             logger.warn { "Request was cancelled" }
             throw e // Let cancellation exceptions propagate
         } catch (e: OpenAIException) {
-            logger.error(e) { "Error creating response" }
+            logger.error { "Error creating response" }
             throw e
         } catch (e: Exception) {
-            logger.error(e) { "Error creating response" }
+            logger.error { "Error creating response" }
             throw ResponseProcessingException("Error processing response: ${e.message}")
         }
     }
@@ -245,7 +244,7 @@ class MasaicResponseService(
                 )
                 // Add error handling to the flow
                 .catch { error ->
-                    logger.error(error) { "Error in streaming response" }
+                    logger.error { "Error in streaming response" }
 
                     val errorEvent =
                         EventUtils.convertEvent(
@@ -265,13 +264,13 @@ class MasaicResponseService(
                     throw ResponseStreamingException("Error in streaming response: ${error.message}", error)
                 }.onCompletion { error ->
                     if (error != null) {
-                        logger.error(error) { "Stream completed with error" }
+                        logger.error { "Stream completed with error" }
                     } else {
                         logger.info { "Stream completed successfully" }
                     }
                 }
         } catch (e: Exception) {
-            logger.error(e) { "Failed to create streaming response" }
+            logger.error { "Failed to create streaming response" }
             throw ResponseStreamingException("Failed to create streaming response: ${e.message}", e)
         }
     }
@@ -368,7 +367,7 @@ class MasaicResponseService(
                             logger.warn { "Failed to send streaming event to client" }
                         }
                     } catch (e: Exception) {
-                        logger.error(e) { "Error processing streaming event" }
+                        logger.error { "Error processing streaming event" }
                     }
                 }
 
@@ -377,7 +376,7 @@ class MasaicResponseService(
                     subscription.onCompleteFuture().await()
                     logger.debug { "Streaming response completed successfully" }
                 } catch (e: Exception) {
-                    logger.error(e) { "Error in streaming response completion" }
+                    logger.error { "Error in streaming response completion" }
                 }
             }
 
@@ -386,7 +385,7 @@ class MasaicResponseService(
                     logger.debug { "Cancelling streaming subscription" }
                     subscription.onCompleteFuture().cancel(false)
                 } catch (e: Exception) {
-                    logger.warn(e) { "Error cancelling streaming subscription" }
+                    logger.warn { "Error cancelling streaming subscription" }
                 }
             }
         }
