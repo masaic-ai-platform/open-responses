@@ -38,18 +38,30 @@ class TelemetryService(
         inputParams.messages().forEach { message ->
             val (role, eventName, content) =
                 when {
-                    message.isUser() ->
-                        Triple(
-                            "user",
-                            GenAIObsAttributes.USER_MESSAGE,
-                            messageContent(
-                                message
+                    message.isUser() -> {
+                        val content =
+                            if (message
                                     .user()
                                     .get()
                                     .content()
-                                    .asText(),
-                            ),
+                                    .isText()
+                            ) {
+                                messageContent(
+                                    message
+                                        .user()
+                                        .get()
+                                        .content()
+                                        .asText(),
+                                )
+                            } else {
+                                messageContent(mapper.writeValueAsString(message.user().get().content()))
+                            }
+                        Triple(
+                            "user",
+                            GenAIObsAttributes.USER_MESSAGE,
+                            content,
                         )
+                    }
                     message.isAssistant() &&
                         message
                             .assistant()

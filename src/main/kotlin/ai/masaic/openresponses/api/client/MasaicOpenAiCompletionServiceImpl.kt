@@ -233,7 +233,7 @@ class MasaicOpenAiCompletionServiceImpl(
                 // If no tool calls, the flow just finishes here after emitting chunks.
                 // The 'finalCompletion' variable holds the result from processStreamSegment.
             }.catch { error ->
-                logger.error(error) { "[OBS:${observation.context.name}] Error in streaming chat completion flow" }
+                logger.error { "[OBS:${observation.context.name}] Error in streaming chat completion flow" }
                 observation.error(error) // Record error in observation
                 emit(
                     ServerSentEvent
@@ -277,7 +277,7 @@ class MasaicOpenAiCompletionServiceImpl(
                         observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "unknown")
                     }
                 } else {
-                    logger.error(error) { "[OBS:${observation.context.name}] Stream completed with error. Final telemetry potentially incomplete." }
+                    logger.error { "[OBS:${observation.context.name}] Stream completed with error. Final telemetry potentially incomplete." }
                     // Error already recorded in catch block
                     observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "error")
                 }
@@ -287,7 +287,7 @@ class MasaicOpenAiCompletionServiceImpl(
             }
         } catch (e: Exception) {
             // Handle exceptions during flow creation/initialization
-            logger.error(e) { "[OBS:${observation.context.name}] Error during stream setup before flow execution." }
+            logger.error { "[OBS:${observation.context.name}] Error during stream setup before flow execution." }
             observation.error(e)
             observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, e.javaClass.simpleName)
             observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "error")

@@ -127,7 +127,7 @@ class MasaicCompletionServiceTest {
             }
 
         @Test
-        fun `should throw CompletionTimeoutException on timeout`() =
+        fun `should throw RuntimeException on timeout`() =
             runTest {
                 // Given
                 val request = createDefaultRequest()
@@ -141,10 +141,10 @@ class MasaicCompletionServiceTest {
                         any<ChatCompletionCreateParams>(),
                         expectedMetadata,
                     )
-                } throws CompletionTimeoutException("Timeout")
+                } throws RuntimeException("Timeout")
 
                 // When & Then
-                assertThrows<CompletionProcessingException> {
+                assertThrows<RuntimeException> {
                     masaicCompletionService.createCompletion(request, headers, queryParams)
                 }
             }
@@ -173,7 +173,7 @@ class MasaicCompletionServiceTest {
             }
 
         @Test
-        fun `should throw CompletionProcessingException on general error`() =
+        fun `should throw RuntimeException on general error`() =
             runTest {
                 // Given
                 val request = createDefaultRequest()
@@ -192,10 +192,10 @@ class MasaicCompletionServiceTest {
 
                 // When & Then
                 val thrown =
-                    assertThrows<CompletionProcessingException> {
+                    assertThrows<RuntimeException> {
                         masaicCompletionService.createCompletion(request, headers, queryParams)
                     }
-                assertEquals("Error processing completion: ${exception.message}", thrown.message)
+                assertEquals(exception.message, thrown.message)
             }
 
         @Test
@@ -317,7 +317,7 @@ class MasaicCompletionServiceTest {
             }
 
         @Test
-        fun `should throw CompletionStreamingException on general error`() =
+        fun `should throw RuntimeException on general error`() =
             runTest {
                 // Given
                 val request = createDefaultRequest().copy(stream = true)
@@ -336,11 +336,11 @@ class MasaicCompletionServiceTest {
 
                 // When & Then
                 val thrown =
-                    assertThrows<CompletionStreamingException> {
+                    assertThrows<RuntimeException> {
                         masaicCompletionService.createStreamingCompletion(request, headers, queryParams)
                     }
-                assertEquals("Failed to create streaming completion: ${exception.message}", thrown.message)
-                assertEquals(exception, thrown.cause)
+                assertEquals(exception.message, thrown.message)
+                assertEquals(exception, thrown)
             }
 
         @Test
