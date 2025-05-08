@@ -179,7 +179,7 @@ class ModelAnnotaterEvaluator(
             throw RuntimeException("Error calling label model: ${completionResult.error}")
         }
         
-        val response = completionResult.contentJson
+        val response = completionResult.contentJson.replace("```json", "").replace("```", "")
 
         logger.debug("Response: $response")
         return response
