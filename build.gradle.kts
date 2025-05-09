@@ -50,7 +50,7 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-open-ai:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
-
+    implementation("com.knuddels:jtokkit:1.1.0")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("io.micrometer:micrometer-tracing-bridge-otel:1.4.4")
     implementation("io.opentelemetry.instrumentation:opentelemetry-spring-boot-starter")
