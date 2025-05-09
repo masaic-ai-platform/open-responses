@@ -29,7 +29,7 @@ class EmbeddingsControllerTest {
         encoding = mockk()
         observationMock = mockk(relaxed = true)
 
-        coEvery { telemetryService.startObservation(any()) } returns observationMock
+        coEvery { telemetryService.startObservation(any(), "openai@text-embedding-3-small") } returns observationMock
         every { observationMock.lowCardinalityKeyValue(any(), any()) } returns observationMock
         every { observationMock.error(any<Exception>()) } returns observationMock
         every { observationMock.stop() } returns Unit
@@ -77,7 +77,7 @@ class EmbeddingsControllerTest {
             assertEquals(10, responseBody.usage.totalTokens)
 
             // Verify telemetry
-            coVerify { telemetryService.startObservation("gen_ai.embeddings") }
+            coVerify { telemetryService.startObservation("gen_ai.embeddings", "openai@text-embedding-3-small") }
             verify { observationMock.lowCardinalityKeyValue("gen_ai.operation.name", "embeddings") }
             verify { observationMock.lowCardinalityKeyValue("gen_ai.request.model", "openai@text-embedding-3-small") }
             verify { observationMock.lowCardinalityKeyValue("server.address", "https://api.openai.com/v1") }
@@ -118,7 +118,7 @@ class EmbeddingsControllerTest {
             assertTrue(responseBody.data[0].embedding is String) // Base64 encoded
         
             // Verify telemetry
-            coVerify { telemetryService.startObservation("gen_ai.embeddings") }
+            coVerify { telemetryService.startObservation("gen_ai.embeddings", "openai@text-embedding-3-small") }
             verify { observationMock.lowCardinalityKeyValue("gen_ai.request.encoding_formats", "base64") }
             verify { observationMock.stop() }
         }

@@ -67,7 +67,7 @@ class EmbeddingsController(
         @RequestHeader("Authorization") authHeader: String,
     ): ResponseEntity<EmbeddingResponse> {
         // Start observation for embeddings operation with OpenTelemetry
-        val observation = telemetryService.startObservation("gen_ai.embeddings")
+        val observation = telemetryService.startObservation("gen_ai.embeddings", modelName = request.model)
         
         try {
             // Set required OpenTelemetry attributes for GenAI spans
