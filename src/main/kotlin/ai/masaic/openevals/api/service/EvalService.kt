@@ -100,7 +100,6 @@ class EvalService(
                     is ModelAnnotator ->
                         criterion.copy(
                             id = "${criterion.name}-${UUID.randomUUID()}",
-                            apiKey = EvalRunService.extractApiKey(headers),
                         )
                     else -> throw UnsupportedOperationException("Unknown testing criterion type: ${criterion.javaClass.simpleName}")
                 }

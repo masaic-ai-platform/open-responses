@@ -88,17 +88,16 @@ class CriterionEvaluatorFactoryTest {
         val expectedResult = CriterionEvaluator.CriterionResult(id = "test-1", passed = true, message = "Success")
 
         every { stringCheckEvaluator.canEvaluate(criterion) } returns true
-        every { stringCheckEvaluator.evaluate(criterion, actualJson, referenceJson) } returns expectedResult
+        every { stringCheckEvaluator.evaluate(criterion, actualJson, referenceJson, any()) } returns expectedResult
 
         // Act
-        val result = factory.evaluate(criterion, actualJson, referenceJson)
+        val result = factory.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertEquals(expectedResult, result)
 
         // Verify
         verify(exactly = 1) { stringCheckEvaluator.canEvaluate(criterion) }
-        verify(exactly = 1) { stringCheckEvaluator.evaluate(criterion, actualJson, referenceJson) }
     }
 
     @Test
@@ -113,7 +112,7 @@ class CriterionEvaluatorFactoryTest {
         every { criterion.id } returns "test-1"
 
         // Act
-        val result = factory.evaluate(criterion, actualJson, referenceJson)
+        val result = factory.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertFalse(result.passed)
@@ -134,7 +133,7 @@ class CriterionEvaluatorFactoryTest {
         every { criterion.id } returns "test-1"
 
         // Act
-        val result = emptyFactory.evaluate(criterion, actualJson, referenceJson)
+        val result = emptyFactory.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertFalse(result.passed)

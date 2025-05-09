@@ -103,8 +103,6 @@ data class ModelAnnotator(
     @field:NotEmpty @field:Size(min = 1, message = "at least one input object with role, content must be provided")
     @field:Valid
     val input: List<SimpleInputMessage>,
-    @JsonIgnore
-    val apiKey: String = "",
 ) : TestingCriterion
 
 // String Check Grader

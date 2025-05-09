@@ -1,5 +1,6 @@
 package ai.masaic.openevals.api.service.runner
 
+import ai.masaic.openevals.api.model.EvalRun
 import ai.masaic.openevals.api.model.TestingCriterion
 
 /**
@@ -26,6 +27,7 @@ interface CriterionEvaluator {
         criterion: TestingCriterion,
         actualJson: String,
         referenceJson: String,
+        evalRun: EvalRun,
     ): CriterionResult
 
     /**

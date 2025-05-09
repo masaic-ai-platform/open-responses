@@ -303,7 +303,7 @@ class EvalRunner(
                     resultMap,
                     jsonLines,
                     eval.testingCriteria,
-                    evalRun.id,
+                    evalRun,
                 )
 
             logger.info("Testing criteria evaluation completed [evalRunId=${evalRun.id}]")
@@ -382,7 +382,7 @@ class EvalRunner(
                 evaluateStoredCompletions(
                     jsonLines,
                     eval.testingCriteria,
-                    evalRun.id,
+                    evalRun,
                 )
 
             logger.info("Testing criteria evaluation completed [evalRunId=${evalRun.id}]")
@@ -471,16 +471,16 @@ class EvalRunner(
         resultMap: Map<Int, CompletionResult>,
         jsonLines: List<String>,
         testingCriteria: List<TestingCriterion>,
-        evalRunId: String,
+        evalRun: EvalRun,
     ): Map<Int, Map<String, CriterionEvaluator.CriterionResult>> {
         val results = mutableMapOf<Int, Map<String, CriterionEvaluator.CriterionResult>>()
-        logger.debug("Starting evaluation of ${resultMap.size} completions against ${testingCriteria.size} criteria [evalRunId=$evalRunId]")
+        logger.debug("Starting evaluation of ${resultMap.size} completions against ${testingCriteria.size} criteria [evalRunId=${evalRun.evalId}]")
 
         resultMap.forEach { (index, completionResult) ->
             // Get the corresponding JSON line for this index
             val jsonLine = if (index < jsonLines.size) jsonLines[index] else null
             if (jsonLine == null) {
-                logger.warn("No JSON data found for index $index [evalRunId=$evalRunId]")
+                logger.warn("No JSON data found for index $index [evalRunId=${evalRun.evalId}]")
                 // Still record the failure instead of skipping
                 results[index] =
                     testingCriteria.associate { criterion ->
@@ -495,7 +495,7 @@ class EvalRunner(
             }
 
             val criteriaResults = mutableMapOf<String, CriterionEvaluator.CriterionResult>()
-            logger.debug("Evaluating completion at index $index against ${testingCriteria.size} criteria [evalRunId=$evalRunId]")
+            logger.debug("Evaluating completion at index $index against ${testingCriteria.size} criteria [evalRunId=${evalRun.evalId}]")
 
             // Evaluate each testing criterion with individual error handling
             testingCriteria.forEach { criterion ->
@@ -506,14 +506,15 @@ class EvalRunner(
                             criterion,
                             actualJson = completionResult.contentJson,
                             referenceJson = jsonLine,
+                            evalRun = evalRun,
                         )
 
                     criteriaResults[criterion.name] = result
-                    logger.debug("Criterion '${criterion.name}' evaluated, result=${result.passed} [evalRunId=$evalRunId, index=$index]")
+                    logger.debug("Criterion '${criterion.name}' evaluated, result=${result.passed} [evalRunId=${evalRun.evalId}, index=$index]")
                 } catch (e: Exception) {
                     // Record the error but continue with other criteria
                     logger.error(
-                        "Error evaluating criterion '${criterion.name}' for index $index [evalRunId=$evalRunId]: ${e.message}",
+                        "Error evaluating criterion '${criterion.name}' for index $index [evalRunId=${evalRun.evalId}]: ${e.message}",
                         e,
                     )
                     criteriaResults[criterion.name] =
@@ -534,7 +535,7 @@ class EvalRunner(
         val totalTests = totalItems * totalCriteria
         val passedTests = results.values.sumOf { criteriaMap -> criteriaMap.values.count { it.passed } }
 
-        logger.info("Testing criteria evaluation: $passedTests/$totalTests tests passed across $totalItems items [evalRunId=$evalRunId]")
+        logger.info("Testing criteria evaluation: $passedTests/$totalTests tests passed across $totalItems items [evalRunId=${evalRun.evalId}]")
 
         return results
     }
@@ -550,14 +551,14 @@ class EvalRunner(
     private fun evaluateStoredCompletions(
         jsonLines: List<String>,
         testingCriteria: List<TestingCriterion>,
-        evalRunId: String,
+        evalRun: EvalRun,
     ): Map<Int, Map<String, CriterionEvaluator.CriterionResult>> {
         val results = mutableMapOf<Int, Map<String, CriterionEvaluator.CriterionResult>>()
         // Evaluate each testing criterion with individual error handling
         testingCriteria.forEachIndexed { criteriaNumber, criterion ->
             val criteriaResults = mutableMapOf<String, CriterionEvaluator.CriterionResult>()
             jsonLines.forEachIndexed { index, jsonLine ->
-                logger.debug("Evaluating stored messages at index $index against ${testingCriteria.size} criteria [evalRunId=$evalRunId]")
+                logger.debug("Evaluating stored messages at index $index against ${testingCriteria.size} criteria [evalRunId=${evalRun.evalId}]")
                 try {
                     // Pass completion result as actual and original data as reference
                     val result =
@@ -565,14 +566,15 @@ class EvalRunner(
                             criterion,
                             actualJson = jsonLine,
                             referenceJson = jsonLine,
+                            evalRun = evalRun,
                         )
 
                     criteriaResults["$index"] = result
-                    logger.debug("Criterion '${criterion.name}' evaluated, result=${result.passed} [evalRunId=$evalRunId, index=$index]")
+                    logger.debug("Criterion '${criterion.name}' evaluated, result=${result.passed} [evalRunId=${evalRun.evalId}, index=$index]")
                 } catch (e: Exception) {
                     // Record the error but continue with other criteria
                     logger.error(
-                        "Error evaluating criterion '${criterion.name}' for index $index [evalRunId=$evalRunId]: ${e.message}",
+                        "Error evaluating criterion '${criterion.name}' for index $index [evalRunId=${evalRun.evalId}]: ${e.message}",
                         e,
                     )
                     criteriaResults[criterion.name] =
@@ -592,7 +594,7 @@ class EvalRunner(
         val totalTests = totalItems * totalCriteria
         val passedTests = results.values.sumOf { criteriaMap -> criteriaMap.values.count { it.passed } }
 
-        logger.info("Testing criteria evaluation: $passedTests/$totalTests tests passed across $totalItems items [evalRunId=$evalRunId]")
+        logger.info("Testing criteria evaluation: $passedTests/$totalTests tests passed across $totalItems items [evalRunId=${evalRun.evalId}]")
 
         return results
     }

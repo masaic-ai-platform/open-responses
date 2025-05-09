@@ -304,6 +304,7 @@ class EvalRunnerTest {
                     any(),
                     any(),
                     any(),
+                    any(),
                 ) 
             } returns criterionResult
             every { resultProcessor.calculateResultCounts(any()) } returns resultCounts

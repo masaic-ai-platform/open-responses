@@ -46,6 +46,7 @@ class LabelModelGraderEvaluator(
         criterion: TestingCriterion,
         actualJson: String,
         referenceJson: String,
+        evalRun: EvalRun,
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is LabelModelGrader) {
             return CriterionEvaluator.CriterionResult(

@@ -9,9 +9,9 @@ import java.time.Instant
  * Enum representing who annotated the result.
  */
 enum class AnnotatedBy {
-    MODEL,    // Annotation was created by a model (default)
-    HUMAN,    // Annotation was updated by a human
-    UNKNOWN   // Source of annotation is unknown
+    MODEL, // Annotation was created by a model (default)
+    HUMAN, // Annotation was updated by a human
+    UNKNOWN, // Source of annotation is unknown
 }
 
 /**
@@ -22,7 +22,7 @@ enum class AnnotatedBy {
  */
 data class UpdateAnnotationRequest(
     val lastAnnotatedBy: AnnotatedBy? = null,
-    val annotationAttributes: Map<String, Any> = emptyMap()
+    val annotationAttributes: Map<String, Any> = emptyMap(),
 )
 
 /**

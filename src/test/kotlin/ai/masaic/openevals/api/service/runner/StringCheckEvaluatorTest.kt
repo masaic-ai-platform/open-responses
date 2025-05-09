@@ -61,7 +61,7 @@ class StringCheckEvaluatorTest {
         val criterion = mockk<TestingCriterion>()
         every { criterion.id } returns "test-1"
         // Act
-        val result = evaluator.evaluate(criterion, "{}", "{}")
+        val result = evaluator.evaluate(criterion, "{}", "{}", mockk())
 
         // Assert
         assertFalse(result.passed)
@@ -89,7 +89,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.answer}}", referenceJson, pebbleEngine) } returns "test value"
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertTrue(result.passed)
@@ -122,7 +122,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.answer}}", referenceJson, pebbleEngine) } returns "different value"
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertFalse(result.passed)
@@ -155,7 +155,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.answer}}", referenceJson, pebbleEngine) } returns "different value"
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertTrue(result.passed)
@@ -188,7 +188,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.answer}}", referenceJson, pebbleEngine) } returns "test"
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertTrue(result.passed)
@@ -221,7 +221,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.answer}}", referenceJson, pebbleEngine) } returns "test"
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertTrue(result.passed)
@@ -254,7 +254,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.answer}}", referenceJson, pebbleEngine) } returns "test value"
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertFalse(result.passed)
@@ -286,7 +286,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{expected.missing}}", referenceJson, pebbleEngine) } returns ""
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertFalse(result.passed)
@@ -318,7 +318,7 @@ class StringCheckEvaluatorTest {
         every { TemplateUtils.resolveTemplateValue("{{response.answer}}", actualJson, pebbleEngine) } throws RuntimeException("Template error")
 
         // Act
-        val result = evaluator.evaluate(criterion, actualJson, referenceJson)
+        val result = evaluator.evaluate(criterion, actualJson, referenceJson, mockk())
 
         // Assert
         assertFalse(result.passed)

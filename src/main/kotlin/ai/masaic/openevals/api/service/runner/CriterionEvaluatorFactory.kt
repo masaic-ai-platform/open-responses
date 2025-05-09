@@ -1,5 +1,6 @@
 package ai.masaic.openevals.api.service.runner
 
+import ai.masaic.openevals.api.model.EvalRun
 import ai.masaic.openevals.api.model.TestingCriterion
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
@@ -45,10 +46,11 @@ class CriterionEvaluatorFactory(
         criterion: TestingCriterion,
         actualJson: String,
         referenceJson: String,
+        evalRun: EvalRun,
     ): CriterionEvaluator.CriterionResult {
         val evaluator = getEvaluator(criterion)
         
-        return evaluator?.evaluate(criterion, actualJson, referenceJson)
+        return evaluator?.evaluate(criterion, actualJson, referenceJson, evalRun)
             ?: CriterionEvaluator.CriterionResult(
                 id = criterion.id,
                 passed = false,

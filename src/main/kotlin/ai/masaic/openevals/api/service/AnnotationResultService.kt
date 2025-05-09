@@ -1,8 +1,8 @@
 package ai.masaic.openevals.api.service
 
-import ai.masaic.openevals.api.model.AnnotationResult
 import ai.masaic.openevals.api.model.AnnotatedBy
 import ai.masaic.openevals.api.model.AnnotationAggregationResponse
+import ai.masaic.openevals.api.model.AnnotationResult
 import ai.masaic.openevals.api.model.Level1Aggregation
 import ai.masaic.openevals.api.model.Level2Aggregation
 import ai.masaic.openevals.api.repository.AnnotationResultRepository
@@ -34,11 +34,11 @@ class AnnotationResultService(
      * @return List of annotation results for the specified evaluation run and test
      */
     suspend fun getAnnotationResultsByTest(
-        runId: String, 
-        testId: String, 
-        after: String? = null, 
-        limit: Int = 50, 
-        order: String = "asc"
+        runId: String,
+        testId: String,
+        after: String? = null,
+        limit: Int = 50,
+        order: String = "asc",
     ): List<AnnotationResult> {
         logger.info("Getting annotation results for run=$runId, test=$testId, after=$after, limit=$limit, order=$order")
         
@@ -51,11 +51,12 @@ class AnnotationResultService(
         val allResults = annotationResultRepository.findByEvalRunIdAndCriterionId(runId, testId)
         
         // Sort based on order parameter (asc or desc by creation time)
-        val sortedResults = when (order) {
-            "asc" -> allResults.sortedBy { it.createdAt }
-            "desc" -> allResults.sortedByDescending { it.createdAt }
-            else -> allResults.sortedBy { it.createdAt } // Default to ascending
-        }
+        val sortedResults =
+            when (order) {
+                "asc" -> allResults.sortedBy { it.createdAt }
+                "desc" -> allResults.sortedByDescending { it.createdAt }
+                else -> allResults.sortedBy { it.createdAt } // Default to ascending
+            }
         
         // Apply cursor-based pagination
         return applyCursorPagination(sortedResults, after, limit)
@@ -94,7 +95,7 @@ class AnnotationResultService(
             aggregations = createLevel1Aggregations(annotations),
         )
     }
-    
+
     /**
      * Update an annotation with new attribute values.
      *
@@ -111,7 +112,7 @@ class AnnotationResultService(
         runId: String,
         testId: String,
         newAttributes: Map<String, Any>,
-        lastAnnotatedBy: AnnotatedBy = AnnotatedBy.HUMAN
+        lastAnnotatedBy: AnnotatedBy = AnnotatedBy.HUMAN,
     ): AnnotationResult {
         logger.info("Updating annotation $annotationId with ${newAttributes.size} new attributes")
         
@@ -119,24 +120,26 @@ class AnnotationResultService(
         val existingAnnotation = findAnnotation(annotationId, runId, testId)
         
         // Process attributes to be updated
-        val (updatedAttributes, retiredAttributes) = processAttributes(
-            existingAnnotation.annotationAttributes,
-            existingAnnotation.overriddenAnnotationAttributes,
-            newAttributes
-        )
+        val (updatedAttributes, retiredAttributes) =
+            processAttributes(
+                existingAnnotation.annotationAttributes,
+                existingAnnotation.overriddenAnnotationAttributes,
+                newAttributes,
+            )
         
         // Create the updated annotation
-        val updatedAnnotation = existingAnnotation.copy(
-            annotationAttributes = updatedAttributes,
-            overriddenAnnotationAttributes = retiredAttributes,
-            lastAnnotatedBy = lastAnnotatedBy,
-            updatedAt = Instant.now().epochSecond
-        )
+        val updatedAnnotation =
+            existingAnnotation.copy(
+                annotationAttributes = updatedAttributes,
+                overriddenAnnotationAttributes = retiredAttributes,
+                lastAnnotatedBy = lastAnnotatedBy,
+                updatedAt = Instant.now().epochSecond,
+            )
         
         // Save and return the updated annotation
         return annotationResultRepository.saveAnnotationResult(updatedAnnotation)
     }
-    
+
     /**
      * Find an annotation by ID and validate it belongs to the specified run and test.
      *
@@ -149,25 +152,26 @@ class AnnotationResultService(
     private suspend fun findAnnotation(
         annotationId: String,
         runId: String,
-        testId: String
+        testId: String,
     ): AnnotationResult {
         // Find all annotations for this run and test
         val annotations = annotationResultRepository.findByEvalRunIdAndCriterionId(runId, testId)
         
         // Find the specific annotation by ID
-        val annotation = annotations.find { it.id == annotationId }
-            ?: throw NoSuchElementException("Annotation not found with ID: $annotationId")
+        val annotation =
+            annotations.find { it.id == annotationId }
+                ?: throw NoSuchElementException("Annotation not found with ID: $annotationId")
         
         // Validate that it matches the run and test IDs
         if (annotation.evalRunId != runId || annotation.criterionId != testId) {
             throw NoSuchElementException(
-                "Annotation with ID $annotationId does not belong to run $runId and test $testId"
+                "Annotation with ID $annotationId does not belong to run $runId and test $testId",
             )
         }
         
         return annotation
     }
-    
+
     /**
      * Process attributes for updating, creating retired versions of overridden values.
      * Only specific keys (handover_reason_l1, handover_reason_l2) are stored in retired attributes.
@@ -180,7 +184,7 @@ class AnnotationResultService(
     private fun processAttributes(
         existingAttributes: Map<String, Any>,
         existingRetiredAttributes: Map<String, Any>,
-        newAttributes: Map<String, Any>
+        newAttributes: Map<String, Any>,
     ): Pair<Map<String, Any>, Map<String, Any>> {
         if (newAttributes.isEmpty()) {
             return Pair(existingAttributes, existingRetiredAttributes)
@@ -218,9 +222,9 @@ class AnnotationResultService(
      * @return Paginated list of results
      */
     private fun applyCursorPagination(
-        results: List<AnnotationResult>, 
-        after: String?, 
-        limit: Int
+        results: List<AnnotationResult>,
+        after: String?,
+        limit: Int,
     ): List<AnnotationResult> {
         if (results.isEmpty()) {
             return emptyList()

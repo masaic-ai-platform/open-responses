@@ -1,8 +1,8 @@
 package ai.masaic.openevals.api.controller
 
-import ai.masaic.openevals.api.model.AnnotationResult
 import ai.masaic.openevals.api.model.AnnotatedBy
 import ai.masaic.openevals.api.model.AnnotationAggregationResponse
+import ai.masaic.openevals.api.model.AnnotationResult
 import ai.masaic.openevals.api.model.UpdateAnnotationRequest
 import ai.masaic.openevals.api.service.AnnotationResultService
 import org.slf4j.LoggerFactory
@@ -118,7 +118,7 @@ class AnnotationResultController(
             )
         }
     }
-    
+
     /**
      * Update an annotation result.
      *
@@ -144,13 +144,14 @@ class AnnotationResultController(
             // Hard code the lastAnnotatedBy value to HUMAN
             val updatedRequest = request.copy(lastAnnotatedBy = AnnotatedBy.HUMAN)
             
-            val updatedAnnotation = annotationResultService.updateAnnotation(
-                annotationId, 
-                runId, 
-                testId,
-                updatedRequest.annotationAttributes,
-                updatedRequest.lastAnnotatedBy ?: AnnotatedBy.HUMAN
-            )
+            val updatedAnnotation =
+                annotationResultService.updateAnnotation(
+                    annotationId, 
+                    runId, 
+                    testId,
+                    updatedRequest.annotationAttributes,
+                    updatedRequest.lastAnnotatedBy ?: AnnotatedBy.HUMAN,
+                )
             
             return ResponseEntity.ok(updatedAnnotation)
         } catch (e: NoSuchElementException) {

@@ -61,7 +61,7 @@ class LabelModelGraderEvaluatorTest {
         every { criterion.id } returns "test-id"
         
         // Act
-        val result = evaluator.evaluate(criterion, "{}", "{}")
+        val result = evaluator.evaluate(criterion, "{}", "{}", mockk())
         
         // Assert
         assertEquals("test-id", result.id)
@@ -115,7 +115,7 @@ class LabelModelGraderEvaluatorTest {
         }
         
         // Act
-        val result = evaluator.evaluate(criterion, """{"data": {"value": "actual value"}}""", "{}")
+        val result = evaluator.evaluate(criterion, """{"data": {"value": "actual value"}}""", "{}", mockk())
         
         // Assert
         assertEquals("test-id", result.id)
@@ -173,7 +173,7 @@ class LabelModelGraderEvaluatorTest {
         }
         
         // Act
-        val result = evaluator.evaluate(criterion, "{}", "{}")
+        val result = evaluator.evaluate(criterion, "{}", "{}", mockk())
         
         // Assert
         assertEquals("test-id", result.id)
@@ -226,7 +226,7 @@ class LabelModelGraderEvaluatorTest {
         }
         
         // Act
-        val result = evaluator.evaluate(criterion, "{}", "{}")
+        val result = evaluator.evaluate(criterion, "{}", "{}", mockk())
         
         // Assert
         assertEquals("test-id", result.id)
@@ -279,7 +279,7 @@ class LabelModelGraderEvaluatorTest {
         }
         
         // Act
-        val result = evaluator.evaluate(criterion, "{}", "{}")
+        val result = evaluator.evaluate(criterion, "{}", "{}", mockk())
         
         // Assert
         assertEquals("test-id", result.id)
@@ -332,7 +332,7 @@ class LabelModelGraderEvaluatorTest {
         }
         
         // Act
-        val result = evaluator.evaluate(criterion, "{}", "{}")
+        val result = evaluator.evaluate(criterion, "{}", "{}", mockk())
         
         // Assert
         assertEquals("test-id", result.id)

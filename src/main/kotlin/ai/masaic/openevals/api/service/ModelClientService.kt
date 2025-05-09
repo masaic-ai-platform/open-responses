@@ -2,6 +2,8 @@ package ai.masaic.openevals.api.service
 
 import ai.masaic.openevals.api.model.CompletionResult
 import ai.masaic.openresponses.api.service.MasaicResponseService
+import com.azure.identity.AuthenticationUtil
+import com.azure.identity.DefaultAzureCredentialBuilder
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.credential.BearerTokenCredential
@@ -49,14 +51,30 @@ class ModelClientService {
         apiKey: String,
         model: String,
     ): OpenAIClient {
-        val baseUrl = MasaicResponseService.getApiBaseUri(model).toURL().toString()
+        val baseUrl = System.getenv("OPENAI_BASE_URL") ?: MasaicResponseService.getApiBaseUri(model).toURL().toString()
         logger.debug("Creating OpenAI client with base URL: {}", baseUrl)
-        
-        return OpenAIOkHttpClient
-            .builder()
-            .credential(BearerTokenCredential.create { apiKey })
-            .baseUrl(baseUrl)
-            .build()
+
+        val openAIClient =
+            if (baseUrl.contains("azure")) {
+                OpenAIOkHttpClient
+                    .builder()
+                    .baseUrl(baseUrl)
+                    .credential(
+                        BearerTokenCredential.create(
+                            AuthenticationUtil.getBearerTokenSupplier(
+                                DefaultAzureCredentialBuilder().build(),
+                                "https://cognitiveservices.azure.com/.default",
+                            ),
+                        ),
+                    ).build()
+            } else {
+                return OpenAIOkHttpClient
+                    .builder()
+                    .credential(BearerTokenCredential.create { apiKey })
+                    .baseUrl(baseUrl)
+                    .build()
+            }
+        return openAIClient
     }
 
     /**

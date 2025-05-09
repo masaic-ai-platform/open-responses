@@ -1,10 +1,10 @@
 package ai.masaic.openevals.api.service.runner
 
+import ai.masaic.openevals.api.model.EvalRun
 import ai.masaic.openevals.api.model.ModelAnnotator
 import ai.masaic.openevals.api.model.SimpleInputMessage
 import ai.masaic.openevals.api.model.TestingCriterion
 import ai.masaic.openevals.api.service.ModelClientService
-import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import ai.masaic.openevals.api.utils.TemplateUtils
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -50,6 +50,7 @@ class ModelAnnotaterEvaluator(
         criterion: TestingCriterion,
         actualJson: String,
         referenceJson: String,
+        evalRun: EvalRun,
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is ModelAnnotator) {
             return CriterionEvaluator.CriterionResult(
@@ -66,7 +67,7 @@ class ModelAnnotaterEvaluator(
             logger.debug("Calling model ${criterion.model} with inputs: $processedInputs")
 
             // Call the model to get a classification
-            val result = callModel(criterion, processedInputs)
+            val result = callModel(criterion, processedInputs, evalRun)
             
             logger.debug("Model returned response: $result")
             
@@ -155,6 +156,7 @@ class ModelAnnotaterEvaluator(
     private fun callModel(
         criterion: ModelAnnotator,
         inputs: List<SimpleInputMessage>,
+        evalRun: EvalRun,
     ): String {
         // Create completion params and execute with cached client
         val builder = modelClientService.createBasicCompletionParams(criterion.model)
@@ -170,7 +172,7 @@ class ModelAnnotaterEvaluator(
 
         val completionResult =
             modelClientService.executeWithClientAndErrorHandling(
-                apiKey = criterion.apiKey,
+                apiKey = evalRun.apiKey,
                 params = builder.build(),
                 identifier = criterion.id,
             ) { content, error ->
@@ -205,15 +207,12 @@ class ModelAnnotaterEvaluator(
                 .name("evalSchema")
                 .build()
 
-
         return ResponseFormatJsonSchema
             .builder()
             .type(JsonValue.from("json_schema"))
             .jsonSchema(format)
             .build()
-
     }
-
 }
 
 const val JSON_SCHEMA = """

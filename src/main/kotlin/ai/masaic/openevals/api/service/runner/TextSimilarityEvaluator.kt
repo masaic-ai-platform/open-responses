@@ -1,5 +1,6 @@
 package ai.masaic.openevals.api.service.runner
 
+import ai.masaic.openevals.api.model.EvalRun
 import ai.masaic.openevals.api.model.TestingCriterion
 import ai.masaic.openevals.api.model.TextSimilarityGrader
 import ai.masaic.openevals.api.utils.TemplateUtils
@@ -36,6 +37,7 @@ class TextSimilarityEvaluator(
         criterion: TestingCriterion,
         actualJson: String,
         referenceJson: String,
+        evalRun: EvalRun,
     ): CriterionEvaluator.CriterionResult {
         if (criterion !is TextSimilarityGrader) {
             return CriterionEvaluator.CriterionResult(
