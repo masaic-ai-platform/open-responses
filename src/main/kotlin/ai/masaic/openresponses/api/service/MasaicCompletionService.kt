@@ -167,9 +167,6 @@ class MasaicCompletionService(
         } catch (e: CancellationException) {
             logger.warn { "Request was cancelled" }
             throw e // Let cancellation exceptions propagate
-        } catch (e: Exception) {
-            logger.error(e) { "Error creating completion" }
-            throw CompletionProcessingException("Error processing completion: ${e.message}")
         }
     }
 
@@ -199,8 +196,8 @@ class MasaicCompletionService(
             
             return openAICompletionService.createCompletionStream(client, params, metadata)
         } catch (e: Exception) {
-            logger.error(e) { "Failed to create streaming completion" }
-            throw CompletionStreamingException("Failed to create streaming completion: ${e.message}", e)
+            logger.error { "Failed to create streaming completion" }
+            throw e
         }
     }
 
