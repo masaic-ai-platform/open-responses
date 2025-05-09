@@ -4,9 +4,13 @@ import ai.masaic.openevals.api.model.ModelAnnotator
 import ai.masaic.openevals.api.model.SimpleInputMessage
 import ai.masaic.openevals.api.model.TestingCriterion
 import ai.masaic.openevals.api.service.ModelClientService
+import ai.masaic.openevals.api.utils.SampleSchemaUtils
 import ai.masaic.openevals.api.utils.TemplateUtils
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
 import com.mitchellbosecke.pebble.PebbleEngine
+import com.openai.core.JsonValue
+import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
@@ -24,6 +28,7 @@ class ModelAnnotaterEvaluator(
 ) : CriterionEvaluator {
     private val logger = LoggerFactory.getLogger(ModelAnnotaterEvaluator::class.java)
     private val objectMapper = jacksonObjectMapper()
+    private val evaluatorSchema = objectMapper.readValue<Map<String, JsonValue>>(JSON_SCHEMA)
 
     /**
      * Checks if this evaluator can handle the given testing criterion.
@@ -156,6 +161,7 @@ class ModelAnnotaterEvaluator(
 
         builder
             .model(criterion.model)
+            .responseFormat(addJsonSchema())
         addSimpleInputMessagesToBuilder(builder, inputs)
 
 //        runBlocking {
@@ -179,9 +185,70 @@ class ModelAnnotaterEvaluator(
             throw RuntimeException("Error calling label model: ${completionResult.error}")
         }
         
-        val response = completionResult.contentJson.replace("```json", "").replace("```", "")
+        val response = completionResult.contentJson
 
         logger.debug("Response: $response")
         return response
     }
+
+    private fun addJsonSchema(): ResponseFormatJsonSchema {
+        val jsonSchema =
+            ResponseFormatJsonSchema.JsonSchema.Schema
+                .builder()
+                .additionalProperties(evaluatorSchema)
+                .build()
+
+        val format =
+            ResponseFormatJsonSchema.JsonSchema
+                .builder()
+                .schema(jsonSchema)
+                .name("evalSchema")
+                .build()
+
+
+        return ResponseFormatJsonSchema
+            .builder()
+            .type(JsonValue.from("json_schema"))
+            .jsonSchema(format)
+            .build()
+
+    }
+
 }
+
+const val JSON_SCHEMA = """
+    {
+  "title": "ConversationAnnotation",
+  "type": "object",
+  "properties": {
+    "conversationId": {
+      "type": "string",
+      "description": "Unique identifier for the conversation"
+    },
+    "conversation": {
+      "type": "string",
+      "description": "Full text of the conversation"
+    },
+    "handover_reason_l1": {
+      "type": "string",
+      "description": "Top-level reason for agent handover"
+    },
+    "handover_reason_l2": {
+      "type": "string",
+      "description": "More specific sub-reason for handover"
+    },
+    "label_selection_reason": {
+      "type": "string",
+      "description": "Explanation for why these labels were selected"
+    }
+  },
+  "required": [
+    "conversationId",
+    "conversation",
+    "handover_reason_l1",
+    "handover_reason_l2",
+    "label_selection_reason"
+  ],
+  "additionalProperties": false
+}
+"""
