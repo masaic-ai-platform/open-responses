@@ -51,7 +51,7 @@ class ModelClientService {
         apiKey: String,
         model: String,
     ): OpenAIClient {
-        val baseUrl = System.getenv("OPENAI_BASE_URL") ?: MasaicResponseService.getApiBaseUri(model).toURL().toString()
+        val baseUrl = MasaicResponseService.getApiBaseUri(model).toURL().toString()
         logger.debug("Creating OpenAI client with base URL: {}", baseUrl)
 
         val openAIClient =
