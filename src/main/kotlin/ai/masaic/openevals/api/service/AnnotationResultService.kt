@@ -265,34 +265,39 @@ class AnnotationResultService(
         if (annotations.isEmpty()) {
             return emptyList()
         }
-        
+
         // Map to track level1 -> level2 counts
         val level1Aggregations = mutableMapOf<String, MutableMap<String, Int>>()
-        
+
         // Process each annotation
         annotations.forEach { annotation ->
-            // Extract level1 value, default to "UNKNOWN" if not present
             val level1Value = annotation.annotationAttributes[level1AttributeName]?.toString() ?: "UNKNOWN"
-            
-            // Extract level2 value, default to "UNKNOWN" if not present
             val level2Value = annotation.annotationAttributes[level2AttributeName]?.toString() ?: "UNKNOWN"
-            
-            // Update the level1 aggregation map
+
             val level2Counts = level1Aggregations.getOrPut(level1Value) { mutableMapOf() }
             level2Counts[level2Value] = level2Counts.getOrDefault(level2Value, 0) + 1
         }
-        
-        // Convert the map to a list of Level1Aggregation objects
+
+        // Remove all UNKNOWN level-2 entries from each bucket
+        level1Aggregations.values.forEach { it.remove("UNKNOWN") }
+        // Remove the UNKNOWN level-1 bucket entirely
+        level1Aggregations.remove("UNKNOWN")
+
+        // If after filtering there's nothing left, return empty
+        if (level1Aggregations.isEmpty()) {
+            return emptyList()
+        }
+
+        // Build and sort the final list
         return level1Aggregations
             .map { (level1Value, level2Counts) ->
-                val level1Count = level2Counts.values.sum()
-            
                 Level1Aggregation(
                     name = level1Value,
-                    count = level1Count,
-                    level2 = createLevel2Aggregations(level2Counts),
+                    count = level2Counts.values.sum(),
+                    level2 = createLevel2Aggregations(level2Counts)
                 )
-            }.sortedByDescending { it.count } // Sort by count (highest first)
+            }
+            .sortedByDescending { it.count }
     }
 
     /**
