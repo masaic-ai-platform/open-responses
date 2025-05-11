@@ -13,19 +13,16 @@ import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.*
 import com.openai.models.completions.CompletionUsage
 import io.micrometer.observation.Observation
-import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
-import kotlin.coroutines.coroutineContext
 import kotlin.jvm.optionals.getOrDefault
 import kotlin.jvm.optionals.getOrNull
 
@@ -58,13 +55,12 @@ class MasaicOpenAiCompletionServiceImpl(
         params: ChatCompletionCreateParams,
         metadata: InstrumentationMetadataInput = InstrumentationMetadataInput(),
     ): ChatCompletion {
-        val chatCompletion =
-            telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
-                logger.debug { "Creating chat completion with model: ${params.model()}" }
-                
-                telemetryService.emitModelInputEvents(observation, params, metadata)
+        logger.debug { "Creating chat completion with model: ${params.model()}" }
 
+        var chatCompletion =
+            telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
                 var completion = telemetryService.withChatCompletionTimer(params, metadata) { client.chat().completions().create(params) }
+                telemetryService.emitModelInputEvents(observation, params, metadata)
 
                 // Generate ID if missing
                 if (completion._id().isMissing()) {
@@ -79,25 +75,26 @@ class MasaicOpenAiCompletionServiceImpl(
                     telemetryService.recordChatCompletionTokenUsage(metadata, completion, params, "input", completion.usage().get().promptTokens())
                     telemetryService.recordChatCompletionTokenUsage(metadata, completion, params, "output", completion.usage().get().completionTokens())
                 }
-
-                // Check for tool calls that need to be handled
-                if (hasToolCalls(completion)) {
-                    logger.info { "Tool calls detected in completion ${completion.id()}, initiating tool handling flow." }
-                    // Call handleToolCalls which will recursively call create if needed
-                    val response = runBlocking { handleToolCalls(completion, params, client, metadata) }
-
-                    // Store final completion if no tool calls needed further handling
-                    if (params.store().getOrDefault(false)) {
-                        runBlocking { storeCompletion(response, params) }
-                    }
-                    return@withClientObservation response // Return the final completion
-                }
-                // Store final completion if no tool calls needed further handling
-                if (params.store().getOrDefault(false)) {
-                    runBlocking { storeCompletion(completion, params) }
-                }
                 completion
             }
+
+        // Check for tool calls that need to be handled
+        if (hasToolCalls(chatCompletion)) {
+            logger.info { "Tool calls detected in completion ${chatCompletion.id()}, initiating tool handling flow." }
+            // Call handleToolCalls which will recursively call create if needed
+            val response = runBlocking { handleToolCalls(chatCompletion, params, client, metadata) }
+
+            // Store final completion if no tool calls needed further handling
+            if (params.store().getOrDefault(false)) {
+                runBlocking { storeCompletion(response, params) }
+            }
+            return response // Return the final completion
+        }
+        // Store final completion if no tool calls needed further handling
+        if (params.store().getOrDefault(false)) {
+            runBlocking { storeCompletion(chatCompletion, params) }
+        }
+
         logger.debug { "Final chat completion ID: ${chatCompletion.id()}" }
         return chatCompletion
     }
@@ -170,10 +167,7 @@ class MasaicOpenAiCompletionServiceImpl(
         params: ChatCompletionCreateParams,
         metadata: InstrumentationMetadataInput,
     ): Flow<ServerSentEvent<String>> {
-        val parentObservation =
-            coroutineContext[ReactorContext]?.context?.get<Observation>(
-                ObservationThreadLocalAccessor.KEY,
-            )
+        logger.debug { "Creating streaming chat completion with model: ${params.model()}" }
 
         // Start observation manually
         val observation = telemetryService.startObservation("chat", metadata.modelName)
@@ -273,8 +267,6 @@ class MasaicOpenAiCompletionServiceImpl(
                         }
                     } ?: run {
                         logger.warn { "Final reconstructed completion was null, cannot record final telemetry." }
-                        // Optionally set some basic attributes if completion is null but stream succeeded
-                        observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "unknown")
                     }
                 } else {
                     logger.error { "[OBS:${observation.context.name}] Stream completed with error. Final telemetry potentially incomplete." }
