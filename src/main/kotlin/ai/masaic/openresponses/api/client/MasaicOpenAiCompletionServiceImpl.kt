@@ -442,63 +442,79 @@ class MasaicOpenAiCompletionServiceImpl(
                 val content = contentBuffers[index]?.toString()
                 
                 // Get tool calls for this choice
-                val deltaTookCalls = toolCallBuffers[index]
+                val deltaToolCalls = toolCallBuffers[index]
                 
                 // Get finish reason, default to STOP if not present for this index but content/tools are
                 val finishReason = finishReasons[index] ?: ChatCompletion.Choice.FinishReason.STOP
                 
                 // Determine if this choice involves tool calls
-                val hasToolCallsForIndex = !deltaTookCalls.isNullOrEmpty()
+                val hasToolCallsForIndex = !deltaToolCalls.isNullOrEmpty()
                 
                 // Skip choice if it has no content, no tool calls, and no explicit finish reason
                 if (content.isNullOrEmpty() && !hasToolCallsForIndex && !finishReasons.containsKey(index)) {
                     continue
                 }
                 
-                // Consolidate tool calls by ID
+                // Consolidate tool calls by their declared index within the tool_calls array
                 val completedToolCalls = mutableListOf<ChatCompletionMessageToolCall>()
-                if (hasToolCallsForIndex) {
-                    val consolidatedToolCalls = mutableMapOf<String, MutableMap<String, String>>()
-                    // First pass: collect all tool call information
-                    deltaTookCalls?.forEach { toolCall ->
-                        if (!toolCall.function().isPresent) return@forEach
-                        
-                        val id = toolCall.id().getOrNull() ?: return@forEach
-                        val function = toolCall.function().get()
-                        
-                        val toolInfo = consolidatedToolCalls.getOrPut(id) { mutableMapOf() }
-                        
-                        // Update name if present
-                        if (function.name().isPresent) {
-                            toolInfo["name"] = function.name().get()
-                        }
-                        
-                        // Update arguments if present
-                        if (function.arguments().isPresent) {
-                            val newArgs = function.arguments().get()
-                            val currentArgs = toolInfo["arguments"] ?: ""
-                            toolInfo["arguments"] = currentArgs + newArgs
+                if (hasToolCallsForIndex && deltaToolCalls.isNotEmpty()) {
+                    // Group tool call parts by their 'index' field (0, 1, ... for the tool_calls array)
+                    val toolPartsByMessageIndex = mutableMapOf<Long, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>()
+                    deltaToolCalls.forEach { tcPart ->
+                        // tcPart.index() refers to the index within the tool_calls array of the message
+                        tcPart.index().let { messageIdx ->
+                            toolPartsByMessageIndex.getOrPut(messageIdx) { mutableListOf() }.add(tcPart)
                         }
                     }
-                    
-                    // Build the complete tool calls
-                    for ((id, toolInfo) in consolidatedToolCalls) {
-                        // Skip tool calls with missing information
-                        val name = toolInfo["name"] ?: continue
-                        val arguments = toolInfo["arguments"] ?: ""
-                        
-                        completedToolCalls.add(
-                            ChatCompletionMessageToolCall
-                                .builder()
-                                .id(id)
-                                .function(
-                                    ChatCompletionMessageToolCall.Function
-                                        .builder()
-                                        .name(name)
-                                        .arguments(arguments)
-                                        .build(),
-                                ).build(),
-                        )
+
+                    toolPartsByMessageIndex.forEach { (messageIndex, parts) ->
+                        var toolCallId: String? = null
+                        var functionName: String? = null
+                        val functionArguments = StringBuilder()
+                        var toolType: String? = null // Expected to be "function"
+
+                        parts.forEach { part ->
+                            if (toolCallId == null && part.id().isPresent) {
+                                toolCallId = part.id().get()
+                            }
+                            if (toolType == null && part.type().isPresent) {
+                                // part.type().get() is an enum like Type.FUNCTION
+                                // Convert to lowercase string e.g., "function"
+                                toolType =
+                                    part
+                                        .type()
+                                        .getOrNull()
+                                        ?.value()
+                                        ?.name
+                                        ?.lowercase()
+                            }
+                            part.function().ifPresent { func ->
+                                if (functionName == null && func.name().isPresent) {
+                                    functionName = func.name().get()
+                                }
+                                func.arguments().ifPresent { args ->
+                                    functionArguments.append(args)
+                                }
+                            }
+                        }
+
+                        if (toolCallId != null && functionName != null) {
+                            completedToolCalls.add(
+                                ChatCompletionMessageToolCall
+                                    .builder()
+                                    .id(toolCallId)
+                                    .type(JsonValue.from(toolType)) // Default to "function"
+                                    .function(
+                                        ChatCompletionMessageToolCall.Function
+                                            .builder()
+                                            .name(functionName)
+                                            .arguments(functionArguments.toString())
+                                            .build(),
+                                    ).build(),
+                            )
+                        } else {
+                            logger.warn { "Could not fully reconstruct tool call at messageIndex $messageIndex for choice $index due to missing ID or name." }
+                        }
                     }
                 }
                 
@@ -522,7 +538,12 @@ class MasaicOpenAiCompletionServiceImpl(
                 } else if (content.isNullOrEmpty()) {
                     // If no content AND no tool calls, this choice might be invalid unless there's a finish reason only
                     // If finishReason is STOP, allow empty content. If TOOL_CALLS, it's inconsistent.
-                    if (finishReason == ChatCompletion.Choice.FinishReason.STOP) {
+                    if (finishReason.toString().lowercase() ==
+                        ChatCompletion.Choice.FinishReason.STOP
+                            .value()
+                            .name
+                            .lowercase()
+                    ) {
                         messageBuilder.content("") // Ensure content is non-null for the builder
                     } else {
                         logger.warn { "Skipping choice index $index: No content or tool calls, but finish reason is $finishReason" }
