@@ -182,7 +182,7 @@ class MasaicOpenAiCompletionServiceImpl(
             // Process the streaming request with tool call handling
             return flow {
                 // Process the initial streaming segment
-                val streamResult = processStreamSegment(client, params, observation, metadata)
+                val streamResult = processStreamSegment(client, params)
                 
                 // Store the completion from this segment if available
                 streamResult.completion?.let { finalCompletion = it }
@@ -193,7 +193,7 @@ class MasaicOpenAiCompletionServiceImpl(
                 // If a tool call was detected and we have a reconstructed completion
                 if (streamResult.completion != null && hasToolCalls(streamResult.completion)) {
                     logger.info { "Tool calls detected in stream completion ${streamResult.completion.id()}, handling tool calls" }
-                    
+                    observation.stop()
                     // Call the wrapper function to handle tool calls and prepare for possible next step
                     val handlingResult =
                         handleToolCallsAndPrepareNextStep(
@@ -227,8 +227,7 @@ class MasaicOpenAiCompletionServiceImpl(
                 // If no tool calls, the flow just finishes here after emitting chunks.
                 // The 'finalCompletion' variable holds the result from processStreamSegment.
             }.catch { error ->
-                logger.error { "[OBS:${observation.context.name}] Error in streaming chat completion flow" }
-                observation.error(error) // Record error in observation
+                logger.error { "Error in streaming chat completion flow" }
                 emit(
                     ServerSentEvent
                         .builder<String>()
@@ -270,8 +269,6 @@ class MasaicOpenAiCompletionServiceImpl(
                     }
                 } else {
                     logger.error { "[OBS:${observation.context.name}] Stream completed with error. Final telemetry potentially incomplete." }
-                    // Error already recorded in catch block
-                    observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "error")
                 }
                 // Stop the observation here, after all final attributes/events are set
                 observation.stop()
@@ -295,15 +292,11 @@ class MasaicOpenAiCompletionServiceImpl(
      *
      * @param client OpenAI client to use
      * @param params Chat completion parameters 
-     * @param observation Current telemetry observation
-     * @param metadata Metadata for the completion
      * @return StreamSegmentResult containing the flow of chunks and possibly a reconstructed completion
      */
     private suspend fun processStreamSegment(
         client: OpenAIClient,
         params: ChatCompletionCreateParams,
-        observation: Observation,
-        metadata: InstrumentationMetadataInput,
     ): StreamSegmentResult {
         logger.debug { "Processing stream segment with model: ${params.model()}" }
         
