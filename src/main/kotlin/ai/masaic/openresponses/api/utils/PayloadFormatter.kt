@@ -80,7 +80,7 @@ class PayloadFormatter(
                     } else {
                         tool
                     }
-                }?.toMutableList()
+                }?.toMutableList()?.plus(tools.filter { it["type"] == "function" })
 
         return mapper.convertValue(tools, typeReference)
     }
