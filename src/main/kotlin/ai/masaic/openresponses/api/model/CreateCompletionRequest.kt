@@ -15,7 +15,7 @@ data class CreateCompletionRequest(
     val max_tokens: Int? = null,
     val n: Int? = null,
     val presence_penalty: Double? = null,
-    val response_format: Map<String, String>? = null,
+    val response_format: Map<String, Any>? = null,
     val seed: Long? = null,
     val stop: Any? = null,
     val stream: Boolean = false,
