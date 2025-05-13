@@ -333,7 +333,7 @@ class MasaicCompletionService(
                             ResponseFormatJsonSchema
                                 .builder()
                                 .jsonSchema(
-                                    JsonValue.from(it["schema"] ?: throw IllegalArgumentException("json_schema is required")),
+                                    JsonValue.from(it["json_schema"] ?: throw IllegalArgumentException("json_schema is required")),
                                 ).type(JsonValue.from(type))
                                 .build(),
                         ),
