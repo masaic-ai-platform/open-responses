@@ -66,6 +66,9 @@ dependencies {
     // MongoDB dependencies
     implementation("org.springframework.boot:spring-boot-starter-data-mongodb-reactive")
 
+    // CSV parsing
+    implementation("com.opencsv:opencsv:5.9")
+
     implementation("net.logstash.logback:logstash-logback-encoder:7.4")
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
 
