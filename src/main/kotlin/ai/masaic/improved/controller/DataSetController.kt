@@ -123,7 +123,7 @@ class DataSetController(
         messages.chunked(50).forEach { batchMessages ->
             val request = CreateEmbeddingRequest(
                 input = batchMessages,
-                model = "openai@text-embedding-3-small"
+                model = "text-embedding-3-small"
             )
 
             val embedResp = embeddingsController.createEmbedding(request, authHeader)
@@ -1028,7 +1028,7 @@ For hand‑over codes:
         )
         val createCompletionRequest = CreateCompletionRequest(
             messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
-            model = "openai@o3-mini",
+            model = "o3-mini",
             response_format = responseFormat,
             stream = false,
             store = false
