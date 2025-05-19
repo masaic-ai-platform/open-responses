@@ -50,6 +50,6 @@ class ImprovementConfig {
 }
 
 object QDRANTCOLLECTIONS {
-    const val CONVERSATIONS = "test-conversations"
-    const val LABEL_RULES = "test-label_rules"
+    const val CONVERSATIONS = "conversations"
+    const val LABEL_RULES = "label_rules"
 }
