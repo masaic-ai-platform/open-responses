@@ -26,7 +26,7 @@ data class CreateEmbeddingRequest(
  */
 data class EmbeddingResponse(
     val `object`: String = "list",
-    val data: List<EmbeddingData>,
+    val  data: List<EmbeddingData>,
     val model: String,
     val usage: EmbeddingUsage,
 )

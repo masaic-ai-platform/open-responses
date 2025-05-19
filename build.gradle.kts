@@ -89,6 +89,10 @@ dependencies {
 
     implementation("com.google.cloud:google-cloud-translate:2.60.0")
     implementation("com.azure:azure-identity:1.15.0")
+    implementation("org.apache.commons:commons-math3:3.6.1")
+    // Apache POI for Excel file processing
+    implementation("org.apache.poi:poi:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
 }
 
 kotlin {

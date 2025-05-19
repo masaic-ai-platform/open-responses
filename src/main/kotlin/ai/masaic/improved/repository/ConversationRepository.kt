@@ -42,6 +42,15 @@ interface ConversationRepository {
     suspend fun listConversations(params: ListConversationsParams): List<Conversation>
 
     /**
+     * Get conversations that match a specific label path with a limit.
+     *
+     * @param labelPath The path to match against conversation labels
+     * @param limit The maximum number of conversations to return
+     * @return A list of conversations that match the label path
+     */
+    suspend fun getConversations(labelPath: String, limit: Int): List<Conversation>
+
+    /**
      * Update a conversation.
      *
      * @param conversation The conversation to update
@@ -56,4 +65,4 @@ interface ConversationRepository {
      * @return True if the conversation was deleted, false otherwise
      */
     suspend fun deleteConversation(conversationId: String): Boolean
-} 
+}

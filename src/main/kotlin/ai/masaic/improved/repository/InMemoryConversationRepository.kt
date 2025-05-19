@@ -196,4 +196,25 @@ class InMemoryConversationRepository : ConversationRepository {
             logger.error(e) { "Error deleting conversation with ID: $conversationId" }
             false
         }
+
+    /**
+     * Get conversations that match a specific label path with a limit.
+     *
+     * @param labelPath The path to match against conversation labels
+     * @param limit The maximum number of conversations to return
+     * @return A list of conversations that match the label path
+     */
+    override suspend fun getConversations(labelPath: String, limit: Int): List<Conversation> {
+        try {
+            return conversations.values
+                .filter { conversation ->
+                    conversation.labels.any { it.path == labelPath }
+                }
+                .sortedByDescending { it.createdAt }
+                .take(limit)
+        } catch (e: Exception) {
+            logger.error(e) { "Error finding conversations with label path: $labelPath" }
+            return emptyList()
+        }
+    }
 } 
