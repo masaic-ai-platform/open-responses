@@ -43,13 +43,13 @@ class ImprovementConfig {
                 Collections.VectorParams
                     .newBuilder()
                     .setDistance(Collections.Distance.Cosine)
-                    .setSize(1536)
+                    .setSize(384)
                     .build(),
             ).get()
     }
 }
 
 object QDRANTCOLLECTIONS {
-    const val CONVERSATIONS = "conversations"
-    const val LABEL_RULES = "label_rules"
+    const val CONVERSATIONS = "test-conversations"
+    const val LABEL_RULES = "test-label_rules"
 }

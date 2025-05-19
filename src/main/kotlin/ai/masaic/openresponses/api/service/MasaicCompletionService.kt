@@ -4,6 +4,8 @@ import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.client.MasaicOpenAiCompletionServiceImpl
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
+import com.azure.identity.AuthenticationUtil
+import com.azure.identity.DefaultAzureCredentialBuilder
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
@@ -256,20 +258,34 @@ class MasaicCompletionService(
         headers: MultiValueMap<String, String>,
         modelName: String,
     ): OpenAIClient {
-        val authHeader =
-            headers.getFirst("Authorization")
-                ?: throw IllegalArgumentException("api-key is missing.")
+        val baseUrl = getApiBaseUri(headers, modelName).toURL().toString()
+        return  if (baseUrl.contains("azure")) {
+            OpenAIOkHttpClient
+                .builder()
+                .baseUrl(baseUrl)
+                .credential(
+                    BearerTokenCredential.create(
+                        AuthenticationUtil.getBearerTokenSupplier(
+                            DefaultAzureCredentialBuilder().build(),
+                            "https://cognitiveservices.azure.com/.default",
+                        ),
+                    ),
+                ).build()
+        } else {
+            val authHeader =
+                headers.getFirst("Authorization")
+                    ?: throw IllegalArgumentException("api-key is missing.")
 
-        val credential =
-            BearerTokenCredential.create {
-                authHeader.split(" ").getOrNull(1) ?: throw IllegalArgumentException("api-key is missing.")
-            }
-
-        return OpenAIOkHttpClient
-            .builder()
-            .credential(credential)
-            .baseUrl(getApiBaseUri(headers, modelName).toURL().toString())
-            .build()
+            val credential =
+                BearerTokenCredential.create {
+                    authHeader.split(" ").getOrNull(1) ?: throw IllegalArgumentException("api-key is missing.")
+                }
+            OpenAIOkHttpClient
+                .builder()
+                .credential(credential)
+                .baseUrl(baseUrl)
+                .build()
+        }
     }
 
     /**

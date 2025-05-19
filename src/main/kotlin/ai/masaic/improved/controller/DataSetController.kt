@@ -123,7 +123,7 @@ class DataSetController(
         messages.chunked(50).forEach { batchMessages ->
             val request = CreateEmbeddingRequest(
                 input = batchMessages,
-                model = "text-embedding-3-small"
+                model = "default"
             )
 
             val embedResp = embeddingsController.createEmbedding(request, authHeader)
@@ -953,7 +953,7 @@ class DataSetController(
         val messages = objectMapper.writeValueAsString(conversation.messages)
         val request = CreateEmbeddingRequest(
             input = messages,
-            model = "openai@text-embedding-3-small"
+            model = "default"
         )
 
         val embedResp = embeddingsController.createEmbedding(request, apiKey)

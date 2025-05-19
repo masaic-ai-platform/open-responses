@@ -219,7 +219,7 @@ $samplesFromCluster
     suspend fun createEmbeddings(conversations: List<Conversation>, apiKey: String): List<EmbeddingData> {
         val request = CreateEmbeddingRequest(
             input = conversations.map { it.summary }.toList(),
-            model = "openai@text-embedding-3-small"
+            model = "default"
         )
         val response = embeddingsController.createEmbedding(request, apiKey)
         return (response.body?.data as List<EmbeddingData>)
