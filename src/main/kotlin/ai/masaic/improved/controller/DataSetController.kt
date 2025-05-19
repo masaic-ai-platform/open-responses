@@ -3,6 +3,7 @@ package ai.masaic.improved.controller
 import ai.masaic.improved.QDRANTCOLLECTIONS
 import ai.masaic.improved.model.*
 import ai.masaic.improved.repository.ConversationRepository
+import ai.masaic.improved.repository.MongoConversationRepository
 import ai.masaic.openevals.api.service.ModelClientService
 import ai.masaic.openresponses.api.controller.CompletionController
 import ai.masaic.openresponses.api.controller.EmbeddingsController
@@ -27,6 +28,7 @@ import io.qdrant.client.grpc.Points.WithPayloadSelector
 import kotlinx.coroutines.reactive.awaitSingle
 import mu.KotlinLogging
 import org.apache.poi.ss.usermodel.WorkbookFactory
+import org.apache.poi.xssf.usermodel.XSSFWorkbook
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
@@ -226,6 +228,68 @@ class DataSetController(
         return ResponseEntity.ok().body(conversation)
     }
 
+    @GetMapping(
+        "/data/export",
+        produces = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+    )
+    suspend fun exportDataSet(): ResponseEntity<ByteArray> {
+        logger.info { "Exporting conversations to Excel file" }
+        
+        // Get data from repository
+        val conversationRepository = this.conversationRepository as MongoConversationRepository
+        val conversations = conversationRepository.aggregateDomainConversations()
+        
+        // Create a workbook
+        val workbook = XSSFWorkbook()
+        val sheet = workbook.createSheet("Conversations")
+        
+        // Create header row
+        val headerRow = sheet.createRow(0)
+        val columnHeaders = arrayOf("conversation_id", "conversation", "bucket", "problem")
+        columnHeaders.forEachIndexed { index, header ->
+            headerRow.createCell(index).setCellValue(header)
+        }
+        
+        // Create data rows
+        conversations.forEachIndexed { index, conversation ->
+            val row = sheet.createRow(index + 1)
+            
+            // Set conversation ID
+            row.createCell(0).setCellValue(conversation.conversationId)
+            
+            // Set conversation messages as JSON string
+            val messagesJson = objectMapper.writeValueAsString(conversation.conversation)
+            row.createCell(1).setCellValue(messagesJson)
+            val labels = conversation.domainLabel.split("/")
+            if(labels.size == 3) {
+                row.createCell(2).setCellValue(labels[1])
+                row.createCell(3).setCellValue(labels[2])
+            }
+        }
+        
+        // Adjust column widths
+        columnHeaders.indices.forEach { i ->
+            sheet.autoSizeColumn(i)
+        }
+        
+        // Write workbook to byte array
+        val outputStream = ByteArrayOutputStream()
+        workbook.write(outputStream)
+        workbook.close()
+        
+        // Set headers for file download
+        val headers = org.springframework.http.HttpHeaders()
+        headers.add("Content-Disposition", "attachment; filename=conversations_export.xlsx")
+        headers.contentType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        
+        logger.info { "Successfully exported ${conversations.size} conversations" }
+        
+        return ResponseEntity
+            .ok()
+            .headers(headers)
+            .body(outputStream.toByteArray())
+    }
+
     @PostMapping(
         "/data/import",
         consumes = [MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.MULTIPART_MIXED_VALUE],
@@ -306,10 +370,13 @@ class DataSetController(
                 // Parse conversation JSON
                 val messages = parseConversationJson(conversationJson)
 
+                val startDate = Instant.parse("2025-05-01T00:00:00Z")
+                val endDate = Instant.parse("2025-05-20T23:59:59Z")
+                val randomCreatedAt = generateRandomTimestamp(startDate, endDate)
                 // Create a Conversation object
                 val conversation = Conversation(
                     id = conversationId,
-                    createdAt = Instant.now(),
+                    createdAt = randomCreatedAt,
                     messages = messages,
                     labels = emptyList(),
                     meta = mapOf(
@@ -861,7 +928,7 @@ class DataSetController(
 
         // Generate a random timestamp between May 1, 2025 and May 12, 2025
         val startDate = Instant.parse("2025-05-01T00:00:00Z")
-        val endDate = Instant.parse("2025-05-12T23:59:59Z")
+        val endDate = Instant.parse("2025-05-20T23:59:59Z")
         val randomCreatedAt = generateRandomTimestamp(startDate, endDate)
 
         return Conversation(

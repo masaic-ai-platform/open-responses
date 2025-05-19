@@ -325,6 +325,29 @@ class MongoConversationRepository(
             .collectList()
             .awaitSingle()
     }
+
+    suspend fun aggregateDomainConversations(): List<DomainConversation> {
+        val agg = newAggregation(
+            unwind("labels"),
+            match(Criteria.where("labels.path").regex("^domain/")),
+            group("_id")
+                .first("messages").`as`("conversation")
+                .first("labels.path").`as`("domainLabel"),
+            project("conversation", "domainLabel")
+                .and("_id").`as`("conversationId")
+        )
+
+        return reactiveMongoTemplate
+            .aggregate(agg, CONVERSATION_COLLECTION, DomainConversation::class.java)
+            .collectList()
+            .awaitSingle()
+    }
 }
+
+data class DomainConversation(
+    val conversationId: String,
+    val conversation: List<Document>,
+    val domainLabel: String
+)
 
 data class GenericLabel(val path: String, val count: Int)
