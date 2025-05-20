@@ -132,7 +132,7 @@ You are a $domainOfLabeller domain-expert assistant.
 TASK:
 For the cluster below, return **up to THREE** label candidates.  
 • **If the cluster clearly fits an EXISTING label, list that path first.**  
-• Otherwise fill the first slot with a NEW label in the form domain/<journey>/<failure>.  
+• Otherwise fill the first slot with a NEW label in the form domain/<domain-name>/<failure>.  
 • After the first slot, you may add 1–2 alternative NEW labels if they capture *different* failure facets of the same cluster.  
 • Do NOT output more than three items.
 
@@ -141,7 +141,7 @@ CONSTRAINTS
 • Do not duplicate any path in EXISTING or NEW-THIS-SESSION lists.
 • A good label:
     • always starts with 'domain/'.
-    • journey could be specific to business line or sel-service journey.
+    • domain-name could be specific to business line or department.
     • captures the reason for customer inquiry or problem faced.
 
 EXISTING domain labels: 
