@@ -12,6 +12,7 @@ import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessage
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.responses.*
@@ -70,6 +71,31 @@ data class MasaicToolCallStreamingResult(
 )
 
 /**
+ * Represents the outcome of handling tool calls in a non-streaming ChatCompletion context.
+ */
+sealed class CompletionToolCallOutcome {
+    /**
+     * Indicates that tool processing should continue, potentially with more LLM calls or client-side handling.
+     * @param updatedMessages The list of messages for the next LLM call, or to inform client of parked tools.
+     * @param hasUnresolvedClientTools True if non-native tools were encountered that the client needs to handle.
+     */
+    data class Continue(
+        val updatedMessages: List<ChatCompletionMessageParam>,
+        val hasUnresolvedClientTools: Boolean,
+    ) : CompletionToolCallOutcome()
+
+    /**
+     * Indicates that tool processing should terminate, and a direct ChatCompletion (e.g., image) should be sent to the user.
+     * @param finalChatCompletion The ChatCompletion to be sent directly to the user, containing the terminal tool's output.
+     * @param messagesForStorage The complete list of messages up to and including the terminal tool's call and output. Used for storing the interaction.
+     */
+    data class Terminate(
+        val finalChatCompletion: ChatCompletion,
+        val messagesForStorage: List<ChatCompletionMessageParam>,
+    ) : CompletionToolCallOutcome()
+}
+
+/**
  * Handles tool-related operations for the Masaic OpenAI API integration.
  * Encapsulates the logic for processing tool calls and tool outputs.
  */
@@ -101,15 +127,15 @@ class MasaicToolHandler(
         chatCompletion: ChatCompletion,
         params: ChatCompletionCreateParams,
         openAIClient: OpenAIClient,
-    ): CompletionToolHandlingResult {
+    ): CompletionToolCallOutcome {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
 
         val assistantMessage = chatCompletion.choices().firstOrNull()?.message()
         if (assistantMessage == null || !assistantMessage.toolCalls().isPresent || assistantMessage.toolCalls().get().isEmpty()) {
             logger.warn { "No tool calls found in ChatCompletion: ${chatCompletion.id()}. Returning original messages." }
-            // Return original messages plus the assistant message if it exists
             val messages = params.messages() + listOfNotNull(assistantMessage?.toChatCompletionMessageParam(objectMapper))
-            return CompletionToolHandlingResult(messages, false) // No unresolved tools here
+            // No unresolved tools here, and messages are for continuation (even if it's just to return to client)
+            return CompletionToolCallOutcome.Continue(messages, false)
         }
 
         val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
@@ -125,7 +151,7 @@ class MasaicToolHandler(
 
         logger.debug { "Processing ${toolCalls.size} tool calls from assistant message" }
 
-        toolCalls.forEach { toolCall ->
+        for (toolCall in toolCalls) { // Iterate to allow early exit for Terminate
             val function = toolCall.function()
             val toolName = function.name()
             val toolCallId = toolCall.id()
@@ -133,48 +159,148 @@ class MasaicToolHandler(
             if (toolService.getFunctionTool(toolName, context) != null) {
                 // Native tool: Execute and add output
                 logger.info { "Executing native tool: $toolName with ID: $toolCallId" }
-                val toolResult =
-                    executeToolWithObservationForCompletion(
-                        toolName = toolName,
-                        toolDescription = toolService.getAvailableTool(toolName)?.description ?: "not_available",
-                        arguments = function.arguments(),
-                        toolId = toolCallId,
-                        toolMetadata = mapOf("toolCallId" to toolCallId),
-                        params = params,
-                        openAIClient = openAIClient,
-                        context = context,
-                    )
 
-                val toolOutputMessage =
-                    ChatCompletionMessageParam.ofTool(
-                        ChatCompletionToolMessageParam
-                            .builder()
-                            .toolCallId(toolCallId)
-                            .content(toolResult ?: "Tool execution resulted in null.")
-                            .build(),
-                    )
-                updatedMessages.add(toolOutputMessage)
-                nativeToolsExecuted++
-                logger.debug { "Added tool output message for native tool: $toolName" }
+                if (toolName == IMAGE_GENERATION_TOOL_NAME) {
+                    logger.info { "Executing terminal tool (completion context): $toolName with ID: $toolCallId" }
+                    var rawToolOutput: String? = null
+                    try {
+                        rawToolOutput =
+                            runBlocking {
+                                toolService.executeTool(
+                                    toolName,
+                                    arguments = function.arguments(),
+                                    params = params, // ChatCompletionCreateParams
+                                    openAIClient = openAIClient,
+                                    eventEmitter = {}, // No SSE for non-streaming completion context tool call
+                                    toolMetadata = mapOf("toolCallId" to toolCallId),
+                                    context = context, // CompletionToolRequestContext
+                                )
+                            }
+                    } catch (e: Exception) {
+                        logger.error(e) { "Error executing terminal tool $toolName for completion: ${e.message}" }
+                        rawToolOutput = "{\"error\": \"Error executing tool $toolName: ${e.message}\"}" // Encapsulate error in JSON-like string
+                    }
+
+                    var imageData: String? = null
+                    var errorMessage: String? = null
+
+                    if (rawToolOutput != null) {
+                        try {
+                            val typeRef = object : TypeReference<Map<String, Any>>() {}
+                            val outputMap = objectMapper.readValue(rawToolOutput, typeRef)
+                            imageData = outputMap["data"] as? String // Assuming data holds the base64 string or URL
+                            if (imageData == null) {
+                                errorMessage = outputMap["error"] as? String ?: "Tool $toolName executed but 'data' key is missing or not a string in output."
+                                logger.warn { errorMessage }
+                            }
+                        } catch (e: com.fasterxml.jackson.core.JsonProcessingException) {
+                            errorMessage = "Tool $toolName executed but output was not valid JSON: $rawToolOutput"
+                            logger.warn(e) { errorMessage }
+                        }
+                    } else {
+                        errorMessage = "Tool $toolName execution resulted in null output."
+                        logger.warn { errorMessage }
+                    }
+
+                    if (imageData != null) {
+                        val toolOutputMessageForStorage =
+                            ChatCompletionMessageParam.ofTool(
+                                ChatCompletionToolMessageParam
+                                    .builder()
+                                    .toolCallId(toolCallId)
+                                    .content(imageData) // Store the extracted image data
+                                    .putAdditionalProperty("type", JsonValue.from("image"))
+                                    .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
+                                    .build(),
+                            )
+                        updatedMessages.add(toolOutputMessageForStorage) // For storage log
+
+                        val finalImageCompletionBuilder =
+                            ChatCompletion
+                                .builder()
+                                .id(chatCompletion.id()) // Reuse original completion ID
+                                .model(params.model().toString()) // Model from request
+                                .created(System.currentTimeMillis() / 1000L) // Current time
+                                .choices(
+                                    listOf(
+                                        ChatCompletion.Choice
+                                            .builder()
+                                            .index(0L)
+                                            .message(
+                                                ChatCompletionMessage
+                                                    .builder()
+                                                    .role(JsonValue.from("assistant"))
+                                                    .content(imageData) // Use the extracted image data
+                                                    .putAdditionalProperty("type", JsonValue.from("image"))
+                                                    .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
+                                                    .refusal(null)
+                                                    .build(),
+                                            ).logprobs(null)
+                                            .finishReason(ChatCompletion.Choice.FinishReason.STOP)
+                                            .build(),
+                                    ),
+                                )
+
+                        if (chatCompletion.usage().isPresent) {
+                            finalImageCompletionBuilder.usage(chatCompletion.usage().get())
+                        }
+
+                        val finalImageCompletion =
+                            finalImageCompletionBuilder
+                                .build()
+                        
+                        return CompletionToolCallOutcome.Terminate(finalImageCompletion, updatedMessages.toList())
+                    } else {
+                        val finalErrorMessage = errorMessage ?: "Tool $toolName failed or returned unexpected output."
+                        logger.warn { "Terminal tool $toolName did not yield valid image data. Error: $finalErrorMessage" }
+                        val errorToolOutputMessage =
+                            ChatCompletionMessageParam.ofTool(
+                                ChatCompletionToolMessageParam
+                                    .builder()
+                                    .toolCallId(toolCallId)
+                                    .content(finalErrorMessage)
+                                    .build(),
+                            )
+                        updatedMessages.add(errorToolOutputMessage)
+                        nativeToolsExecuted++ // Count as executed, albeit with an error output
+                    }
+                } else {
+                    // Regular native tool
+                    val toolResult =
+                        executeToolWithObservationForCompletion(
+                            toolName = toolName,
+                            toolDescription = toolService.getAvailableTool(toolName)?.description ?: "not_available",
+                            arguments = function.arguments(),
+                            toolId = toolCallId,
+                            toolMetadata = mapOf("toolCallId" to toolCallId),
+                            params = params,
+                            openAIClient = openAIClient,
+                            context = context,
+                        )
+
+                    val toolOutputMessage =
+                        ChatCompletionMessageParam.ofTool(
+                            ChatCompletionToolMessageParam
+                                .builder()
+                                .toolCallId(toolCallId)
+                                .content(toolResult ?: "Tool execution resulted in null.")
+                                .build(),
+                        )
+                    updatedMessages.add(toolOutputMessage)
+                    nativeToolsExecuted++
+                    logger.debug { "Added tool output message for native tool: $toolName" }
+                }
             } else {
-                // Non-native tool: Log, set flag, DO NOT add a message
+                // Non-native tool: Log, set flag, DO NOT add a message for LLM (it's for client)
                 logger.info { "Non-native tool requested: $toolName with ID: $toolCallId. Parking for client." }
                 nonNativeToolsFound = true
             }
         }
 
-        // Sanity check (optional): Compare counts explicitly
-        if (nativeToolsExecuted < toolCalls.size && !nonNativeToolsFound) {
-            logger.warn("Tool count mismatch: ${toolCalls.size} calls requested, but only $nativeToolsExecuted native outputs generated, yet no non-native tools were flagged.")
-            // Decide how critical this is - perhaps force nonNativeToolsFound = true?
-        }
-        if (nativeToolsExecuted == toolCalls.size && nonNativeToolsFound) {
-            logger.warn("Tool count mismatch: All ${toolCalls.size} calls generated native outputs, but non-native tools were somehow flagged.")
-            // Decide how critical this is - perhaps force nonNativeToolsFound = false?
-        }
-
-        return CompletionToolHandlingResult(
-            updatedMessages = updatedMessages,
+        // If loop completes without Terminate, it means either all tools were native (and not image_generation that succeeded),
+        // or there were non-native tools, or a mix.
+        return CompletionToolCallOutcome.Continue(
+            updatedMessages = updatedMessages.toList(), 
             hasUnresolvedClientTools = nonNativeToolsFound,
         )
     }
@@ -367,6 +493,8 @@ class MasaicToolHandler(
                                                             .builder()
                                                             .text(toolOutputString["data"].toString()) // This is the image data/URL
                                                             .annotations(emptyList())
+                                                            .putAdditionalProperty("type", JsonValue.from("image"))
+                                                            .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                                             .build(),
                                                     ),
                                                 ),
@@ -685,6 +813,8 @@ class MasaicToolHandler(
                                                     .builder()
                                                     .text((imageToolOutputString as Map<out String?, String?>)["data"].toString()) // Image data/URL
                                                     .annotations(emptyList())
+                                                    .putAdditionalProperty("type", JsonValue.from("image"))
+                                                    .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                                     .build(),
                                             ),
                                         ),

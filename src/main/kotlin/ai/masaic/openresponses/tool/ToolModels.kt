@@ -359,7 +359,7 @@ class ChatCompletionParamsAdapter(
                                     null
                                 }
                             },
-                        model = additionalProps["model"]?.asString()?.getOrNull().toString(),
+                        model = additionalProps["model"]?.asString()?.getOrNull() ?: "gpt-image-1",
                         moderation = additionalProps["moderation"]?.asString()?.getOrNull(),
                         outputCompression = additionalProps["output_compression"]?.asNumber()?.getOrNull()?.toInt(),
                         outputFormat = additionalProps["output_format"]?.asString()?.getOrNull(),
