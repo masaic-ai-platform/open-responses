@@ -13,13 +13,20 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse
 import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.core.io.Resource
+import org.springframework.core.io.buffer.DataBuffer
+import org.springframework.core.io.buffer.DataBufferUtils
+import org.springframework.http.ContentDisposition
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.multipart.FilePart
+import org.springframework.http.codec.multipart.Part
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
+import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
+import java.nio.file.Path
 
 /**
  * Controller for the Files API.
@@ -35,43 +42,33 @@ class FileController(
 ) {
     private val log = LoggerFactory.getLogger(FileController::class.java)
 
-    @PostMapping("/files", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.MULTIPART_MIXED_VALUE])
-    @Operation(
-        summary = "Upload a file",
-        description = "Upload a file that can be used across various endpoints. Individual files can be up to 512 MB.",
-        responses = [
-            ApiResponse(
-                responseCode = "200",
-                description = "The uploaded File object",
-                content = [Content(schema = Schema(implementation = File::class))],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "Bad request, such as invalid purpose or file too large",
-            ),
-        ],
+    @PostMapping(
+        "/files",
+        consumes = [MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.MULTIPART_MIXED_VALUE],
     )
     suspend fun uploadFile(
-        @Parameter(description = "The File object (not file name) to be uploaded", required = true)
-        @RequestPart("file") filePart: FilePart,
-        @Parameter(
-            description =
-                "The intended purpose of the uploaded file. " +
-                    "One of: assistants, batch, fine_tune, vision, user_data, evals",
-            required = true,
-        )
+        @RequestPart("file") part: Part,
         @RequestPart("purpose") purpose: String,
     ): ResponseEntity<File> {
         try {
-            log.info("Uploading file: ${filePart.filename()} for purpose: $purpose")
-            val uploadedFile = fileService.uploadFilePart(filePart, purpose)
-            return ResponseEntity.ok(uploadedFile)
+            // 1) Normalize ANY Part into a FilePart
+            val filePart: FilePart = getFilePart(part)
+
+            log.info("Uploading file: '${filePart.filename()}' for purpose: $purpose")
+            // 2) Single method call
+            val uploaded = fileService.uploadFilePart(filePart, purpose)
+            return ResponseEntity.ok(uploaded)
         } catch (e: IllegalArgumentException) {
-            log.error("Error uploading file: ${e.message}")
+            log.error("Invalid request: {}", e.message)
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, e.message)
+        } catch (e: ResponseStatusException) {
+            throw e
         } catch (e: Exception) {
             log.error("Error uploading file", e)
-            throw ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error uploading file: ${e.message}")
+            throw ResponseStatusException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                "Error uploading file: ${e.message}",
+            )
         }
     }
 
@@ -236,5 +233,47 @@ class FileController(
             "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
             else -> "application/octet-stream"
         }
+    }
+
+    /**
+     * Given a [Part], returns a [FilePart] instance.
+     * If the [Part] is already a [FilePart], returns it as is.
+     * Otherwise, creates a new [FilePart] instance that wraps the given [Part].
+     * The new [FilePart] will have the same headers as the original [Part],
+     * but will ensure that there is a filename in the Content-Disposition header.
+     * If the original [Part] has no filename, the filename will be set to the part name with a ".bin" extension.
+     */
+    private fun getFilePart(part: Part): FilePart = when (part) {
+        is FilePart -> part // already a FilePart
+        else ->
+            object : FilePart { // wrap DEFAULT/FORM‐FIELD/whatever
+                private val headers: HttpHeaders =
+                    HttpHeaders().apply {
+                        // carry over original headers if you like:
+                        putAll(part.headers())
+                        // ensure there's a filename ⇒ some uploader code may rely on it
+                        contentDisposition =
+                            part
+                                .headers()
+                                .contentDisposition.filename
+                                .let { cd ->
+                                    ContentDisposition
+                                        .builder("form-data")
+                                        .name(part.name())
+                                        .filename(cd ?: (part.name() + ".bin"))
+                                        .build()
+                                }
+                    }
+
+                override fun name(): String = part.name()
+
+                override fun filename(): String = part.headers().contentDisposition.filename ?: (part.name() + ".bin")
+
+                override fun headers(): HttpHeaders = headers
+
+                override fun content(): Flux<DataBuffer> = part.content()
+
+                override fun transferTo(dest: Path): Mono<Void> = DataBufferUtils.write(content(), dest).then()
+            }
     }
 } 
