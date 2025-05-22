@@ -26,7 +26,7 @@ import java.net.URI
 import java.util.concurrent.TimeoutException
 
 @ExtendWith(SpringExtension::class)
-class MasaicCompletionServiceTest {
+class MasaicModelServiceTest {
     private lateinit var openAICompletionService: MasaicOpenAiCompletionServiceImpl
     private lateinit var completionStore: CompletionStore
     private lateinit var objectMapper: ObjectMapper

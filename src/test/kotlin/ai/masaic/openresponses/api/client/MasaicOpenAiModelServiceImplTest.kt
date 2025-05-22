@@ -37,7 +37,7 @@ import kotlin.test.assertEquals
  * Unit tests for MasaicOpenAiCompletionServiceImpl#create()
  */
 @ExtendWith(MockKExtension::class)
-class MasaicOpenAiCompletionServiceImplTest {
+class MasaicOpenAiModelServiceImplTest {
     private lateinit var client: OpenAIClient
     private lateinit var toolHandler: MasaicToolHandler
     private lateinit var completionStore: CompletionStore

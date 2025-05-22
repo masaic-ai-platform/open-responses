@@ -1,5 +1,6 @@
 package ai.masaic.improved.model
 
+import ai.masaic.improved.CLASSIFICATION
 import java.time.Instant
 
 /**
@@ -14,7 +15,8 @@ data class Conversation(
     val resolved: Boolean? = null,
     val nps: Int? = null,
     val meta: Map<String, Any> = emptyMap(),
-    val version: Int = 1
+    val version: Int = 1,
+    val classification: CLASSIFICATION ?= null
 ) {
     init {
         require(messages.isNotEmpty()) { "Conversation must contain at least one message" }

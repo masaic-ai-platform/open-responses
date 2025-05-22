@@ -93,17 +93,17 @@ class DataSetController(
             order = order, // Always desc on createdAt as specified in comments
             labels = listOf(domainLabel) // Filter by domainLabel at the database layer
         )
-
+        
         // Get conversations already filtered by domainLabel from the repository
         val conversations = conversationRepository.listConversations(params)
-
+        
         // Map conversations to transcripts, checking if each one has a generic label
         return conversations.map { conversation ->
             // Check if the conversation has any label that starts with "generic"
-            val isGenericLabelAvailable = conversation.labels.any { label ->
+            val isGenericLabelAvailable = conversation.labels.any { label -> 
                 label.path.startsWith("generic")
             }
-
+            
             // Create and return a Transcript object
             Transcript(
                 conversationId = conversation.id,
@@ -163,7 +163,7 @@ class DataSetController(
 //                    "intent" to value(conversation.meta["intent"] as String),
                     "messages" to value(objectMapper.writeValueAsString(conversation.messages)),
                     "createdAt" to value(conversation.createdAt.toString())
-                )
+                    )
             )
             .build()
     }
@@ -172,7 +172,7 @@ class DataSetController(
     suspend fun assignDomainLabels(): ResponseEntity<List<String>> {
         val conversations = conversationRepository.listConversations()
         val conversationIds = conversations.map {
-            assignDomainLabels(it.id).body?.id ?: "not_available for ${it.id}"
+           assignDomainLabels(it.id).body?.id ?: "not_available for ${it.id}"
         }
         return ResponseEntity.ok().body(conversationIds)
     }
@@ -368,7 +368,7 @@ class DataSetController(
 
             try {
                 // Parse conversation JSON
-                val messages = parseConversationJson(conversationJson)
+                var messages = parseConversationJson(conversationJson)
 
                 val startDate = Instant.parse("2025-05-01T00:00:00Z")
                 val endDate = Instant.parse("2025-05-20T23:59:59Z")
@@ -377,7 +377,7 @@ class DataSetController(
                 val conversation = Conversation(
                     id = conversationId,
                     createdAt = randomCreatedAt,
-                    messages = messages,
+                    messages = messages.dropLastWhile { it.role == Role.ASSISTANT },
                     labels = emptyList(),
                     meta = mapOf(
                         "source" to "excel_import"
