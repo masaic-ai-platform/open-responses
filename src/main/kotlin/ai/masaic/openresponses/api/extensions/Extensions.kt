@@ -9,6 +9,8 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.responses.EasyInputMessage
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
+import com.openai.models.responses.ResponseOutputMessage
+import com.openai.models.responses.ResponseOutputText
 
 /**
  * Extension function to copy properties from a ResponseCreateParams.Body to a ResponseCreateParams.Builder.
@@ -50,7 +52,7 @@ suspend fun ResponseCreateParams.Builder.fromBody(
 
         previousInputItems.addAll(previousResponseOutputItems.map { objectMapper.convertValue(it, ResponseInputItem::class.java) })
         previousInputItems.addAll(currentInputItems)
-        input(ResponseCreateParams.Input.ofResponse(previousInputItems))
+        input(ResponseCreateParams.Input.ofResponse(removeImageBody(previousInputItems)))
     } else {
         input(body.input())
     }
@@ -100,6 +102,59 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     body.tools().ifPresent { tools(it) }
 
     return this
+}
+
+private fun ResponseCreateParams.Builder.removeImageBody(items: MutableList<ResponseInputItem>): List<ResponseInputItem> {
+    // Take all function and function output items
+    val imageFunctionIds = items.filter { it.isFunctionCall() && it.asFunctionCall().name() == "image_generation" }.map { it.asFunctionCall().callId() }.toSet()
+
+    if (imageFunctionIds.isEmpty()) {
+        return items
+    }
+    val newItems = mutableListOf<ResponseInputItem>()
+
+    items.forEachIndexed { index, it ->
+        if (it.isFunctionCallOutput() && imageFunctionIds.contains(it.asFunctionCallOutput().callId())) {
+            val builder = it.asFunctionCallOutput().toBuilder()
+            builder.output("<image>")
+            newItems.add(ResponseInputItem.ofFunctionCallOutput(builder.build()))
+        } else if (it.isEasyInputMessage() &&
+            it.asEasyInputMessage().content().isResponseInputMessageContentList() &&
+            it.asEasyInputMessage().content().asResponseInputMessageContentList().any {
+                it.isInputText() && it.asInputText()._additionalProperties()["type"].toString() == "image"
+            }
+        ) {
+            val builder = it.asEasyInputMessage().toBuilder()
+            builder.content("<image>")
+            newItems.add(ResponseInputItem.ofEasyInputMessage(builder.build()))
+        } else if (it.isResponseOutputMessage() &&
+            it.asResponseOutputMessage().content().any {
+                it
+                    ._json()
+                    .get()
+                    .toString()
+                    .contains("output_format=b64_json")
+            }
+        ) {
+            val builder = it.asResponseOutputMessage().toBuilder()
+            builder.content(
+                listOf(
+                    ResponseOutputMessage.Content.ofOutputText(
+                        ResponseOutputText
+                            .builder()
+                            .text("<image>")
+                            .annotations(listOf())
+                            .build(),
+                    ),
+                ),
+            )
+            newItems.add(ResponseInputItem.ofResponseOutputMessage(builder.build()))
+        } else {
+            newItems.add(it)
+        }
+    }
+
+    return newItems
 }
 
 fun ChatCompletionMessage.toChatCompletionMessageParam(objectMapper: ObjectMapper): ChatCompletionMessageParam =

@@ -15,11 +15,14 @@ import com.openai.models.ResponseFormatJsonObject
 import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.ResponseFormatText
 import com.openai.models.chat.completions.ChatCompletion
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionMessageToolCall
 import com.openai.models.chat.completions.ChatCompletionStreamOptions
 import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.chat.completions.ChatCompletionToolChoiceOption
+import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withTimeout
@@ -155,7 +158,6 @@ class MasaicCompletionService(
                 val metadata = instrumentationMetadataInput(headers, request)
                 
                 val completion = openAICompletionService.create(client, params, metadata)
-                // completionStore.storeCompletion(completion, messages)
                 completion
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
@@ -284,7 +286,7 @@ class MasaicCompletionService(
         val builder =
             ChatCompletionCreateParams
                 .builder()
-                .messages(messages)
+                .messages(removeImageBody(messages))
                 .additionalHeaders(headerBuilder.build())
                 .additionalQueryParams(queryBuilder.build())
 
@@ -391,6 +393,64 @@ class MasaicCompletionService(
         request.user?.let { builder.user(it) }
         
         return builder.build()
+    }
+
+    /**
+     * This function takes a list of ChatCompletionMessageParam objects and removes the bodies of all the messages
+     * that contain an image generation function. The bodies of the messages are replaced with "<image>".
+     *
+     * @param messages The list of messages to process
+     * @return A new list of messages, with the bodies of the image generation functions removed
+     */
+    private fun removeImageBody(messages: List<ChatCompletionMessageParam>): List<ChatCompletionMessageParam> {
+        val imageGenerationFunctions =
+            messages
+                .filterIsInstance<ChatCompletionMessageToolCall>()
+                .filter { it.function().name() == "image-generation" }
+                .map { it.id() }
+
+        if (imageGenerationFunctions.isEmpty()) {
+            return messages
+        }
+
+        val newMessages = mutableListOf<ChatCompletionMessageParam>()
+
+        for (message in messages) {
+            if (message.isTool()) {
+                if (imageGenerationFunctions.contains(message.asTool().toolCallId())) {
+                    newMessages.add(
+                        ChatCompletionMessageParam.ofTool(
+                            ChatCompletionToolMessageParam
+                                .builder()
+                                .toolCallId(message.asTool().toolCallId())
+                                .content("<image>")
+                                .build(),
+                        ),
+                    )
+                }
+            } else if (message.isAssistant()) {
+                if (message.asAssistant()._additionalProperties().containsKey("type") &&
+                    message
+                        .asAssistant()
+                        ._additionalProperties()["type"]
+                        .toString() == "image"
+                ) {
+                    newMessages.add(
+                        ChatCompletionMessageParam
+                            .ofAssistant(
+                                ChatCompletionAssistantMessageParam
+                                    .builder()
+                                    .content("<image>")
+                                    .build(),
+                            ),
+                    )
+                }
+            } else {
+                newMessages.add(message)
+            }
+        }
+
+        return newMessages
     }
 
     private fun instrumentationMetadataInput(

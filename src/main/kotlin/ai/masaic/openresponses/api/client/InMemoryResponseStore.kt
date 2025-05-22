@@ -2,7 +2,6 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.tool.ToolRequestContext
-import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.benmanes.caffeine.cache.Cache
 import com.github.benmanes.caffeine.cache.Caffeine
@@ -22,7 +21,6 @@ import kotlin.jvm.optionals.getOrNull
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory", matchIfMissing = true)
 class InMemoryResponseStore(
     private val objectMapper: ObjectMapper,
-    private val toolService: ToolService,
     @Value("\${open-responses.store.cache-size:10000}") private val cacheSize: Long,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
@@ -68,7 +66,7 @@ class InMemoryResponseStore(
                             objectMapper.convertValue(outputItem.message().get(), InputMessageItem::class.java)
                         }
                         // Handle function calls
-                        outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name(), context) == null) -> {
+                        outputItem.isFunctionCall() -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
                                 id = functionCall.id().getOrNull() ?: functionCall.callId(),

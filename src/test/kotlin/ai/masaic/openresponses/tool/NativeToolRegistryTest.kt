@@ -24,7 +24,7 @@ class NativeToolRegistryTest {
     @BeforeEach
     fun setUp() {
         vectorStoreService = mockk()
-        nativeToolRegistry = NativeToolRegistry(jacksonObjectMapper())
+        nativeToolRegistry = NativeToolRegistry(jacksonObjectMapper(), mockk(relaxed = true))
         // Set vectorStoreService via reflection since it's private
         ReflectionTestUtils.setField(nativeToolRegistry, "vectorStoreService", vectorStoreService)
     }

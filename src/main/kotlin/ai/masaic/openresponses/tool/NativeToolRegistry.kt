@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.tool
 
+import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.model.AgenticSeachTool
 import ai.masaic.openresponses.api.model.FileSearchTool
 import ai.masaic.openresponses.api.model.Filter
@@ -11,9 +12,9 @@ import ai.masaic.openresponses.tool.agentic.AgenticSearchService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
-import com.openai.core.JsonValue
 import com.openai.credential.BearerTokenCredential
 import com.openai.models.images.ImageGenerateParams
+import com.openai.models.responses.ResponseOutputItem
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.codec.ServerSentEvent
@@ -24,6 +25,7 @@ import kotlin.jvm.optionals.getOrNull
 @Component
 class NativeToolRegistry(
     private val objectMapper: ObjectMapper,
+    private val responseStore: ResponseStore,
 ) {
     private val log = LoggerFactory.getLogger(NativeToolRegistry::class.java)
     private val toolRepository = mutableMapOf<String, ToolDefinition>()
@@ -370,13 +372,13 @@ class NativeToolRegistry(
                 "properties" to
                     mutableMapOf<String, Any>(
                         "prompt" to mutableMapOf("type" to "string", "description" to "A text description of the desired image(s). Max 32000 chars."),
-                        "generation_type" to mutableMapOf("type" to "string", "description" to "Type of image generation: 'new' for new image, 'edit' for editing an existing image, 'variation' for creating a variation.", "enum" to listOf("new", "edit", "variation"), "default" to "new"),
+                        "is_edit" to mutableMapOf("type" to "boolean", "description" to "Type of image generation: 'false' for new image, 'true' for editing an existing image. Choose 'true' if there is already an <image> in previous context and user's intent is to edit it. ", "default" to "false"),
                     ),
-                "required" to listOf("prompt", "generation_type"),
+                "required" to listOf("prompt", "is_edit"),
             )
         return NativeToolDefinition(
             name = "image_generation",
-            description = "Generates images from text prompts using models like DALL-E or gpt-image-1.",
+            description = "Generates and edits images from text prompts.",
             parameters = parameters,
         )
     }
@@ -404,34 +406,69 @@ class NativeToolRegistry(
                 return objectMapper.writeValueAsString(mapOf("error" to "API key not configured."))
             }
 
+            val imageData =
+                if (paramsAccessor is ResponseParamsAdapter && paramsAccessor.params.previousResponseId().isPresent) {
+                    val contentNode = responseStore.getOutputItems(paramsAccessor.params.previousResponseId().get()).first()
+                    if (contentNode.content?.toString()?.contains("b64_json") == true) {
+                        val responseOutputItem = objectMapper.readValue(objectMapper.writeValueAsString(contentNode.content), ResponseOutputItem::class.java)
+                        responseOutputItem
+                            ._json()
+                            .get()
+                            .asArray()
+                            .get()
+                            .first()
+                            .asObject()
+                            .get()["text"]
+                            .toString()
+                    } else {
+                        throw IllegalArgumentException("Could not prepare image edit. Request must be corrupted.")
+                    }
+                } else {
+                    throw IllegalArgumentException("Could not prepare image edit. Request must be corrupted.")
+                }
+
             val rawToolConfig = paramsAccessor.getSpecificToolConfig("image_generation", ImageGenerationTool::class.java) ?: ImageGenerationTool()
-        
             val client = OpenAIOkHttpClient.builder().credential(BearerTokenCredential.create(apiKey)).build()
 
             val output =
-                client.images().generate(
-                    ImageGenerateParams
-                        .builder()
-                        .model(rawToolConfig.model)
-                        .prompt(llmArgs.prompt)
-                        .n(rawToolConfig.n?.toLong())
-                        .putAdditionalBodyProperty(
-                            "output_format",
-                            JsonValue.from(rawToolConfig.outputFormat),
-                        ).build(),
-                )
-
-            // TODO edit and variation
+                if (!llmArgs.isEdit || imageData.isBlank()) {
+                    client.images().generate(
+                        ImageGenerateParams
+                            .builder()
+                            .model(rawToolConfig.model)
+                            .prompt(llmArgs.prompt)
+                            .n(rawToolConfig.n?.toLong())
+                            .outputFormat(
+                                when (rawToolConfig.outputFormat?.lowercase()) {
+                                    "png" -> ImageGenerateParams.OutputFormat.PNG
+                                    "jpeg" -> ImageGenerateParams.OutputFormat.JPEG
+                                    else -> ImageGenerateParams.OutputFormat.WEBP
+                                },
+                            ).build(),
+                    )
+                } else {
+                    return objectMapper.writeValueAsString(
+                        mapOf(
+                            "error" to "Editing is not supported yet.",
+                            "image_id" to UUID.randomUUID().toString(),
+                        ),
+                    )
+                }
 
             // Simulate a response based on prompt content for testing
             return if (output.data().isPresent && output.data().get().size > 1) {
                 objectMapper.writeValueAsString(
-                    output.data().get().mapNotNull { it.b64Json().getOrNull() }.mapIndexed { index, image ->
-                        mapOf(
-                            "data" to image,
-                            "image_id" to UUID.randomUUID().toString(),
-                        )
-                    },
+                    mapOf(
+                        "data" to
+                            objectMapper.writeValueAsString(
+                                output.data().get().mapNotNull { it.b64Json().getOrNull() }.mapIndexed { index, image ->
+                                    mapOf(
+                                        "data" to image,
+                                        "image_id" to UUID.randomUUID().toString(),
+                                    )
+                                },
+                            ),
+                    ),
                 )
             } else if (output.data().isPresent && output.data().get().size == 1) {
                 objectMapper.writeValueAsString(

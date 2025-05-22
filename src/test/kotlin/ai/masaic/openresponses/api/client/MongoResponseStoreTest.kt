@@ -35,7 +35,7 @@ class MongoResponseStoreTest {
         every { objectMapper.writeValueAsString(any<Response>()) } returns """{"id":"resp_123456"}"""
         every { objectMapper.readValue(any<String>(), Response::class.java) } returns mockk()
         
-        responseStore = MongoResponseStore(mongoTemplate, objectMapper, toolService)
+        responseStore = MongoResponseStore(mongoTemplate, objectMapper)
     }
 
     @Test

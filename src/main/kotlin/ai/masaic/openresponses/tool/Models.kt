@@ -127,6 +127,6 @@ data class AgenticSearchIteration(
 data class ImageGenerationToolArguments(
     @JsonProperty("prompt")
     val prompt: String,
-    @JsonProperty("generation_type")
-    val generationType: String = "new", // e.g., "new", "edit", "variation"
+    @JsonProperty("is_edit")
+    val isEdit: Boolean = false,
 )
