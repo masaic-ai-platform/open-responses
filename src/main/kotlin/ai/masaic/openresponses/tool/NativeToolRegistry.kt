@@ -34,15 +34,6 @@ class NativeToolRegistry(
     @Autowired
     private lateinit var agenticSearchService: AgenticSearchService
 
-    private val PROVIDER_BASE_URLS =
-        mapOf(
-            "openai" to "https://api.openai.com/v1",
-            "togetherai" to "https://api.together.xyz/v1",
-            "gemini" to "https://generativelanguage.googleapis.com/v1beta/openai/",
-            "google" to "https://generativelanguage.googleapis.com/v1beta/openai/",
-            "xai" to "https://api.x.ai/v1",
-        )
-
     init {
         toolRepository["think"] = loadExtendedThinkTool()
         toolRepository["file_search"] = loadFileSearchTool()
@@ -433,19 +424,24 @@ class NativeToolRegistry(
             // TODO edit and variation
 
             // Simulate a response based on prompt content for testing
-            return if (output.data().size > 1) {
+            return if (output.data().isPresent && output.data().get().size > 1) {
                 objectMapper.writeValueAsString(
-                    output.data().mapNotNull { it.b64Json().getOrNull() }.mapIndexed { index, image ->
+                    output.data().get().mapNotNull { it.b64Json().getOrNull() }.mapIndexed { index, image ->
                         mapOf(
                             "data" to image,
                             "image_id" to UUID.randomUUID().toString(),
                         )
                     },
                 )
-            } else if (output.data().size == 1) {
+            } else if (output.data().isPresent && output.data().get().size == 1) {
                 objectMapper.writeValueAsString(
                     mapOf(
-                        "data" to output.data()[0].b64Json().getOrNull(),
+                        "data" to
+                            output
+                                .data()
+                                .get()[0]
+                                .b64Json()
+                                .getOrNull(),
                         "image_id" to UUID.randomUUID().toString(),
                     ),
                 )

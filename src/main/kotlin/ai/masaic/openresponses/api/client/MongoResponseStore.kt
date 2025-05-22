@@ -14,6 +14,7 @@ import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * MongoDB implementation of ResponseStore.
@@ -64,7 +65,7 @@ class MongoResponseStore(
                         outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name(), context) == null) -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
-                                id = functionCall.id(),
+                                id = (functionCall.id().getOrNull() ?: functionCall.id()).toString(),
                                 role = "assistant",
                                 type = "function_call",
                                 call_id = functionCall.callId(),

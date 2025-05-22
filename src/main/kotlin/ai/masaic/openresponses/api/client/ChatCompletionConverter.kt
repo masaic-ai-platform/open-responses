@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.client
 import ai.masaic.openresponses.tool.AgenticSearchResponse
 import ai.masaic.openresponses.tool.FileSearchResponse
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.ChatModel
@@ -18,7 +19,7 @@ import java.util.*
  * compatibility across the platform.
  */
 object ChatCompletionConverter {
-    val objectMapper = jacksonObjectMapper()
+    val objectMapper = jacksonObjectMapper().registerModule(Jdk8Module())
     val log = org.slf4j.LoggerFactory.getLogger(ChatCompletionConverter::class.java)
 
     /**
@@ -39,7 +40,7 @@ object ChatCompletionConverter {
             .error(null) // Required field, null since we assume no error
             .incompleteDetails(null) // Required field, null since we assume complete response
             .instructions(params.instructions())
-            .metadata(params.metadata())
+            .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
             .model(params.model())
             .object_(JsonValue.from("response")) // Standard value
             .temperature(params.temperature())
@@ -163,7 +164,7 @@ object ChatCompletionConverter {
                         .error(null) // Required field, null since we assume no error
                         .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
                         .instructions(params.instructions())
-                        .metadata(params.metadata())
+                        .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                         .model(params.model())
                         .object_(JsonValue.from("response")) // Standard value
                         .temperature(params.temperature())
@@ -235,7 +236,7 @@ object ChatCompletionConverter {
                         .error(null) // Required field, null since we assume no error
                         .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
                         .instructions(params.instructions())
-                        .metadata(params.metadata())
+                        .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                         .model(params.model())
                         .object_(JsonValue.from("response")) // Standard value
                         .temperature(params.temperature())
@@ -263,7 +264,7 @@ object ChatCompletionConverter {
             .error(null) // Required field, null since we assume no error
             .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
             .instructions(params.instructions())
-            .metadata(params.metadata())
+            .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
             .model(params.model())
             .object_(JsonValue.from("response")) // Standard value
             .temperature(params.temperature())
@@ -617,7 +618,7 @@ object ChatCompletionConverter {
                             .build(),
                     ) // Required field, null since we assume complete response
                     .instructions(params.instructions())
-                    .metadata(params.metadata())
+                    .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                     .model(convertModel(chatCompletion.model()))
                     .object_(JsonValue.from("response")) // Standard value
                     .output(outputItems)
@@ -658,7 +659,7 @@ object ChatCompletionConverter {
                             .build(),
                     ) // Required field, null since we assume complete response
                     .instructions(params.instructions())
-                    .metadata(params.metadata())
+                    .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                     .model(convertModel(chatCompletion.model()))
                     .object_(JsonValue.from("response")) // Standard value
                     .output(outputItems)
@@ -687,7 +688,7 @@ object ChatCompletionConverter {
                 .error(null) // Required field, null since we assume no error
                 .incompleteDetails(null) // Required field, null since we assume complete response
                 .instructions(params.instructions())
-                .metadata(params.metadata())
+                .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                 .model(convertModel(chatCompletion.model()))
                 .object_(JsonValue.from("response")) // Standard value
                 .output(outputItems)
@@ -753,6 +754,20 @@ object ChatCompletionConverter {
                 .inputTokens(completionUsage.promptTokens().toLong())
                 .outputTokens(completionUsage.completionTokens().toLong())
                 .totalTokens(completionUsage.totalTokens().toLong())
+
+        if (completionUsage.promptTokensDetails().isPresent) {
+            builder.inputTokensDetails(
+                ResponseUsage.InputTokensDetails
+                    .builder()
+                    .cachedTokens(
+                        completionUsage
+                            .promptTokensDetails()
+                            .get()
+                            .cachedTokens()
+                            .get(),
+                    ).build(),
+            )
+        }
 
         if (completionUsage.completionTokensDetails().isPresent &&
             completionUsage

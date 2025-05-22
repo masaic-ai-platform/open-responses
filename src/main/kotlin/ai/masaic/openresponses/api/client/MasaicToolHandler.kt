@@ -22,6 +22,7 @@ import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.*
 import kotlin.String
+import kotlin.jvm.optionals.getOrNull
 
 private const val IMAGE_GENERATION_TOOL_NAME = "image_generation"
 
@@ -596,7 +597,7 @@ class MasaicToolHandler(
                         .data(
                             objectMapper.writeValueAsString(
                                 mapOf<String, String>(
-                                    "item_id" to function.id(),
+                                    "item_id" to (function.id().getOrNull() ?: function.callId()),
                                     "output_index" to index.toString(),
                                     "type" to "$eventPrefix.in_progress",
                                 ),
@@ -610,7 +611,7 @@ class MasaicToolHandler(
                         ResponseFunctionToolCall
                             .builder()
                             .callId(function.callId())
-                            .id(function.id())
+                            .id(function.id().toString())
                             .name(function.name())
                             .arguments(function.arguments())
                             .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
@@ -625,7 +626,7 @@ class MasaicToolHandler(
                         .data(
                             objectMapper.writeValueAsString(
                                 mapOf<String, String>(
-                                    "item_id" to function.id(),
+                                    "item_id" to (function.id().getOrNull() ?: function.callId()),
                                     "output_index" to index.toString(),
                                     "type" to "$eventPrefix.executing",
                                 ),
@@ -640,7 +641,7 @@ class MasaicToolHandler(
                         function.name(),
                         toolService.getAvailableTool(function.name())?.description ?: "not_available",
                         function.arguments(),
-                        function.id(),
+                        function.id().toString(),
                         mapOf("toolId" to function.id(), "eventIndex" to index),
                         params,
                         openAIClient,
@@ -674,7 +675,7 @@ class MasaicToolHandler(
                             ResponseOutputItem.ofMessage(
                                 ResponseOutputMessage
                                     .builder()
-                                    .id(function.id()) // Use function ID for the message ID
+                                    .id(function.id().toString()) // Use function ID for the message ID
                                     .role(JsonValue.from("assistant"))
                                     .status(ResponseOutputMessage.Status.COMPLETED)
                                     .content(
@@ -742,7 +743,7 @@ class MasaicToolHandler(
                         function.name(),
                         toolService.getAvailableTool(function.name())?.description ?: "not_available",
                         function.arguments(),
-                        function.id(),
+                        function.id().toString(),
                         mapOf("toolId" to function.id(), "eventIndex" to index),
                         params,
                         openAIClient,
@@ -783,7 +784,7 @@ class MasaicToolHandler(
                         ResponseFunctionToolCall
                             .builder()
                             .callId(function.callId())
-                            .id(function.id())
+                            .id(function.id().toString())
                             .name(function.name())
                             .arguments(function.arguments())
                             .build(),

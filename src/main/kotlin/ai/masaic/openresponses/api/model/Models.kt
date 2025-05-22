@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.openai.models.Metadata
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseOutputText
 import com.openai.models.responses.ResponseTextConfig
@@ -217,7 +216,7 @@ data class CreateResponseRequest(
     val store: Boolean = true,
     val stream: Boolean = false,
     val reasoning: Reasoning? = null,
-    val metadata: Metadata? = null,
+    val metadata: Any? = null,
     val truncation: Response.Truncation? = null,
     val text: ResponseTextConfig? = null,
 ) {

@@ -56,7 +56,16 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     }
 
     // Extract model name from request
-    val modelName = body.model().toString()
+    val modelName =
+        if (body.model().isChat()) {
+            body
+                .model()
+                .chat()
+                .get()
+                .toString()
+        } else {
+            body.model().string().get()
+        }
 
     // If model contains url@model format, update the model name to just the model part
     if (modelName.contains("@") == true) {

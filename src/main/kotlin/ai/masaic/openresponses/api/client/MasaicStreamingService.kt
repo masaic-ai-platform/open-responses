@@ -26,6 +26,7 @@ import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.*
+import kotlin.jvm.optionals.getOrNull
 
 @Service
 class MasaicStreamingService(
@@ -658,7 +659,7 @@ class MasaicStreamingService(
 
         // If a recognized function, mark internal
         if (toolService.getFunctionTool(functionName, context) != null) {
-            internalToolItemIds.add(functionCall.id())
+            internalToolItemIds.add(functionCall.id().getOrNull() ?: functionCall.callId())
         }
 
         // If arguments are not blank, treat it as a complete function call
@@ -670,7 +671,7 @@ class MasaicStreamingService(
                         .name(functionName)
                         .arguments(functionCall.arguments())
                         .callId(functionCall.callId())
-                        .id(functionCall.id())
+                        .id(functionCall.id().getOrNull() ?: functionCall.callId())
                         .status(ResponseFunctionToolCall.Status.COMPLETED)
                         .putAllAdditionalProperties(functionCall._additionalProperties())
                         .type(JsonValue.from("function_call"))

@@ -281,7 +281,7 @@ class MasaicParameterConverter(
         completionBuilder: ChatCompletionCreateParams.Builder,
         params: ResponseCreateParams,
     ) {
-        completionBuilder.model(params.model())
+        completionBuilder.model(params.model().string().get())
         if (params.temperature().isPresent) {
             completionBuilder.temperature(params.temperature())
         }

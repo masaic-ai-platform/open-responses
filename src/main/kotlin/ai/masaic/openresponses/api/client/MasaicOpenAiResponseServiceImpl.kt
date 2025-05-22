@@ -18,6 +18,7 @@ import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.
@@ -256,7 +257,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions,
     ): Response {
-        val responseId = params.responseId()
+        val responseId = params.responseId().getOrNull() ?: throw IllegalArgumentException("Response ID is required")
         logger.debug { "Retrieving response with ID: $responseId" }
 
         // Attempt to retrieve the response from the store
@@ -278,7 +279,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions,
     ) {
-        val responseId = params.responseId()
+        val responseId = params.responseId().getOrNull() ?: throw IllegalArgumentException("Response ID is required")
         logger.debug { "Deleting response with ID: $responseId" }
 
         val response = responseStore.getResponse(responseId)
@@ -368,7 +369,7 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
                                 .builder()
                                 .fileData(inputFile._fileData())
                                 .fileId(inputFile._fileId())
-                                .fileName(inputFile._filename())
+                                .filename(inputFile._filename())
                                 .build(),
                         ).build(),
                 )

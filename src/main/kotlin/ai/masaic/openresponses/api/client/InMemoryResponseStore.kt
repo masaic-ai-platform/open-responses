@@ -12,6 +12,7 @@ import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * In-memory implementation of ResponseStore.
@@ -70,7 +71,7 @@ class InMemoryResponseStore(
                         outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name(), context) == null) -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
-                                id = functionCall.id(),
+                                id = functionCall.id().getOrNull() ?: functionCall.callId(),
                                 role = "assistant",
                                 type = "function_call",
                                 call_id = functionCall.callId(),
