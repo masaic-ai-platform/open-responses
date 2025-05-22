@@ -27,6 +27,9 @@
       "env": {
         "BRAVE_API_KEY": "BRAVE_API_KEY"
       }
+    },
+    "shopify": {
+      "url": "https://www.aloyoga.com/api/mcp"
     }
   }
 }

@@ -1,17 +1,8 @@
 package ai.masaic.openresponses.tool.mcp
 
 import ai.masaic.openresponses.tool.ToolDefinition
-import dev.langchain4j.agent.tool.ToolExecutionRequest
-import dev.langchain4j.mcp.client.DefaultMcpClient
-import dev.langchain4j.mcp.client.McpClient
-import dev.langchain4j.mcp.client.transport.McpTransport
-import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport
-import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
-import java.time.Duration
-import java.time.temporal.ChronoUnit
-import java.util.concurrent.*
 
 /**
  * Component responsible for executing MCP tools.
@@ -42,10 +33,10 @@ class MCPToolExecutor {
         val mcpClient =
             when {
                 mcpServer.url != null && mcpServer.command == null -> {
-                    connectOverHttp(serverName, mcpServer)
+                    McpClient().init(serverName, mcpServer)
                 }
                 else -> {
-                    connectOverStdIO(serverName, mcpServer)
+                    McpClient().init(serverName, mcpServer, "stdio")
                 }
             }
         mcpClients[serverName] = mcpClient
@@ -65,13 +56,7 @@ class MCPToolExecutor {
     ): String? {
         val mcpTool = tool as McpToolDefinition
         val mcpClient = mcpClients[mcpTool.serverInfo.id] ?: return null
-        return mcpClient.executeTool(
-            ToolExecutionRequest
-                .builder()
-                .name(mcpTool.name)
-                .arguments(arguments)
-                .build(),
-        )
+        return mcpClient.executeTool(tool, arguments)
     }
 
     /**
@@ -81,85 +66,6 @@ class MCPToolExecutor {
         mcpClients.forEach { (_, mcpClient) ->
             mcpClient.close()
         }
-    }
-
-    /**
-     * Connects to an MCP server over HTTP.
-     *
-     * @param serverName Name of the server to connect to
-     * @param mcpServer Server configuration
-     * @return McpClient instance connected over HTTP
-     */
-    private fun connectOverHttp(
-        serverName: String,
-        mcpServer: MCPServer,
-    ): McpClient {
-        val transport: McpTransport =
-            HttpMcpTransport
-                .Builder()
-                .sseUrl(mcpServer.url)
-                .build()
-
-        val mcpClient =
-            DefaultMcpClient
-                .Builder()
-                .transport(transport)
-                .toolExecutionTimeout(Duration.of(3, ChronoUnit.MINUTES))
-                .build()
-        log.info("MCP HTTP client connected for $serverName server at: ${mcpServer.url}")
-        return mcpClient
-    }
-
-    /**
-     * Connects to an MCP server over standard I/O.
-     *
-     * @param serverName Name of the server to connect to
-     * @param mcpServer Server configuration
-     * @return McpClient instance connected over standard I/O
-     * @throws IllegalStateException if connection times out
-     */
-    private fun connectOverStdIO(
-        serverName: String,
-        mcpServer: MCPServer,
-    ): McpClient {
-        val command = buildCommand(mcpServer)
-        log.info("Command to start server will be: ${command.joinToString(" ")}")
-
-        // Create an executor with a single thread dedicated to this blocking operation
-        val executor = Executors.newSingleThreadExecutor()
-
-        val mcpClient =
-            try {
-                val future: Future<McpClient> =
-                    executor.submit(
-                        Callable {
-                            // Build the transport (this should be fast or already cooperative)
-                            val transport: McpTransport =
-                                StdioMcpTransport
-                                    .Builder()
-                                    .command(command)
-                                    .logEvents(true)
-                                    .build()
-
-                            // This call is blocking and may run infinitely if not cooperative.
-                            DefaultMcpClient
-                                .Builder()
-                                .transport(transport)
-                                .build()
-                        },
-                    )
-
-                // Try to get the result within timeout period
-                future.get(CONNECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            } catch (e: TimeoutException) {
-                // Cancel the task if it's still running
-                throw IllegalStateException("Timed out while connecting to MCP server $serverName", e)
-            } finally {
-                executor.shutdownNow()
-            }
-
-        log.info("MCP StdIO client connected for $serverName server with command: ${command.joinToString(" ")}")
-        return mcpClient
     }
 
     /**
@@ -188,7 +94,6 @@ class MCPToolExecutor {
  */
 @Component
 class MCPToolRegistry {
-    private val log = LoggerFactory.getLogger(MCPToolRegistry::class.java)
     private val toolRepository = mutableMapOf<String, ToolDefinition>()
 
     /**
@@ -201,7 +106,8 @@ class MCPToolRegistry {
         serverName: String,
         mcpClient: McpClient,
     ) {
-        registerMCPToolDefinitions(serverName, mcpClient)
+        val mcpTools = mcpClient.listTools(serverName)
+        mcpTools.forEach { addTool(it) }
     }
 
     /**
@@ -235,27 +141,27 @@ class MCPToolRegistry {
         toolRepository.clear()
     }
 
-    /**
-     * Registers MCP tool definitions from the given client.
-     *
-     * @param serverId ID of the server hosting the tools
-     * @param mcpClient Client connected to the server
-     */
-    private fun registerMCPToolDefinitions(
-        serverId: String,
-        mcpClient: McpClient,
-    ) {
-        val toolSpecs = mcpClient.listTools()
-        toolSpecs.forEach { toolSpec ->
-            val tool =
-                McpToolDefinition(
-                    name = toolSpec.name(),
-                    description = toolSpec.description(),
-                    parameters = toolSpec.parameters(),
-                    mcpServerInfo = MCPServerInfo(serverId),
-                )
-            log.info("Adding tool: $tool")
-            addTool(tool)
-        }
-    }
+//    /**
+//     * Registers MCP tool definitions from the given client.
+//     *
+//     * @param serverId ID of the server hosting the tools
+//     * @param mcpClient Client connected to the server
+//     */
+//    private fun registerMCPToolDefinitions(
+//        serverId: String,
+//        mcpClient: McpClient,
+//    ) {
+//        val toolSpecs = mcpClient.listTools()
+//        toolSpecs.forEach { toolSpec ->
+//            val tool =
+//                McpToolDefinition(
+//                    name = toolSpec.name(),
+//                    description = toolSpec.description() ?: toolSpec.name(),
+//                    parameters = toolSpec.parameters(),
+//                    mcpServerInfo = MCPServerInfo(serverId),
+//                )
+//            log.info("Adding tool: $tool")
+//            addTool(tool)
+//        }
+//    }
 }
