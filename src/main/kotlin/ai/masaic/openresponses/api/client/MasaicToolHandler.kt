@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.CompletionToolRequestContext
 import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
+import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -21,6 +22,51 @@ import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.*
 import kotlin.String
+
+private const val IMAGE_GENERATION_TOOL_NAME = "image_generation"
+
+/**
+ * Represents the outcome of handling tool calls in a non-streaming context.
+ */
+sealed class MasaicToolCallResult {
+    /**
+     * Indicates that tool processing should continue, potentially with more LLM calls.
+     * @param items The list of input items, including original messages, tool calls, and tool outputs, for the next LLM call.
+     */
+    data class Continue(
+        val items: List<ResponseInputItem>,
+    ) : MasaicToolCallResult()
+
+    /**
+     * Indicates that tool processing should terminate, and a direct response should be sent to the user.
+     * This is used when a terminal tool (like image_generation) is executed.
+     * @param finalResponseInputItems The complete list of input items up to and including the terminal tool's call and output. Used for storing the interaction.
+     * @param directResponse The Response object to be sent directly to the user, containing the terminal tool's output.
+     */
+    data class Terminate(
+        val finalResponseInputItems: List<ResponseInputItem>,
+        val directResponse: Response,
+    ) : MasaicToolCallResult()
+}
+
+/**
+ * Represents the outcome of handling tool calls in a streaming context.
+ */
+data class MasaicToolCallStreamingResult(
+    /**
+     * The list of response input items accumulated during tool processing, including tool calls and their outputs.
+     */
+    val toolResponseItems: List<ResponseInputItem>,
+    /**
+     * Flag indicating whether a terminal tool was executed and the streaming should terminate.
+     */
+    val shouldTerminate: Boolean = false,
+    /**
+     * The output item from the terminal tool (e.g., image_generation), if one was executed.
+     * This item is intended to be the final piece of content sent to the user.
+     */
+    val terminalOutputItem: ResponseOutputItem? = null,
+)
 
 /**
  * Handles tool-related operations for the Masaic OpenAI API integration.
@@ -185,7 +231,7 @@ class MasaicToolHandler(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
-    ): List<ResponseInputItem> {
+    ): MasaicToolCallResult {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
         
         // Create context with alias mappings
@@ -249,13 +295,13 @@ class MasaicToolHandler(
                 val toolCalls = message.toolCalls().get()
                 logger.debug { "Processing ${toolCalls.size} tool calls" }
 
-                toolCalls.forEach { tool ->
+                for (tool in toolCalls) { // Changed from forEach to allow early exit for Terminate
                     val function = tool.function()
                     if (toolService.getFunctionTool(function.name(), context) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
 
                         // Add the function call to response items
-                        responseInputItems.add(
+                        val functionCallInputItem =
                             ResponseInputItem.ofFunctionCall(
                                 ResponseFunctionToolCall
                                     .builder()
@@ -263,38 +309,151 @@ class MasaicToolHandler(
                                     .id(tool.id())
                                     .name(function.name())
                                     .arguments(function.arguments())
+                                    .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
                                     .build(),
-                            ),
-                        )
+                            )
+                        responseInputItems.add(functionCallInputItem)
 
-                        // Execute the tool using the observation API
-                        executeToolWithObservation(
-                            function.name(),
-                            toolService.getAvailableTool(function.name())?.description ?: "not_available",
-                            function.arguments(),
-                            tool.id(),
-                            mapOf("toolId" to tool.id()),
-//                            parentObservation,
-                            params,
-                            openAIClient,
-                            {},
-                            context,
-                        ) { toolResult ->
-                            if (toolResult != null) {
-                                logger.debug { "Tool execution successful for ${function.name()}" }
+                        if (function.name() == IMAGE_GENERATION_TOOL_NAME) {
+                            logger.info { "Executing terminal tool: ${function.name()} with ID: ${tool.id()}" }
+
+                            var toolOutputString: Map<String, String>? = null
+                            // Simplified execution for clarity; actual execution uses `toolService.executeTool`
+                            try {
+                                toolOutputString =
+                                    runBlocking {
+                                        objectMapper.readValue(
+                                            toolService.executeTool(
+                                                function.name(),
+                                                function.arguments(),
+                                                params,
+                                                openAIClient,
+                                                {},
+                                                mapOf("toolId" to tool.id()),
+                                                context,
+                                            ),
+                                            object : TypeReference<Map<String, String>>() {},
+                                        )
+                                    }
+                            } catch (e: Exception) {
+                                logger.error(e) { "Error executing terminal tool ${function.name()}: ${e.message}" }
+                                toolOutputString = mapOf("error" to "Error executing terminal tool: ${e.message}")
+                            }
+
+                            if (toolOutputString != null && toolOutputString.isNotEmpty() && toolOutputString["data"]?.isNotBlank() == true) {
+                                val functionCallOutputItem =
+                                    ResponseInputItem.ofFunctionCallOutput(
+                                        ResponseInputItem.FunctionCallOutput
+                                            .builder()
+                                            .callId(tool.id())
+                                            .id(tool.id())
+                                            .output(toolOutputString["data"].toString())
+                                            .build(),
+                                    )
+                                responseInputItems.add(functionCallOutputItem)
+
+                                val imageResponseOutputItem =
+                                    ResponseOutputItem.ofMessage(
+                                        ResponseOutputMessage
+                                            .builder()
+                                            .id(UUID.randomUUID().toString())
+                                            .role(JsonValue.from("assistant"))
+                                            .status(ResponseOutputMessage.Status.COMPLETED)
+                                            .content(
+                                                listOf(
+                                                    ResponseOutputMessage.Content.ofOutputText(
+                                                        ResponseOutputText
+                                                            .builder()
+                                                            .text(toolOutputString["data"].toString()) // This is the image data/URL
+                                                            .annotations(emptyList())
+                                                            .build(),
+                                                    ),
+                                                ),
+                                            ).build(),
+                                    )
+
+                                val directResponse =
+                                    ChatCompletionConverter.buildFinalResponse(
+                                        params,
+                                        ResponseStatus.COMPLETED,
+                                        chatCompletion.id(),
+                                        listOf(imageResponseOutputItem),
+                                    )
+                                
+                                return MasaicToolCallResult.Terminate(responseInputItems.toList() + parked, directResponse)
+                            } else {
+                                logger.warn { "Terminal tool ${function.name()} returned null output. Proceeding as regular tool call." }
+                                // Add null output so it's not lost
                                 responseInputItems.add(
                                     ResponseInputItem.ofFunctionCallOutput(
                                         ResponseInputItem.FunctionCallOutput
                                             .builder()
                                             .callId(tool.id())
                                             .id(tool.id())
-                                            .output(toolResult)
+                                            .output("Tool ${function.name()} returned null output.")
                                             .build(),
                                     ),
                                 )
-                            } else {
-                                logger.warn { "Tool execution returned null for ${function.name()}" }
                             }
+                        } else {
+                            // Regular native tool execution
+                            executeToolWithObservation(
+                                function.name(),
+                                toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                                function.arguments(),
+                                tool.id(),
+                                mapOf("toolId" to tool.id()),
+                                params,
+                                openAIClient,
+                                {}, // No event emitter for non-streaming context here
+                                context,
+                            ) { toolResult ->
+                                // This callback style is for the streaming version, adapt for non-streaming
+                                var regularToolResult: String? = null
+                                try {
+                                    regularToolResult =
+                                        runBlocking {
+                                            toolService.executeTool(
+                                                function.name(),
+                                                function.arguments(),
+                                                params,
+                                                openAIClient,
+                                                {},
+                                                mapOf("toolId" to tool.id()),
+                                                context,
+                                            )
+                                        }
+                                } catch (e: Exception) {
+                                    logger.error(e) { "Error executing tool ${function.name()}: ${e.message}" }
+                                    regularToolResult = "Error executing tool ${function.name()}: ${e.message}"
+                                }
+
+                                if (regularToolResult != null) {
+                                    logger.debug { "Tool execution successful for ${function.name()}" }
+                                    responseInputItems.add(
+                                        ResponseInputItem.ofFunctionCallOutput(
+                                            ResponseInputItem.FunctionCallOutput
+                                                .builder()
+                                                .callId(tool.id())
+                                                .id(tool.id())
+                                                .output(regularToolResult)
+                                                .build(),
+                                        ),
+                                    )
+                                } else {
+                                    logger.warn { "Tool execution returned null for ${function.name()}" }
+                                    responseInputItems.add( // Add an item indicating null output
+                                        ResponseInputItem.ofFunctionCallOutput(
+                                            ResponseInputItem.FunctionCallOutput
+                                                .builder()
+                                                .callId(tool.id())
+                                                .id(tool.id())
+                                                .output("Tool ${function.name()} returned null output.")
+                                                .build(),
+                                        ),
+                                    )
+                                }
+                            } // End of simulated direct call block
                         }
                     } else {
                         logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
@@ -316,7 +475,7 @@ class MasaicToolHandler(
 
         logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
-        return responseInputItems
+        return MasaicToolCallResult.Continue(responseInputItems.toList())
     }
 
     /**
@@ -373,7 +532,7 @@ class MasaicToolHandler(
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
         parentObservation: Observation? = null,
         openAIClient: OpenAIClient,
-    ): List<ResponseInputItem> {
+    ): MasaicToolCallStreamingResult {
         logger.debug { "Processing tool calls from Response ID: ${response.id()}" }
 
         // Create context with alias mappings
@@ -396,6 +555,8 @@ class MasaicToolHandler(
             }
 
         val parked = mutableListOf<ResponseInputItem>()
+        var shouldTerminate = false // Local flag for termination
+        var terminalOutputItem: ResponseOutputItem? = null // To store image tool's output item
 
         // Add message outputs to parked items
         val messageOutputs =
@@ -416,7 +577,11 @@ class MasaicToolHandler(
         val functionCalls = response.output().filter { it.isFunctionCall() }
         logger.debug { "Processing ${functionCalls.size} function calls" }
 
-        functionCalls.forEachIndexed { index, tool ->
+        for (indexedToolCall in functionCalls.withIndex()) { // Changed to for loop to allow break
+            if (shouldTerminate) break // If already decided to terminate, skip other tools
+
+            val index = indexedToolCall.index
+            val tool = indexedToolCall.value
             val function = tool.asFunctionCall()
 
             if (toolService.getFunctionTool(function.name(), context) != null) {
@@ -448,6 +613,7 @@ class MasaicToolHandler(
                             .id(function.id())
                             .name(function.name())
                             .arguments(function.arguments())
+                            .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
                             .build(),
                     ),
                 )
@@ -467,48 +633,149 @@ class MasaicToolHandler(
                         ).build(),
                 )
 
-                executeToolWithObservation(
-                    function.name(),
-                    toolService.getAvailableTool(function.name())?.description ?: "not_available",
-                    function.arguments(),
-                    function.id(),
-                    mapOf("toolId" to function.id(), "eventIndex" to index),
-                    params,
-                    openAIClient,
-                    eventEmitter,
-                    context,
-                ) { toolResult ->
-                    if (toolResult != null) {
-                        logger.debug { "Tool execution successful for ${function.name()}" }
+                if (function.name() == IMAGE_GENERATION_TOOL_NAME) {
+                    logger.info { "Executing terminal tool (streaming): ${function.name()} with ID: ${function.id()}" }
+                    var imageToolOutputString: Map<String, String>? = null
+                    executeToolWithObservation(
+                        function.name(),
+                        toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                        function.arguments(),
+                        function.id(),
+                        mapOf("toolId" to function.id(), "eventIndex" to index),
+                        params,
+                        openAIClient,
+                        eventEmitter, // Pass through the eventEmitter
+                        context,
+                    ) { toolResult ->
+                        // This is the callback
+                        val typeReference = object : TypeReference<Map<String, String>>() {}
+                        @Suppress("UNCHECKED_CAST")
+                        imageToolOutputString =
+                            objectMapper.readValue(toolResult, typeReference) // Capture the result
+                    }
+
+                    if (imageToolOutputString != null &&
+                        (imageToolOutputString as Map<out String?, String?>).contains("data") &&
+                        (imageToolOutputString as Map<out String?, String?>)["data"]?.isNotBlank() == true
+                    ) {
+                        // Add the function call output to responseInputItems for storage/logging
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCallOutput(
                                 ResponseInputItem.FunctionCallOutput
                                     .builder()
                                     .callId(function.callId())
                                     .id(function.id())
-                                    .output(toolResult)
+                                    .output((imageToolOutputString as Map<out String?, String?>)["data"].toString())
                                     .build(),
                             ),
                         )
+                        // Create the ResponseOutputItem for the image tool (this will be the final message)
+                        terminalOutputItem =
+                            ResponseOutputItem.ofMessage(
+                                ResponseOutputMessage
+                                    .builder()
+                                    .id(function.id()) // Use function ID for the message ID
+                                    .role(JsonValue.from("assistant"))
+                                    .status(ResponseOutputMessage.Status.COMPLETED)
+                                    .content(
+                                        listOf(
+                                            ResponseOutputMessage.Content.ofOutputText(
+                                                ResponseOutputText
+                                                    .builder()
+                                                    .text((imageToolOutputString as Map<out String?, String?>)["data"].toString()) // Image data/URL
+                                                    .annotations(emptyList())
+                                                    .build(),
+                                            ),
+                                        ),
+                                    ).build(),
+                            )
+
+                        shouldTerminate = true // Signal to terminate streaming after this tool
+                        // Emit completed event for image_generation tool itself (optional, depends on desired events)
+                        eventEmitter.invoke(
+                            ServerSentEvent
+                                .builder<String>()
+                                .event("$eventPrefix.completed") // This was for the generic tool
+                                .data(
+                                    objectMapper.writeValueAsString(
+                                        mapOf(
+                                            "item_id" to function.id(),
+                                            "output_index" to index.toString(),
+                                            "type" to "$eventPrefix.completed",
+                                            "final_output_generated" to "true",
+                                        ),
+                                    ),
+                                ).build(),
+                        )
+                        break // Exit loop, image_generation is terminal for this batch of tools
                     } else {
-                        logger.warn { "Tool execution returned null for ${function.name()}" }
+                        logger.warn { "Terminal tool ${function.name()} returned null output in streaming. Adding error/null output." }
+                        responseInputItems.add(
+                            ResponseInputItem.ofFunctionCallOutput(
+                                ResponseInputItem.FunctionCallOutput
+                                    .builder()
+                                    .callId(function.callId())
+                                    .id(function.id())
+                                    .output("Tool ${function.name()} returned null or failed.")
+                                    .build(),
+                            ),
+                        )
+                        // Emit completed event for image_generation tool, but indicating failure/null
+                        eventEmitter.invoke(
+                            ServerSentEvent
+                                .builder<String>()
+                                .event("$eventPrefix.completed")
+                                .data(
+                                    objectMapper.writeValueAsString(
+                                        mapOf(
+                                            "item_id" to function.id(),
+                                            "output_index" to index.toString(),
+                                            "type" to "$eventPrefix.completed",
+                                            "error" to "Tool returned null",
+                                        ),
+                                    ),
+                                ).build(),
+                        )
+                    }
+                } else { // Regular native tool
+                    executeToolWithObservation(
+                        function.name(),
+                        toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                        function.arguments(),
+                        function.id(),
+                        mapOf("toolId" to function.id(), "eventIndex" to index),
+                        params,
+                        openAIClient,
+                        eventEmitter,
+                        context,
+                    ) { toolResult ->
+                        if (toolResult != null) {
+                            logger.debug { "Tool execution successful for ${function.name()}" }
+                            responseInputItems.add(
+                                ResponseInputItem.ofFunctionCallOutput(
+                                    ResponseInputItem.FunctionCallOutput
+                                        .builder()
+                                        .callId(function.callId())
+                                        .id(function.id())
+                                        .output(toolResult)
+                                        .build(),
+                                ),
+                            )
+                        } else {
+                            logger.warn { "Tool execution returned null for ${function.name()}" }
+                            responseInputItems.add(
+                                ResponseInputItem.ofFunctionCallOutput(
+                                    ResponseInputItem.FunctionCallOutput
+                                        .builder()
+                                        .callId(function.callId())
+                                        .id(function.id())
+                                        .output("Tool ${function.name()} returned null output.")
+                                        .build(),
+                                ),
+                            )
+                        }
                     }
                 }
-
-                eventEmitter.invoke(
-                    ServerSentEvent
-                        .builder<String>()
-                        .event("$eventPrefix.completed")
-                        .data(
-                            objectMapper.writeValueAsString(
-                                mapOf<String, String>(
-                                    "item_id" to function.id(),
-                                    "output_index" to index.toString(),
-                                    "type" to "$eventPrefix.completed",
-                                ),
-                            ),
-                        ).build(),
-                )
             } else {
                 logger.info { "Unsupported tool requested: ${function.name()}, parking for client handling" }
                 parked.add(
@@ -527,6 +794,6 @@ class MasaicToolHandler(
 
         logger.debug { "Adding ${parked.size} parked items to response" }
         responseInputItems.addAll(parked)
-        return responseInputItems
+        return MasaicToolCallStreamingResult(responseInputItems.toList(), shouldTerminate, terminalOutputItem)
     }
 }

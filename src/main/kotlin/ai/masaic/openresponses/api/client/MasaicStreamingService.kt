@@ -301,58 +301,100 @@ class MasaicStreamingService(
                             // Process text so far, put it at the beginning
                             handleTextCompletion(textAccumulator, responseOutputItemAccumulator, prepend = true)
 
-                            val finalResponse =
+                            // responseOutputItemAccumulator now contains all text and ResponseOutputItem.ofFunctionCall items
+                            // from the convertAndPublish method for this LLM response.
+                            val responseWithToolRequests =
                                 ChatCompletionConverter.buildFinalResponse(
                                     params,
-                                    ResponseStatus.COMPLETED,
+                                    ResponseStatus.COMPLETED, // LLM's turn is complete, it requested tools.
                                     responseId,
-                                    responseOutputItemAccumulator,
+                                    responseOutputItemAccumulator, // Contains text and tool call requests from LLM
                                 )
-                            runBlocking { storeResponseWithInputItems(finalResponse, params) }
+                            runBlocking { storeResponseWithInputItems(responseWithToolRequests, params) }
 
-                            logger.debug { "Response body: ${objectMapper.writeValueAsString(finalResponse)}" }
-                            telemetryService.stopObservation(observation, finalResponse, params, metadata)
+                            logger.debug { "Response body (LLM requesting tools): ${objectMapper.writeValueAsString(responseWithToolRequests)}" }
+                            telemetryService.stopObservation(observation, responseWithToolRequests, params, metadata)
                             telemetryService.stopGenAiDurationSample(metadata, params, genAiSample)
 
+                            // internalToolItemIds is populated by convertAndPublish if a tool call matches a known internal tool.
                             if (internalToolItemIds.isEmpty()) {
-                                // No calls to actually handle
-                                logger.info { "Response completed for id: ${finalResponse.id()}" }
+                                // LLM requested tools, but none were recognized as internal/actionable by us.
+                                logger.info { "Response completed with tool requests, but no recognized internal tools to execute. ID: ${responseWithToolRequests.id()}" }
                                 nextIteration = false
                                 trySend(
                                     EventUtils.convertEvent(
                                         ResponseStreamEvent.ofCompleted(
                                             ResponseCompletedEvent
                                                 .builder()
-                                                .response(finalResponse)
+                                                .response(responseWithToolRequests) // Send the response that includes the tool requests
                                                 .build(),
                                         ),
                                         payloadFormatter,
                                         objectMapper,
                                     ),
-                                )
+                                ).isSuccess // Or handle failure
+                                close() // Close to terminate this iteration of callbackFlow
                             } else {
+                                // Recognized internal tools were requested, proceed to handle them.
                                 val parentObservation =
                                     coroutineContext[ReactorContext]?.context?.get<Observation>(
                                         ObservationThreadLocalAccessor.KEY,
                                     )
-                                // Actually handle these calls
-                                val toolResponseItems =
-                                    toolHandler.handleMasaicToolCall(
-                                        params,
-                                        finalResponse,
-                                        eventEmitter = { event -> trySend(event) },
-                                        parentObservation,
-                                        client,
-                                    )
-                                updatedParams =
-                                    params
-                                        .toBuilder()
-                                        .input(ResponseCreateParams.Input.ofResponse(toolResponseItems))
-                                        .build()
 
-                                // We'll do another iteration
-                                nextIteration = true
-                                close()
+                                val toolStreamingResult =
+                                    toolHandler.handleMasaicToolCall(
+                                        params = params, // The original ResponseCreateParams for this iteration
+                                        response = responseWithToolRequests, // The Response from LLM containing tool requests
+                                        eventEmitter = { event -> trySend(event).isSuccess },
+                                        parentObservation = parentObservation,
+                                        openAIClient = client,
+                                    )
+
+                                if (toolStreamingResult.shouldTerminate && toolStreamingResult.terminalOutputItem != null) {
+                                    // A terminal tool (e.g., image_generation) was executed.
+                                    logger.info { "Terminal tool executed in stream. Completing stream with tool output." }
+
+                                    val finalTerminalResponse =
+                                        ChatCompletionConverter.buildFinalResponse(
+                                            params,
+                                            ResponseStatus.COMPLETED, // LLM's turn is complete, it requested tools.
+                                            responseId,
+                                            listOf(toolStreamingResult.terminalOutputItem), // Contains text and tool call requests from LLM
+                                        )
+
+                                    // Store this terminal response. Use toolStreamingResult.toolResponseItems for full history context.
+                                    val paramsForStorage =
+                                        params
+                                            .toBuilder()
+                                            .input(ResponseCreateParams.Input.ofResponse(toolStreamingResult.toolResponseItems))
+                                            .build()
+                                    runBlocking { storeResponseWithInputItems(finalTerminalResponse, paramsForStorage) }
+
+                                    trySend(
+                                        EventUtils.convertEvent(
+                                            ResponseStreamEvent.ofCompleted(
+                                                ResponseCompletedEvent.builder().response(finalTerminalResponse).build(),
+                                            ),
+                                            payloadFormatter,
+                                            objectMapper,
+                                        ),
+                                    ).isSuccess
+                                    nextIteration = false
+                                    close()
+                                } else {
+                                    // Non-terminal tools were executed, or no specific terminal output to send directly.
+                                    // Prepare for the next LLM call with the tool outputs.
+                                    updatedParams =
+                                        params
+                                            .toBuilder()
+                                            .input(ResponseCreateParams.Input.ofResponse(toolStreamingResult.toolResponseItems))
+                                            .build()
+
+                                    // We'll do another iteration if there are tool responses to send to the LLM.
+                                    // The toolResponseItems should contain the necessary data for the next call.
+                                    nextIteration = true
+                                    close() // Close to proceed to the next iteration of the outer loop.
+                                }
                             }
                         }
                     }

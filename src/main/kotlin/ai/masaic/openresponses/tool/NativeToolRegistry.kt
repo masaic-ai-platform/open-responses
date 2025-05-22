@@ -3,17 +3,23 @@ package ai.masaic.openresponses.tool
 import ai.masaic.openresponses.api.model.AgenticSeachTool
 import ai.masaic.openresponses.api.model.FileSearchTool
 import ai.masaic.openresponses.api.model.Filter
+import ai.masaic.openresponses.api.model.ImageGenerationTool
 import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.agentic.AgenticSearchService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
+import com.openai.client.okhttp.OpenAIOkHttpClient
+import com.openai.core.JsonValue
+import com.openai.credential.BearerTokenCredential
+import com.openai.models.images.ImageGenerateParams
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 @Component
 class NativeToolRegistry(
@@ -28,10 +34,20 @@ class NativeToolRegistry(
     @Autowired
     private lateinit var agenticSearchService: AgenticSearchService
 
+    private val PROVIDER_BASE_URLS =
+        mapOf(
+            "openai" to "https://api.openai.com/v1",
+            "togetherai" to "https://api.together.xyz/v1",
+            "gemini" to "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "google" to "https://generativelanguage.googleapis.com/v1beta/openai/",
+            "xai" to "https://api.x.ai/v1",
+        )
+
     init {
         toolRepository["think"] = loadExtendedThinkTool()
         toolRepository["file_search"] = loadFileSearchTool()
         toolRepository["agentic_search"] = loadAgenticSearchTool()
+        toolRepository["image_generation"] = loadImageGenerationTool()
     }
 
     fun findByName(name: String): ToolDefinition? = toolRepository[name]
@@ -67,6 +83,7 @@ class NativeToolRegistry(
             "think" -> "Your thought has been logged."
             "file_search" -> executeFileSearch(arguments, paramsAccessor, resolvedName, toolMetadata, context)
             "agentic_search" -> executeAgenticSearch(arguments, paramsAccessor, client, resolvedName, eventEmitter, toolMetadata, context)
+            "image_generation" -> executeImageGeneration(arguments, paramsAccessor, resolvedName, toolMetadata, context)
             else -> {
                 log.warn("Attempted to execute unknown native tool: $resolvedName")
                 null
@@ -353,6 +370,97 @@ class NativeToolRegistry(
                 """.trimIndent(),
             parameters = parameters,
         )
+    }
+
+    private fun loadImageGenerationTool(): NativeToolDefinition {
+        val parameters =
+            mutableMapOf<String, Any>(
+                "type" to "object",
+                "properties" to
+                    mutableMapOf<String, Any>(
+                        "prompt" to mutableMapOf("type" to "string", "description" to "A text description of the desired image(s). Max 32000 chars."),
+                        "generation_type" to mutableMapOf("type" to "string", "description" to "Type of image generation: 'new' for new image, 'edit' for editing an existing image, 'variation' for creating a variation.", "enum" to listOf("new", "edit", "variation"), "default" to "new"),
+                    ),
+                "required" to listOf("prompt", "generation_type"),
+            )
+        return NativeToolDefinition(
+            name = "image_generation",
+            description = "Generates images from text prompts using models like DALL-E or gpt-image-1.",
+            parameters = parameters,
+        )
+    }
+
+    private suspend fun executeImageGeneration(
+        arguments: String,
+        paramsAccessor: ToolParamsAccessor,
+        resolvedToolName: String,
+        toolMetadata: Map<String, Any>,
+        context: UnifiedToolContext,
+    ): String {
+        try {
+            log.info("Executing image_generation tool with LLM arguments: $arguments")
+            val llmArgs =
+                try {
+                    objectMapper.readValue(arguments, ImageGenerationToolArguments::class.java)
+                } catch (e: Exception) {
+                    log.error("Error parsing LLM arguments for image_generation: ${e.message}", e)
+                    return objectMapper.writeValueAsString(mapOf("error" to "Invalid LLM arguments: ${e.message}"))
+                }
+
+            val apiKey = System.getenv("OPEN_RESPONSES_IMAGE_GENERATION_API_KEY") ?: System.getenv("OPENAI_API_KEY")
+            if (apiKey.isNullOrBlank()) {
+                log.error("OPENAI_API_KEY environment variable is not set.")
+                return objectMapper.writeValueAsString(mapOf("error" to "API key not configured."))
+            }
+
+            val rawToolConfig = paramsAccessor.getSpecificToolConfig("image_generation", ImageGenerationTool::class.java) ?: ImageGenerationTool()
+        
+            val client = OpenAIOkHttpClient.builder().credential(BearerTokenCredential.create(apiKey)).build()
+
+            val output =
+                client.images().generate(
+                    ImageGenerateParams
+                        .builder()
+                        .model(rawToolConfig.model)
+                        .prompt(llmArgs.prompt)
+                        .n(rawToolConfig.n?.toLong())
+                        .putAdditionalBodyProperty(
+                            "output_format",
+                            JsonValue.from(rawToolConfig.outputFormat),
+                        ).build(),
+                )
+
+            // TODO edit and variation
+
+            // Simulate a response based on prompt content for testing
+            return if (output.data().size > 1) {
+                objectMapper.writeValueAsString(
+                    output.data().mapNotNull { it.b64Json().getOrNull() }.mapIndexed { index, image ->
+                        mapOf(
+                            "data" to image,
+                            "image_id" to UUID.randomUUID().toString(),
+                        )
+                    },
+                )
+            } else if (output.data().size == 1) {
+                objectMapper.writeValueAsString(
+                    mapOf(
+                        "data" to output.data()[0].b64Json().getOrNull(),
+                        "image_id" to UUID.randomUUID().toString(),
+                    ),
+                )
+            } else {
+                objectMapper.writeValueAsString(
+                    mapOf(
+                        "data" to "",
+                        "image_id" to UUID.randomUUID().toString(),
+                    ),
+                )
+            }
+        } catch (e: Exception) {
+            log.error("Error executing image_generation tool: ${e.message}", e)
+            return objectMapper.writeValueAsString(mapOf("data" to "", "image_id" to UUID.randomUUID().toString()))
+        }
     }
 
     private fun Any?.convert(
