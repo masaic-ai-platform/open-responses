@@ -310,6 +310,7 @@ class MasaicCompletionService(
         request.max_tokens?.let { builder.maxCompletionTokens(it.toLong()) }
         request.n?.let { builder.n(it.toLong()) }
         request.presence_penalty?.let { builder.presencePenalty(it) }
+        request.metadata?.let { builder.metadata(it) }
         request.response_format?.let {
             val type = it["type"] ?: "text"
             when (type) {

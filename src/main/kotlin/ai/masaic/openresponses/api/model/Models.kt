@@ -433,4 +433,6 @@ data class ImageGenerationTool(
     val responseFormat: String? = "b64_json",
     val style: String? = "vivid",
     val user: String? = null,
+    @JsonProperty("model_provider_key")
+    val modelProviderKey: String? = null,
 ) : Tool

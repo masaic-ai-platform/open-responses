@@ -43,6 +43,17 @@ class NativeToolRegistry(
         toolRepository["image_generation"] = loadImageGenerationTool()
     }
 
+    companion object {
+        val PROVIDER_BASE_URLS =
+            mapOf(
+                "openai" to "https://api.openai.com/v1",
+                "togetherai" to "https://api.together.xyz/v1",
+                "gemini" to "https://generativelanguage.googleapis.com/v1beta/openai",
+                "google" to "https://generativelanguage.googleapis.com/v1beta/openai",
+                "xai" to "https://api.x.ai/v1",
+            )
+    }
+
     fun findByName(name: String): ToolDefinition? = toolRepository[name]
 
     fun findAll(): List<ToolDefinition> = toolRepository.values.toList()
@@ -400,14 +411,8 @@ class NativeToolRegistry(
                     return objectMapper.writeValueAsString(mapOf("error" to "Invalid LLM arguments: ${e.message}"))
                 }
 
-            val apiKey = System.getenv("OPEN_RESPONSES_IMAGE_GENERATION_API_KEY") ?: System.getenv("OPENAI_API_KEY")
-            if (apiKey.isNullOrBlank()) {
-                log.error("OPENAI_API_KEY environment variable is not set.")
-                return objectMapper.writeValueAsString(mapOf("error" to "API key not configured."))
-            }
-
             val imageData =
-                if (paramsAccessor is ResponseParamsAdapter && paramsAccessor.params.previousResponseId().isPresent) {
+                if (paramsAccessor is ResponseParamsAdapter && llmArgs.isEdit && paramsAccessor.params.previousResponseId().isPresent) {
                     val contentNode = responseStore.getOutputItems(paramsAccessor.params.previousResponseId().get()).first()
                     if (contentNode.content?.toString()?.contains("b64_json") == true) {
                         val responseOutputItem = objectMapper.readValue(objectMapper.writeValueAsString(contentNode.content), ResponseOutputItem::class.java)
@@ -421,38 +426,51 @@ class NativeToolRegistry(
                             .get()["text"]
                             .toString()
                     } else {
-                        throw IllegalArgumentException("Could not prepare image edit. Request must be corrupted.")
+                        null
                     }
                 } else {
-                    throw IllegalArgumentException("Could not prepare image edit. Request must be corrupted.")
+                    null
                 }
 
             val rawToolConfig = paramsAccessor.getSpecificToolConfig("image_generation", ImageGenerationTool::class.java) ?: ImageGenerationTool()
-            val client = OpenAIOkHttpClient.builder().credential(BearerTokenCredential.create(apiKey)).build()
+            val config = getApiConfig(rawToolConfig)
+            val client =
+                OpenAIOkHttpClient
+                    .builder()
+                    .baseUrl(config.third)
+                    .credential(BearerTokenCredential.create(config.second))
+                    .build()
 
             val output =
-                if (!llmArgs.isEdit || imageData.isBlank()) {
-                    client.images().generate(
+                if (!llmArgs.isEdit || imageData?.isBlank() == true) {
+                    val builder =
                         ImageGenerateParams
                             .builder()
-                            .model(rawToolConfig.model)
+                            .model(config.first)
                             .prompt(llmArgs.prompt)
-                            .n(rawToolConfig.n?.toLong())
-                            .outputFormat(
-                                when (rawToolConfig.outputFormat?.lowercase()) {
-                                    "png" -> ImageGenerateParams.OutputFormat.PNG
-                                    "jpeg" -> ImageGenerateParams.OutputFormat.JPEG
-                                    else -> ImageGenerateParams.OutputFormat.WEBP
-                                },
-                            ).build(),
-                    )
+                            .n(rawToolConfig.n?.toLong() ?: 1)
+
+                    if (config.third.contains("api.openai.com")) {
+                        builder.outputFormat(ImageGenerateParams.OutputFormat.of((rawToolConfig.outputFormat?.lowercase() ?: "png")))
+                    } else {
+                        builder.responseFormat(ImageGenerateParams.ResponseFormat.of((rawToolConfig.responseFormat?.lowercase() ?: "b64_json")))
+                    }
+                    client.images().generate(builder.build())
                 } else {
-                    return objectMapper.writeValueAsString(
-                        mapOf(
-                            "error" to "Editing is not supported yet.",
-                            "image_id" to UUID.randomUUID().toString(),
-                        ),
-                    )
+                    // TODO Add support for image editing
+                    val builder =
+                        ImageGenerateParams
+                            .builder()
+                            .model(config.first)
+                            .prompt(llmArgs.prompt)
+                            .n(rawToolConfig.n?.toLong() ?: 1)
+
+                    if (config.third.contains("api.openai.com")) {
+                        builder.outputFormat(ImageGenerateParams.OutputFormat.of((rawToolConfig.outputFormat?.lowercase() ?: "png")))
+                    } else {
+                        builder.responseFormat(ImageGenerateParams.ResponseFormat.of((rawToolConfig.responseFormat?.lowercase() ?: "b64_json")))
+                    }
+                    client.images().generate(builder.build())
                 }
 
             // Simulate a response based on prompt content for testing
@@ -494,6 +512,32 @@ class NativeToolRegistry(
             log.error("Error executing image_generation tool: ${e.message}", e)
             return objectMapper.writeValueAsString(mapOf("data" to "", "image_id" to UUID.randomUUID().toString()))
         }
+    }
+
+    private fun getApiConfig(tool: ImageGenerationTool): Triple<String, String, String> {
+        var imageModel = tool.model
+        val apiKey = tool.modelProviderKey ?: System.getenv("OPEN_RESPONSES_IMAGE_GENERATION_API_KEY")
+        val url =
+            if (tool.model.contains("@") == true) {
+                val parts = tool.model.split("@", limit = 2)
+                if (parts.size == 2 && parts[0].isNotBlank()) {
+                    imageModel = parts[1]
+                    // Check if the first part is a URL
+                    if (parts[0].startsWith("http://") || parts[0].startsWith("https://")) {
+                        parts[0]
+                    } else {
+                        // Check if it's a known provider name
+                        val providerUrl = PROVIDER_BASE_URLS[parts[0].lowercase()]
+                        providerUrl ?: throw IllegalArgumentException("Model provider not recognized: ${parts[0]}")
+                    }
+                } else {
+                    throw IllegalArgumentException("Model provider not recognized: ${parts[0]}")
+                }
+            } else {
+                System.getenv("OPEN_RESPONSES_IMAGE_GENERATION_BASE_URL") ?: System.getenv("OPENAI_BASE_URL")
+            }
+
+        return Triple(imageModel, apiKey, url)
     }
 
     private fun Any?.convert(

@@ -133,7 +133,12 @@ fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>)
                     ._json()
                     .get()
                     .toString()
-                    .contains("output_format=b64_json")
+                    .contains("output_format=b64_json") ||
+                    it
+                        ._json()
+                        .get()
+                        .toString()
+                        .contains("type=image")
             }
         ) {
             val builder = it.asResponseOutputMessage().toBuilder()

@@ -194,19 +194,61 @@ class ResponseParamsAdapter(
                     alias = it.asFileSearch()._additionalProperties()["alias"]?.toString(),
                 )
             } else if (it.isWebSearch()) {
-                val props = it.asWebSearch()._additionalProperties()
-                AgenticSeachTool(
-                    type = "agentic_search",
-                    vectorStoreIds = props["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() },
-                    filters = props["filters"]?.convert(Filter::class.java),
-                    maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
-                    maxIterations = props["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
-                    alias = props["alias"]?.toString(),
-                    enablePresencePenaltyTuning = props["enable_presence_penalty_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                    enableFrequencyPenaltyTuning = props["enable_frequency_penalty_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                    enableTemperatureTuning = props["enable_temperature_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                    enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                )
+                if (it.asWebSearch().type().toString() == "agentic_search") {
+                    val props = it.asWebSearch()._additionalProperties()
+                    AgenticSeachTool(
+                        type = "agentic_search",
+                        vectorStoreIds =
+                            props["vector_store_ids"]
+                                ?.asArray()
+                                ?.getOrDefault(emptyList())
+                                ?.map { it.toString() },
+                        filters = props["filters"]?.convert(Filter::class.java),
+                        maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
+                        maxIterations = props["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
+                        alias = props["alias"]?.toString(),
+                        enablePresencePenaltyTuning =
+                            props["enable_presence_penalty_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableFrequencyPenaltyTuning =
+                            props["enable_frequency_penalty_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableTemperatureTuning =
+                            props["enable_temperature_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
+                    )
+                } else if (it.asWebSearch().type().toString() == "image_generation") {
+                    val props = it.asWebSearch()._additionalProperties()
+                    ImageGenerationTool(
+                        background = props["background"]?.asString()?.getOrNull(),
+                        inputImageMask =
+                            props["input_image_mask"]?.let { maskJson ->
+                                try {
+                                    objectMapper.convertValue(maskJson.asObject().get(), InputImageMask::class.java)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            },
+                        model = props["model"]?.asString()?.getOrNull().toString(),
+                        moderation = props["moderation"]?.asString()?.getOrNull(),
+                        outputCompression = props["output_compression"]?.asNumber()?.getOrNull()?.toInt(),
+                        outputFormat = props["output_format"]?.asString()?.getOrNull(),
+                        partialImages = props["partial_images"]?.asNumber()?.getOrNull()?.toInt(),
+                        quality = props["quality"]?.asString()?.getOrNull(),
+                        size = props["size"]?.asString()?.getOrNull(),
+                        n = props["n"]?.asNumber()?.getOrNull()?.toInt(),
+                        responseFormat = props["response_format"]?.asString()?.getOrNull(),
+                        style = props["style"]?.asString()?.getOrNull(),
+                        user = props["user"]?.asString()?.getOrNull(),
+                        modelProviderKey = props["model_provider_key"]?.asString()?.getOrNull(),
+                    )
+                } else {
+                    throw IllegalArgumentException("Unsupported type of tool: ${it.asWebSearch().type()}")
+                }
             } else if (it.isFunction()) {
                 val func = it.asFunction()
                 val funcName = func.name()
@@ -215,7 +257,6 @@ class ResponseParamsAdapter(
                 when (funcName) {
                     "image_generation" -> {
                         ImageGenerationTool(
-                            type = "image_generation",
                             background = additionalProps["background"]?.asString()?.getOrNull(),
                             inputImageMask =
                                 additionalProps["input_image_mask"]?.let { maskJson ->
@@ -236,6 +277,7 @@ class ResponseParamsAdapter(
                             responseFormat = additionalProps["response_format"]?.asString()?.getOrNull(),
                             style = additionalProps["style"]?.asString()?.getOrNull(),
                             user = additionalProps["user"]?.asString()?.getOrNull(),
+                            modelProviderKey = additionalProps["model_provider_key"]?.asString()?.getOrNull(),
                         )
                     }
                     else -> {
@@ -370,6 +412,7 @@ class ChatCompletionParamsAdapter(
                         responseFormat = additionalProps["response_format"]?.asString()?.getOrNull(),
                         style = additionalProps["style"]?.asString()?.getOrNull(),
                         user = additionalProps["user"]?.asString()?.getOrNull(),
+                        modelProviderKey = additionalProps["model_provider_key"]?.asString()?.getOrNull(),
                     )
                 }
                 else -> {
