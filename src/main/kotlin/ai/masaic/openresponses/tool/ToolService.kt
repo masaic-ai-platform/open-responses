@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.model.FunctionTool
+import ai.masaic.openresponses.api.model.MCPTool
 import ai.masaic.openresponses.tool.mcp.*
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
@@ -86,10 +87,15 @@ class ToolService(
      */
     fun getAvailableTool(name: String): ToolMetadata? {
         val tool = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
+        val toolName = if(tool.hosting == ToolHosting.REMOTE) {
+            (tool as McpToolDefinition).serverInfo.unQualifiedToolName(tool.name)
+        }else tool.name
         return ToolMetadata(
             id = tool.id,
-            name = tool.name,
+            name = toolName,
             description = tool.description,
+            protocol = tool.protocol,
+            hosting = tool.hosting
         )
     }
 
@@ -187,6 +193,35 @@ class ToolService(
         return when {
             toolDefinition is NativeToolDefinition -> NativeToolDefinition.toFunctionTool(toolDefinition)
             else -> (toolDefinition as McpToolDefinition).toFunctionTool()
+        }
+    }
+
+    fun getRemoteMcpTool(
+        mcpTool: MCPTool,
+    ): List<FunctionTool> {
+        val info = MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl)
+        val allowedTools = mcpTool.allowedTools.map { info.qualifiedToolName(it) }
+        val mcpServerInfo = mcpToolRegistry.findServerById(info.serverIdentifier())
+        return if(mcpServerInfo == null || mcpServerInfo.tools.isEmpty()) {
+            val mcpClient = McpClient().init(mcpTool.serverLabel, mcpTool.serverUrl)
+            val availableTools = mcpClient.listTools(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl))
+            availableTools.forEach {
+                mcpToolRegistry.addTool(it)
+            }
+            mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, availableTools.map { it.name}))
+            mcpToolExecutor.addMcpClient(info.serverIdentifier(), mcpClient)
+
+            val toolsToUse = availableTools.filter { allowedTools.contains(it.name) }
+            toolsToUse.map { it.toFunctionTool() }
+        } else {
+            val tool = mutableListOf<FunctionTool>()
+            mcpServerInfo.tools.forEach {
+                if(allowedTools.contains(it)) {
+                    val toolDef = mcpToolRegistry.findByName(it) ?: throw IllegalStateException("Unable to find mcp tool $it in the registry")
+                    tool.add((toolDef as McpToolDefinition).toFunctionTool())
+                }
+            }
+            return tool
         }
     }
 

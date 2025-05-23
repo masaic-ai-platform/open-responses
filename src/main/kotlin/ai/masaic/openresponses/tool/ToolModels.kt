@@ -29,9 +29,7 @@ import kotlin.jvm.optionals.getOrNull
 enum class ToolHosting {
     /** Tool is hosted and managed by Masaic */
     MASAIC_MANAGED,
-
-    /** Tool is self-hosted by the client */
-    SELF_HOSTED,
+    REMOTE
 }
 
 /**

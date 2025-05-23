@@ -1,6 +1,8 @@
 package ai.masaic.openresponses.tool.mcp
 
+import ai.masaic.openresponses.api.service.ResponseTimeoutException
 import ai.masaic.openresponses.tool.ToolDefinition
+import ai.masaic.openresponses.tool.ToolHosting
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -10,6 +12,7 @@ import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.mcp.client.Converter
 import dev.langchain4j.mcp.client.DefaultMcpClient
 import dev.langchain4j.mcp.client.transport.McpTransport
+import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport
 import mu.KotlinLogging
 import okhttp3.Headers
@@ -22,6 +25,7 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import java.time.Duration
+import java.time.temporal.ChronoUnit
 import java.util.concurrent.*
 
 class McpClient {
@@ -31,90 +35,90 @@ class McpClient {
     private val mapper = jacksonObjectMapper()
 
     private companion object {
-        const val CONNECTION_TIMEOUT_SECONDS = 20L
+        const val CONNECTION_TIMEOUT_SECONDS = 60L
     }
 
     fun init(
         serverName: String,
-        mcpServer: MCPServer,
-        transportType: String = "http",
+        url: String
     ): McpClient {
-        when (transportType) {
-            "http" -> {
-                val transport =
-                    HttpSseTransport(
-                        mcpServer.url ?: throw IllegalStateException("for remote http server, url is mandatory."),
-                    )
-                customClient =
-                    McpSyncClient
-                        .sync(transport)
-                        .requestTimeout(Duration.ofSeconds(60 * 1000))
-                        .capabilities(
-                            ClientCapabilities
-                                .Builder()
-                                .roots()
-                                .sampling()
-                                .build(),
-                        ).build()
-                log.info("MCP HTTP client connected for $serverName server at: ${mcpServer.url}")
-            }
-
-            "stdio" -> {
-                val command = buildCommand(mcpServer)
-                log.info("Command to start server will be: ${command.joinToString(" ")}")
-
-                // Create an executor with a single thread dedicated to this blocking operation
-                val executor = Executors.newSingleThreadExecutor()
-
-                defaultMcpClient =
-                    try {
-                        val future: Future<DefaultMcpClient> =
-                            executor.submit(
-                                Callable {
-                                    // Build the transport (this should be fast or already cooperative)
-                                    val transport: McpTransport =
-                                        StdioMcpTransport
-                                            .Builder()
-                                            .command(command)
-                                            .logEvents(true)
-                                            .build()
-
-                                    // This call is blocking and may run infinitely if not cooperative.
-                                    DefaultMcpClient.Builder().transport(transport).build()
-                                },
-                            )
-
-                        // Try to get the result within timeout period
-                        future.get(CONNECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                    } catch (e: TimeoutException) {
-                        // Cancel the task if it's still running
-                        throw IllegalStateException("Timed out while connecting to MCP server $serverName", e)
-                    } finally {
-                        executor.shutdownNow()
-                    }
-
-                log.info("MCP StdIO client connected for $serverName server with command: ${command.joinToString(" ")}")
-            }
-
-            else -> throw UnsupportedOperationException("transportType can be only http or stdio")
-        }
-
+        val transport = HttpSseTransport(url)
+        customClient =
+            McpSyncClient
+                .sync(transport)
+                .requestTimeout(Duration.ofSeconds(60 * 1000))
+                .build()
+        customClient?.initialize(url) ?: throw IllegalStateException("mcp client not initialised for $url")
+        log.info("MCP HTTP client connected for $serverName server at: ${url}")
         return this
     }
 
-    fun listTools(serverId: String): List<McpToolDefinition> {
-        val toolSpecs = defaultMcpClient?.listTools() ?: customClient?.listTools()
-        return toolSpecs?.map { toolSpec ->
+    fun init(
+        serverName: String,
+        mcpServer: MCPServer
+    ): McpClient {
+
+        val command = buildCommand(mcpServer)
+        log.info("Command to start server will be: ${command.joinToString(" ")}")
+
+        // Create an executor with a single thread dedicated to this blocking operation
+        val executor = Executors.newSingleThreadExecutor()
+
+        defaultMcpClient =
+            try {
+                val future: Future<DefaultMcpClient> =
+                    executor.submit(
+                        Callable {
+                            // Build the transport (this should be fast or already cooperative)
+                            val transport: McpTransport =
+                                StdioMcpTransport
+                                    .Builder()
+                                    .command(command)
+                                    .logEvents(true)
+                                    .build()
+
+                            // This call is blocking and may run infinitely if not cooperative.
+                            DefaultMcpClient.Builder().transport(transport).build()
+                        },
+                    )
+
+                // Try to get the result within timeout period
+                future.get(CONNECTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            } catch (e: TimeoutException) {
+                // Cancel the task if it's still running
+                throw ResponseTimeoutException("Timed out while connecting to MCP server $serverName")
+            } finally {
+                executor.shutdownNow()
+            }
+
+        log.info("MCP StdIO client connected for $serverName server with command: ${command.joinToString(" ")}")
+        return this
+    }
+
+    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> {
+        return defaultMcpClient?.listTools()?.map {
             val tool =
                 McpToolDefinition(
-                    name = toolSpec.name(),
-                    description = toolSpec.description() ?: toolSpec.name(),
-                    parameters = toolSpec.parameters(),
-                    mcpServerInfo = MCPServerInfo(serverId),
+                    name = it.name(),
+                    description = it.description() ?: it.name(),
+                    parameters = it.parameters(),
+                    mcpServerInfo = mcpServerInfo
                 )
-            log.info("Adding tool: $tool")
+            log.info("Adding stdio mcp tool: $tool")
             tool
-        } ?: emptyList()
+        } ?: customClient?.listTools()?.map {
+            val tool =
+                McpToolDefinition(
+                    name = mcpServerInfo.qualifiedToolName(it.name()),
+                    description = it.description() ?: it.name(),
+                    parameters = it.parameters(),
+                    mcpServerInfo = mcpServerInfo,
+                    hosting = ToolHosting.REMOTE
+                )
+            log.info("Adding remote mcp tool: $tool")
+            tool
+        }
+        ?: emptyList()
     }
 
     fun executeTool(
@@ -162,6 +166,7 @@ class HttpSseTransport(
 ) {
     private val mapper = jacksonObjectMapper()
     private val jsonMediaType = "application/json".toMediaType()
+    private val log = KotlinLogging.logger {}
 
     /**
      * Sends a JSON-RPC message via HTTP POST and returns the parsed body and response headers.
@@ -192,8 +197,7 @@ class HttpSseTransport(
 
             // Regular JSON body
             val raw = resp.body?.string().orEmpty()
-            val parsed = if (raw.isNotBlank()) mapper.readValue<Any>(raw) else null
-            return Pair(parsed, headers)
+            return Pair(raw, headers)
         }
     }
 
@@ -211,7 +215,7 @@ class HttpSseTransport(
                 .Builder()
                 .url(endpoint)
                 .post(json.toRequestBody(jsonMediaType))
-                .header("Accept", "application/json, text/event-stream")
+                .header("Accept", "application/json,text/event-stream")
                 .apply { sessionId?.let { header("Mcp-Session-Id", it) } }
                 .build()
 
@@ -221,11 +225,14 @@ class HttpSseTransport(
 
             if (code == 202 && resp.body?.contentLength() == 0L) return null
 
+            if(code in 400..503) { //TODO: doing minimal handling now.
+                throw Exception("mcp server request failed and response returned is: ${resp.body!!.string()}")
+            }
+
             if (ct.startsWith("text/event-stream") && onEvent != null) {
                 openSse(request, onEvent)
                 return null
             }
-
             return resp.body!!.string()
         }
     }
@@ -236,7 +243,7 @@ class HttpSseTransport(
     ) {
         val factory = EventSources.createFactory(client)
         factory.newEventSource(
-            request.newBuilder().get().build(),
+            request,
             object : EventSourceListener() {
                 override fun onEvent(
                     source: EventSource,
@@ -244,6 +251,7 @@ class HttpSseTransport(
                     type: String?,
                     data: String,
                 ) {
+                    log.debug { "received message= $data" }
                     mapper.readValue<Any>(data)?.let(onMessage)
                 }
 
@@ -252,7 +260,12 @@ class HttpSseTransport(
                     t: Throwable?,
                     response: Response?,
                 ) {
+                    log.error { "error message received from server: code=${response?.code}, message=${response?.body?.string()}" }
                     source.cancel()
+                }
+
+                override fun onClosed(eventSource: EventSource) {
+                    super.onClosed(eventSource)
                 }
             },
         )
@@ -263,32 +276,20 @@ class HttpSseTransport(
  * Supported client capabilities.
  */
 data class ClientCapabilities(
-    val roots: Boolean = false,
-    val sampling: Boolean = false,
-) {
-    data class Builder(
-        var roots: Boolean = false,
-        var sampling: Boolean = false,
-    ) {
-        fun roots(enable: Boolean = true) = apply { this.roots = enable }
-
-        fun sampling(enable: Boolean = true) = apply { this.sampling = enable }
-
-        fun build() = ClientCapabilities(roots, sampling)
-    }
-}
+    val roots: Map<String, Any>
+)
 
 /**
  * Synchronous MCP client.
  */
 class McpSyncClient private constructor(
     private val transport: HttpSseTransport,
-    private val timeout: Duration,
     private val capabilities: ClientCapabilities,
-    private val samplingHandler: ((CreateMessageRequest) -> CreateMessageResult)?,
 ) {
     private var sessionId: String? = null
+    private var listenSSE: Boolean = false
     private val mapper = jacksonObjectMapper()
+    private val log = KotlinLogging.logger {}
 
     init {
         mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
@@ -303,16 +304,13 @@ class McpSyncClient private constructor(
         private val transport: HttpSseTransport,
     ) {
         private var timeout: Duration = Duration.ofSeconds(30)
-        private var capabilities: ClientCapabilities = ClientCapabilities()
-        private var samplingHandler: ((CreateMessageRequest) -> CreateMessageResult)? = null
+        private var capabilities = ClientCapabilities(roots = mapOf("listChanged" to true))
 
         fun requestTimeout(d: Duration) = apply { timeout = d }
 
         fun capabilities(cap: ClientCapabilities) = apply { capabilities = cap }
 
-        fun sampling(handler: (CreateMessageRequest) -> CreateMessageResult) = apply { samplingHandler = handler }
-
-        fun build() = McpSyncClient(transport, timeout, capabilities, samplingHandler)
+        fun build() = McpSyncClient(transport, capabilities)
     }
 
     /**
@@ -320,37 +318,92 @@ class McpSyncClient private constructor(
      * that value is used. Otherwise, no session ID is stored, and subsequent calls
      * are made without a session header.
      */
-    fun initialize() {
+    fun initialize(url: String) {
         val initReq =
             mapOf(
                 "jsonrpc" to "2.0",
                 "method" to "initialize",
                 "id" to 1,
                 "params" to
-                    mapOf(
-                        "protocolVersion" to "2025-03-26",
-                        "capabilities" to capabilities,
-                    ),
+                        mapOf(
+                            "protocolVersion" to "2025-03-26",
+                            "capabilities" to emptyMap<String,Any>(),
+                            "clientInfo" to mapOf(
+                                "name" to "open-responses",
+                                "version" to "1.0.0"
+                            )
+                        ),
             )
         val (parsedBody, headers) = transport.sendWithHeaders(initReq)
         sessionId = headers["Mcp-Session-Id"] ?: (parsedBody as? Map<String, Any>)
             ?.get("result")
             ?.let { (it as? Map<String, Any>)?.get("sessionId") as? String }
-        // sessionId remains null if neither header nor body provided it
+
+        log.info { "Connection with server established at $url with sessionId: $sessionId" }
+        listenSSE = headers["Content-Type"] == "text/event-stream"
+        log.info { "Server will send content as ${headers["Content-Type"]}, setting listenSSE=$listenSSE" }
     }
 
     fun listTools(): List<ToolSpecification> {
+        if(listenSSE) {
+            return listenListTools()
+        }
         val resp =
             transport.send(
                 mapOf("jsonrpc" to "2.0", "method" to "tools/list", "id" to 2),
                 sessionId,
+
             )
-        return Converter.convert(mapper.readTree(resp))
+        return Converter.convert(mapper.readTree(resp as String))
+    }
+
+    private fun listenListTools(): List<ToolSpecification> {
+        // we’ll wait for exactly one response and then return
+        val latch = CountDownLatch(1)
+        val collected = mutableListOf<ToolSpecification>()
+
+        // fire off the RPC, streaming SSE events into our lambda
+        transport.send(
+            payload = mapOf("jsonrpc" to "2.0", "method" to "tools/list", "id" to 2),
+            sessionId = sessionId,
+            onEvent = { rawEvent ->
+                // rawEvent is already deserialized as Any -> re-serialize to JSON text
+                val text = mapper.writeValueAsString(rawEvent)
+                val node = mapper.readTree(text)
+                collected += Converter.convert(node)
+                latch.countDown()
+            }
+        )
+
+        // wait (with a timeout!) for the callback to fire
+        if (!latch.await(30, TimeUnit.SECONDS)) {
+            throw ResponseTimeoutException("Timed out waiting for tools/list response")
+        }
+        return collected
     }
 
     fun callTool(request: CallToolRequest): String {
+        if(listenSSE) {
+            return listenCallTool(request)
+        }
+
         val resp = transport.send(request.toRpc(3), sessionId)
         return resp.toString()
+    }
+
+    private fun listenCallTool(request: CallToolRequest): String {
+        val latch = CountDownLatch(1)
+        var toolResponse = "no_response_from_tool"
+        transport.send(payload = request.toRpc(3), sessionId= sessionId,
+            onEvent = { rawEvent ->
+                // rawEvent is already deserialized as Any -> re-serialize to JSON text
+                toolResponse = rawEvent.toString()
+                latch.countDown()
+            })
+        if (!latch.await(30, TimeUnit.SECONDS)) {
+            throw ResponseTimeoutException("Timed out waiting for tools/call response")
+        }
+        return toolResponse
     }
 
     fun closeGracefully() {
@@ -360,16 +413,6 @@ class McpSyncClient private constructor(
         )
     }
 }
-
-// Helper data classes for RPC
-
-data class CreateMessageRequest(
-    val content: String,
-)
-
-data class CreateMessageResult(
-    val response: Any,
-)
 
 data class CallToolRequest(
     val name: String,

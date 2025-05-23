@@ -1,9 +1,7 @@
 package ai.masaic.openresponses.api.utils
 
-import ai.masaic.openresponses.api.model.CreateCompletionRequest
-import ai.masaic.openresponses.api.model.CreateResponseRequest
-import ai.masaic.openresponses.api.model.MasaicManagedTool
-import ai.masaic.openresponses.api.model.Tool
+import ai.masaic.openresponses.api.model.*
+import ai.masaic.openresponses.tool.ToolProtocol
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonNode
@@ -38,18 +36,31 @@ class PayloadFormatter(
      * @param tools The original list of tools in the request
      * @return The updated list of tools
      */
-    private fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? =
-        tools
-            ?.map { tool ->
-                if (tool is MasaicManagedTool) {
-                    toolService.getFunctionTool(tool.type) ?: throw ResponseStatusException(
+    private fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? {
+        val updatedTools = mutableListOf<Tool>()
+        tools?.forEach {
+            when (it) {
+                is MasaicManagedTool -> {
+                    val tool = toolService.getFunctionTool(it.type) ?: throw ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Define tool ${tool.type} properly",
+                        "Define tool ${it.type} properly",
                     )
-                } else {
-                    tool
+                    updatedTools.add(tool)
                 }
-            }?.toMutableList()
+
+                is MCPTool -> {
+                    val mcpToolFunctions = toolService.getRemoteMcpTool(it)
+                    if(mcpToolFunctions.isEmpty()) throw IllegalStateException("No MCP tools found for ${it.serverLabel}, ${it.serverUrl}")
+                    updatedTools.addAll(mcpToolFunctions)
+                }
+
+                else -> {
+                    updatedTools.add(it)
+                }
+            }
+        }
+        return updatedTools
+    }
 
     /**
      * Updates the tools in the request with proper tool definitions from the tool service.
@@ -192,7 +203,12 @@ class PayloadFormatter(
             // Create a new ObjectNode with only the "type" field set to the function name.
             // This satisfies your requirement to include only the type parameter.
             val newToolNode = mapper.createObjectNode()
-            newToolNode.put("type", functionName)
+            if(toolMetadata.protocol == ToolProtocol.MCP) {
+                newToolNode.put("type", "mcp")
+                newToolNode.put("name", toolMetadata.name)
+            }else {
+                newToolNode.put("type", functionName)
+            }
             // Replace the current tool node with the new one.
             toolsNode.set(index, newToolNode)
         }

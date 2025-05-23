@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.tool.mcp
 
 import ai.masaic.openresponses.tool.ToolDefinition
+import ai.masaic.openresponses.tool.ToolHosting
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
@@ -15,10 +16,6 @@ class MCPToolExecutor {
     private val log = LoggerFactory.getLogger(MCPToolExecutor::class.java)
     private val mcpClients = mutableMapOf<String, McpClient>()
 
-    private companion object {
-        const val CONNECTION_TIMEOUT_SECONDS = 20L
-    }
-
     /**
      * Connects to an MCP server based on the provided configuration.
      *
@@ -30,17 +27,13 @@ class MCPToolExecutor {
         serverName: String,
         mcpServer: MCPServer,
     ): McpClient {
-        val mcpClient =
-            when {
-                mcpServer.url != null && mcpServer.command == null -> {
-                    McpClient().init(serverName, mcpServer)
-                }
-                else -> {
-                    McpClient().init(serverName, mcpServer, "stdio")
-                }
-            }
+        val mcpClient = McpClient().init(serverName, mcpServer)
         mcpClients[serverName] = mcpClient
         return mcpClient
+    }
+
+    fun addMcpClient(serverName: String, mcpClient: McpClient) {
+        mcpClients[serverName] = mcpClient
     }
 
     /**
@@ -55,8 +48,15 @@ class MCPToolExecutor {
         arguments: String,
     ): String? {
         val mcpTool = tool as McpToolDefinition
-        val mcpClient = mcpClients[mcpTool.serverInfo.id] ?: return null
-        return mcpClient.executeTool(tool, arguments)
+        var serverId = mcpTool.serverInfo.id
+        var toolName = mcpTool.name
+        if(mcpTool.hosting == ToolHosting.REMOTE) {
+            serverId = mcpTool.serverInfo.serverIdentifier()
+            toolName = mcpTool.serverInfo.unQualifiedToolName(mcpTool.name)
+        }
+
+        val mcpClient = mcpClients[serverId] ?: return null
+        return mcpClient.executeTool(tool.copy(name = toolName), arguments)
     }
 
     /**
@@ -67,23 +67,6 @@ class MCPToolExecutor {
             mcpClient.close()
         }
     }
-
-    /**
-     * Builds the command list for starting an MCP server via standard I/O.
-     *
-     * @param mcpServer Server configuration
-     * @return List of command arguments
-     */
-    private fun buildCommand(mcpServer: MCPServer): List<String> =
-        buildList {
-            mcpServer.command?.let { add(it) }
-            mcpServer.args.forEach { arg ->
-                val envVar = mcpServer.env[arg]
-                val envValue = envVar?.let { System.getenv(it) ?: it }
-                add(envValue?.let { "$arg=$it" } ?: arg)
-            }
-            add("2>&1")
-        }
 }
 
 /**
@@ -95,6 +78,7 @@ class MCPToolExecutor {
 @Component
 class MCPToolRegistry {
     private val toolRepository = mutableMapOf<String, ToolDefinition>()
+    private val serverRepository = mutableMapOf<String, MCPServerInfo>()
 
     /**
      * Registers MCP tools from the given client.
@@ -106,7 +90,7 @@ class MCPToolRegistry {
         serverName: String,
         mcpClient: McpClient,
     ) {
-        val mcpTools = mcpClient.listTools(serverName)
+        val mcpTools = mcpClient.listTools(MCPServerInfo(serverName))
         mcpTools.forEach { addTool(it) }
     }
 
@@ -115,8 +99,12 @@ class MCPToolRegistry {
      *
      * @param tool Tool definition to add
      */
-    private fun addTool(tool: ToolDefinition) {
+    fun addTool(tool: ToolDefinition) {
         toolRepository[tool.name] = tool
+    }
+
+    fun addMcpServer(mcpServerInfo: MCPServerInfo) {
+        serverRepository[mcpServerInfo.serverIdentifier()] = mcpServerInfo
     }
 
     /**
@@ -125,7 +113,15 @@ class MCPToolRegistry {
      * @param name Name of the tool to find
      * @return Tool definition if found, null otherwise
      */
-    fun findByName(name: String): ToolDefinition? = toolRepository[name]
+    fun findByName(name: String): ToolDefinition? {
+        return toolRepository[name]
+
+    }
+
+    fun findServerById(id: String): MCPServerInfo? {
+        return serverRepository[id]
+
+    }
 
     /**
      * Returns all registered tools.
