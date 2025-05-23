@@ -18,7 +18,7 @@ import java.util.*
 data class MCPServer(
     val command: String? = null,
     val args: List<String> = emptyList(),
-    val env: Map<String, String> = emptyMap()
+    val env: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -70,7 +70,7 @@ data class McpToolDefinition(
         name: String,
         description: String,
         mcpServerInfo: MCPServerInfo,
-        hosting: ToolHosting = ToolHosting.MASAIC_MANAGED
+        hosting: ToolHosting = ToolHosting.MASAIC_MANAGED,
     ) : this(
         UUID.randomUUID().toString(),
         ToolProtocol.MCP,
@@ -92,9 +92,11 @@ data class McpToolDefinition(
 data class MCPServerInfo(
     val id: String,
     val url: String = "not_required",
-    val tools: List<String> = emptyList()
+    val tools: List<String> = emptyList(),
 ) {
     fun serverIdentifier() = "${id}_$url"
+
     fun qualifiedToolName(toolName: String) = "${id}_$toolName"
-    fun unQualifiedToolName(qualifiedToolName: String) =  qualifiedToolName.replace("${id}_", "")
+
+    fun unQualifiedToolName(qualifiedToolName: String) = qualifiedToolName.replace("${id}_", "")
 }

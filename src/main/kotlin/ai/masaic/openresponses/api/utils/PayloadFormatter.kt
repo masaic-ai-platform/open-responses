@@ -41,16 +41,17 @@ class PayloadFormatter(
         tools?.forEach {
             when (it) {
                 is MasaicManagedTool -> {
-                    val tool = toolService.getFunctionTool(it.type) ?: throw ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Define tool ${it.type} properly",
-                    )
+                    val tool =
+                        toolService.getFunctionTool(it.type) ?: throw ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Define tool ${it.type} properly",
+                        )
                     updatedTools.add(tool)
                 }
 
                 is MCPTool -> {
                     val mcpToolFunctions = toolService.getRemoteMcpTool(it)
-                    if(mcpToolFunctions.isEmpty()) throw IllegalStateException("No MCP tools found for ${it.serverLabel}, ${it.serverUrl}")
+                    if (mcpToolFunctions.isEmpty()) throw IllegalStateException("No MCP tools found for ${it.serverLabel}, ${it.serverUrl}")
                     updatedTools.addAll(mcpToolFunctions)
                 }
 
@@ -203,10 +204,10 @@ class PayloadFormatter(
             // Create a new ObjectNode with only the "type" field set to the function name.
             // This satisfies your requirement to include only the type parameter.
             val newToolNode = mapper.createObjectNode()
-            if(toolMetadata.protocol == ToolProtocol.MCP) {
+            if (toolMetadata.protocol == ToolProtocol.MCP) {
                 newToolNode.put("type", "mcp")
                 newToolNode.put("name", toolMetadata.name)
-            }else {
+            } else {
                 newToolNode.put("type", functionName)
             }
             // Replace the current tool node with the new one.

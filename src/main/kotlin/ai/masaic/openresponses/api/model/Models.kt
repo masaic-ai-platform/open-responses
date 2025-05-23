@@ -395,9 +395,9 @@ data class MCPTool(
     val serverLabel: String,
     @JsonProperty("server_url")
     val serverUrl: String,
-    @JsonIgnore //TODO: for now this will be always never. Will enable this in upcoming releases.
+    @JsonIgnore // TODO: for now this will be always never. Will enable this in upcoming releases.
     @JsonProperty("require_approval")
     val requireApproval: String = "never",
     @JsonProperty("allowed_tools")
-    val allowedTools: List<String> = emptyList()
+    val allowedTools: List<String> = emptyList(),
 ) : Tool

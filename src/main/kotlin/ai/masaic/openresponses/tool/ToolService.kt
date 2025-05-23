@@ -87,15 +87,18 @@ class ToolService(
      */
     fun getAvailableTool(name: String): ToolMetadata? {
         val tool = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
-        val toolName = if(tool.hosting == ToolHosting.REMOTE) {
-            (tool as McpToolDefinition).serverInfo.unQualifiedToolName(tool.name)
-        }else tool.name
+        val toolName =
+            if (tool.hosting == ToolHosting.REMOTE) {
+                (tool as McpToolDefinition).serverInfo.unQualifiedToolName(tool.name)
+            } else {
+                tool.name
+            }
         return ToolMetadata(
             id = tool.id,
             name = toolName,
             description = tool.description,
             protocol = tool.protocol,
-            hosting = tool.hosting
+            hosting = tool.hosting,
         )
     }
 
@@ -202,13 +205,13 @@ class ToolService(
         val info = MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl)
         val allowedTools = mcpTool.allowedTools.map { info.qualifiedToolName(it) }
         val mcpServerInfo = mcpToolRegistry.findServerById(info.serverIdentifier())
-        return if(mcpServerInfo == null || mcpServerInfo.tools.isEmpty()) {
+        return if (mcpServerInfo == null || mcpServerInfo.tools.isEmpty()) {
             val mcpClient = McpClient().init(mcpTool.serverLabel, mcpTool.serverUrl)
             val availableTools = mcpClient.listTools(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl))
             availableTools.forEach {
                 mcpToolRegistry.addTool(it)
             }
-            mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, availableTools.map { it.name}))
+            mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, availableTools.map { it.name }))
             mcpToolExecutor.addMcpClient(info.serverIdentifier(), mcpClient)
 
             val toolsToUse = availableTools.filter { allowedTools.contains(it.name) }
@@ -216,7 +219,7 @@ class ToolService(
         } else {
             val tool = mutableListOf<FunctionTool>()
             mcpServerInfo.tools.forEach {
-                if(allowedTools.contains(it)) {
+                if (allowedTools.contains(it)) {
                     val toolDef = mcpToolRegistry.findByName(it) ?: throw IllegalStateException("Unable to find mcp tool $it in the registry")
                     tool.add((toolDef as McpToolDefinition).toFunctionTool())
                 }

@@ -12,7 +12,6 @@ import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.mcp.client.Converter
 import dev.langchain4j.mcp.client.DefaultMcpClient
 import dev.langchain4j.mcp.client.transport.McpTransport
-import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport
 import mu.KotlinLogging
 import okhttp3.Headers
@@ -25,7 +24,6 @@ import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import java.time.Duration
-import java.time.temporal.ChronoUnit
 import java.util.concurrent.*
 
 class McpClient {
@@ -40,7 +38,7 @@ class McpClient {
 
     fun init(
         serverName: String,
-        url: String
+        url: String,
     ): McpClient {
         val transport = HttpSseTransport(url)
         customClient =
@@ -49,15 +47,14 @@ class McpClient {
                 .requestTimeout(Duration.ofSeconds(60 * 1000))
                 .build()
         customClient?.initialize(url) ?: throw IllegalStateException("mcp client not initialised for $url")
-        log.info("MCP HTTP client connected for $serverName server at: ${url}")
+        log.info("MCP HTTP client connected for $serverName server at: $url")
         return this
     }
 
     fun init(
         serverName: String,
-        mcpServer: MCPServer
+        mcpServer: MCPServer,
     ): McpClient {
-
         val command = buildCommand(mcpServer)
         log.info("Command to start server will be: ${command.joinToString(" ")}")
 
@@ -95,14 +92,14 @@ class McpClient {
         return this
     }
 
-    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> {
-        return defaultMcpClient?.listTools()?.map {
+    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
+        defaultMcpClient?.listTools()?.map {
             val tool =
                 McpToolDefinition(
                     name = it.name(),
                     description = it.description() ?: it.name(),
                     parameters = it.parameters(),
-                    mcpServerInfo = mcpServerInfo
+                    mcpServerInfo = mcpServerInfo,
                 )
             log.info("Adding stdio mcp tool: $tool")
             tool
@@ -113,13 +110,12 @@ class McpClient {
                     description = it.description() ?: it.name(),
                     parameters = it.parameters(),
                     mcpServerInfo = mcpServerInfo,
-                    hosting = ToolHosting.REMOTE
+                    hosting = ToolHosting.REMOTE,
                 )
             log.info("Adding remote mcp tool: $tool")
             tool
         }
-        ?: emptyList()
-    }
+            ?: emptyList()
 
     fun executeTool(
         tool: ToolDefinition,
@@ -225,7 +221,7 @@ class HttpSseTransport(
 
             if (code == 202 && resp.body?.contentLength() == 0L) return null
 
-            if(code in 400..503) { //TODO: doing minimal handling now.
+            if (code in 400..503) { // TODO: doing minimal handling now.
                 throw Exception("mcp server request failed and response returned is: ${resp.body!!.string()}")
             }
 
@@ -276,7 +272,7 @@ class HttpSseTransport(
  * Supported client capabilities.
  */
 data class ClientCapabilities(
-    val roots: Map<String, Any>
+    val roots: Map<String, Any>,
 )
 
 /**
@@ -325,14 +321,15 @@ class McpSyncClient private constructor(
                 "method" to "initialize",
                 "id" to 1,
                 "params" to
-                        mapOf(
-                            "protocolVersion" to "2025-03-26",
-                            "capabilities" to emptyMap<String,Any>(),
-                            "clientInfo" to mapOf(
+                    mapOf(
+                        "protocolVersion" to "2025-03-26",
+                        "capabilities" to emptyMap<String, Any>(),
+                        "clientInfo" to
+                            mapOf(
                                 "name" to "open-responses",
-                                "version" to "1.0.0"
-                            )
-                        ),
+                                "version" to "1.0.0",
+                            ),
+                    ),
             )
         val (parsedBody, headers) = transport.sendWithHeaders(initReq)
         sessionId = headers["Mcp-Session-Id"] ?: (parsedBody as? Map<String, Any>)
@@ -345,14 +342,13 @@ class McpSyncClient private constructor(
     }
 
     fun listTools(): List<ToolSpecification> {
-        if(listenSSE) {
+        if (listenSSE) {
             return listenListTools()
         }
         val resp =
             transport.send(
                 mapOf("jsonrpc" to "2.0", "method" to "tools/list", "id" to 2),
                 sessionId,
-
             )
         return Converter.convert(mapper.readTree(resp as String))
     }
@@ -372,7 +368,7 @@ class McpSyncClient private constructor(
                 val node = mapper.readTree(text)
                 collected += Converter.convert(node)
                 latch.countDown()
-            }
+            },
         )
 
         // wait (with a timeout!) for the callback to fire
@@ -383,7 +379,7 @@ class McpSyncClient private constructor(
     }
 
     fun callTool(request: CallToolRequest): String {
-        if(listenSSE) {
+        if (listenSSE) {
             return listenCallTool(request)
         }
 
@@ -394,12 +390,15 @@ class McpSyncClient private constructor(
     private fun listenCallTool(request: CallToolRequest): String {
         val latch = CountDownLatch(1)
         var toolResponse = "no_response_from_tool"
-        transport.send(payload = request.toRpc(3), sessionId= sessionId,
+        transport.send(
+            payload = request.toRpc(3),
+            sessionId = sessionId,
             onEvent = { rawEvent ->
                 // rawEvent is already deserialized as Any -> re-serialize to JSON text
                 toolResponse = rawEvent.toString()
                 latch.countDown()
-            })
+            },
+        )
         if (!latch.await(30, TimeUnit.SECONDS)) {
             throw ResponseTimeoutException("Timed out waiting for tools/call response")
         }

@@ -32,7 +32,10 @@ class MCPToolExecutor {
         return mcpClient
     }
 
-    fun addMcpClient(serverName: String, mcpClient: McpClient) {
+    fun addMcpClient(
+        serverName: String,
+        mcpClient: McpClient,
+    ) {
         mcpClients[serverName] = mcpClient
     }
 
@@ -50,7 +53,7 @@ class MCPToolExecutor {
         val mcpTool = tool as McpToolDefinition
         var serverId = mcpTool.serverInfo.id
         var toolName = mcpTool.name
-        if(mcpTool.hosting == ToolHosting.REMOTE) {
+        if (mcpTool.hosting == ToolHosting.REMOTE) {
             serverId = mcpTool.serverInfo.serverIdentifier()
             toolName = mcpTool.serverInfo.unQualifiedToolName(mcpTool.name)
         }
@@ -113,15 +116,9 @@ class MCPToolRegistry {
      * @param name Name of the tool to find
      * @return Tool definition if found, null otherwise
      */
-    fun findByName(name: String): ToolDefinition? {
-        return toolRepository[name]
+    fun findByName(name: String): ToolDefinition? = toolRepository[name]
 
-    }
-
-    fun findServerById(id: String): MCPServerInfo? {
-        return serverRepository[id]
-
-    }
+    fun findServerById(id: String): MCPServerInfo? = serverRepository[id]
 
     /**
      * Returns all registered tools.
