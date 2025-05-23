@@ -10,7 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonField
 import com.openai.core.JsonValue
-import com.openai.models.ChatModel
+import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.completions.CompletionUsage
 import com.openai.models.responses.Response
@@ -177,7 +177,7 @@ class PayloadFormatterTest {
 
             every { params.instructions() } returns Optional.empty()
             every { params.metadata() } returns Optional.empty()
-            every { params.model() } returns ChatModel.of("gpt-4")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.temperature() } returns Optional.of(0.7)
             every { params._parallelToolCalls() } returns JsonField.of(false)
             if (includeTools) {
@@ -335,7 +335,7 @@ class PayloadFormatterTest {
 
             every { params.instructions() } returns Optional.empty()
             every { params.metadata() } returns Optional.empty()
-            every { params.model() } returns ChatModel.of("gpt-4")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.temperature() } returns Optional.of(0.7)
             every { params._parallelToolCalls() } returns JsonField.of(false)
             every { params._tools() } returns

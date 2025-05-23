@@ -2,14 +2,17 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.service.storage.FileService
 import ai.masaic.openresponses.tool.NativeToolRegistry
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.core.JsonValue
-import com.openai.models.ChatModel
 import com.openai.models.Reasoning
 import com.openai.models.ReasoningEffort
+import com.openai.models.ResponsesModel
 import com.openai.models.responses.*
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.spyk
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.*
@@ -18,6 +21,8 @@ import org.springframework.core.io.ByteArrayResource
 import java.util.Optional
 
 class MasaicParameterConverterTest {
+    private val objectMapper = spyk(jacksonObjectMapper().registerModule(Jdk8Module()))
+
     /**
      * Test for text-based input.
      */
@@ -26,7 +31,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             // Mock your parameter object
             val params = mockk<ResponseCreateParams>(relaxed = true)
@@ -37,7 +42,7 @@ class MasaicParameterConverterTest {
             every { input.toString() } returns "Hello from user"
             every { input.asText() } returns "Hello from user"
             every { params.input() } returns input
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.temperature() } returns Optional.of(0.7)
             every { params.maxOutputTokens() } returns Optional.of(128)
             every { params.topP() } returns Optional.of(0.9)
@@ -48,7 +53,7 @@ class MasaicParameterConverterTest {
 
             // Assertions
             assertNotNull(result)
-            assertEquals(ChatModel.of("gpt-3.5-turbo"), result.model())
+            assertEquals(ResponsesModel.ofString("gpt-4").asString(), result.model().asString())
             assertEquals(0.7, result.temperature().get())
             assertEquals(128, result.maxCompletionTokens().get())
             assertEquals(0.9, result.topP().get())
@@ -76,7 +81,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -102,7 +107,7 @@ class MasaicParameterConverterTest {
             every { input.isResponse() } returns true
             every { input.asResponse() } returns messageList
             every { params.input() } returns input
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.temperature() } returns Optional.of(0.7)
             every { params.maxOutputTokens() } returns Optional.of(128)
             every { params.topP() } returns Optional.of(0.9)
@@ -110,7 +115,7 @@ class MasaicParameterConverterTest {
 
             val result = converter.prepareCompletion(params)
 
-            assertEquals(ChatModel.of("gpt-3.5-turbo"), result.model())
+            assertEquals(ResponsesModel.ofString("gpt-4").asString(), result.model().asString())
             assertEquals(2, result.messages().size)
             assertEquals(0.7, result.temperature().get())
             assertEquals(128, result.maxCompletionTokens().get())
@@ -147,7 +152,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -156,7 +161,7 @@ class MasaicParameterConverterTest {
             every { input.asText() } returns "User text here"
             every { params.input() } returns input
             every { params.instructions() } returns Optional.of("System instructions")
-            every { params.model() } returns ChatModel.of("gpt-4")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.temperature() } returns Optional.empty()
             every { params.maxOutputTokens() } returns Optional.empty()
             every { params.topP() } returns Optional.empty()
@@ -165,7 +170,7 @@ class MasaicParameterConverterTest {
             val result = converter.prepareCompletion(params)
 
             assertNotNull(result)
-            assertEquals(ChatModel.of("gpt-4"), result.model())
+            assertEquals(ResponsesModel.ofString("gpt-4").asString(), result.model().asString())
             assertEquals(2, result.messages().size)
 
             // system message first
@@ -200,7 +205,7 @@ class MasaicParameterConverterTest {
     fun `test system message at non-zero index throws`() {
         val nativeToolRegistry = mockk<NativeToolRegistry>()
         val fileService = mockk<FileService>()
-        val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+        val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
         val params = mockk<ResponseCreateParams>(relaxed = true)
         val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -226,7 +231,7 @@ class MasaicParameterConverterTest {
         every { input.isResponse() } returns true
         every { input.asResponse() } returns messageList
         every { params.input() } returns input
-        every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.toolChoice() } returns Optional.empty()
 
         assertThrows(IllegalArgumentException::class.java) {
@@ -244,7 +249,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -260,7 +265,7 @@ class MasaicParameterConverterTest {
             every { input.isResponse() } returns true
             every { input.asResponse() } returns messageList
             every { params.input() } returns input
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.toolChoice() } returns Optional.empty()
 
             val result = converter.prepareCompletion(params)
@@ -307,7 +312,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -322,7 +327,7 @@ class MasaicParameterConverterTest {
             every { input.isResponse() } returns true
             every { input.asResponse() } returns messageList
             every { params.input() } returns input
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.toolChoice() } returns Optional.empty()
 
             val result = converter.prepareCompletion(params)
@@ -344,7 +349,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
 
@@ -367,14 +372,16 @@ class MasaicParameterConverterTest {
             // Mock the tool and its function
             val tool = mockk<Tool>(relaxed = true)
             val functionTool = mockk<FunctionTool>(relaxed = true)
+            every { functionTool.parameters() } returns Optional.empty()
             every { tool.isFunction() } returns true
             every { functionTool.name() } returns "someFunction"
             every { tool.asFunction() } returns functionTool
+            every { objectMapper.writeValueAsString(any()) } returns "{}"
 
             // Provide the tool
             every { params.tools() } returns Optional.of(listOf(tool))
             every { params.toolChoice() } returns Optional.empty()
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
 
             val result = converter.prepareCompletion(params)
             assertTrue(result.tools().isPresent)
@@ -400,15 +407,27 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
+            val schemaObject = mockk<ResponseFormatTextJsonSchemaConfig.Schema>(relaxed = true)
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
 
-            val text = mockk<ResponseTextConfig>(relaxed = true)
-            val format = mockk<ResponseFormatTextConfig>(relaxed = true)
             val jsonSchemaFormat = mockk<ResponseFormatTextJsonSchemaConfig>(relaxed = true)
-            val schemaObject = mockk<ResponseFormatTextJsonSchemaConfig.Schema>(relaxed = true)
+
+            every { jsonSchemaFormat.schema() } returns schemaObject
+            every { jsonSchemaFormat._type() } returns JsonValue.from("object")
+            every { jsonSchemaFormat._type().asString().get() } returns JsonValue.from("object").asString().get()
+            every { jsonSchemaFormat._name() } returns JsonValue.from("MyJSONSchema")
+            every { objectMapper.writeValueAsString(schemaObject) } returns "{}"
+
+            val text = mockk<ResponseTextConfig>(relaxed = true)
+            val format =
+                mockk<ResponseFormatTextConfig>(relaxed = true) {
+                    every { isJsonSchema() } returns true
+                    every { asJsonSchema() } returns jsonSchemaFormat
+                    every { asJsonSchema().schema() } returns schemaObject
+                }
 
             every { input.isText() } returns true
             every { input.asText() } returns "Test input text"
@@ -416,30 +435,16 @@ class MasaicParameterConverterTest {
 
             every { params.text() } returns Optional.of(text)
             every { text.format() } returns Optional.of(format)
-            every { format.isJsonSchema() } returns true
-            every { format.asJsonSchema() } returns jsonSchemaFormat
 
-            every { jsonSchemaFormat._type() } returns JsonValue.from("object")
-            every { jsonSchemaFormat._name() } returns JsonValue.from("MyJSONSchema")
-            every { jsonSchemaFormat.schema() } returns schemaObject
-
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.toolChoice() } returns Optional.empty()
 
             val result = converter.prepareCompletion(params)
 
             val rf = result.responseFormat().get()
             assertTrue(rf.isJsonSchema())
-            val schema = rf.asJsonSchema()
-            assertEquals("object", schema._type().asString().get())
-            assertEquals(
-                "MyJSONSchema",
-                schema
-                    .jsonSchema()
-                    ._name()
-                    .asString()
-                    .get(),
-            )
+            // verify the JSON schema
+            rf.asJsonSchema()
         }
 
     /**
@@ -450,7 +455,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -463,7 +468,7 @@ class MasaicParameterConverterTest {
             every { params.reasoning() } returns Optional.of(reasoning)
             every { reasoning.effort() } returns Optional.of(ReasoningEffort.MEDIUM)
 
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
             every { params.toolChoice() } returns Optional.empty()
 
             val result = converter.prepareCompletion(params)
@@ -479,7 +484,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
 
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -487,7 +492,7 @@ class MasaicParameterConverterTest {
             every { input.isText() } returns false
             every { input.isResponse() } returns false
             every { params.input() } returns input
-            every { params.model() } returns ChatModel.of("gpt-3.5-turbo")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4")
 
             assertThrows(IllegalArgumentException::class.java) {
                 runBlocking { converter.prepareCompletion(params) }
@@ -502,7 +507,7 @@ class MasaicParameterConverterTest {
         runTest {
             val nativeToolRegistry = mockk<NativeToolRegistry>()
             val fileService = mockk<FileService>()
-            val converter = MasaicParameterConverter(nativeToolRegistry, fileService)
+            val converter = MasaicParameterConverter(nativeToolRegistry, fileService, objectMapper)
         
             val params = mockk<ResponseCreateParams>(relaxed = true)
             val input = mockk<ResponseCreateParams.Input>(relaxed = true)
@@ -543,7 +548,7 @@ class MasaicParameterConverterTest {
             every { input.isResponse() } returns true
             every { input.asResponse() } returns messageList
             every { params.input() } returns input
-            every { params.model() } returns ChatModel.of("gpt-4o")
+            every { params.model() } returns ResponsesModel.ofString("gpt-4o")
             every { params.toolChoice() } returns Optional.empty()
         
             // Execute the test

@@ -5,7 +5,7 @@ import ai.masaic.openresponses.api.service.storage.FileService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.NativeToolRegistry
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
@@ -26,9 +26,9 @@ import org.springframework.stereotype.Component
 class MasaicParameterConverter(
     val nativeToolRegistry: NativeToolRegistry,
     val fileService: FileService,
+    val objectMapper: ObjectMapper,
 ) {
     private val logger = KotlinLogging.logger {}
-    private val objectMapper = jacksonObjectMapper()
 
     /**
      * Prepares a chat completion request from response parameters.

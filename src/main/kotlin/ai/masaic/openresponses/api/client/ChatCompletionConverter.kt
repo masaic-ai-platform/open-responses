@@ -770,6 +770,13 @@ object ChatCompletionConverter {
                             .get(),
                     ).build(),
             )
+        } else {
+            builder.inputTokensDetails(
+                ResponseUsage.InputTokensDetails
+                    .builder()
+                    .cachedTokens(0)
+                    .build(),
+            )
         }
 
         if (completionUsage.completionTokensDetails().isPresent &&

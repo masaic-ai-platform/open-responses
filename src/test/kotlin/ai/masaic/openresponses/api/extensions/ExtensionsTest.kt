@@ -5,7 +5,7 @@ import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.ChatModel
-import com.openai.models.Metadata
+import com.openai.models.ResponsesModel
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -35,13 +35,13 @@ class ExtensionsTest {
                 mockk<ResponseCreateParams.Body> {
                     every { previousResponseId() } returns Optional.empty()
                     every { input() } returns ResponseCreateParams.Input.ofText("Test input")
-                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { model() } returns ResponsesModel.ofString("gpt-4o")
                     every { instructions() } returns Optional.of("Test instructions")
                     every { reasoning() } returns Optional.empty()
                     every { include() } returns Optional.empty()
                     every { parallelToolCalls() } returns Optional.of(true)
                     every { maxOutputTokens() } returns Optional.of(100)
-                    every { metadata() } returns Optional.of(Metadata.builder().build())
+                    every { metadata() } returns Optional.of(ResponseCreateParams.Metadata.builder().build())
                     every { store() } returns Optional.of(true)
                     every { temperature() } returns Optional.of(0.7)
                     every { topP() } returns Optional.of(0.9)
@@ -126,22 +126,34 @@ class ExtensionsTest {
             coEvery { responseStore.getOutputItems(previousResponseId) } returns previousOutputItems
         
             // Mock converted input items
-            val convertedInputItem1 = mockk<ResponseInputItem>()
-            val convertedInputItem2 = mockk<ResponseInputItem>()
-            val convertedOutputItem = mockk<ResponseInputItem>()
+            val convertedInputItem1 =
+                mockk<ResponseInputItem> {
+                    every { isFunctionCall() } returns false
+                }
+            val convertedInputItem2 =
+                mockk<ResponseInputItem> {
+                    every { isFunctionCall() } returns false
+                }
+            val convertedOutputItem =
+                mockk<ResponseInputItem> {
+                    every { isFunctionCall() } returns false
+                }
             every { objectMapper.convertValue(previousInputItem1, ResponseInputItem::class.java) } returns convertedInputItem1
             every { objectMapper.convertValue(previousInputItem2, ResponseInputItem::class.java) } returns convertedInputItem2
             every { objectMapper.convertValue(previousOutputItem, ResponseInputItem::class.java) } returns convertedOutputItem
         
             // Mock current input
-            val currentInputItem = mockk<ResponseInputItem>()
+            val currentInputItem =
+                mockk<ResponseInputItem> {
+                    every { isFunctionCall() } returns false
+                }
             val currentInputItems = listOf(currentInputItem)
         
             val body =
                 mockk<ResponseCreateParams.Body> {
                     every { previousResponseId() } returns Optional.of(previousResponseId)
                     every { input() } returns ResponseCreateParams.Input.ofResponse(currentInputItems)
-                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { model() } returns ResponsesModel.ofString("gpt-4o")
                     every { instructions() } returns Optional.empty()
                     every { reasoning() } returns Optional.empty()
                     every { parallelToolCalls() } returns Optional.empty()

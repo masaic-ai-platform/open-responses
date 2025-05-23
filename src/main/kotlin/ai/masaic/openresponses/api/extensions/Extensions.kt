@@ -104,7 +104,7 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     return this
 }
 
-private fun ResponseCreateParams.Builder.removeImageBody(items: MutableList<ResponseInputItem>): List<ResponseInputItem> {
+fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>): List<ResponseInputItem> {
     // Take all function and function output items
     val imageFunctionIds = items.filter { it.isFunctionCall() && it.asFunctionCall().name() == "image_generation" }.map { it.asFunctionCall().callId() }.toSet()
 

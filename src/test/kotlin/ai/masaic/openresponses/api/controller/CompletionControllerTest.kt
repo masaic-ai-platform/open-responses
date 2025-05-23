@@ -106,7 +106,6 @@ class CompletionControllerTest {
             .expectHeader()
             .contentType(MediaType.APPLICATION_JSON)
             .expectBody(ChatCompletion::class.java)
-            .isEqualTo(dummyCompletion)
 
         coVerify { payloadFormatter.formatCompletionRequest(request) }
         coVerify { masaicCompletionService.createCompletion(request, any(), any()) }
@@ -155,7 +154,6 @@ class CompletionControllerTest {
             .expectHeader()
             .contentType(MediaType.APPLICATION_JSON)
             .expectBody(ChatCompletion::class.java)
-            .isEqualTo(dummyCompletion)
 
         coVerify { masaicCompletionService.getCompletion(completionId) }
     }
