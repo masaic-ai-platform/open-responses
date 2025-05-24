@@ -954,6 +954,21 @@ class MasaicToolHandler(
                                         .build(),
                                 ),
                             )
+
+                            eventEmitter.invoke(
+                                ServerSentEvent
+                                    .builder<String>()
+                                    .event("$eventPrefix.completed")
+                                    .data(
+                                        objectMapper.writeValueAsString(
+                                            mapOf<String, String>(
+                                                "item_id" to function.id().toString(),
+                                                "output_index" to index.toString(),
+                                                "type" to "$eventPrefix.completed",
+                                            ),
+                                        ),
+                                    ).build(),
+                            )
                         } else {
                             logger.warn { "Tool execution returned null for ${function.name()}" }
                             // Add the function call to response items
@@ -978,6 +993,22 @@ class MasaicToolHandler(
                                         .output("Tool ${function.name()} returned null output.")
                                         .build(),
                                 ),
+                            )
+
+                            eventEmitter.invoke(
+                                ServerSentEvent
+                                    .builder<String>()
+                                    .event("$eventPrefix.completed")
+                                    .data(
+                                        objectMapper.writeValueAsString(
+                                            mapOf<String, String>(
+                                                "item_id" to function.id().toString(),
+                                                "output_index" to index.toString(),
+                                                "type" to "$eventPrefix.completed",
+                                                "error" to "Tool returned error or null",
+                                            ),
+                                        ),
+                                    ).build(),
                             )
                         }
                     }
