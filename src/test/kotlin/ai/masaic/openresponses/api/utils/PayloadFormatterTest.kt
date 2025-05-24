@@ -28,7 +28,7 @@ import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
 import java.util.Optional
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PayloadFormatterTest {
     private lateinit var toolService: ToolService
@@ -51,7 +51,7 @@ class PayloadFormatterTest {
             payloadFormatter.formatResponseRequest(request)
 
             // Tools remain null, no changes
-            assertNull(request.tools)
+            assertTrue { request.tools?.isEmpty() ?: false }
         }
 
         @Test

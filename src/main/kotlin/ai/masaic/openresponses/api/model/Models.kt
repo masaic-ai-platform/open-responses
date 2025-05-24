@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -109,6 +110,7 @@ data class RankingOptions(
     JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search"),
     JsonSubTypes.Type(value = FunctionTool::class, name = "function"),
     JsonSubTypes.Type(value = AgenticSeachTool::class, name = "agentic_search"),
+    JsonSubTypes.Type(value = MCPTool::class, name = "mcp"),
     JsonSubTypes.Type(value = ImageGenerationTool::class, name = "image_generation"),
 )
 interface Tool {
@@ -377,6 +379,28 @@ data class InstrumentationMetadataInput(
     val modelProviderAddress: String = "UNKNOWN",
     val modelProviderPort: String = "UNKNOWN",
 )
+
+/**
+ * Tool implementation for MCP (Model Control Panel) operations.
+ *
+ * @property type The type identifier for this tool, should be "mcp"
+ * @property serverLabel Label for the server
+ * @property serverUrl URL of the MCP server
+ * @property requireApproval When approval is required for tool use
+ * @property allowedTools List of tools allowed to be used
+ */
+data class MCPTool(
+    override val type: String,
+    @JsonProperty("server_label")
+    val serverLabel: String,
+    @JsonProperty("server_url")
+    val serverUrl: String,
+    @JsonIgnore // TODO: for now this will be always never. Will enable this in upcoming releases.
+    @JsonProperty("require_approval")
+    val requireApproval: String = "never",
+    @JsonProperty("allowed_tools")
+    val allowedTools: List<String> = emptyList(),
+) : Tool
 
 /**
  * Optional mask for inpainting within an image generation tool.

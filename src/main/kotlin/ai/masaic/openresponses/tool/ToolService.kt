@@ -1,11 +1,8 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.model.FunctionTool
-import ai.masaic.openresponses.tool.mcp.MCPServer
-import ai.masaic.openresponses.tool.mcp.MCPServers
-import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
-import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
-import ai.masaic.openresponses.tool.mcp.McpToolDefinition
+import ai.masaic.openresponses.api.model.MCPTool
+import ai.masaic.openresponses.tool.mcp.*
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
@@ -14,7 +11,6 @@ import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionTool
 import com.openai.models.responses.ResponseCreateParams
-import dev.langchain4j.mcp.client.McpClient
 import dev.langchain4j.model.chat.request.json.*
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
@@ -91,10 +87,18 @@ class ToolService(
      */
     fun getAvailableTool(name: String): ToolMetadata? {
         val tool = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name) ?: return null
+        val toolName =
+            if (tool.hosting == ToolHosting.REMOTE) {
+                (tool as McpToolDefinition).serverInfo.unQualifiedToolName(tool.name)
+            } else {
+                tool.name
+            }
         return ToolMetadata(
             id = tool.id,
-            name = tool.name,
+            name = toolName,
             description = tool.description,
+            protocol = tool.protocol,
+            hosting = tool.hosting,
         )
     }
 
@@ -192,6 +196,48 @@ class ToolService(
         return when {
             toolDefinition is NativeToolDefinition -> NativeToolDefinition.toFunctionTool(toolDefinition)
             else -> (toolDefinition as McpToolDefinition).toFunctionTool()
+        }
+    }
+
+    fun getRemoteMcpTools(
+        mcpTool: MCPTool,
+    ): List<FunctionTool> {
+        val remoteTools = getRemoteMcpToolDefinitions(mcpTool)
+        return remoteTools.map { it.toFunctionTool() }
+    }
+
+    fun getRemoteMcpToolsForChatCompletion(
+        mcpTool: MCPTool,
+    ): List<ChatCompletionTool> {
+        val remoteTools = getRemoteMcpToolDefinitions(mcpTool)
+        return remoteTools.map { it.toChatCompletionTool(objectMapper) }
+    }
+
+    private fun getRemoteMcpToolDefinitions(
+        mcpTool: MCPTool,
+    ): List<McpToolDefinition> {
+        val info = MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl)
+        val allowedTools = mcpTool.allowedTools.map { info.qualifiedToolName(it) }
+        val mcpServerInfo = mcpToolRegistry.findServerById(info.serverIdentifier())
+        return if (mcpServerInfo == null || mcpServerInfo.tools.isEmpty()) {
+            val mcpClient = McpClient().init(mcpTool.serverLabel, mcpTool.serverUrl)
+            val availableTools = mcpClient.listTools(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl))
+            availableTools.forEach {
+                mcpToolRegistry.addTool(it)
+            }
+            mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, availableTools.map { it.name }))
+            mcpToolExecutor.addMcpClient(info.serverIdentifier(), mcpClient)
+
+            availableTools.filter { allowedTools.contains(it.name) }
+        } else {
+            val tools = mutableListOf<McpToolDefinition>()
+            mcpServerInfo.tools.forEach {
+                if (allowedTools.contains(it)) {
+                    val toolDef = mcpToolRegistry.findByName(it) ?: throw IllegalStateException("Unable to find mcp tool $it in the registry")
+                    tools.add((toolDef as McpToolDefinition))
+                }
+            }
+            return tools
         }
     }
 
