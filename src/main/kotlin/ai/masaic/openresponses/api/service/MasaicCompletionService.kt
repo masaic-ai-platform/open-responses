@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.client.CompletionStore
 import ai.masaic.openresponses.api.client.MasaicOpenAiCompletionServiceImpl
+import ai.masaic.openresponses.api.extensions.isImageContent
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -16,6 +17,8 @@ import com.openai.models.ResponseFormatJsonSchema
 import com.openai.models.ResponseFormatText
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
+import com.openai.models.chat.completions.ChatCompletionContentPartText
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall
@@ -398,7 +401,7 @@ class MasaicCompletionService(
 
     /**
      * This function takes a list of ChatCompletionMessageParam objects and removes the bodies of all the messages
-     * that contain an image generation function. The bodies of the messages are replaced with "<image>".
+     * that contain an image generation function. The bodies of the messages are replaced with "<FORMAT>...".
      *
      * @param messages The list of messages to process
      * @return A new list of messages, with the bodies of the image generation functions removed
@@ -410,26 +413,67 @@ class MasaicCompletionService(
                 .filter { it.function().name() == "image-generation" }
                 .map { it.id() }
 
-        if (imageGenerationFunctions.isEmpty()) {
-            return messages
-        }
-
         val newMessages = mutableListOf<ChatCompletionMessageParam>()
 
         for (message in messages) {
             if (message.isTool()) {
                 if (imageGenerationFunctions.contains(message.asTool().toolCallId())) {
-                    newMessages.add(
-                        ChatCompletionMessageParam.ofTool(
-                            ChatCompletionToolMessageParam
-                                .builder()
-                                .toolCallId(message.asTool().toolCallId())
-                                .content("<image>")
-                                .build(),
-                        ),
-                    )
+                    // Check if the tool content is an image using the new detection logic
+                    val toolContent = message.asTool().content()
+                    if (toolContent.isText()) {
+                        val imageInfo = isImageContent(toolContent.asText())
+                        val replacementText = if (imageInfo.isImage) "<${imageInfo.format}>..." else "<image>..."
+
+                        newMessages.add(
+                            ChatCompletionMessageParam.ofTool(
+                                ChatCompletionToolMessageParam
+                                    .builder()
+                                    .toolCallId(message.asTool().toolCallId())
+                                    .content(replacementText)
+                                    .build(),
+                            ),
+                        )
+                    } else if (toolContent.isArrayOfContentParts()) {
+                        val contentParts = toolContent.asArrayOfContentParts()
+                        val newContentParts = mutableListOf<ChatCompletionContentPartText>()
+                        for (contentPart in contentParts) {
+                            val imageInfo = isImageContent(contentPart.text())
+                            val replacementText = if (imageInfo.isImage) "<${imageInfo.format}>..." else contentPart.text()
+                            newContentParts.add(
+                                ChatCompletionContentPartText
+                                    .builder()
+                                    .text(replacementText)
+                                    .build(),
+                            )
+                        }
+                        newMessages.add(
+                            ChatCompletionMessageParam.ofTool(
+                                ChatCompletionToolMessageParam
+                                    .builder()
+                                    .toolCallId(message.asTool().toolCallId())
+                                    .content(ChatCompletionToolMessageParam.Content.ofArrayOfContentParts(newContentParts))
+                                    .build(),
+                            ),
+                        )
+                    } else {
+                        // For other content types, add default replacement
+                        newMessages.add(
+                            ChatCompletionMessageParam.ofTool(
+                                ChatCompletionToolMessageParam
+                                    .builder()
+                                    .toolCallId(message.asTool().toolCallId())
+                                    .content("<image>...")
+                                    .build(),
+                            ),
+                        )
+                    }
+                } else {
+                    newMessages.add(message)
                 }
             } else if (message.isAssistant()) {
+                var imageFormat = "image"
+                
+                // Check the old detection method for backward compatibility
                 if (message.asAssistant()._additionalProperties().containsKey("type") &&
                     message
                         .asAssistant()
@@ -441,11 +485,78 @@ class MasaicCompletionService(
                             .ofAssistant(
                                 ChatCompletionAssistantMessageParam
                                     .builder()
-                                    .content("<image>")
+                                    .content("<$imageFormat>...")
                                     .build(),
                             ),
                     )
+                    continue
                 }
+                
+                // Check the actual content using the new detection logic
+                val assistantContent = message.asAssistant().content()
+                if (assistantContent.isPresent) {
+                    val textContent = assistantContent.get()
+                    if (textContent.isText()) {
+                        val imageInfo = isImageContent(textContent.asText())
+                        if (imageInfo.isImage) {
+                            imageFormat = imageInfo.format
+                            newMessages.add(
+                                ChatCompletionMessageParam
+                                    .ofAssistant(
+                                        ChatCompletionAssistantMessageParam
+                                            .builder()
+                                            .content("<$imageFormat>...")
+                                            .build(),
+                                    ),
+                            )
+                            continue
+                        }
+                    } else if (textContent.isArrayOfContentParts()) {
+                        val contentParts = textContent.asArrayOfContentParts()
+                        val newContentParts = mutableListOf<ChatCompletionRequestAssistantMessageContentPart>()
+                        var hasImageReplacement = false
+                        
+                        for (contentPart in contentParts) {
+                            if (contentPart.isText() && contentPart.asText().text().isNotBlank()) {
+                                val imageInfo = isImageContent(contentPart.asText().text())
+                                if (imageInfo.isImage) {
+                                    newContentParts.add(
+                                        ChatCompletionRequestAssistantMessageContentPart
+                                            .ofText(
+                                                ChatCompletionContentPartText
+                                                    .builder()
+                                                    .text(
+                                                        "<${imageInfo.format}>...",
+                                                    ).build(),
+                                            ),
+                                    )
+                                    hasImageReplacement = true
+                                } else {
+                                    newContentParts.add(contentPart)
+                                }
+                            } else {
+                                newContentParts.add(contentPart)
+                            }
+                        }
+
+                        // Only create new message if we had replacements, otherwise use original
+                        if (hasImageReplacement) {
+                            newMessages.add(
+                                ChatCompletionMessageParam
+                                    .ofAssistant(
+                                        ChatCompletionAssistantMessageParam
+                                            .builder()
+                                            .content(ChatCompletionAssistantMessageParam.Content.ofArrayOfContentParts(newContentParts))
+                                            .build(),
+                                    ),
+                            )
+                        } else {
+                            newMessages.add(message)
+                        }
+                        continue
+                    }
+                }
+                newMessages.add(message)
             } else {
                 newMessages.add(message)
             }

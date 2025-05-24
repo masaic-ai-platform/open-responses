@@ -8,6 +8,7 @@ import com.openai.models.chat.completions.ChatCompletionMessage
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.responses.EasyInputMessage
 import com.openai.models.responses.ResponseCreateParams
+import com.openai.models.responses.ResponseInputContent
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.ResponseOutputMessage
 import com.openai.models.responses.ResponseOutputText
@@ -104,56 +105,178 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     return this
 }
 
+/**
+ * Data class to hold image format information
+ */
+data class ImageInfo(
+    val format: String,
+    val isImage: Boolean,
+)
+
+/**
+ * Function to detect if content is a valid image based on base64 pattern and image signatures
+ */
+fun isImageContent(content: String): ImageInfo {
+    // Check if content is valid base64 pattern
+    val base64Pattern = Regex("^[A-Za-z0-9+/]*={0,2}$")
+    if (!base64Pattern.matches(content.trim())) {
+        return ImageInfo("", false)
+    }
+    
+    // Check length - must be > 1000 characters
+    if (content.length <= 1000) {
+        return ImageInfo("", false)
+    }
+    
+    // Check image format signatures
+    val trimmedContent = content.trim()
+    
+    return when {
+        trimmedContent.startsWith("/9j/") || trimmedContent.startsWith("FFD8") || trimmedContent.startsWith("/9j") ->
+            ImageInfo("JPEG", true)
+        trimmedContent.startsWith("iVBORw0KGgo") || trimmedContent.startsWith("89504E47") || trimmedContent.startsWith("iVBORw") ->
+            ImageInfo("PNG", true)
+        trimmedContent.startsWith("UklGR") || trimmedContent.startsWith("UklGRg") ->
+            ImageInfo("WebP", true)
+        trimmedContent.startsWith("R0lGODlh") || trimmedContent.startsWith("R0lGODdh") || trimmedContent.startsWith("R0lGOD") ->
+            ImageInfo("GIF", true)
+        trimmedContent.contains("/9j/") || trimmedContent.contains("FFD8") || trimmedContent.contains("/9j") ->
+            ImageInfo("JPEG", true)
+        trimmedContent.contains("iVBORw0KGgo") || trimmedContent.contains("89504E47") || trimmedContent.contains("iVBORw") ->
+            ImageInfo("PNG", true)
+        trimmedContent.contains("UklGR") || trimmedContent.contains("UklGRg") ->
+            ImageInfo("WebP", true)
+        trimmedContent.contains("R0lGODlh") || trimmedContent.contains("R0lGODdh") || trimmedContent.contains("R0lGOD") ->
+            ImageInfo("GIF", true)
+        else -> ImageInfo("", false)
+    }
+}
+
 fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>): List<ResponseInputItem> {
     // Take all function and function output items
     val imageFunctionIds = items.filter { it.isFunctionCall() && it.asFunctionCall().name() == "image_generation" }.map { it.asFunctionCall().callId() }.toSet()
 
-    if (imageFunctionIds.isEmpty()) {
-        return items
-    }
     val newItems = mutableListOf<ResponseInputItem>()
 
     items.forEachIndexed { index, it ->
         if (it.isFunctionCallOutput() && imageFunctionIds.contains(it.asFunctionCallOutput().callId())) {
+            // Check if the output content is an image
+            val outputContent = it.asFunctionCallOutput().output()
+            val imageInfo = isImageContent(outputContent)
             val builder = it.asFunctionCallOutput().toBuilder()
-            builder.output("<image>")
+            
+            if (imageInfo.isImage) {
+                builder.output("<${imageInfo.format}>...")
+            } else {
+                builder.output("<image>...")
+            }
             newItems.add(ResponseInputItem.ofFunctionCallOutput(builder.build()))
         } else if (it.isEasyInputMessage() &&
-            it.asEasyInputMessage().content().isResponseInputMessageContentList() &&
-            it.asEasyInputMessage().content().asResponseInputMessageContentList().any {
-                it.isInputText() && it.asInputText()._additionalProperties()["type"].toString() == "image"
-            }
+            it.asEasyInputMessage().content().isResponseInputMessageContentList()
         ) {
-            val builder = it.asEasyInputMessage().toBuilder()
-            builder.content("<image>")
-            newItems.add(ResponseInputItem.ofEasyInputMessage(builder.build()))
-        } else if (it.isResponseOutputMessage() &&
-            it.asResponseOutputMessage().content().any {
-                it
-                    ._json()
-                    .get()
-                    .toString()
-                    .contains("output_format=b64_json") ||
-                    it
-                        ._json()
-                        .get()
-                        .toString()
-                        .contains("type=image")
+            // Check if any content in the list is an image and replace only those items
+            val contentList = it.asEasyInputMessage().content().asResponseInputMessageContentList()
+            val newContentList = mutableListOf<ResponseInputContent>()
+            var hasAnyReplacement = false
+            
+            for (contentItem in contentList) {
+                if (contentItem.isInputText()) {
+                    val textContent = contentItem.asInputText().text()
+                    val imageInfo = isImageContent(textContent)
+                    if (imageInfo.isImage) {
+                        // Replace this specific image content
+                        newContentList.add(
+                            ResponseInputContent.ofInputText(
+                                contentItem
+                                    .asInputText()
+                                    .toBuilder()
+                                    .text("<${imageInfo.format}>...")
+                                    .build(),
+                            ),
+                        )
+                        hasAnyReplacement = true
+                    } else if (contentItem.asInputText()._additionalProperties()["type"].toString() == "image") {
+                        // Also handle the old detection method for backward compatibility
+                        newContentList.add(
+                            ResponseInputContent.ofInputText(
+                                contentItem
+                                    .asInputText()
+                                    .toBuilder()
+                                    .text("<image>...")
+                                    .build(),
+                            ),
+                        )
+                        hasAnyReplacement = true
+                    } else {
+                        // Keep the original content item
+                        newContentList.add(contentItem)
+                    }
+                } else {
+                    // Keep non-text content items as they are
+                    newContentList.add(contentItem)
+                }
             }
-        ) {
-            val builder = it.asResponseOutputMessage().toBuilder()
-            builder.content(
-                listOf(
-                    ResponseOutputMessage.Content.ofOutputText(
-                        ResponseOutputText
-                            .builder()
-                            .text("<image>")
-                            .annotations(listOf())
-                            .build(),
-                    ),
-                ),
-            )
-            newItems.add(ResponseInputItem.ofResponseOutputMessage(builder.build()))
+            
+            if (hasAnyReplacement) {
+                val builder = it.asEasyInputMessage().toBuilder()
+                builder.content(EasyInputMessage.Content.ofResponseInputMessageContentList(newContentList))
+                newItems.add(ResponseInputItem.ofEasyInputMessage(builder.build()))
+            } else {
+                newItems.add(it)
+            }
+        } else if (it.isResponseOutputMessage()) {
+            // Check if any content is an image and replace only those items
+            val contentList = it.asResponseOutputMessage().content()
+            val newContentList = mutableListOf<ResponseOutputMessage.Content>()
+            var hasAnyReplacement = false
+            
+            for (contentItem in contentList) {
+                val jsonContent = contentItem._json().get().toString()
+                
+                // Check for old detection patterns
+                if (jsonContent.contains("output_format=b64_json") || jsonContent.contains("type=image")) {
+                    newContentList.add(
+                        ResponseOutputMessage.Content.ofOutputText(
+                            ResponseOutputText
+                                .builder()
+                                .text("<image>...")
+                                .annotations(listOf())
+                                .build(),
+                        ),
+                    )
+                    hasAnyReplacement = true
+                } else if (contentItem.isOutputText()) {
+                    // Try to check actual content for image signatures
+                    val textContent = contentItem.asOutputText().text()
+                    val imageInfo = isImageContent(textContent)
+                    if (imageInfo.isImage) {
+                        newContentList.add(
+                            ResponseOutputMessage.Content.ofOutputText(
+                                ResponseOutputText
+                                    .builder()
+                                    .text("<${imageInfo.format}>...")
+                                    .annotations(contentItem.asOutputText().annotations())
+                                    .build(),
+                            ),
+                        )
+                        hasAnyReplacement = true
+                    } else {
+                        // Keep the original content item
+                        newContentList.add(contentItem)
+                    }
+                } else {
+                    // Keep non-text content items as they are
+                    newContentList.add(contentItem)
+                }
+            }
+            
+            if (hasAnyReplacement) {
+                val builder = it.asResponseOutputMessage().toBuilder()
+                builder.content(newContentList)
+                newItems.add(ResponseInputItem.ofResponseOutputMessage(builder.build()))
+            } else {
+                newItems.add(it)
+            }
         } else {
             newItems.add(it)
         }
