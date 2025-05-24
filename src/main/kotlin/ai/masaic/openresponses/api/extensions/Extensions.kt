@@ -195,7 +195,7 @@ fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>)
                             ),
                         )
                         hasAnyReplacement = true
-                    } else if (contentItem.asInputText()._additionalProperties()["type"].toString() == "image") {
+                    } else if (contentItem.asInputText()._additionalProperties()["type"].toString() == "output_image") {
                         // Also handle the old detection method for backward compatibility
                         newContentList.add(
                             ResponseInputContent.ofInputText(
@@ -234,7 +234,7 @@ fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>)
                 val jsonContent = contentItem._json().get().toString()
                 
                 // Check for old detection patterns
-                if (jsonContent.contains("output_format=b64_json") || jsonContent.contains("type=image")) {
+                if (jsonContent.contains("output_format=b64_json") || jsonContent.contains("type=output_image")) {
                     newContentList.add(
                         ResponseOutputMessage.Content.ofOutputText(
                             ResponseOutputText

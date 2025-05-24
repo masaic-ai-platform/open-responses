@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.extensions.isImageContent
 import ai.masaic.openresponses.tool.AgenticSearchResponse
 import ai.masaic.openresponses.tool.FileSearchResponse
 import com.fasterxml.jackson.core.JsonProcessingException
@@ -136,6 +137,15 @@ object ChatCompletionConverter {
 
                     val list = outputItems.toMutableList()
                     val last = list.removeLast()
+                    val isImage =
+                        isImageContent(
+                            last
+                                .asMessage()
+                                .content()
+                                .last()
+                                .asOutputText()
+                                .text(),
+                        ).isImage
                     list.add(
                         ResponseOutputItem.ofMessage(
                             ResponseOutputMessage
@@ -152,6 +162,7 @@ object ChatCompletionConverter {
                                                     .asOutputText()
                                                     .text(),
                                             ).annotations(annotations)
+                                            .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "output_text"))
                                             .build(),
                                     ),
                                 ).id(UUID.randomUUID().toString())
@@ -208,6 +219,15 @@ object ChatCompletionConverter {
 
                     val list = outputItems.toMutableList()
                     val last = list.removeLast()
+                    val isImage =
+                        isImageContent(
+                            last
+                                .asMessage()
+                                .content()
+                                .last()
+                                .asOutputText()
+                                .text(),
+                        ).isImage
                     list.add(
                         ResponseOutputItem.ofMessage(
                             ResponseOutputMessage
@@ -224,6 +244,7 @@ object ChatCompletionConverter {
                                                     .asOutputText()
                                                     .text(),
                                             ).annotations(annotations)
+                                            .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "output_text"))
                                             .build(),
                                     ),
                                 ).id(UUID.randomUUID().toString())
@@ -471,12 +492,16 @@ object ChatCompletionConverter {
                                         .build(),
                                 )
                             }
-
+                        val isImage = isImageContent(messageText).isImage
                         return ResponseOutputItem.ofMessage(
                             ResponseOutputMessage
                                 .builder()
                                 .addContent(
-                                    builder.text(messageText).annotations(annotations).build(),
+                                    builder
+                                        .text(messageText)
+                                        .annotations(annotations)
+                                        .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "text"))
+                                        .build(),
                                 ).id(UUID.randomUUID().toString())
                                 .status(ResponseOutputMessage.Status.COMPLETED)
                                 .build(),
@@ -493,6 +518,7 @@ object ChatCompletionConverter {
                                 AgenticSearchResponse::class.java,
                             )
 
+                        val isImage = isImageContent(messageText).isImage
                         val annotations =
                             response.data.flatMap { it.annotations }.map {
                                 ResponseOutputText.Annotation.ofFileCitation(
@@ -510,7 +536,11 @@ object ChatCompletionConverter {
                             ResponseOutputMessage
                                 .builder()
                                 .addContent(
-                                    builder.text(messageText).annotations(annotations).build(),
+                                    builder
+                                        .text(messageText)
+                                        .annotations(annotations)
+                                        .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "text"))
+                                        .build(),
                                 ).id(UUID.randomUUID().toString())
                                 .status(ResponseOutputMessage.Status.COMPLETED)
                                 .build(),

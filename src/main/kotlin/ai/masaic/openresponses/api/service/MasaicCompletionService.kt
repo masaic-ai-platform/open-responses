@@ -471,14 +471,14 @@ class MasaicCompletionService(
                     newMessages.add(message)
                 }
             } else if (message.isAssistant()) {
-                var imageFormat = "image"
+                var imageFormat = "output_image"
                 
                 // Check the old detection method for backward compatibility
                 if (message.asAssistant()._additionalProperties().containsKey("type") &&
                     message
                         .asAssistant()
                         ._additionalProperties()["type"]
-                        .toString() == "image"
+                        .toString() == "output_image"
                 ) {
                     newMessages.add(
                         ChatCompletionMessageParam

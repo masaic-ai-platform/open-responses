@@ -209,7 +209,7 @@ class MasaicToolHandler(
                                     .builder()
                                     .toolCallId(toolCallId)
                                     .content(imageData) // Store the extracted image data
-                                    .putAdditionalProperty("type", JsonValue.from("image"))
+                                    .putAdditionalProperty("type", JsonValue.from("output_image"))
                                     .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                     .build(),
                             )
@@ -231,7 +231,7 @@ class MasaicToolHandler(
                                                     .builder()
                                                     .role(JsonValue.from("assistant"))
                                                     .content(imageData) // Use the extracted image data
-                                                    .putAdditionalProperty("type", JsonValue.from("image"))
+                                                    .putAdditionalProperty("type", JsonValue.from("output_image"))
                                                     .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                                     .refusal(null)
                                                     .build(),
@@ -493,7 +493,7 @@ class MasaicToolHandler(
                                                             .builder()
                                                             .text(toolOutputString["data"].toString()) // This is the image data/URL
                                                             .annotations(emptyList())
-                                                            .putAdditionalProperty("type", JsonValue.from("image"))
+                                                            .putAdditionalProperty("type", JsonValue.from("output_image"))
                                                             .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                                             .build(),
                                                     ),
@@ -813,7 +813,7 @@ class MasaicToolHandler(
                                                     .builder()
                                                     .text((imageToolOutputString as Map<out String?, String?>)["data"].toString()) // Image data/URL
                                                     .annotations(emptyList())
-                                                    .putAdditionalProperty("type", JsonValue.from("image"))
+                                                    .putAdditionalProperty("type", JsonValue.from("output_image"))
                                                     .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                                     .build(),
                                             ),
