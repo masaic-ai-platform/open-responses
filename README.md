@@ -86,7 +86,7 @@ curl --location 'http://localhost:8080/v1/responses' \
 ```
 For detailed implementation instructions, see our [Quick Start Guide](https://openresponses.masaic.ai/quickstart).
 
-## 💬 What Engineers Are Saying
+
 
 ## 💬 What Engineers Are Saying
 
