@@ -1,4 +1,4 @@
-# OpenResponses API
+# OpenResponses: The Drop-in Agentic API Layer
 
 ![OpenResponses - All-in-One AI Toolkit](static/About.png)
 
@@ -6,8 +6,6 @@
 [![Discussions](https://img.shields.io/static/v1?label=Discussions&message=Community&color=3FB950&logo=github&logoColor=white)](https://github.com/orgs/masaic-ai-platform/discussions)
 
 ## Overview
-
-
 
 **Open Source • Community-Driven • Apache 2.0 Licensed**
 
@@ -104,6 +102,27 @@ For detailed implementation instructions, see our [Quick Start Guide](https://op
 | **Self-Hosted Architecture** | Full control of deployment infrastructure | Maintain complete data sovereignty |
 | **OpenAI-Compatible Interface** | Drop-in replacement for existing OpenAI implementations | Minimal code changes for migration |
 
+## 📚 Documentation
+
+Explore our comprehensive [documentation](https://openresponses.masaic.ai/) to learn more about OpenResponses features and setup.
+
+## 🙌 Help Us Grow
+
+If you find OpenResponses useful, please consider giving it a star ⭐ — it helps others discover it and supports the community!
+
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+Before submitting a Pull Request, please ensure all regression tests pass by running:
+
+```bash
+./regression/regression_common.sh
+./regression/regression_vector.sh
+```
+
+
 ## API Reference
 
 The API implements the following OpenAI-compatible endpoints:
@@ -166,25 +185,6 @@ The API implements the following OpenAI-compatible endpoints:
 | `GET /v1/evals/{evalId}/runs` | List evaluation runs for a specific evaluation |
 | `DELETE /v1/evals/{evalId}/runs/{runId}` | Delete an evaluation run |
 
-## 📚 Documentation
-
-Explore our comprehensive [documentation](https://openresponses.masaic.ai/) to learn more about OpenResponses features and setup.
-
-🙌 Help Us Grow
-
-If you find OpenResponses useful, please consider giving it a star ⭐ — it helps others discover it and supports the community!
-
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-Before submitting a Pull Request, please ensure all regression tests pass by running:
-
-```bash
-./regression/regression_common.sh
-./regression/regression_vector.sh
-```
 
 
 ## 📄 License
