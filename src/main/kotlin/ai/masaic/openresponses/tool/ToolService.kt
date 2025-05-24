@@ -199,9 +199,23 @@ class ToolService(
         }
     }
 
-    fun getRemoteMcpTool(
+    fun getRemoteMcpTools(
         mcpTool: MCPTool,
     ): List<FunctionTool> {
+        val remoteTools = getRemoteMcpToolDefinitions(mcpTool)
+        return remoteTools.map { it.toFunctionTool() }
+    }
+
+    fun getRemoteMcpToolsForChatCompletion(
+        mcpTool: MCPTool,
+    ): List<ChatCompletionTool> {
+        val remoteTools = getRemoteMcpToolDefinitions(mcpTool)
+        return remoteTools.map { it.toChatCompletionTool(objectMapper) }
+    }
+
+    private fun getRemoteMcpToolDefinitions(
+        mcpTool: MCPTool,
+    ): List<McpToolDefinition> {
         val info = MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl)
         val allowedTools = mcpTool.allowedTools.map { info.qualifiedToolName(it) }
         val mcpServerInfo = mcpToolRegistry.findServerById(info.serverIdentifier())
@@ -214,17 +228,16 @@ class ToolService(
             mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, availableTools.map { it.name }))
             mcpToolExecutor.addMcpClient(info.serverIdentifier(), mcpClient)
 
-            val toolsToUse = availableTools.filter { allowedTools.contains(it.name) }
-            toolsToUse.map { it.toFunctionTool() }
+            availableTools.filter { allowedTools.contains(it.name) }
         } else {
-            val tool = mutableListOf<FunctionTool>()
+            val tools = mutableListOf<McpToolDefinition>()
             mcpServerInfo.tools.forEach {
                 if (allowedTools.contains(it)) {
                     val toolDef = mcpToolRegistry.findByName(it) ?: throw IllegalStateException("Unable to find mcp tool $it in the registry")
-                    tool.add((toolDef as McpToolDefinition).toFunctionTool())
+                    tools.add((toolDef as McpToolDefinition))
                 }
             }
-            return tool
+            return tools
         }
     }
 
