@@ -13,14 +13,12 @@ import java.util.*
  * @property command The command to execute for starting a self-hosted MCP server
  * @property args Command-line arguments for the MCP server
  * @property env Environment variables to set when starting the MCP server
- * @property url The URL of the MCP server if it's remotely hosted
  */
 @Serializable
 data class MCPServer(
     val command: String? = null,
     val args: List<String> = emptyList(),
     val env: Map<String, String> = emptyMap(),
-    val url: String? = null,
 )
 
 /**
@@ -72,10 +70,11 @@ data class McpToolDefinition(
         name: String,
         description: String,
         mcpServerInfo: MCPServerInfo,
+        hosting: ToolHosting = ToolHosting.MASAIC_MANAGED,
     ) : this(
         UUID.randomUUID().toString(),
         ToolProtocol.MCP,
-        ToolHosting.MASAIC_MANAGED,
+        hosting,
         name,
         description,
         parameters,
@@ -92,4 +91,12 @@ data class McpToolDefinition(
  */
 data class MCPServerInfo(
     val id: String,
-)
+    val url: String = "not_required",
+    val tools: List<String> = emptyList(),
+) {
+    fun serverIdentifier() = "${id}_$url"
+
+    fun qualifiedToolName(toolName: String) = "${id}_$toolName"
+
+    fun unQualifiedToolName(qualifiedToolName: String) = qualifiedToolName.replace("${id}_", "")
+}

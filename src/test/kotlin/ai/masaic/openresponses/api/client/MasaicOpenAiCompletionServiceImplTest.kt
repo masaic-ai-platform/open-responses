@@ -248,7 +248,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     client,
                 )
             } returns
-                MasaicToolHandler.CompletionToolHandlingResult(
+                CompletionToolCallOutcome.Continue(
                     updatedMessages = emptyList(),
                     hasUnresolvedClientTools = true,
                 )
@@ -312,7 +312,7 @@ class MasaicOpenAiCompletionServiceImplTest {
             every {
                 toolHandler.handleCompletionToolCall(chatCompletion, any(), client)
             } returns
-                MasaicToolHandler.CompletionToolHandlingResult(
+                CompletionToolCallOutcome.Continue(
                     updatedMessages = emptyList(),
                     hasUnresolvedClientTools = true,
                 )
@@ -373,10 +373,6 @@ class MasaicOpenAiCompletionServiceImplTest {
             // When
             val events = service.createCompletionStream(client, params, metadata).toList()
 
-            // Expect only the 'done' event
-            assertEquals(1, events.size)
-            val doneEvent = events.first()
-            assertEquals("done", doneEvent.event())
-            assertEquals("[DONE]", doneEvent.data())
+            assertEquals(0, events.size)
         }
 }

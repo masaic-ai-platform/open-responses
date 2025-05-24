@@ -18,6 +18,7 @@ import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * Implementation of ResponseService for Masaic OpenAI API client.
@@ -93,38 +94,58 @@ class MasaicOpenAiResponseServiceImpl(
 
                 if (!hasToolCalls(chatCompletions)) {
                     logger.info { "No tool calls detected, returning direct response" }
-                    return@withClientObservation chatCompletions.toResponse(params)
+                    // Convert ChatCompletion to Response before returning
+                    val directResponse = chatCompletions.toResponse(params)
+                    // Store this direct response as well
+                    runBlocking { storeResponseWithInputItems(directResponse, params) }
+                    return@withClientObservation directResponse
                 }
 
                 chatCompletions
             }
 
         if (responseOrCompletions is Response) {
-            storeResponseWithInputItems(responseOrCompletions, params)
             return responseOrCompletions
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
-        val responseInputItems = toolHandler.handleMasaicToolCall(chatCompletions, params, client)
-        val updatedParams =
-            params
-                .toBuilder()
-                .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
-                .build()
 
-        if (hasUnresolvedFunctionCalls(updatedParams)) {
-            logger.info { "Some function calls without outputs, returning current response" }
-            val response = chatCompletions.toResponse(updatedParams)
-            storeResponseWithInputItems(response, updatedParams)
-            return chatCompletions.toResponse(updatedParams)
+        // Handle tool calls and decide next step
+        when (val toolCallOutcome = toolHandler.handleMasaicToolCall(chatCompletions, params, client)) {
+            is MasaicToolCallResult.Terminate -> {
+                logger.info { "Terminal tool executed (e.g., image_generation). Returning direct response." }
+                val tempParamsForStorage =
+                    params
+                        .toBuilder()
+                        .input(ResponseCreateParams.Input.ofResponse(toolCallOutcome.finalResponseInputItems))
+                        .build()
+
+                runBlocking { storeResponseWithInputItems(toolCallOutcome.directResponse, tempParamsForStorage) }
+                return toolCallOutcome.directResponse
+            }
+            is MasaicToolCallResult.Continue -> {
+                val responseInputItems = toolCallOutcome.items
+                val updatedParams =
+                    params
+                        .toBuilder()
+                        .input(ResponseCreateParams.Input.ofResponse(responseInputItems))
+                        .build()
+
+                if (hasUnresolvedFunctionCalls(updatedParams)) {
+                    logger.info { "Some function calls without outputs, returning current response based on assistant's request for tools" }
+                    val currentResponseWithToolRequests = chatCompletions.toResponse(updatedParams) // pass updatedParams
+                    runBlocking { storeResponseWithInputItems(currentResponseWithToolRequests, updatedParams) }
+                    return currentResponseWithToolRequests
+                }
+
+                if (exceedsMaxToolCalls(responseInputItems)) {
+                    val errorMsg = "Too many tool calls. Increase limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS."
+                    logger.error { errorMsg }
+                    throw IllegalArgumentException(errorMsg)
+                }
+                // Recursive call to continue processing with the outputs of the executed tools
+                return create(client, updatedParams, metadata)
+            }
         }
-
-        if (exceedsMaxToolCalls(responseInputItems)) {
-            val errorMsg = "Too many tool calls. Increase limit by setting MASAIC_MAX_TOOL_CALLS."
-            logger.error { errorMsg }
-            throw IllegalArgumentException(errorMsg)
-        }
-
-        return create(client, updatedParams, metadata)
     }
 
     /**
@@ -236,7 +257,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseRetrieveParams,
         requestOptions: RequestOptions,
     ): Response {
-        val responseId = params.responseId()
+        val responseId = params.responseId().getOrNull() ?: throw IllegalArgumentException("Response ID is required")
         logger.debug { "Retrieving response with ID: $responseId" }
 
         // Attempt to retrieve the response from the store
@@ -258,7 +279,7 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseDeleteParams,
         requestOptions: RequestOptions,
     ) {
-        val responseId = params.responseId()
+        val responseId = params.responseId().getOrNull() ?: throw IllegalArgumentException("Response ID is required")
         logger.debug { "Deleting response with ID: $responseId" }
 
         val response = responseStore.getResponse(responseId)
@@ -278,7 +299,7 @@ class MasaicOpenAiResponseServiceImpl(
      * Gets the maximum allowed tool calls from environment or default.
      */
     private fun getAllowedMaxToolCalls(): Int {
-        val maxToolCalls = System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 10
+        val maxToolCalls = System.getenv("OPEN_RESPONSES_MAX_TOOL_CALLS")?.toInt() ?: System.getenv("MASAIC_MAX_TOOL_CALLS")?.toInt() ?: 25
         logger.trace { "Maximum allowed tool calls: $maxToolCalls" }
         return maxToolCalls
     }
@@ -348,7 +369,7 @@ private fun prepareUserContent(contentList: List<ResponseInputContent>): List<Ch
                                 .builder()
                                 .fileData(inputFile._fileData())
                                 .fileId(inputFile._fileId())
-                                .fileName(inputFile._filename())
+                                .filename(inputFile._filename())
                                 .build(),
                         ).build(),
                 )

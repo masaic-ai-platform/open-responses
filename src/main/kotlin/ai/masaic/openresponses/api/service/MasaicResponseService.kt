@@ -175,7 +175,7 @@ class MasaicResponseService(
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
     ): Response {
-        logger.info { "Creating response with model: ${request.model().asString()}" }
+        logger.info { "Creating response with model: ${request.model()}" }
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
@@ -225,7 +225,7 @@ class MasaicResponseService(
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
     ): Flow<ServerSentEvent<String>> {
-        logger.info { "Creating streaming response with model: ${request.model().asString()}" }
+        logger.info { "Creating streaming response with model: ${request.model()}" }
 
         val headerBuilder = createHeadersBuilder(headers)
         val queryBuilder = createQueryParamsBuilder(queryParams)
@@ -456,11 +456,22 @@ class MasaicResponseService(
                 authHeader.split(" ").getOrNull(1) ?: throw IllegalArgumentException("api-key is missing.")
             }
 
+        val model =
+            if (request.model().isChat()) {
+                request
+                    .model()
+                    .chat()
+                    .get()
+                    .toString()
+            } else {
+                request.model().string().get()
+            }
+
         // Extract model name for base URL determination
         return OpenAIOkHttpClient
             .builder()
             .credential(credential)
-            .baseUrl(getApiBaseUri(headers, request.model().asString()).toURL().toString())
+            .baseUrl(getApiBaseUri(headers, model).toURL().toString())
             .build()
     }
 
@@ -468,7 +479,16 @@ class MasaicResponseService(
         headers: MultiValueMap<String, String>,
         request: ResponseCreateParams.Body,
     ): InstrumentationMetadataInput {
-        val modelName = request.model().asString()
+        val modelName =
+            if (request.model().isChat()) {
+                request
+                    .model()
+                    .chat()
+                    .get()
+                    .toString()
+            } else {
+                request.model().string().get()
+            }
         val parts = modelName.split("@", limit = 2)
 
         var genAiSystem = "UNKNOWN"
@@ -480,7 +500,7 @@ class MasaicResponseService(
             actualModelName = parts[1]
         }
 
-        val url = getApiBaseUri(headers, request.model().asString())
+        val url = getApiBaseUri(headers, modelName)
         return InstrumentationMetadataInput(genAiSystem, actualModelName, url.host, url.port.toString())
     }
 }

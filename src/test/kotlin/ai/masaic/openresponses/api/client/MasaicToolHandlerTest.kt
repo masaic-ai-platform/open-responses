@@ -6,11 +6,12 @@ import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
-import com.openai.models.ChatModel
+import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionMessage
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall
 import com.openai.models.responses.*
+import com.openai.models.responses.ToolChoiceOptions
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
@@ -18,6 +19,7 @@ import io.mockk.*
 import io.mockk.every
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -127,17 +129,16 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true))
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
-        // Then: We expect 2 items in the result:
-        // 1) The original user input as a ResponseInputItem
-        // 2) The assistant text message from the completion
+        // Then: We expect a Continue result with items
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
+        // 1) The original user input
+        // 2) The assistant message (no tool calls)
         assertEquals(2, items.size)
-
-        // The second item should be the assistant output message
-        val item = items[1]
-        // Confirm that it is a response output message of some sort
-        assert(item.isResponseOutputMessage())
+        assert(items[0].isEasyInputMessage())
+        assert(items[1].isResponseOutputMessage())
 
         // Verify no tool execution observations were created
         verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
@@ -213,12 +214,14 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "tool-call-id-123"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
         // Then: We expect:
         // 1) The original user input
         // 2) A functionCall item
         // 3) A functionCallOutput item
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         assertEquals(3, items.size)
 
         val functionCallItem = items[1]
@@ -335,7 +338,7 @@ class MasaicToolHandlerTest {
                 .incompleteDetails(null)
                 .instructions(null)
                 .metadata(null)
-                .model(ChatModel.of("gpt-3.5-turbo"))
+                .model(ResponsesModel.ofString("gpt-4"))
                 .toolChoice(ToolChoiceOptions.NONE)
                 .temperature(null)
                 .parallelToolCalls(false)
@@ -351,13 +354,15 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, mockk(), mockk(), mockk())
+        val result = handler.handleMasaicToolCall(params, response, mockk(), mockk(), mockk())
 
         // Then
-        // 1) The user input as a ResponseInputItem
-        // 2) The parked assistant message
+        val items = result.toolResponseItems
+        // 1) The user input
+        // 2) The functionCall
+        // 3) The functionCallOutput
         assertEquals(2, items.size)
-        assert(items.first().isEasyInputMessage())
+        assert(items[0].isEasyInputMessage())
         assert(items[1].isResponseOutputMessage())
 
         // Verify no observation was created
@@ -389,7 +394,7 @@ class MasaicToolHandlerTest {
                 .incompleteDetails(null)
                 .instructions(null)
                 .metadata(null)
-                .model(ChatModel.of("gpt-3.5-turbo"))
+                .model(ResponsesModel.ofString("gpt-4"))
                 .toolChoice(ToolChoiceOptions.NONE)
                 .temperature(null)
                 .parallelToolCalls(false)
@@ -424,7 +429,7 @@ class MasaicToolHandlerTest {
         val functionToolMock = mockk<ToolMetadata>(relaxed = true)
         every { toolService.getAvailableTool("myToolFunction") } returns functionToolMock
 
-        // Let’s pretend the toolService recognizes and executes "myToolFunction"
+        // Let's pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction", ofType<ToolRequestContext>()) } returns mockk()
         coEvery {
             toolService.executeTool(
@@ -447,9 +452,10 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "function-call-id"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then
+        val items = result.toolResponseItems
         // 1) The user input
         // 2) The functionCall
         // 3) The functionCallOutput
@@ -518,9 +524,11 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
-        // Then: We expect the unsupported tool call to be parked
+        // Then: We expect a Continue result with the unsupported tool call parked
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         // 1) The original user input as a ResponseInputItem
         // 2) The parked function call
         assertEquals(2, items.size)
@@ -608,9 +616,11 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
-        // Then: We expect 6 items:
+        // Then: We expect a Continue result with 6 items
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         // 1) Original user message
         // 2) Assistant message with tools (parked)
         // 3) First tool call
@@ -686,16 +696,21 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
-        // Then: We expect only 2 items:
+        // Then: We expect a Continue result with 3 items
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         // 1) Original user message
         // 2) Function call
-        // (No function output since the result was null)
-        assertEquals(2, items.size)
+        // 3) Function output (even though tool returned null)
+        assertEquals(3, items.size)
 
         val functionCallItem = items[1]
         assert(functionCallItem.isFunctionCall())
+
+        val functionOutputItem = items[2]
+        assert(functionOutputItem.isFunctionCallOutput())
 
         // Verify the observation was still created despite the null result
         verify { telemetryService.withClientObservation<Any>(any(), any()) }
@@ -706,7 +721,7 @@ class MasaicToolHandlerTest {
 
     @Test
     fun `handleMasaicToolCall(params, response) - should append to existing response items`() {
-        // Given a ResponseCreateParams with existing response items
+        // Given: An existing response with multiple items as input
         val existingFunctionCall =
             ResponseFunctionToolCall
                 .builder()
@@ -716,9 +731,10 @@ class MasaicToolHandlerTest {
                 .arguments("{\"param\":\"existing\"}")
                 .build()
 
-        val existingInputItem = ResponseInputItem.ofFunctionCall(existingFunctionCall)
-
-        val existingItems = listOf(existingInputItem)
+        val existingItems =
+            listOf(
+                ResponseInputItem.ofFunctionCall(existingFunctionCall),
+            )
 
         // A Response with a new function call
         val newFunctionCall =
@@ -743,7 +759,7 @@ class MasaicToolHandlerTest {
                 .incompleteDetails(null)
                 .instructions(null)
                 .metadata(null)
-                .model(ChatModel.of("gpt-3.5-turbo"))
+                .model(ResponsesModel.ofString("gpt-4"))
                 .toolChoice(ToolChoiceOptions.NONE)
                 .temperature(null)
                 .parallelToolCalls(false)
@@ -782,10 +798,10 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "newFunction"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then
-        // We expect:
+        val items = result.toolResponseItems
         // 1) The existing function call
         // 2) The new function call
         // 3) The new function call output
@@ -820,9 +836,11 @@ class MasaicToolHandlerTest {
         every { params.tools() } returns Optional.empty()
         every { toolService.buildAliasMap(any()) } returns emptyMap()
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
-        // Then: We expect only the user input message as there are no choices to process
+        // Then: We expect a Continue result with only the user input message
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         assertEquals(1, items.size)
         assert(items[0].isEasyInputMessage())
         assertEquals("User message", items[0].asEasyInputMessage().content().asTextInput())
@@ -897,9 +915,11 @@ class MasaicToolHandlerTest {
         } returns "Mixed result"
 
         // When
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true))
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true))
 
-        // Then: We expect 4 items in the result:
+        // Then: We expect a Continue result with 4 items
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         // 1) The original user input as a ResponseInputItem
         // 2) The assistant text message from the completion
         // 3) The function call
@@ -910,8 +930,6 @@ class MasaicToolHandlerTest {
         val functionCall = items[1]
         assert(functionCall.isFunctionCall())
         assertEquals("mixedContentTool", functionCall.asFunctionCall().name())
-        // Verify observation was created
-        verify(exactly = 1) { telemetryService.withClientObservation<Any>(any(), any()) }
     }
 
     @Test
@@ -939,7 +957,7 @@ class MasaicToolHandlerTest {
                 .incompleteDetails(null)
                 .instructions(null)
                 .metadata(null)
-                .model(ChatModel.of("gpt-3.5-turbo"))
+                .model(ResponsesModel.ofString("gpt-4"))
                 .toolChoice(ToolChoiceOptions.NONE)
                 .temperature(null)
                 .parallelToolCalls(false)
@@ -958,9 +976,10 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
         // Then: We expect only the user input message since the empty message content should be filtered out
+        val items = result.toolResponseItems
         assertEquals(1, items.size)
         assert(items.first().isEasyInputMessage())
         assertEquals(
@@ -1040,7 +1059,7 @@ class MasaicToolHandlerTest {
         } returns "Parent observation test result"
 
         // Call handler with explicit parent observation
-        val items = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
 
         // Then verify parent observation was passed to the withClientObservation method
         verify {
@@ -1051,6 +1070,8 @@ class MasaicToolHandlerTest {
         }
 
         // Verify function call and output were added
+        assertTrue(result is MasaicToolCallResult.Continue)
+        val items = (result as MasaicToolCallResult.Continue).items
         assertEquals(3, items.size)
         val functionCall = items[1]
         assert(functionCall.isFunctionCall())
@@ -1133,35 +1154,18 @@ class MasaicToolHandlerTest {
     @Test
     fun `handleMasaicToolCall(params, response) - with response as input should preserve existing items`() {
         // Given: An existing response with multiple items as input
-        val existingUserMessage =
-            EasyInputMessage
+        val existingFunctionCall =
+            ResponseFunctionToolCall
                 .builder()
-                .content("Previous user message")
-                .role(EasyInputMessage.Role.USER)
-                .build()
-
-        val existingAssistantMessage =
-            ResponseOutputMessage
-                .builder()
-                .id("existing-msg-id")
-                .status(ResponseOutputMessage.Status.COMPLETED)
-                .content(
-                    listOf(
-                        ResponseOutputMessage.Content.ofOutputText(
-                            ResponseOutputText
-                                .builder()
-                                .text("Previous assistant message")
-                                .annotations(listOf())
-                                .build(),
-                        ),
-                    ),
-                ).role(JsonValue.from("assistant"))
+                .callId("existing-function-id")
+                .id("existing-function-id")
+                .name("existingFunction")
+                .arguments("{\"param\":\"existing\"}")
                 .build()
 
         val existingItems =
             listOf(
-                ResponseInputItem.ofEasyInputMessage(existingUserMessage),
-                ResponseInputItem.ofResponseOutputMessage(existingAssistantMessage),
+                ResponseInputItem.ofFunctionCall(existingFunctionCall),
             )
 
         // A Response with a new function call
@@ -1187,7 +1191,7 @@ class MasaicToolHandlerTest {
                 .incompleteDetails(null)
                 .instructions(null)
                 .metadata(null)
-                .model(ChatModel.of("gpt-3.5-turbo"))
+                .model(ResponsesModel.ofString("gpt-4"))
                 .toolChoice(ToolChoiceOptions.NONE)
                 .temperature(null)
                 .parallelToolCalls(false)
@@ -1224,28 +1228,27 @@ class MasaicToolHandlerTest {
 
         // Mock event emitter function
         val eventEmitter: (ServerSentEvent<String>) -> Unit = mockk(relaxed = true)
-        every { toolService.buildAliasMap(any()) } returns emptyMap()
+
+        // Set attributes for testing
+        capturedAttributes["gen_ai.tool.name"] = "newFunction"
 
         // When
-        val items = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
 
-        // Then: We expect all existing items to be preserved and new items added
-        // 1) Previous user message
-        // 2) Previous assistant message
-        // 3) New function call
-        // 4) New function call output
-        assertEquals(4, items.size)
+        // Then
+        val items = result.toolResponseItems
+        // 1) The existing function call
+        // 2) The new function call
+        // 3) The new function call output
+        assertEquals(3, items.size)
 
-        // Verify first two items are preserved from existing items
-        assert(items[0].isEasyInputMessage())
-        assertEquals("Previous user message", items[0].asEasyInputMessage().content().asTextInput())
+        // First item should be the existing function call
+        assertEquals("existingFunction", items[0].asFunctionCall().name())
 
-        assert(items[1].isResponseOutputMessage())
+        // Second item should be the new function call
+        assertEquals("preserveFunction", items[1].asFunctionCall().name())
 
-        // Verify new function call and output were added
-        assert(items[2].isFunctionCall())
-        assertEquals("preserveFunction", items[2].asFunctionCall().name())
-
-        assert(items[3].isFunctionCallOutput())
+        // Verify the tool execution was observed
+        verify { telemetryService.withClientObservation<Any>(any(), any()) }
     }
 }

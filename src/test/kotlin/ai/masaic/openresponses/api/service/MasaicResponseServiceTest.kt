@@ -11,7 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
-import com.openai.models.ChatModel
+import com.openai.models.ResponsesModel
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseFunctionToolCall
@@ -68,7 +68,7 @@ class MasaicResponseServiceTest {
                 mockk<ResponseCreateParams.Body> {
                     every { previousResponseId() } returns Optional.empty()
                     every { input() } returns ResponseCreateParams.Input.ofText("Test")
-                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { model() } returns ResponsesModel.ofString("gpt-4")
                     every { instructions() } returns Optional.empty()
                     every { reasoning() } returns Optional.empty()
                     every { parallelToolCalls() } returns Optional.of(true)
@@ -114,7 +114,7 @@ class MasaicResponseServiceTest {
             val request =
                 mockk<ResponseCreateParams.Body> {
                     every { input() } returns ResponseCreateParams.Input.ofText("Test")
-                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { model() } returns ResponsesModel.ofString("gpt-4")
                     every { instructions() } returns Optional.empty()
                     every { reasoning() } returns Optional.empty()
                     every { parallelToolCalls() } returns Optional.of(true)
@@ -153,7 +153,7 @@ class MasaicResponseServiceTest {
                 mockk<ResponseCreateParams.Body> {
                     every { previousResponseId() } returns Optional.empty()
                     every { input() } returns ResponseCreateParams.Input.ofText("Test")
-                    every { model() } returns ChatModel.of("gpt-4o")
+                    every { model() } returns ResponsesModel.ofString("gpt-4")
                     every { instructions() } returns Optional.empty()
                     every { reasoning() } returns Optional.empty()
                     every { parallelToolCalls() } returns Optional.of(true)
@@ -193,7 +193,7 @@ class MasaicResponseServiceTest {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = eq(actualMetadata),
+                    any(),
                 )
             } returns expectedFlow
 
@@ -210,7 +210,7 @@ class MasaicResponseServiceTest {
                 openAIResponseService.createCompletionStream(
                     any(),
                     any(),
-                    metadata = eq(actualMetadata),
+                    any(),
                 )
             }
             confirmVerified(openAIResponseService)

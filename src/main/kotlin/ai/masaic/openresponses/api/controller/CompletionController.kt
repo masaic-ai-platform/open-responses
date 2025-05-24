@@ -54,9 +54,6 @@ class CompletionController(
         @RequestParam queryParams: MultiValueMap<String, String>,
         exchange: ServerWebExchange,
     ): ResponseEntity<*> {
-        // Extract trace ID from exchange
-        val traceId = exchange.attributes["traceId"] as? String ?: headers["X-B3-TraceId"]?.firstOrNull() ?: "unknown"
-
         payloadFormatter.formatCompletionRequest(request)
         // Use our custom coroutine-aware MDC context
         val requestBodyJson = mapper.writeValueAsString(request)
