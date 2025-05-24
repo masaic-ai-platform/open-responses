@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  open-responses:
+    image: masaicai/open-responses:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
+  app:
+    image: masaicai/shopping-assistant:latest
+    ports:
+      - "8888:8888"
+    depends_on:
+      - open-responses
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge 
