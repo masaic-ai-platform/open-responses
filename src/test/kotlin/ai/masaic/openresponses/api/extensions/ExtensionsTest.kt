@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.ChatModel
 import com.openai.models.ResponsesModel
+import com.openai.models.responses.EasyInputMessage
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
@@ -129,14 +130,41 @@ class ExtensionsTest {
             val convertedInputItem1 =
                 mockk<ResponseInputItem> {
                     every { isFunctionCall() } returns false
+                    every { isFunctionCallOutput() } returns false
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage() } returns
+                        EasyInputMessage
+                            .builder()
+                            .content("Hello")
+                            .role(EasyInputMessage.Role.USER)
+                            .build()
+                    every { isResponseOutputMessage() } returns false
                 }
             val convertedInputItem2 =
                 mockk<ResponseInputItem> {
                     every { isFunctionCall() } returns false
+                    every { isFunctionCallOutput() } returns false
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage() } returns
+                        EasyInputMessage
+                            .builder()
+                            .content("Hello")
+                            .role(EasyInputMessage.Role.ASSISTANT)
+                            .build()
+                    every { isResponseOutputMessage() } returns false
                 }
             val convertedOutputItem =
                 mockk<ResponseInputItem> {
                     every { isFunctionCall() } returns false
+                    every { isFunctionCallOutput() } returns false
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage() } returns
+                        EasyInputMessage
+                            .builder()
+                            .content("Hello")
+                            .role(EasyInputMessage.Role.USER)
+                            .build()
+                    every { isResponseOutputMessage() } returns false
                 }
             every { objectMapper.convertValue(previousInputItem1, ResponseInputItem::class.java) } returns convertedInputItem1
             every { objectMapper.convertValue(previousInputItem2, ResponseInputItem::class.java) } returns convertedInputItem2
@@ -146,6 +174,15 @@ class ExtensionsTest {
             val currentInputItem =
                 mockk<ResponseInputItem> {
                     every { isFunctionCall() } returns false
+                    every { isFunctionCallOutput() } returns false
+                    every { isEasyInputMessage() } returns true
+                    every { asEasyInputMessage() } returns
+                        EasyInputMessage
+                            .builder()
+                            .content("Hello")
+                            .role(EasyInputMessage.Role.ASSISTANT)
+                            .build()
+                    every { isResponseOutputMessage() } returns false
                 }
             val currentInputItems = listOf(currentInputItem)
         

@@ -382,14 +382,15 @@ class NativeToolRegistry(
                 "type" to "object",
                 "properties" to
                     mutableMapOf<String, Any>(
-                        "prompt" to mutableMapOf("type" to "string", "description" to "A text description of the desired image(s). Max 32000 chars."),
-                        "is_edit" to mutableMapOf("type" to "boolean", "description" to "Type of image generation: 'false' for new image, 'true' for editing an existing image. Choose 'true' if there is already an <image> in previous context and user's intent is to edit it. ", "default" to "false"),
+                        "prompt" to mutableMapOf("type" to "string", "description" to "A text description of the desired image(s). Max 32000 chars. In a multi-turn scenario this should contain previous prompt instructions."),
+                        // TODO after image editing is implemented
+                        // "is_edit" to mutableMapOf("type" to "boolean", "description" to "Type of image generation: 'false' for new image, 'true' for editing an existing image. Choose 'true' if there is already an <image> in previous context and user's intent is to edit it. ", "default" to "false"),
                     ),
-                "required" to listOf("prompt", "is_edit"),
+                "required" to listOf("prompt"),
             )
         return NativeToolDefinition(
             name = "image_generation",
-            description = "Generates and edits images from text prompts.",
+            description = "Generates images from text prompts.",
             parameters = parameters,
         )
     }

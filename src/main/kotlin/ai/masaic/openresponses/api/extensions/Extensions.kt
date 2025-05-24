@@ -117,38 +117,120 @@ data class ImageInfo(
  * Function to detect if content is a valid image based on base64 pattern and image signatures
  */
 fun isImageContent(content: String): ImageInfo {
-    // Check if content is valid base64 pattern
+    if (content.isBlank() || content.length <= 5000) {
+        return ImageInfo("", false)
+    }
+    
+    // Extract potential base64 content from various formats
+    val base64Content = extractBase64Content(content.trim())
+    
+    if (base64Content.isBlank() || base64Content.length <= 5000) {
+        return ImageInfo("", false)
+    }
+    
+    // Validate that the extracted content is valid base64
     val base64Pattern = Regex("^[A-Za-z0-9+/]*={0,2}$")
-    if (!base64Pattern.matches(content.trim())) {
+    if (!base64Pattern.matches(base64Content)) {
         return ImageInfo("", false)
     }
     
-    // Check length - must be > 1000 characters
-    if (content.length <= 1000) {
-        return ImageInfo("", false)
-    }
-    
-    // Check image format signatures
-    val trimmedContent = content.trim()
-    
+    // Check image format signatures on the extracted base64 content
     return when {
-        trimmedContent.startsWith("/9j/") || trimmedContent.startsWith("FFD8") || trimmedContent.startsWith("/9j") ->
+        base64Content.startsWith("/9j/") || base64Content.startsWith("FFD8") || base64Content.startsWith("/9j") ->
             ImageInfo("JPEG", true)
-        trimmedContent.startsWith("iVBORw0KGgo") || trimmedContent.startsWith("89504E47") || trimmedContent.startsWith("iVBORw") ->
+        base64Content.startsWith("iVBORw0KGgo") || base64Content.startsWith("89504E47") || base64Content.startsWith("iVBORw") ->
             ImageInfo("PNG", true)
-        trimmedContent.startsWith("UklGR") || trimmedContent.startsWith("UklGRg") ->
+        base64Content.startsWith("UklGR") || base64Content.startsWith("UklGRg") ->
             ImageInfo("WebP", true)
-        trimmedContent.startsWith("R0lGODlh") || trimmedContent.startsWith("R0lGODdh") || trimmedContent.startsWith("R0lGOD") ->
+        base64Content.startsWith("R0lGODlh") || base64Content.startsWith("R0lGODdh") || base64Content.startsWith("R0lGOD") ->
             ImageInfo("GIF", true)
-        trimmedContent.contains("/9j/") || trimmedContent.contains("FFD8") || trimmedContent.contains("/9j") ->
+        // Also check if signatures appear anywhere in the content (for malformed base64)
+        base64Content.contains("/9j/") || base64Content.contains("FFD8") ->
             ImageInfo("JPEG", true)
-        trimmedContent.contains("iVBORw0KGgo") || trimmedContent.contains("89504E47") || trimmedContent.contains("iVBORw") ->
+        base64Content.contains("iVBORw0KGgo") || base64Content.contains("89504E47") || base64Content.contains("iVBORw") ->
             ImageInfo("PNG", true)
-        trimmedContent.contains("UklGR") || trimmedContent.contains("UklGRg") ->
+        base64Content.contains("UklGR") || base64Content.contains("UklGRg") ->
             ImageInfo("WebP", true)
-        trimmedContent.contains("R0lGODlh") || trimmedContent.contains("R0lGODdh") || trimmedContent.contains("R0lGOD") ->
+        base64Content.contains("R0lGODlh") || base64Content.contains("R0lGODdh") || base64Content.contains("R0lGOD") ->
             ImageInfo("GIF", true)
         else -> ImageInfo("", false)
+    }
+}
+
+/**
+ * Extracts base64 content from various formats:
+ * - data:image/jpeg;base64,<base64>
+ * - https://example.com/path?data=<base64>
+ * - base64:<base64>
+ * - raw <base64>
+ */
+private fun extractBase64Content(content: String): String {
+    return when {
+        // Handle data URI scheme: data:image/jpeg;base64,<base64>
+        content.startsWith("data:") -> {
+            val commaIndex = content.indexOf(',')
+            if (commaIndex != -1 && commaIndex < content.length - 1) {
+                content.substring(commaIndex + 1)
+            } else {
+                content
+            }
+        }
+        
+        // Handle explicit base64 prefix: base64:<base64>
+        content.startsWith("base64:", ignoreCase = true) -> {
+            content.substring(7)
+        }
+        
+        // Handle URL with base64 parameter: https://...?data=<base64> or similar
+        content.startsWith("http") -> {
+            // Look for common parameter names that might contain base64
+            val patterns = listOf("data=", "image=", "content=", "base64=")
+            for (pattern in patterns) {
+                val index = content.indexOf(pattern, ignoreCase = true)
+                if (index != -1) {
+                    val start = index + pattern.length
+                    val end = content.indexOf('&', start).let { if (it == -1) content.length else it }
+                    val extracted = content.substring(start, end)
+                    // If the extracted content looks like base64, return it
+                    if (extracted.length > 100 && extracted.matches(Regex("^[A-Za-z0-9+/]*={0,2}$"))) {
+                        return extracted
+                    }
+                }
+            }
+            // If no parameters found, check if the path itself might be base64
+            val pathStart = content.indexOf("://")
+            if (pathStart != -1) {
+                val pathContent = content.substring(pathStart + 3)
+                val slashIndex = pathContent.indexOf('/')
+                if (slashIndex != -1) {
+                    val afterDomain = pathContent.substring(slashIndex + 1)
+                    // Remove query parameters if any
+                    val queryIndex = afterDomain.indexOf('?')
+                    val pathOnly = if (queryIndex != -1) afterDomain.substring(0, queryIndex) else afterDomain
+                    if (pathOnly.length > 100 && pathOnly.matches(Regex("^[A-Za-z0-9+/]*={0,2}$"))) {
+                        return pathOnly
+                    }
+                }
+            }
+            ""
+        }
+        
+        // Handle other prefixes by looking for the longest valid base64 substring
+        else -> {
+            // Try to find the start of base64 content
+            val possibleStarts = listOf(":", "=", ",", " ", "\t", "\n")
+            for (delimiter in possibleStarts) {
+                val index = content.indexOf(delimiter)
+                if (index != -1 && index < content.length - 100) {
+                    val candidate = content.substring(index + 1).trim()
+                    if (candidate.length > 100 && candidate.matches(Regex("^[A-Za-z0-9+/]*={0,2}$"))) {
+                        return candidate
+                    }
+                }
+            }
+            // If no delimiters work, try the content as-is
+            content
+        }
     }
 }
 
