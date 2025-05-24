@@ -311,7 +311,6 @@ class MasaicStreamingService(
                                     responseId,
                                     responseOutputItemAccumulator, // Contains text and tool call requests from LLM
                                 )
-                            runBlocking { storeResponseWithInputItems(responseWithToolRequests, params) }
 
                             logger.debug { "Response body (LLM requesting tools): ${objectMapper.writeValueAsString(responseWithToolRequests)}" }
                             telemetryService.stopObservation(observation, responseWithToolRequests, params, metadata)
@@ -319,6 +318,7 @@ class MasaicStreamingService(
 
                             // internalToolItemIds is populated by convertAndPublish if a tool call matches a known internal tool.
                             if (internalToolItemIds.isEmpty()) {
+                                runBlocking { storeResponseWithInputItems(responseWithToolRequests, params) }
                                 // LLM requested tools, but none were recognized as internal/actionable by us.
                                 logger.info { "Response completed with tool requests, but no recognized internal tools to execute. ID: ${responseWithToolRequests.id()}" }
                                 nextIteration = false
@@ -363,13 +363,7 @@ class MasaicStreamingService(
                                             listOf(toolStreamingResult.terminalOutputItem), // Contains text and tool call requests from LLM
                                         )
 
-                                    // Store this terminal response. Use toolStreamingResult.toolResponseItems for full history context.
-                                    val paramsForStorage =
-                                        params
-                                            .toBuilder()
-                                            .input(ResponseCreateParams.Input.ofResponse(toolStreamingResult.toolResponseItems))
-                                            .build()
-                                    runBlocking { storeResponseWithInputItems(finalTerminalResponse, paramsForStorage) }
+                                    runBlocking { storeResponseWithInputItems(finalTerminalResponse, params) }
 
                                     trySend(
                                         EventUtils.convertEvent(

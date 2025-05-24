@@ -427,20 +427,6 @@ class MasaicToolHandler(
                     if (toolService.getFunctionTool(function.name(), context) != null) {
                         logger.info { "Executing tool: ${function.name()} with ID: ${tool.id()}" }
 
-                        // Add the function call to response items
-                        val functionCallInputItem =
-                            ResponseInputItem.ofFunctionCall(
-                                ResponseFunctionToolCall
-                                    .builder()
-                                    .callId(tool.id())
-                                    .id(tool.id())
-                                    .name(function.name())
-                                    .arguments(function.arguments())
-                                    .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
-                                    .build(),
-                            )
-                        responseInputItems.add(functionCallInputItem)
-
                         if (function.name() == IMAGE_GENERATION_TOOL_NAME) {
                             logger.info { "Executing terminal tool: ${function.name()} with ID: ${tool.id()}" }
 
@@ -468,6 +454,19 @@ class MasaicToolHandler(
                             }
 
                             if (toolOutputString != null && toolOutputString.isNotEmpty() && toolOutputString["data"]?.isNotBlank() == true) {
+                                // Add the function call to response items
+                                val functionCallInputItem =
+                                    ResponseInputItem.ofFunctionCall(
+                                        ResponseFunctionToolCall
+                                            .builder()
+                                            .callId(tool.id())
+                                            .id(tool.id())
+                                            .name(function.name())
+                                            .arguments(function.arguments())
+                                            .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                            .build(),
+                                    )
+                                responseInputItems.add(functionCallInputItem)
                                 val functionCallOutputItem =
                                     ResponseInputItem.ofFunctionCallOutput(
                                         ResponseInputItem.FunctionCallOutput
@@ -512,6 +511,19 @@ class MasaicToolHandler(
                                 return MasaicToolCallResult.Terminate(responseInputItems.toList() + parked, directResponse)
                             } else {
                                 logger.warn { "Terminal tool ${function.name()} returned null output. Proceeding as regular tool call." }
+                                // Add the function call to response items
+                                val functionCallInputItem =
+                                    ResponseInputItem.ofFunctionCall(
+                                        ResponseFunctionToolCall
+                                            .builder()
+                                            .callId(tool.id())
+                                            .id(tool.id())
+                                            .name(function.name())
+                                            .arguments(function.arguments())
+                                            .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                            .build(),
+                                    )
+                                responseInputItems.add(functionCallInputItem)
                                 // Add null output so it's not lost
                                 responseInputItems.add(
                                     ResponseInputItem.ofFunctionCallOutput(
@@ -558,6 +570,19 @@ class MasaicToolHandler(
                                 }
 
                                 if (regularToolResult != null) {
+                                    // Add the function call to response items
+                                    val functionCallInputItem =
+                                        ResponseInputItem.ofFunctionCall(
+                                            ResponseFunctionToolCall
+                                                .builder()
+                                                .callId(tool.id())
+                                                .id(tool.id())
+                                                .name(function.name())
+                                                .arguments(function.arguments())
+                                                .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                                .build(),
+                                        )
+                                    responseInputItems.add(functionCallInputItem)
                                     logger.debug { "Tool execution successful for ${function.name()}" }
                                     responseInputItems.add(
                                         ResponseInputItem.ofFunctionCallOutput(
@@ -570,6 +595,19 @@ class MasaicToolHandler(
                                         ),
                                     )
                                 } else {
+                                    // Add the function call to response items
+                                    val functionCallInputItem =
+                                        ResponseInputItem.ofFunctionCall(
+                                            ResponseFunctionToolCall
+                                                .builder()
+                                                .callId(tool.id())
+                                                .id(tool.id())
+                                                .name(function.name())
+                                                .arguments(function.arguments())
+                                                .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                                .build(),
+                                        )
+                                    responseInputItems.add(functionCallInputItem)
                                     logger.warn { "Tool execution returned null for ${function.name()}" }
                                     responseInputItems.add( // Add an item indicating null output
                                         ResponseInputItem.ofFunctionCallOutput(
@@ -707,7 +745,6 @@ class MasaicToolHandler(
         logger.debug { "Processing ${functionCalls.size} function calls" }
 
         for (indexedToolCall in functionCalls.withIndex()) { // Changed to for loop to allow break
-            if (shouldTerminate) break // If already decided to terminate, skip other tools
 
             val index = indexedToolCall.index
             val tool = indexedToolCall.value
@@ -731,20 +768,6 @@ class MasaicToolHandler(
                                 ),
                             ),
                         ).build(),
-                )
-
-                // Add the function call to response items
-                responseInputItems.add(
-                    ResponseInputItem.ofFunctionCall(
-                        ResponseFunctionToolCall
-                            .builder()
-                            .callId(function.callId())
-                            .id(function.id().toString())
-                            .name(function.name())
-                            .arguments(function.arguments())
-                            .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
-                            .build(),
-                    ),
                 )
 
                 eventEmitter.invoke(
@@ -787,6 +810,19 @@ class MasaicToolHandler(
                         (imageToolOutputString as Map<out String?, String?>).contains("data") &&
                         (imageToolOutputString as Map<out String?, String?>)["data"]?.isNotBlank() == true
                     ) {
+                        // Add the function call to response items
+                        responseInputItems.add(
+                            ResponseInputItem.ofFunctionCall(
+                                ResponseFunctionToolCall
+                                    .builder()
+                                    .callId(function.callId())
+                                    .id(function.id().toString())
+                                    .name(function.name())
+                                    .arguments(function.arguments())
+                                    .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                    .build(),
+                            ),
+                        )
                         // Add the function call output to responseInputItems for storage/logging
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCallOutput(
@@ -841,6 +877,19 @@ class MasaicToolHandler(
                         break // Exit loop, image_generation is terminal for this batch of tools
                     } else {
                         logger.warn { "Terminal tool ${function.name()} returned null output in streaming. Adding error/null output." }
+                        // Add the function call to response items
+                        responseInputItems.add(
+                            ResponseInputItem.ofFunctionCall(
+                                ResponseFunctionToolCall
+                                    .builder()
+                                    .callId(function.callId())
+                                    .id(function.id().toString())
+                                    .name(function.name())
+                                    .arguments(function.arguments())
+                                    .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                    .build(),
+                            ),
+                        )
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCallOutput(
                                 ResponseInputItem.FunctionCallOutput
@@ -882,6 +931,19 @@ class MasaicToolHandler(
                     ) { toolResult ->
                         if (toolResult != null) {
                             logger.debug { "Tool execution successful for ${function.name()}" }
+                            // Add the function call to response items
+                            responseInputItems.add(
+                                ResponseInputItem.ofFunctionCall(
+                                    ResponseFunctionToolCall
+                                        .builder()
+                                        .callId(function.callId())
+                                        .id(function.id().toString())
+                                        .name(function.name())
+                                        .arguments(function.arguments())
+                                        .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                        .build(),
+                                ),
+                            )
                             responseInputItems.add(
                                 ResponseInputItem.ofFunctionCallOutput(
                                     ResponseInputItem.FunctionCallOutput
@@ -894,6 +956,19 @@ class MasaicToolHandler(
                             )
                         } else {
                             logger.warn { "Tool execution returned null for ${function.name()}" }
+                            // Add the function call to response items
+                            responseInputItems.add(
+                                ResponseInputItem.ofFunctionCall(
+                                    ResponseFunctionToolCall
+                                        .builder()
+                                        .callId(function.callId())
+                                        .id(function.id().toString())
+                                        .name(function.name())
+                                        .arguments(function.arguments())
+                                        .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
+                                        .build(),
+                                ),
+                            )
                             responseInputItems.add(
                                 ResponseInputItem.ofFunctionCallOutput(
                                     ResponseInputItem.FunctionCallOutput

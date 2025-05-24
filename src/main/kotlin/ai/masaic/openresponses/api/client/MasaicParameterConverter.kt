@@ -680,6 +680,19 @@ class MasaicParameterConverter(
                     )
                 }
             }
+        } else if (item.isMessage()) {
+            val message = item.asMessage()
+            completionBuilder.addMessage(
+                ChatCompletionUserMessageParam
+                    .builder()
+                    .content(
+                        ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                            prepareUserContent(
+                                message,
+                            ),
+                        ),
+                    ).build(),
+            )
         }
     }
 

@@ -535,7 +535,9 @@ class NativeToolRegistry(
                     throw IllegalArgumentException("Model provider not recognized: ${parts[0]}")
                 }
             } else {
-                System.getenv("OPEN_RESPONSES_IMAGE_GENERATION_BASE_URL") ?: System.getenv("OPENAI_BASE_URL")
+                System.getenv("OPEN_RESPONSES_IMAGE_GENERATION_BASE_URL")
+                    ?: System.getenv("OPENAI_BASE_URL")
+                    ?: throw IllegalArgumentException("Image model provider not recognized: ${tool.model}")
             }
 
         return Triple(imageModel, apiKey, url)
