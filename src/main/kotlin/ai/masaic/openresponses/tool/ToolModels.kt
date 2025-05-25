@@ -4,6 +4,8 @@ import ai.masaic.openresponses.api.model.AgenticSeachTool
 import ai.masaic.openresponses.api.model.FileSearchTool
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.FunctionTool
+import ai.masaic.openresponses.api.model.ImageGenerationTool
+import ai.masaic.openresponses.api.model.InputImageMask
 import ai.masaic.openresponses.api.model.Tool
 import ai.masaic.openresponses.api.model.UserLocation
 import ai.masaic.openresponses.api.model.WebSearchTool
@@ -29,9 +31,7 @@ import kotlin.jvm.optionals.getOrNull
 enum class ToolHosting {
     /** Tool is hosted and managed by Masaic */
     MASAIC_MANAGED,
-
-    /** Tool is self-hosted by the client */
-    SELF_HOSTED,
+    REMOTE,
 }
 
 /**
@@ -192,31 +192,104 @@ class ResponseParamsAdapter(
                     alias = it.asFileSearch()._additionalProperties()["alias"]?.toString(),
                 )
             } else if (it.isWebSearch()) {
-                // Assuming WebSearch in Response params maps to AgenticSearchTool config
-                val props = it.asWebSearch()._additionalProperties()
-                AgenticSeachTool(
-                    type = "agentic_search", // Map type correctly
-                    vectorStoreIds = props["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() },
-                    filters = props["filters"]?.convert(Filter::class.java),
-                    maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
-                    maxIterations = props["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
-                    alias = props["alias"]?.toString(),
-                    enablePresencePenaltyTuning = props["enable_presence_penalty_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                    enableFrequencyPenaltyTuning = props["enable_frequency_penalty_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                    enableTemperatureTuning = props["enable_temperature_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                    enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
-                )
+                if (it.asWebSearch().type().toString() == "agentic_search") {
+                    val props = it.asWebSearch()._additionalProperties()
+                    AgenticSeachTool(
+                        type = "agentic_search",
+                        vectorStoreIds =
+                            props["vector_store_ids"]
+                                ?.asArray()
+                                ?.getOrDefault(emptyList())
+                                ?.map { it.toString() },
+                        filters = props["filters"]?.convert(Filter::class.java),
+                        maxNumResults = props["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
+                        maxIterations = props["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
+                        alias = props["alias"]?.toString(),
+                        enablePresencePenaltyTuning =
+                            props["enable_presence_penalty_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableFrequencyPenaltyTuning =
+                            props["enable_frequency_penalty_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableTemperatureTuning =
+                            props["enable_temperature_tuning"]
+                                ?.toString()
+                                ?.toBooleanStrictOrNull(),
+                        enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
+                    )
+                } else if (it.asWebSearch().type().toString() == "image_generation") {
+                    val props = it.asWebSearch()._additionalProperties()
+                    ImageGenerationTool(
+                        background = props["background"]?.asString()?.getOrNull(),
+                        inputImageMask =
+                            props["input_image_mask"]?.let { maskJson ->
+                                try {
+                                    objectMapper.convertValue(maskJson.asObject().get(), InputImageMask::class.java)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            },
+                        model = props["model"]?.asString()?.getOrNull().toString(),
+                        moderation = props["moderation"]?.asString()?.getOrNull(),
+                        outputCompression = props["output_compression"]?.asNumber()?.getOrNull()?.toInt(),
+                        outputFormat = props["output_format"]?.asString()?.getOrNull(),
+                        partialImages = props["partial_images"]?.asNumber()?.getOrNull()?.toInt(),
+                        quality = props["quality"]?.asString()?.getOrNull(),
+                        size = props["size"]?.asString()?.getOrNull(),
+                        n = props["n"]?.asNumber()?.getOrNull()?.toInt(),
+                        responseFormat = props["response_format"]?.asString()?.getOrNull(),
+                        style = props["style"]?.asString()?.getOrNull(),
+                        user = props["user"]?.asString()?.getOrNull(),
+                        modelProviderKey = props["model_provider_key"]?.asString()?.getOrNull(),
+                    )
+                } else {
+                    throw IllegalArgumentException("Unsupported type of tool: ${it.asWebSearch().type()}")
+                }
             } else if (it.isFunction()) {
-                FunctionTool(
-                    type = "function",
-                    name = it.asFunction().name(),
-                    description = it.asFunction().description().getOrNull(),
-                    parameters = objectMapper.convertValue(it.asFunction().parameters(), Map::class.java) as MutableMap<String, Any>,
-                    strict = true, // Assuming strict true based on previous FunctionTool definition
-                    // alias = it.asFunction()._additionalProperties()["alias"]?.toString(), // If function can have alias
-                )
+                val func = it.asFunction()
+                val funcName = func.name()
+                val additionalProps = func._additionalProperties() ?: emptyMap<String, JsonValue>()
+
+                when (funcName) {
+                    "image_generation" -> {
+                        ImageGenerationTool(
+                            background = additionalProps["background"]?.asString()?.getOrNull(),
+                            inputImageMask =
+                                additionalProps["input_image_mask"]?.let { maskJson ->
+                                    try {
+                                        objectMapper.convertValue(maskJson.asObject().get(), InputImageMask::class.java)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+                                },
+                            model = additionalProps["model"]?.asString()?.getOrNull().toString(),
+                            moderation = additionalProps["moderation"]?.asString()?.getOrNull(),
+                            outputCompression = additionalProps["output_compression"]?.asNumber()?.getOrNull()?.toInt(),
+                            outputFormat = additionalProps["output_format"]?.asString()?.getOrNull(),
+                            partialImages = additionalProps["partial_images"]?.asNumber()?.getOrNull()?.toInt(),
+                            quality = additionalProps["quality"]?.asString()?.getOrNull(),
+                            size = additionalProps["size"]?.asString()?.getOrNull(),
+                            n = additionalProps["n"]?.asNumber()?.getOrNull()?.toInt(),
+                            responseFormat = additionalProps["response_format"]?.asString()?.getOrNull(),
+                            style = additionalProps["style"]?.asString()?.getOrNull(),
+                            user = additionalProps["user"]?.asString()?.getOrNull(),
+                            modelProviderKey = additionalProps["model_provider_key"]?.asString()?.getOrNull(),
+                        )
+                    }
+                    else -> {
+                        FunctionTool(
+                            type = "function",
+                            name = funcName,
+                            description = func.description().getOrNull(),
+                            parameters = objectMapper.convertValue(func.parameters(), Map::class.java) as MutableMap<String, Any>,
+                            strict = true,
+                        )
+                    }
+                }
             } else {
-                null // Handle other types or return null if not applicable
+                null
             }
         }
 
@@ -239,16 +312,8 @@ class ChatCompletionParamsAdapter(
 
     override fun getTools(): List<Tool> =
         params.tools().orElse(emptyList()).mapNotNull { rawTool ->
-            // Chat tools are functions, check the function name for type
             val toolFunction = rawTool.function()
             val toolName = toolFunction.name()
-            val props =
-                try {
-                    toolFunction.parameters().let { objectMapper.convertValue(it, Map::class.java) } ?: emptyMap<String, Any>()
-                } catch (e: Exception) {
-                    // Handle cases where parameters are not a valid map or missing
-                    mapOf<String, Any>() // Default to empty map on error
-                }
 
             when (toolName) {
                 "file_search" -> {
@@ -260,8 +325,8 @@ class ChatCompletionParamsAdapter(
                             ._additionalProperties()
                     FileSearchTool(
                         type = "file_search",
-                        vectorStoreIds = additionalProps["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() }, // Extract from parameters map
-                        filters = additionalProps["filters"], // Extract from parameters map
+                        vectorStoreIds = additionalProps["vector_store_ids"]?.asArray()?.getOrDefault(emptyList())?.map { it.toString() },
+                        filters = additionalProps["filters"],
                         maxNumResults = additionalProps["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
                         alias = additionalProps["alias"]?.toString(),
                     )
@@ -280,7 +345,6 @@ class ChatCompletionParamsAdapter(
                         maxNumResults = additionalProps["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
                         maxIterations = additionalProps["max_iterations"]?.toString()?.toIntOrNull() ?: 5,
                         alias = additionalProps["alias"]?.toString(),
-                        // Extract tuning flags from parameters map
                         enablePresencePenaltyTuning =
                             additionalProps["enable_presence_penalty_tuning"]
                                 ?.toString()
@@ -296,7 +360,7 @@ class ChatCompletionParamsAdapter(
                         enableTopPTuning = additionalProps["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
                     )
                 }
-                "web_search" -> {
+                "web_search_preview" -> {
                     val additionalProps =
                         params
                             .tools()
@@ -307,26 +371,63 @@ class ChatCompletionParamsAdapter(
                         type = "web_search_preview",
                         userLocation =
                             additionalProps["user_location"]?.let {
-                                objectMapper.convertValue(
-                                    it,
-                                    UserLocation::class.java,
-                                )
+                                try {
+                                    objectMapper.convertValue(it.asObject().get(), UserLocation::class.java)
+                                } catch (e: Exception) {
+                                    null
+                                }
                             },
                         searchContextSize = additionalProps["search_context_size"]?.toString() ?: "medium",
-                        domains = additionalProps["domains"] as? List<String> ?: emptyList(), // Extract domains if present
-                        // alias = props["alias"]?.toString(),
+                        domains = additionalProps["domains"]?.asArray()?.getOrDefault(emptyList())?.mapNotNull { it.asString()?.getOrNull() } ?: emptyList(),
                     )
                 }
-                // Default case for other function tools
-                else ->
+                "image_generation" -> {
+                    val additionalProps =
+                        params
+                            .tools()
+                            .getOrDefault(emptyList())
+                            .first { it.function().name() == "image_generation" }
+                            ._additionalProperties()
+                    ImageGenerationTool(
+                        type = "image_generation",
+                        background = additionalProps["background"]?.asString()?.getOrNull(),
+                        inputImageMask =
+                            additionalProps["input_image_mask"]?.let { maskJson ->
+                                try {
+                                    objectMapper.convertValue(maskJson.asObject().get(), InputImageMask::class.java)
+                                } catch (e: Exception) {
+                                    null
+                                }
+                            },
+                        model = additionalProps["model"]?.asString()?.getOrNull() ?: "gpt-image-1",
+                        moderation = additionalProps["moderation"]?.asString()?.getOrNull(),
+                        outputCompression = additionalProps["output_compression"]?.asNumber()?.getOrNull()?.toInt(),
+                        outputFormat = additionalProps["output_format"]?.asString()?.getOrNull(),
+                        partialImages = additionalProps["partial_images"]?.asNumber()?.getOrNull()?.toInt(),
+                        quality = additionalProps["quality"]?.asString()?.getOrNull(),
+                        size = additionalProps["size"]?.asString()?.getOrNull(),
+                        n = additionalProps["n"]?.asNumber()?.getOrNull()?.toInt(),
+                        responseFormat = additionalProps["response_format"]?.asString()?.getOrNull(),
+                        style = additionalProps["style"]?.asString()?.getOrNull(),
+                        user = additionalProps["user"]?.asString()?.getOrNull(),
+                        modelProviderKey = additionalProps["model_provider_key"]?.asString()?.getOrNull(),
+                    )
+                }
+                else -> {
+                    val functionParams =
+                        try {
+                            toolFunction.parameters().let { objectMapper.convertValue(it, Map::class.java) } ?: emptyMap<String, Any>()
+                        } catch (e: Exception) {
+                            mapOf<String, Any>()
+                        }
                     FunctionTool(
                         type = "function",
                         name = toolName,
                         description = toolFunction.description().getOrNull(),
-                        parameters = props as? MutableMap<String, Any> ?: mutableMapOf(), // Use extracted props
-                        strict = true, // Assuming strict true for function tools
-                        // alias = props["alias"]?.toString(),
+                        parameters = functionParams as? MutableMap<String, Any> ?: mutableMapOf(),
+                        strict = true,
                     )
+                }
             }
         }
 

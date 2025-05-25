@@ -14,7 +14,7 @@ import com.openai.core.JsonField
 import com.openai.core.JsonValue
 import com.openai.core.http.AsyncStreamResponse
 import com.openai.core.http.StreamResponse
-import com.openai.models.ChatModel
+import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.responses.Response
@@ -289,7 +289,7 @@ class MasaicStreamingServiceTest {
             every { originalParams.instructions() } returns Optional.of("My instructions")
             every { originalParams.metadata() } returns Optional.empty()
             every { originalParams.previousResponseId() } returns Optional.empty()
-            every { originalParams.model() } returns ChatModel.of("gpt-4")
+            every { originalParams.model() } returns ResponsesModel.ofString("gpt-4")
             every { originalParams.temperature() } returns Optional.of(0.7)
             every { originalParams._parallelToolCalls() } returns JsonValue.from(false)
             every { originalParams._tools() } returns JsonValue.from(listOf<Tool>())
@@ -309,7 +309,7 @@ class MasaicStreamingServiceTest {
             every { secondParams.instructions() } returns Optional.of("My instructions")
             every { secondParams.metadata() } returns Optional.empty()
             every { secondParams.previousResponseId() } returns Optional.empty()
-            every { secondParams.model() } returns ChatModel.of("gpt-4")
+            every { secondParams.model() } returns ResponsesModel.ofString("gpt-4")
             every { secondParams.temperature() } returns Optional.of(0.7)
             every { secondParams.topP() } returns Optional.of(1.0)
             every { secondParams.maxOutputTokens() } returns Optional.of(512)
@@ -439,7 +439,7 @@ class MasaicStreamingServiceTest {
                         every { isResponseOutputMessage() } returns true
                     },
                 )
-            every { toolHandler.handleMasaicToolCall(any(), any(), any(), any(), any()) } returns toolHandlerItems
+            every { toolHandler.handleMasaicToolCall(any(), any(), any(), any(), any()) } returns MasaicToolCallStreamingResult(toolHandlerItems)
 
             // 6) Now run the flow. This should trigger TWO iterations:
             val events =
@@ -464,7 +464,7 @@ class MasaicStreamingServiceTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList<Tool>())

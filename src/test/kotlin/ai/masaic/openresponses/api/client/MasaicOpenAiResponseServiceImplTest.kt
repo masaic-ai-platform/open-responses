@@ -6,7 +6,7 @@ import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonField
 import com.openai.core.RequestOptions
-import com.openai.models.ChatModel
+import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.responses.*
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
@@ -150,7 +150,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Setup
         val responseId = "resp_123456"
         val params = mockk<ResponseRetrieveParams>(relaxed = true)
-        every { params.responseId() } returns responseId
+        every { params.responseId() } returns Optional.of(responseId)
 
         val mockResponse = mockk<Response>(relaxed = true)
         coEvery { responseStore.getResponse(responseId) } returns mockResponse
@@ -174,7 +174,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Setup
         val responseId = "nonexistent_resp"
         val params = mockk<ResponseRetrieveParams>(relaxed = true)
-        every { params.responseId() } returns responseId
+        every { params.responseId() } returns Optional.of(responseId)
 
         coEvery { responseStore.getResponse(responseId) } returns null
 
@@ -197,7 +197,7 @@ class MasaicOpenAiResponseServiceImplTest {
         // Setup
         val responseId = "resp_123456"
         val params = mockk<ResponseDeleteParams>(relaxed = true)
-        every { params.responseId() } returns responseId
+        every { params.responseId() } returns Optional.of(responseId)
         
         coEvery { responseStore.deleteResponse(responseId) } returns true
         
@@ -217,7 +217,7 @@ class MasaicOpenAiResponseServiceImplTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.of("Say hello to the world")
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList<Tool>())
