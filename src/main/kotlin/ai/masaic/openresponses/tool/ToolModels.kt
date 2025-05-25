@@ -165,7 +165,7 @@ class ResponseParamsAdapter(
     internal val params: ResponseCreateParams,
     val objectMapper: ObjectMapper,
 ) : ToolParamsAccessor {
-    override fun getModel(): String = params.model().toString()
+    override fun getModel(): String = if (params.model().isString()) params.model().string().get() else params.model().asChat().toString()
 
     override fun getDefaultTemperature(): Double? = params.temperature().getOrDefault(1.0)
 

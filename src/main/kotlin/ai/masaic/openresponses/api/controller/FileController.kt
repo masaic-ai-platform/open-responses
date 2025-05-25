@@ -243,37 +243,38 @@ class FileController(
      * but will ensure that there is a filename in the Content-Disposition header.
      * If the original [Part] has no filename, the filename will be set to the part name with a ".bin" extension.
      */
-    private fun getFilePart(part: Part): FilePart = when (part) {
-        is FilePart -> part // already a FilePart
-        else ->
-            object : FilePart { // wrap DEFAULT/FORM‐FIELD/whatever
-                private val headers: HttpHeaders =
-                    HttpHeaders().apply {
-                        // carry over original headers if you like:
-                        putAll(part.headers())
-                        // ensure there's a filename ⇒ some uploader code may rely on it
-                        contentDisposition =
-                            part
-                                .headers()
-                                .contentDisposition.filename
-                                .let { cd ->
-                                    ContentDisposition
-                                        .builder("form-data")
-                                        .name(part.name())
-                                        .filename(cd ?: (part.name() + ".bin"))
-                                        .build()
-                                }
-                    }
+    private fun getFilePart(part: Part): FilePart =
+        when (part) {
+            is FilePart -> part // already a FilePart
+            else ->
+                object : FilePart { // wrap DEFAULT/FORM‐FIELD/whatever
+                    private val headers: HttpHeaders =
+                        HttpHeaders().apply {
+                            // carry over original headers if you like:
+                            putAll(part.headers())
+                            // ensure there's a filename ⇒ some uploader code may rely on it
+                            contentDisposition =
+                                part
+                                    .headers()
+                                    .contentDisposition.filename
+                                    .let { cd ->
+                                        ContentDisposition
+                                            .builder("form-data")
+                                            .name(part.name())
+                                            .filename(cd ?: (part.name() + ".bin"))
+                                            .build()
+                                    }
+                        }
 
-                override fun name(): String = part.name()
+                    override fun name(): String = part.name()
 
-                override fun filename(): String = part.headers().contentDisposition.filename ?: (part.name() + ".bin")
+                    override fun filename(): String = part.headers().contentDisposition.filename ?: (part.name() + ".bin")
 
-                override fun headers(): HttpHeaders = headers
+                    override fun headers(): HttpHeaders = headers
 
-                override fun content(): Flux<DataBuffer> = part.content()
+                    override fun content(): Flux<DataBuffer> = part.content()
 
-                override fun transferTo(dest: Path): Mono<Void> = DataBufferUtils.write(content(), dest).then()
-            }
-    }
+                    override fun transferTo(dest: Path): Mono<Void> = DataBufferUtils.write(content(), dest).then()
+                }
+        }
 } 
