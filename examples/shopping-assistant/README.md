@@ -2,7 +2,7 @@
 
 This example demonstrates how to run the Shopping Assistant with Open Responses.
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/C4pHvhuGlog" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+[![Shopping Assistant Demo](https://yt-embed.live/embed?v=C4pHvhuGlog)](https://www.youtube.com/watch?v=C4pHvhuGlog)
 
 ## Components
 
