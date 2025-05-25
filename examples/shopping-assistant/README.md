@@ -2,15 +2,28 @@
 
 This example demonstrates how to run the Shopping Assistant with Open Responses.
 
+<iframe width="560" height="315" src="https://www.youtube.com/embed/C4pHvhuGlog" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+
 ## Components
 
 - **Shopping Assistant**: A demo application showcasing AI-assisted shopping experiences
-- **Open Responses**: A service for handling AI responses and evaluation
+- **Open Responses**: 
+- **Jupyter Notebook**: An interactive notebook demonstrating OpenResponses Agent orchestration
 
 ## Source Code
 
-The Shopping Assistant codebase is available at:
+The Shopping Assistant UI codebase is available at:
 - https://github.com/masaic-ai-platform/shopper-cart-flow-ui
+
+## Features
+This demo showcases the integration with Shopify MCP, which allows:
+
+- Searching product catalogs in real-time
+- Adding items to carts programmatically
+- Generating checkout links
+- Providing a conversational shopping experience
+
+The Jupyter notebook (`shopify_mcp_demo.ipynb`) demonstrates how to use the OpenAI Python SDK to interact with OpenResponse orchestration of MCP tools.
 
 ## Getting Started
 
@@ -41,18 +54,28 @@ The Shopping Assistant codebase is available at:
    http://localhost:8080
    ```
 
-## Configuration
+5. The Jupyter notebook interface will be available at:
+   ```
+   http://localhost:8890
+   ```
 
-The Docker Compose setup automatically configures:
-- Network connectivity between services
-- Port mappings for local access
-- Dependencies to ensure proper startup order
+### Using the Jupyter Notebook
+
+The included notebook demonstrates how to:
+
+1. Connect to the Open Responses service using the OpenAI SDK
+2. Execute MCP calls to Shopify for catalog search and cart operations
+3. Parse and display responses from the assistant
+
+To run the notebook:
+1. Open the Jupyter interface at http://localhost:8890
+2. Open the `shopify_mcp_demo.ipynb` file
 
 ## Troubleshooting
 
 If you encounter issues:
 
-1. Check that both services are running:
+1. Check that all services are running:
    ```bash
    docker compose ps
    ```
@@ -67,6 +90,8 @@ If you encounter issues:
    docker compose logs open-responses
    # or
    docker compose logs app
+   # or 
+   docker compose logs notebook
    ```
 
 ## Stopping the Demo
