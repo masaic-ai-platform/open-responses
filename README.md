@@ -1,7 +1,5 @@
 # OpenResponses: The Drop-in Agentic API Layer
 
-![OpenResponses - All-in-One AI Toolkit](static/About.png)
-
 [![Discord](https://img.shields.io/static/v1?label=Discord&message=Join%20Us&color=5865F2&logo=discord&logoColor=white)](https://discord.com/channels/1335132819260702723/1354795442004820068)
 [![Discussions](https://img.shields.io/static/v1?label=Discussions&message=Community&color=3FB950&logo=github&logoColor=white)](https://github.com/orgs/masaic-ai-platform/discussions)
 
