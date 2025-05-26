@@ -761,10 +761,13 @@ class DataSetController(
     ): Conversation {
         val apiKey = headers["Authorization"]?.first() ?: throw IllegalStateException("apiKey is mandatory")
         val labellingResponse = generateGenericLabel(conversationMessages, headers, queryParams)
+        val messages = if (labellingResponse.messages.last().role == Role.ASSISTANT) {
+            labellingResponse.messages.dropLast(1)
+        } else labellingResponse.messages
         val updatedConversation = conversation.copy(
             labels = listOf(labellingResponse.toLabel()),
             summary = labellingResponse.summary,
-            messages = labellingResponse.messages
+            messages = messages
         )
 
         val savedConversation = conversationRepository.createConversation(updatedConversation)
