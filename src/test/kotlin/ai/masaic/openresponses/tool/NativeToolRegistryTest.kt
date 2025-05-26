@@ -24,7 +24,7 @@ class NativeToolRegistryTest {
     @BeforeEach
     fun setUp() {
         vectorStoreService = mockk()
-        nativeToolRegistry = NativeToolRegistry(jacksonObjectMapper())
+        nativeToolRegistry = NativeToolRegistry(jacksonObjectMapper(), mockk(relaxed = true))
         // Set vectorStoreService via reflection since it's private
         ReflectionTestUtils.setField(nativeToolRegistry, "vectorStoreService", vectorStoreService)
     }
@@ -57,10 +57,11 @@ class NativeToolRegistryTest {
         val tools = nativeToolRegistry.findAll()
 
         // Then
-        assertEquals(3, tools.size)
+        assertEquals(4, tools.size)
         assertTrue(tools.any { it.name == "think" })
         assertTrue(tools.any { it.name == "file_search" })
         assertTrue(tools.any { it.name == "agentic_search" })
+        assertTrue(tools.any { it.name == "image_generation" })
     }
 
     @Test

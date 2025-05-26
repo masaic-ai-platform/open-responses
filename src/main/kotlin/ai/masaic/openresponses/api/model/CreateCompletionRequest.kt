@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.model
 
 import com.fasterxml.jackson.annotation.JsonAlias
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import java.util.*
 
@@ -25,6 +26,7 @@ data class CreateCompletionRequest(
     val tool_choice: Any? = null,
     val user: String? = null,
     val store: Boolean = false,
+    val metadata: ChatCompletionCreateParams.Metadata? = null,
     val stream_options: Map<String, Any>? = null,
     @JsonAlias("extra_body")
     val extraBody: Map<String, Any>? = null,

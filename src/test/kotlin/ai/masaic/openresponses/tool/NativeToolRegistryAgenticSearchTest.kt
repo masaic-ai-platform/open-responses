@@ -28,7 +28,7 @@ class NativeToolRegistryAgenticSearchTest {
         vectorStoreService = mockk()
         openAIClient = mockk()
         objectMapper = jacksonObjectMapper()
-        nativeToolRegistry = NativeToolRegistry(objectMapper)
+        nativeToolRegistry = NativeToolRegistry(objectMapper, mockk(relaxed = true))
 
         // Set vectorStoreService via reflection since it's private
         ReflectionTestUtils.setField(nativeToolRegistry, "vectorStoreService", vectorStoreService)

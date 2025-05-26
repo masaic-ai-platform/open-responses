@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
@@ -7,7 +8,6 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.openai.models.Metadata
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseOutputText
 import com.openai.models.responses.ResponseTextConfig
@@ -110,6 +110,8 @@ data class RankingOptions(
     JsonSubTypes.Type(value = FileSearchTool::class, name = "file_search"),
     JsonSubTypes.Type(value = FunctionTool::class, name = "function"),
     JsonSubTypes.Type(value = AgenticSeachTool::class, name = "agentic_search"),
+    JsonSubTypes.Type(value = MCPTool::class, name = "mcp"),
+    JsonSubTypes.Type(value = ImageGenerationTool::class, name = "image_generation"),
 )
 interface Tool {
     val type: String
@@ -216,7 +218,7 @@ data class CreateResponseRequest(
     val store: Boolean = true,
     val stream: Boolean = false,
     val reasoning: Reasoning? = null,
-    val metadata: Metadata? = null,
+    val metadata: Any? = null,
     val truncation: Response.Truncation? = null,
     val text: ResponseTextConfig? = null,
 ) {
@@ -377,3 +379,84 @@ data class InstrumentationMetadataInput(
     val modelProviderAddress: String = "UNKNOWN",
     val modelProviderPort: String = "UNKNOWN",
 )
+
+/**
+ * Tool implementation for MCP (Model Control Panel) operations.
+ *
+ * @property type The type identifier for this tool, should be "mcp"
+ * @property serverLabel Label for the server
+ * @property serverUrl URL of the MCP server
+ * @property requireApproval When approval is required for tool use
+ * @property allowedTools List of tools allowed to be used
+ */
+data class MCPTool(
+    override val type: String,
+    @JsonProperty("server_label")
+    val serverLabel: String,
+    @JsonProperty("server_url")
+    val serverUrl: String,
+    @JsonIgnore // TODO: for now this will be always never. Will enable this in upcoming releases.
+    @JsonProperty("require_approval")
+    val requireApproval: String = "never",
+    @JsonProperty("allowed_tools")
+    val allowedTools: List<String> = emptyList(),
+) : Tool
+
+/**
+ * Optional mask for inpainting within an image generation tool.
+ *
+ * @property imageUrl Optional URL of the mask image.
+ * @property fileId Optional file ID of the mask image.
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class InputImageMask(
+    @JsonProperty("image_url")
+    val imageUrl: String? = null,
+    @JsonProperty("file_id")
+    val fileId: String? = null,
+)
+
+/**
+ * Tool implementation for image generation (Configuration Aspect).
+ * This data class holds the configuration parameters for the image generation tool.
+ * `prompt` and `generationType` are provided dynamically by the LLM.
+ *
+ * @property type The type of the image generation tool. Always "image_generation".
+ * @property background Background type for the generated image. One of "transparent", "opaque", or "auto". Default: "auto".
+ * @property inputImageMask Optional mask for inpainting (used for 'edit' type typically).
+ * @property model The image generation model to use. E.g., "dall-e-2", "dall-e-3", "gpt-image-1". Default: "gpt-image-1".
+ * @property moderation Moderation level for the generated image. E.g., "low", "auto". Default: "auto".
+ * @property outputCompression Compression level (0-100%) for the output image (WEBP/JPEG only). Default: 100.
+ * @property outputFormat The output format of the generated image. One of "png", "webp", or "jpeg". Default: "png".
+ * @property partialImages Number of partial images to generate in streaming mode (0-3). Default: 0.
+ * @property quality The quality of the generated image. E.g., "low", "medium", "high", "auto" (for gpt-image-1); "standard", "hd" (for dall-e-3). Default: "auto".
+ * @property size The size of the generated image. E.g., "1024x1024", "1024x1536", "1536x1024", "auto". Default: "auto".
+ * @property n Number of images to generate. Default: 1.
+ * @property responseFormat Format for dall-e-2/3: url or b64_json. gpt-image-1 always b64_json. Default: "url".
+ * @property style Style for dall-e-3: vivid or natural. Default: "vivid".
+ * @property user Unique identifier for end-user for abuse monitoring.
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class ImageGenerationTool(
+    override val type: String = "image_generation",
+    val background: String? = "auto",
+    @JsonProperty("input_image_mask")
+    val inputImageMask: InputImageMask? = null,
+    val model: String = "gpt-image-1",
+    val moderation: String? = "auto",
+    @JsonProperty("output_compression")
+    val outputCompression: Int? = 100,
+    @JsonProperty("output_format")
+    val outputFormat: String? = "png",
+    @JsonProperty("partial_images")
+    val partialImages: Int? = 0,
+    val quality: String? = "auto",
+    val size: String? = "auto",
+    val n: Int? = 1,
+    @JsonProperty("response_format")
+    val responseFormat: String? = "b64_json",
+    val style: String? = "vivid",
+    val user: String? = null,
+    @JsonProperty("model_provider_key")
+    val modelProviderKey: String? = null,
+) : Tool
