@@ -8,7 +8,7 @@ import java.time.Instant
 data class Conversation(
     val id: String,
     val createdAt: Instant,
-    val messages: List<Message>,
+    val messages: List<Message> = emptyList(),
     val summary: String = "NA",
     val labels: List<Label> = emptyList(),
     val resolved: Boolean? = null,
@@ -16,9 +16,9 @@ data class Conversation(
     val meta: Map<String, Any> = emptyMap(),
     val version: Int = 1
 ) {
-    init {
-        require(messages.isNotEmpty()) { "Conversation must contain at least one message" }
-    }
+//    init {
+//        require(messages.isNotEmpty()) { "Conversation must contain at least one message" }
+//    }
 }
 
 /**
