@@ -479,25 +479,14 @@ class MasaicToolHandler(
                                 responseInputItems.add(functionCallOutputItem)
 
                                 val imageResponseOutputItem =
-                                    ResponseOutputItem.ofMessage(
-                                        ResponseOutputMessage
+                                    ResponseOutputItem.ofImageGenerationCall(
+                                        ResponseOutputItem.ImageGenerationCall
                                             .builder()
-                                            .id(UUID.randomUUID().toString())
-                                            .role(JsonValue.from("assistant"))
-                                            .status(ResponseOutputMessage.Status.COMPLETED)
-                                            .content(
-                                                listOf(
-                                                    ResponseOutputMessage.Content.ofOutputText(
-                                                        ResponseOutputText
-                                                            .builder()
-                                                            .text(toolOutputString["data"].toString()) // This is the image data/URL
-                                                            .annotations(emptyList())
-                                                            .putAdditionalProperty("type", JsonValue.from("output_image"))
-                                                            .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
-                                                            .build(),
-                                                    ),
-                                                ),
-                                            ).build(),
+                                            .id(tool.id())
+                                            .status(ResponseOutputItem.ImageGenerationCall.Status.COMPLETED)
+                                            .result(toolOutputString["data"].toString())
+                                            .type(JsonValue.from("image_generation_call"))
+                                            .build(),
                                     )
 
                                 val directResponse =
@@ -786,6 +775,21 @@ class MasaicToolHandler(
                 )
 
                 if (function.name() == IMAGE_GENERATION_TOOL_NAME) {
+                    eventEmitter.invoke(
+                        ServerSentEvent
+                            .builder<String>()
+                            .event("$eventPrefix.generating")
+                            .data(
+                                objectMapper.writeValueAsString(
+                                    mapOf<String, String>(
+                                        "item_id" to (function.id().getOrNull() ?: function.callId()),
+                                        "output_index" to index.toString(),
+                                        "type" to "$eventPrefix.executing",
+                                    ),
+                                ),
+                            ).build(),
+                    )
+
                     logger.info { "Executing terminal tool (streaming): ${function.name()} with ID: ${function.id()}" }
                     var imageToolOutputString: Map<String, String>? = null
                     executeToolWithObservation(
@@ -835,26 +839,16 @@ class MasaicToolHandler(
                             ),
                         )
                         // Create the ResponseOutputItem for the image tool (this will be the final message)
+
                         terminalOutputItem =
-                            ResponseOutputItem.ofMessage(
-                                ResponseOutputMessage
+                            ResponseOutputItem.ofImageGenerationCall(
+                                ResponseOutputItem.ImageGenerationCall
                                     .builder()
-                                    .id(function.id().toString()) // Use function ID for the message ID
-                                    .role(JsonValue.from("assistant"))
-                                    .status(ResponseOutputMessage.Status.COMPLETED)
-                                    .content(
-                                        listOf(
-                                            ResponseOutputMessage.Content.ofOutputText(
-                                                ResponseOutputText
-                                                    .builder()
-                                                    .text((imageToolOutputString as Map<out String?, String?>)["data"].toString()) // Image data/URL
-                                                    .annotations(emptyList())
-                                                    .putAdditionalProperty("type", JsonValue.from("output_image"))
-                                                    .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
-                                                    .build(),
-                                            ),
-                                        ),
-                                    ).build(),
+                                    .id(function.id().get())
+                                    .status(ResponseOutputItem.ImageGenerationCall.Status.COMPLETED)
+                                    .result(imageToolOutputString["data"].toString())
+                                    .type(JsonValue.from("image_generation_call"))
+                                    .build(),
                             )
 
                         shouldTerminate = true // Signal to terminate streaming after this tool

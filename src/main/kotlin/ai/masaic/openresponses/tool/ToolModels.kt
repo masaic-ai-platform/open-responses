@@ -219,38 +219,38 @@ class ResponseParamsAdapter(
                                 ?.toBooleanStrictOrNull(),
                         enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
                     )
-                } else if (it.asWebSearch().type().toString() == "image_generation") {
-                    val props = it.asWebSearch()._additionalProperties()
-                    ImageGenerationTool(
-                        background = props["background"]?.asString()?.getOrNull(),
-                        inputImageMask =
-                            props["input_image_mask"]?.let { maskJson ->
-                                try {
-                                    objectMapper.convertValue(maskJson.asObject().get(), InputImageMask::class.java)
-                                } catch (e: Exception) {
-                                    null
-                                }
-                            },
-                        model = props["model"]?.asString()?.getOrNull().toString(),
-                        moderation = props["moderation"]?.asString()?.getOrNull(),
-                        outputCompression = props["output_compression"]?.asNumber()?.getOrNull()?.toInt(),
-                        outputFormat = props["output_format"]?.asString()?.getOrNull(),
-                        partialImages = props["partial_images"]?.asNumber()?.getOrNull()?.toInt(),
-                        quality = props["quality"]?.asString()?.getOrNull(),
-                        size = props["size"]?.asString()?.getOrNull(),
-                        n = props["n"]?.asNumber()?.getOrNull()?.toInt(),
-                        responseFormat = props["response_format"]?.asString()?.getOrNull(),
-                        style = props["style"]?.asString()?.getOrNull(),
-                        user = props["user"]?.asString()?.getOrNull(),
-                        modelProviderKey = props["model_provider_key"]?.asString()?.getOrNull(),
-                    )
                 } else {
                     throw IllegalArgumentException("Unsupported type of tool: ${it.asWebSearch().type()}")
                 }
+            } else if (it.isImageGeneration()) {
+                val request = it.asImageGeneration()
+                val props = it.asImageGeneration()._additionalProperties()
+                ImageGenerationTool(
+                    background = request.background().getOrNull().toString(),
+                    inputImageMask =
+                        request.inputImageMask().getOrNull()?.let { maskJson ->
+                            try {
+                                objectMapper.convertValue(maskJson, InputImageMask::class.java)
+                            } catch (e: Exception) {
+                                null
+                            }
+                        },
+                    model = request.model().getOrNull().toString(),
+                    moderation = request.moderation().getOrNull().toString(),
+                    outputCompression = request.outputCompression().getOrNull()?.toInt(),
+                    outputFormat = request.outputFormat().getOrNull().toString(),
+                    partialImages = request.partialImages().getOrNull()?.toInt(),
+                    quality = request.quality().getOrNull()?.toString(),
+                    size = request.size().getOrNull().toString(),
+                    responseFormat = props["response_format"]?.asString()?.getOrNull(),
+                    style = props["style"]?.asString()?.getOrNull(),
+                    user = props["user"]?.asString()?.getOrNull(),
+                    modelProviderKey = props["model_provider_key"]?.asString()?.getOrNull(),
+                )
             } else if (it.isFunction()) {
                 val func = it.asFunction()
                 val funcName = func.name()
-                val additionalProps = func._additionalProperties() ?: emptyMap<String, JsonValue>()
+                val additionalProps = func._additionalProperties()
 
                 when (funcName) {
                     "image_generation" -> {

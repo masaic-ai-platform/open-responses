@@ -67,6 +67,7 @@ object ChatCompletionChunkConverter {
                     .outputIndex(index)
                     .itemId(itemId)
                     .delta(content)
+                    .sequenceNumber(System.nanoTime())
                     .build(),
             ),
         )
@@ -137,7 +138,8 @@ object ChatCompletionChunkConverter {
                             .status(ResponseFunctionToolCall.Status.IN_PROGRESS)
                             .build(),
                     ),
-                ).build(),
+                ).sequenceNumber(System.nanoTime())
+                .build(),
         )
 
     /**
@@ -174,6 +176,7 @@ object ChatCompletionChunkConverter {
                 .delta(arguments)
                 .itemId(completionId)
                 .putAllAdditionalProperties(toolCall._additionalProperties())
+                .sequenceNumber(System.nanoTime())
                 .build(),
         )
     }
@@ -199,6 +202,7 @@ object ChatCompletionChunkConverter {
                     .arguments("")
                     .itemId(completionId)
                     .putAllAdditionalProperties(additionalProperties)
+                    .sequenceNumber(System.nanoTime())
                     .build(),
             ),
         )
