@@ -2,6 +2,7 @@ package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import com.fasterxml.jackson.annotation.JsonIgnore
+import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 import kotlinx.serialization.Serializable
 
@@ -88,7 +89,7 @@ data class AgenticSearchResponse(
     @JsonProperty("search_iterations")
     val search_iterations: List<AgenticSearchIteration>,
     @JsonProperty("knowledge_acquired")
-    val knowledge_acquired: String? = null,
+    val knowledge_acquired: String = "",
 )
 
 /**
@@ -116,4 +117,16 @@ data class AgenticSearchIteration(
     var termination_reason: String? = null,
     @JsonIgnore
     val results: MutableList<VectorStoreSearchResult> = mutableListOf(),
+)
+
+/**
+ * Arguments for the image generation tool.
+ * These parameters are used to request image creation from an external API.
+ */
+@JsonInclude(JsonInclude.Include.NON_NULL)
+data class ImageGenerationToolArguments(
+    @JsonProperty("prompt")
+    val prompt: String,
+    @JsonProperty("is_edit")
+    val isEdit: Boolean = false,
 )

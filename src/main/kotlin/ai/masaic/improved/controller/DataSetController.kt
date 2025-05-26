@@ -93,17 +93,17 @@ class DataSetController(
             order = order, // Always desc on createdAt as specified in comments
             labels = listOf(domainLabel) // Filter by domainLabel at the database layer
         )
-        
+
         // Get conversations already filtered by domainLabel from the repository
         val conversations = conversationRepository.listConversations(params)
-        
+
         // Map conversations to transcripts, checking if each one has a generic label
         return conversations.map { conversation ->
             // Check if the conversation has any label that starts with "generic"
-            val isGenericLabelAvailable = conversation.labels.any { label -> 
+            val isGenericLabelAvailable = conversation.labels.any { label ->
                 label.path.startsWith("generic")
             }
-            
+
             // Create and return a Transcript object
             Transcript(
                 conversationId = conversation.id,
@@ -172,7 +172,7 @@ class DataSetController(
     suspend fun assignDomainLabels(): ResponseEntity<List<String>> {
         val conversations = conversationRepository.listConversations()
         val conversationIds = conversations.map {
-           assignDomainLabels(it.id).body?.id ?: "not_available for ${it.id}"
+            assignDomainLabels(it.id).body?.id ?: "not_available for ${it.id}"
         }
         return ResponseEntity.ok().body(conversationIds)
     }
@@ -335,6 +335,7 @@ class DataSetController(
 
         val sheet = workbook.getSheetAt(0)
         val conversations = mutableListOf<Conversation>()
+        val conversationMessages = mutableListOf<String>()
         val formatter = org.apache.poi.ss.usermodel.DataFormatter()
 
         // Iterate through rows (skip header row)
@@ -368,7 +369,7 @@ class DataSetController(
 
             try {
                 // Parse conversation JSON
-                var messages = parseConversationJson(conversationJson)
+//                val messages = parseConversationJson(conversationJson)
 
                 val startDate = Instant.parse("2025-05-01T00:00:00Z")
                 val endDate = Instant.parse("2025-05-20T23:59:59Z")
@@ -377,7 +378,6 @@ class DataSetController(
                 val conversation = Conversation(
                     id = conversationId,
                     createdAt = randomCreatedAt,
-                    messages = messages.dropLastWhile { it.role == Role.ASSISTANT },
                     labels = emptyList(),
                     meta = mapOf(
                         "source" to "excel_import"
@@ -387,6 +387,7 @@ class DataSetController(
 
                 // Save to the repository
                 conversations.add(conversation)
+                conversationMessages.add(conversationJson)
                 logger.info { "Processed conversation ID: $conversationId" }
 
             } catch (e: Exception) {
@@ -406,9 +407,9 @@ class DataSetController(
             throw IllegalStateException("no conversations found for processing.")
         }
 
-        val savedConvLog = conversations.map {
+        val savedConvLog = conversations.mapIndexed{ index, converstion ->
             val savedConversation =
-                processConversation(it, headers, queryParams, labelConvWithDomain)
+                processConversation(converstion, conversationMessages[index], headers, queryParams, labelConvWithDomain)
             "saved conversation: ${savedConversation.id}"
         }
 
@@ -753,6 +754,28 @@ class DataSetController(
 
     suspend fun processConversation(
         conversation: Conversation,
+        conversationMessages: String,
+        headers: MultiValueMap<String, String>,
+        queryParams: MultiValueMap<String, String>,
+        labelConvWithDomain: Boolean
+    ): Conversation {
+        val apiKey = headers["Authorization"]?.first() ?: throw IllegalStateException("apiKey is mandatory")
+        val labellingResponse = generateGenericLabel(conversationMessages, headers, queryParams)
+        val updatedConversation = conversation.copy(
+            labels = listOf(labellingResponse.toLabel()),
+            summary = labellingResponse.summary,
+            messages = labellingResponse.messages
+        )
+
+        val savedConversation = conversationRepository.createConversation(updatedConversation)
+        saveConversationVector(savedConversation, apiKey)
+        assignDomainLabels(savedConversation.id).body
+            ?: throw IllegalStateException("Conversation not labelled with domain label..")
+        return savedConversation
+    }
+
+    suspend fun processConversation(
+        conversation: Conversation,
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
         labelConvWithDomain: Boolean
@@ -967,11 +990,19 @@ class DataSetController(
         messages: List<Message>, headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>
     ): LabellingResponse {
+        val messagesJson = jacksonObjectMapper().writeValueAsString(messages.toString())
+        return generateGenericLabel(messagesJson, headers, queryParams)
+    }
+
+    private suspend fun generateGenericLabel(
+        messagesJson: String, headers: MultiValueMap<String, String>,
+        queryParams: MultiValueMap<String, String>
+    ): LabellingResponse {
         val systemPrompt = """
 You are **HandoverJudgeGPT**, an expert in labeling chat transcripts with exactly one Level‑1 (L1) and one Level‑2 (L2) hand‑over code or query_resolved in case customer query is resolved.
 
 Conversation:
-${jacksonObjectMapper().writeValueAsString(messages.toString())}
+$messagesJson
 
 ────────────────  TAXONOMY (v0.2)  ────────────────
 1. nlu_low_confidence
@@ -1081,7 +1112,7 @@ const val responseFormat = """
 """
 
 const val labelling_response_format = """
-    {
+ {
   "title": "ConversationAnnotation",
   "type": "object",
   "properties": {
@@ -1100,13 +1131,37 @@ const val labelling_response_format = """
     "summary": {
       "type": "string",
       "description": "Summarization of the conversation."
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "ASSISTANT",
+              "USER"
+            ]
+          }
+        },
+        "required": [
+          "text",
+          "role"
+        ],
+        "additionalProperties": false
+      }
     }
   },
   "required": [
     "level1",
     "level2",
     "reason",
-    "summary"
+    "summary",
+    "messages"
   ],
   "additionalProperties": false
 }
@@ -1121,7 +1176,7 @@ data class ProcessRangeRequest(
     val labelConvWithDomain: Boolean = false
 )
 
-data class LabellingResponse(val level1: String, val level2: String, val reason: String, val summary: String) {
+data class LabellingResponse(val level1: String, val level2: String, val reason: String, val summary: String, val messages: List<Message> = emptyList()) {
     fun toLabel(): Label {
         return Label(
             path = "generic/$level1/$level2",

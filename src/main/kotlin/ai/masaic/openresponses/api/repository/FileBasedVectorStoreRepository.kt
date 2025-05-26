@@ -59,7 +59,7 @@ class FileBasedVectorStoreRepository(
                 
                 val json = objectMapper.writeValueAsString(vectorStore)
                 Files.write(filePath, json.toByteArray())
-                log.info("Saved vector store metadata ${vectorStore.id} with status ${vectorStore.status}")
+                log.debug("Saved vector store metadata ${vectorStore.id} with status ${vectorStore.status}")
                 vectorStore
             } catch (e: Exception) {
                 log.error("Error saving vector store metadata ${vectorStore.id}", e)

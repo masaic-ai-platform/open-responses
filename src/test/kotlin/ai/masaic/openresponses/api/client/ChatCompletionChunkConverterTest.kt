@@ -74,7 +74,7 @@ internal class ChatCompletionChunkConverterTest {
         assertEquals("myFunction", toolCallObj.name())
         assertEquals("""{"arg1":"value1"}""", toolCallObj.arguments())
         assertEquals("tool_call_id", toolCallObj.callId())
-        assertEquals("test_id", toolCallObj.id())
+        assertEquals("test_id", toolCallObj.id().get())
         assertEquals(ResponseFunctionToolCall.Status.IN_PROGRESS, toolCallObj.status().get())
     }
 
