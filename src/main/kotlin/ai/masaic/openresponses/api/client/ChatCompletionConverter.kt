@@ -1,12 +1,17 @@
 package ai.masaic.openresponses.api.client
 
+import ai.masaic.openresponses.api.extensions.isImageContent
 import ai.masaic.openresponses.tool.AgenticSearchResponse
 import ai.masaic.openresponses.tool.FileSearchResponse
 import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.ChatModel
 import com.openai.models.chat.completions.ChatCompletion
+import com.openai.models.chat.completions.ChatCompletionChunk
+import com.openai.models.chat.completions.ChatCompletionMessage
+import com.openai.models.chat.completions.ChatCompletionMessageToolCall
 import com.openai.models.completions.CompletionUsage
 import com.openai.models.responses.*
 import java.time.Instant
@@ -18,7 +23,7 @@ import java.util.*
  * compatibility across the platform.
  */
 object ChatCompletionConverter {
-    val objectMapper = jacksonObjectMapper()
+    val objectMapper = jacksonObjectMapper().registerModule(Jdk8Module())
     val log = org.slf4j.LoggerFactory.getLogger(ChatCompletionConverter::class.java)
 
     /**
@@ -39,7 +44,7 @@ object ChatCompletionConverter {
             .error(null) // Required field, null since we assume no error
             .incompleteDetails(null) // Required field, null since we assume complete response
             .instructions(params.instructions())
-            .metadata(params.metadata())
+            .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
             .model(params.model())
             .object_(JsonValue.from("response")) // Standard value
             .temperature(params.temperature())
@@ -132,6 +137,15 @@ object ChatCompletionConverter {
 
                     val list = outputItems.toMutableList()
                     val last = list.removeLast()
+                    val isImage =
+                        isImageContent(
+                            last
+                                .asMessage()
+                                .content()
+                                .last()
+                                .asOutputText()
+                                .text(),
+                        ).isImage
                     list.add(
                         ResponseOutputItem.ofMessage(
                             ResponseOutputMessage
@@ -148,6 +162,7 @@ object ChatCompletionConverter {
                                                     .asOutputText()
                                                     .text(),
                                             ).annotations(annotations)
+                                            .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "output_text"))
                                             .build(),
                                     ),
                                 ).id(UUID.randomUUID().toString())
@@ -163,7 +178,7 @@ object ChatCompletionConverter {
                         .error(null) // Required field, null since we assume no error
                         .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
                         .instructions(params.instructions())
-                        .metadata(params.metadata())
+                        .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                         .model(params.model())
                         .object_(JsonValue.from("response")) // Standard value
                         .temperature(params.temperature())
@@ -204,6 +219,15 @@ object ChatCompletionConverter {
 
                     val list = outputItems.toMutableList()
                     val last = list.removeLast()
+                    val isImage =
+                        isImageContent(
+                            last
+                                .asMessage()
+                                .content()
+                                .last()
+                                .asOutputText()
+                                .text(),
+                        ).isImage
                     list.add(
                         ResponseOutputItem.ofMessage(
                             ResponseOutputMessage
@@ -220,6 +244,7 @@ object ChatCompletionConverter {
                                                     .asOutputText()
                                                     .text(),
                                             ).annotations(annotations)
+                                            .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "output_text"))
                                             .build(),
                                     ),
                                 ).id(UUID.randomUUID().toString())
@@ -235,7 +260,7 @@ object ChatCompletionConverter {
                         .error(null) // Required field, null since we assume no error
                         .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
                         .instructions(params.instructions())
-                        .metadata(params.metadata())
+                        .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                         .model(params.model())
                         .object_(JsonValue.from("response")) // Standard value
                         .temperature(params.temperature())
@@ -263,7 +288,7 @@ object ChatCompletionConverter {
             .error(null) // Required field, null since we assume no error
             .incompleteDetails(incompleteDetails) // Required field, null since we assume complete response
             .instructions(params.instructions())
-            .metadata(params.metadata())
+            .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
             .model(params.model())
             .object_(JsonValue.from("response")) // Standard value
             .temperature(params.temperature())
@@ -467,12 +492,16 @@ object ChatCompletionConverter {
                                         .build(),
                                 )
                             }
-
+                        val isImage = isImageContent(messageText).isImage
                         return ResponseOutputItem.ofMessage(
                             ResponseOutputMessage
                                 .builder()
                                 .addContent(
-                                    builder.text(messageText).annotations(annotations).build(),
+                                    builder
+                                        .text(messageText)
+                                        .annotations(annotations)
+                                        .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "text"))
+                                        .build(),
                                 ).id(UUID.randomUUID().toString())
                                 .status(ResponseOutputMessage.Status.COMPLETED)
                                 .build(),
@@ -489,6 +518,7 @@ object ChatCompletionConverter {
                                 AgenticSearchResponse::class.java,
                             )
 
+                        val isImage = isImageContent(messageText).isImage
                         val annotations =
                             response.data.flatMap { it.annotations }.map {
                                 ResponseOutputText.Annotation.ofFileCitation(
@@ -506,7 +536,11 @@ object ChatCompletionConverter {
                             ResponseOutputMessage
                                 .builder()
                                 .addContent(
-                                    builder.text(messageText).annotations(annotations).build(),
+                                    builder
+                                        .text(messageText)
+                                        .annotations(annotations)
+                                        .putAdditionalProperty("type", JsonValue.from(if (isImage) "output_image" else "text"))
+                                        .build(),
                                 ).id(UUID.randomUUID().toString())
                                 .status(ResponseOutputMessage.Status.COMPLETED)
                                 .build(),
@@ -617,7 +651,7 @@ object ChatCompletionConverter {
                             .build(),
                     ) // Required field, null since we assume complete response
                     .instructions(params.instructions())
-                    .metadata(params.metadata())
+                    .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                     .model(convertModel(chatCompletion.model()))
                     .object_(JsonValue.from("response")) // Standard value
                     .output(outputItems)
@@ -658,7 +692,7 @@ object ChatCompletionConverter {
                             .build(),
                     ) // Required field, null since we assume complete response
                     .instructions(params.instructions())
-                    .metadata(params.metadata())
+                    .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                     .model(convertModel(chatCompletion.model()))
                     .object_(JsonValue.from("response")) // Standard value
                     .output(outputItems)
@@ -687,7 +721,7 @@ object ChatCompletionConverter {
                 .error(null) // Required field, null since we assume no error
                 .incompleteDetails(null) // Required field, null since we assume complete response
                 .instructions(params.instructions())
-                .metadata(params.metadata())
+                .metadata(objectMapper.convertValue(params.metadata(), JsonValue::class.java))
                 .model(convertModel(chatCompletion.model()))
                 .object_(JsonValue.from("response")) // Standard value
                 .output(outputItems)
@@ -754,6 +788,27 @@ object ChatCompletionConverter {
                 .outputTokens(completionUsage.completionTokens().toLong())
                 .totalTokens(completionUsage.totalTokens().toLong())
 
+        if (completionUsage.promptTokensDetails().isPresent) {
+            builder.inputTokensDetails(
+                ResponseUsage.InputTokensDetails
+                    .builder()
+                    .cachedTokens(
+                        completionUsage
+                            .promptTokensDetails()
+                            .get()
+                            .cachedTokens()
+                            .get(),
+                    ).build(),
+            )
+        } else {
+            builder.inputTokensDetails(
+                ResponseUsage.InputTokensDetails
+                    .builder()
+                    .cachedTokens(0)
+                    .build(),
+            )
+        }
+
         if (completionUsage.completionTokensDetails().isPresent &&
             completionUsage
                 .completionTokensDetails()
@@ -779,6 +834,187 @@ object ChatCompletionConverter {
                     .reasoningTokens(0)
                     .build(),
             )
+        }
+        return builder.build()
+    }
+
+    fun reconstructFromChunks(
+        chunks: List<ChatCompletionChunk>,
+        modelName: String,
+    ): ChatCompletion? {
+        if (chunks.isEmpty()) {
+            log.warn("Cannot reconstruct ChatCompletion from empty chunk list.")
+            return null
+        }
+
+        var completionId: String? = chunks.firstNotNullOfOrNull { it.id() }
+        if (completionId == null) {
+            // Fallback if ID is not in the first chunk but maybe in later ones, or generate one if truly missing.
+            // For now, let's assume the first chunk should ideally have it or it's consistent.
+            completionId = chunks.firstNotNullOfOrNull { it.id() } ?: UUID.randomUUID().toString()
+            log.warn("Completion ID not found in the first chunk, picked first available or generated: $completionId")
+        }
+
+        val contentBuffers = mutableMapOf<Int, StringBuilder>()
+        val toolCallDeltaBuffers = mutableMapOf<Int, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>()
+        val finishReasons = mutableMapOf<Int, ChatCompletion.Choice.FinishReason>()
+        var usageData: CompletionUsage? = null
+        var finalCreatedTs: Long? = chunks.firstNotNullOfOrNull { it.created() }
+
+        for (chunk in chunks) {
+            // Prefer the first non-null created timestamp
+            if (finalCreatedTs == null) finalCreatedTs = chunk.created()
+            
+            chunk.usage().ifPresent { usageData = it }
+
+            for (choiceChunk in chunk.choices()) {
+                val choiceIndex = choiceChunk.index().toInt()
+
+                choiceChunk.delta().content().ifPresent {
+                    contentBuffers.getOrPut(choiceIndex) { StringBuilder() }.append(it)
+                }
+
+                choiceChunk.delta().toolCalls().ifPresent { tcList ->
+                    if (tcList.isNotEmpty()) {
+                        toolCallDeltaBuffers.getOrPut(choiceIndex) { mutableListOf() }.addAll(tcList)
+                    }
+                }
+                // Map from ChatCompletionChunk.Choice.FinishReason to ChatCompletion.Choice.FinishReason
+                choiceChunk.finishReason().ifPresent {
+                    try {
+                        finishReasons[choiceIndex] = ChatCompletion.Choice.FinishReason.of(it.value().name)
+                    } catch (e: IllegalArgumentException) {
+                        log.warn("Unknown finish reason encountered in chunk: ${it.value().name}")
+                        // Potentially default to STOP or handle as an error indicator
+                        finishReasons[choiceIndex] = ChatCompletion.Choice.FinishReason.STOP // Default or error
+                    }
+                }
+            }
+        }
+
+        val assembledChoices = mutableListOf<ChatCompletion.Choice>()
+        val allChoiceIndices = (contentBuffers.keys + toolCallDeltaBuffers.keys + finishReasons.keys).toSet()
+
+        if (allChoiceIndices.isEmpty() && chunks.isNotEmpty()) {
+            log.warn("No choice data (content, tool calls, or finish reasons) found across all chunks for $completionId. Returning minimal completion.")
+            val builder =
+                ChatCompletion
+                    .builder()
+                    .id(completionId)
+                    .model(modelName)
+                    .created(finalCreatedTs ?: (System.currentTimeMillis() / 1000L))
+                    .choices(emptyList()) // No valid choices to add
+            if (usageData != null) {
+                builder.usage(usageData)
+            }
+
+            return builder.build()
+        }
+
+        for (index in allChoiceIndices.sorted()) { // Iterate sorted by index for order
+            val messageContent = contentBuffers[index]?.toString()
+            val deltaToolCalls = toolCallDeltaBuffers[index]
+            val finalFinishReason = finishReasons[index] ?: ChatCompletion.Choice.FinishReason.STOP // Default if no specific reason
+
+            val consolidatedToolCalls = mutableListOf<ChatCompletionMessageToolCall>()
+            if (!deltaToolCalls.isNullOrEmpty()) {
+                // Group tool call parts by their declared index within the tool_calls array of the message
+                val toolPartsByMessageIndex = mutableMapOf<Long, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>() 
+                deltaToolCalls.forEach { tcPart ->
+                    tcPart.index().let { tcMessageIdx ->
+                        // This is the index within the tool_calls array itself
+                        toolPartsByMessageIndex.getOrPut(tcMessageIdx) { mutableListOf() }.add(tcPart)
+                    }
+                }
+
+                toolPartsByMessageIndex.toSortedMap().values.forEach { parts ->
+                    // Process in order of tool call index
+                    var toolCallId: String? = null
+                    var functionName: String? = null
+                    val functionArguments = StringBuilder()
+                    // Assuming type is always function for ChatCompletions
+
+                    parts.forEach { part ->
+                        part.id().ifPresent { id -> if (toolCallId == null) toolCallId = id }
+                        part.function().ifPresent { func ->
+                            func.name().ifPresent { name -> if (functionName == null) functionName = name }
+                            func.arguments().ifPresent { args -> functionArguments.append(args) }
+                        }
+                    }
+
+                    if (toolCallId != null && functionName != null) {
+                        consolidatedToolCalls.add(
+                            ChatCompletionMessageToolCall
+                                .builder()
+                                .id(toolCallId)
+                                .type(JsonValue.from("function")) // Default to function for chat
+                                .function(
+                                    ChatCompletionMessageToolCall.Function
+                                        .builder()
+                                        .name(functionName)
+                                        .arguments(functionArguments.toString())
+                                        .build(),
+                                ).build(),
+                        )
+                    } else {
+                        log.warn("Could not fully reconstruct tool call for choice $index due to missing ID or name in parts: $parts")
+                    }
+                }
+            }
+
+            // Build the message for the choice
+            val messageBuilder = ChatCompletionMessage.builder().role(JsonValue.from("assistant"))
+            var hasDataForMessage = false
+            messageContent?.let {
+                messageBuilder.content(it)
+                hasDataForMessage = true
+            }
+            if (consolidatedToolCalls.isNotEmpty()) {
+                messageBuilder.toolCalls(consolidatedToolCalls)
+                hasDataForMessage = true
+                // If content is null/empty but we have tool calls, set content to empty string if needed by builder logic of SDK
+                if (messageContent.isNullOrEmpty()) {
+                    messageBuilder.content("") 
+                }
+            }
+            
+            if (!hasDataForMessage && finalFinishReason == ChatCompletion.Choice.FinishReason.STOP && contentBuffers[index]?.isEmpty() == true) {
+                // If message is empty, but it's a deliberate stop, some models might send this.
+                messageBuilder.content("")
+                hasDataForMessage = true
+            }
+
+            if (hasDataForMessage || finishReasons.containsKey(index)) { // Only add choice if it has content/tools or an explicit finish reason
+                assembledChoices.add(
+                    ChatCompletion.Choice
+                        .builder()
+                        .index(index.toLong())
+                        .message(messageBuilder.refusal(null).build())
+                        .logprobs(null)
+                        .finishReason(finalFinishReason)
+                        .build(),
+                )
+            } else {
+                log.warn("Skipping choice at index $index as it has no content, tool calls, or explicit finish reason.")
+            }
+        }
+        
+        if (allChoiceIndices.isNotEmpty() && assembledChoices.isEmpty()) {
+            log.warn("Processed chunk data for indices ${allChoiceIndices.joinToString()}, but no valid choices could be assembled for $completionId. This may indicate malformed stream data.")
+            // Depending on strictness, could return null or a completion with no choices.
+            // Returning null to indicate reconstruction failure clearly.
+            return null
+        }
+
+        val builder =
+            ChatCompletion
+                .builder()
+                .id(completionId)
+                .model(modelName)
+                .created(finalCreatedTs ?: (System.currentTimeMillis() / 1000L)) // Use current time as fallback for created
+                .choices(assembledChoices)
+        if (usageData != null) {
+            builder.usage(usageData)
         }
         return builder.build()
     }

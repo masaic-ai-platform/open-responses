@@ -2,7 +2,6 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InputMessageItem
 import ai.masaic.openresponses.tool.ToolRequestContext
-import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseInputItem
@@ -14,6 +13,7 @@ import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * MongoDB implementation of ResponseStore.
@@ -23,7 +23,6 @@ import org.springframework.data.mongodb.core.query.Query
 class MongoResponseStore(
     private val mongoTemplate: ReactiveMongoTemplate,
     private val objectMapper: ObjectMapper,
-    private val toolService: ToolService,
 ) : ResponseStore {
     private val logger = KotlinLogging.logger {}
 
@@ -61,10 +60,10 @@ class MongoResponseStore(
                             objectMapper.convertValue(outputItem.message().get(), InputMessageItem::class.java)
                         }
                         // Handle function calls
-                        outputItem.isFunctionCall() && (toolService.getFunctionTool(outputItem.asFunctionCall().name(), context) == null) -> {
+                        outputItem.isFunctionCall() -> {
                             val functionCall = outputItem.asFunctionCall()
                             InputMessageItem(
-                                id = functionCall.id(),
+                                id = (functionCall.id().getOrNull() ?: functionCall.id()).toString(),
                                 role = "assistant",
                                 type = "function_call",
                                 call_id = functionCall.callId(),

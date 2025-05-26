@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.client
 
 import com.openai.core.JsonField
-import com.openai.models.ChatModel
+import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionMessage
 import com.openai.models.chat.completions.ChatCompletionMessageToolCall
@@ -29,7 +29,12 @@ class ChatCompletionConverterTest {
             Optional.of(
                 CompletionUsage
                     .builder()
-                    .completionTokens(3)
+                    .promptTokensDetails(
+                        CompletionUsage.PromptTokensDetails
+                            .builder()
+                            .cachedTokens(0)
+                            .build(),
+                    ).completionTokens(3)
                     .totalTokens(8)
                     .promptTokens(5)
                     .build(),
@@ -47,6 +52,7 @@ class ChatCompletionConverterTest {
 
         // Mock usage
         val usage = mockk<CompletionUsage>(relaxed = true)
+        every { usage.promptTokensDetails() } returns Optional.empty()
         every { usage.promptTokens() } returns 5
         every { usage.completionTokens() } returns 3
         every { usage.totalTokens() } returns 8
@@ -56,7 +62,7 @@ class ChatCompletionConverterTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList())
@@ -112,7 +118,12 @@ class ChatCompletionConverterTest {
             Optional.of(
                 CompletionUsage
                     .builder()
-                    .completionTokens(3)
+                    .promptTokensDetails(
+                        CompletionUsage.PromptTokensDetails
+                            .builder()
+                            .cachedTokens(0)
+                            .build(),
+                    ).completionTokens(3)
                     .totalTokens(8)
                     .promptTokens(5)
                     .build(),
@@ -131,7 +142,7 @@ class ChatCompletionConverterTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList())
@@ -187,7 +198,12 @@ class ChatCompletionConverterTest {
             Optional.of(
                 CompletionUsage
                     .builder()
-                    .completionTokens(3)
+                    .promptTokensDetails(
+                        CompletionUsage.PromptTokensDetails
+                            .builder()
+                            .cachedTokens(0)
+                            .build(),
+                    ).completionTokens(3)
                     .totalTokens(8)
                     .promptTokens(5)
                     .build(),
@@ -212,7 +228,7 @@ class ChatCompletionConverterTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList())
@@ -257,7 +273,12 @@ class ChatCompletionConverterTest {
             Optional.of(
                 CompletionUsage
                     .builder()
-                    .completionTokens(3)
+                    .promptTokensDetails(
+                        CompletionUsage.PromptTokensDetails
+                            .builder()
+                            .cachedTokens(0)
+                            .build(),
+                    ).completionTokens(3)
                     .totalTokens(8)
                     .promptTokens(5)
                     .build(),
@@ -282,7 +303,7 @@ class ChatCompletionConverterTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList())
@@ -337,7 +358,12 @@ class ChatCompletionConverterTest {
             Optional.of(
                 CompletionUsage
                     .builder()
-                    .completionTokens(3)
+                    .promptTokensDetails(
+                        CompletionUsage.PromptTokensDetails
+                            .builder()
+                            .cachedTokens(0)
+                            .build(),
+                    ).completionTokens(3)
                     .totalTokens(8)
                     .promptTokens(5)
                     .build(),
@@ -360,7 +386,7 @@ class ChatCompletionConverterTest {
         val params = mockk<ResponseCreateParams>(relaxed = true)
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList())
@@ -404,7 +430,12 @@ class ChatCompletionConverterTest {
             Optional.of(
                 CompletionUsage
                     .builder()
-                    .completionTokens(3)
+                    .promptTokensDetails(
+                        CompletionUsage.PromptTokensDetails
+                            .builder()
+                            .cachedTokens(0)
+                            .build(),
+                    ).completionTokens(3)
                     .totalTokens(8)
                     .promptTokens(5)
                     .build(),
@@ -412,7 +443,7 @@ class ChatCompletionConverterTest {
 
         every { params.instructions() } returns Optional.empty()
         every { params.metadata() } returns Optional.empty()
-        every { params.model() } returns ChatModel.of("gpt-4")
+        every { params.model() } returns ResponsesModel.ofString("gpt-4")
         every { params.temperature() } returns Optional.of(0.7)
         every { params._parallelToolCalls() } returns JsonField.of(false)
         every { params._tools() } returns JsonField.of(emptyList())

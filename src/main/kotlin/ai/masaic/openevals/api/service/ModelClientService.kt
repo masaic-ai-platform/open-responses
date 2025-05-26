@@ -126,7 +126,7 @@ class ModelClientService {
      * @return Updated completion parameters with proper model name
      */
     private fun extractActualModelName(params: ChatCompletionCreateParams): ChatCompletionCreateParams {
-        val modelName = params.model().asString()
+        val modelName = params.model().toString()
         
         // If model doesn't contain @, return the original params
         if (!modelName.contains("@")) {

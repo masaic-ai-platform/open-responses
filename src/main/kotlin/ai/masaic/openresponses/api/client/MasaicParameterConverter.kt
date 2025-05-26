@@ -5,7 +5,7 @@ import ai.masaic.openresponses.api.service.storage.FileService
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.NativeToolRegistry
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
@@ -26,9 +26,9 @@ import org.springframework.stereotype.Component
 class MasaicParameterConverter(
     val nativeToolRegistry: NativeToolRegistry,
     val fileService: FileService,
+    val objectMapper: ObjectMapper,
 ) {
     private val logger = KotlinLogging.logger {}
-    private val objectMapper = jacksonObjectMapper()
 
     /**
      * Prepares a chat completion request from response parameters.
@@ -281,7 +281,7 @@ class MasaicParameterConverter(
         completionBuilder: ChatCompletionCreateParams.Builder,
         params: ResponseCreateParams,
     ) {
-        completionBuilder.model(params.model())
+        completionBuilder.model(params.model().string().get())
         if (params.temperature().isPresent) {
             completionBuilder.temperature(params.temperature())
         }
@@ -401,6 +401,31 @@ class MasaicParameterConverter(
                         val toolName = responseTool.asWebSearch()._additionalProperties()["alias"]?.toString() ?: nativeTool.name
                         val description = responseTool.asWebSearch()._additionalProperties()["alias_description"]?.toString() ?: nativeTool.description
                         logger.trace { "Converting agentic search tool: $toolName" }
+                        result.add(
+                            ChatCompletionTool
+                                .builder()
+                                .type(JsonValue.from("function"))
+                                .function(
+                                    FunctionDefinition
+                                        .builder()
+                                        .name(toolName)
+                                        .description(description)
+                                        .parameters(
+                                            objectMapper.readValue(
+                                                objectMapper.writeValueAsString(nativeTool.parameters),
+                                                FunctionParameters::class.java,
+                                            ),
+                                        ).build(),
+                                ).build(),
+                        )
+                    } else if (responseTool.asWebSearch().type().toString() == "image_generation") {
+                        val nativeTool =
+                            nativeToolRegistry.findByName("image_generation") as? NativeToolDefinition
+                                ?: throw IllegalArgumentException("Native tool definition for 'image_generation' not found")
+                        val toolProperties = responseTool.asWebSearch()._additionalProperties()
+                        val toolName = toolProperties["alias"]?.toString() ?: nativeTool.name
+                        val description = toolProperties["alias_description"]?.toString() ?: nativeTool.description
+                        logger.trace { "Converting image generation tool: $toolName" }
                         result.add(
                             ChatCompletionTool
                                 .builder()
@@ -655,6 +680,19 @@ class MasaicParameterConverter(
                     )
                 }
             }
+        } else if (item.isMessage()) {
+            val message = item.asMessage()
+            completionBuilder.addMessage(
+                ChatCompletionUserMessageParam
+                    .builder()
+                    .content(
+                        ChatCompletionUserMessageParam.Content.ofArrayOfContentParts(
+                            prepareUserContent(
+                                message,
+                            ),
+                        ),
+                    ).build(),
+            )
         }
     }
 

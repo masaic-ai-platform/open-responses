@@ -1,24 +1,19 @@
 package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
-import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.EventUtils
 import ai.masaic.openresponses.tool.CompletionToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
-import com.openai.core.JsonValue
-import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.*
-import com.openai.models.completions.CompletionUsage
-import io.micrometer.observation.Observation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.stream.consumeAsFlow
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -57,7 +52,7 @@ class MasaicOpenAiCompletionServiceImpl(
     ): ChatCompletion {
         logger.debug { "Creating chat completion with model: ${params.model()}" }
 
-        var chatCompletion =
+        var initialChatCompletion =
             telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
                 var completion = telemetryService.withChatCompletionTimer(params, metadata) { client.chat().completions().create(params) }
                 telemetryService.emitModelInputEvents(observation, params, metadata)
@@ -79,88 +74,97 @@ class MasaicOpenAiCompletionServiceImpl(
             }
 
         // Check for tool calls that need to be handled
-        if (hasToolCalls(chatCompletion)) {
-            logger.info { "Tool calls detected in completion ${chatCompletion.id()}, initiating tool handling flow." }
-            // Call handleToolCalls which will recursively call create if needed
-            val response = runBlocking { handleToolCalls(chatCompletion, params, client, metadata) }
-
-            // Store final completion if no tool calls needed further handling
-            if (params.store().getOrDefault(false)) {
-                runBlocking { storeCompletion(response, params) }
-            }
-            return response // Return the final completion
+        if (hasToolCalls(initialChatCompletion)) {
+            logger.info { "Tool calls detected in completion ${initialChatCompletion.id()}, initiating tool handling flow." }
+            // Call handleToolCalls which will recursively call create if needed, or return a terminal completion
+            return runBlocking { handleToolCalls(initialChatCompletion, params, client, metadata) }
         }
-        // Store final completion if no tool calls needed further handling
+        
+        // No tool calls, store and return the original completion
         if (params.store().getOrDefault(false)) {
-            runBlocking { storeCompletion(chatCompletion, params) }
+            runBlocking { storeCompletion(initialChatCompletion, params) }
         }
 
-        logger.debug { "Final chat completion ID: ${chatCompletion.id()}" }
-        return chatCompletion
+        logger.debug { "Final chat completion ID: ${initialChatCompletion.id()}" }
+        return initialChatCompletion
     }
 
     /**
-     * Handles tool calls in the chat completion. Executes native tools.
+     * Handles tool calls in the chat completion. Executes native tools or terminates for specific tools like image_generation.
      * If non-native tools are encountered, returns the original completion to the client.
      * Otherwise, recursively calls create with tool outputs included.
      */
     private suspend fun handleToolCalls(
-        chatCompletion: ChatCompletion,
-        params: ChatCompletionCreateParams,
+        chatCompletion: ChatCompletion, // The completion from LLM that might contain tool calls
+        originalParams: ChatCompletionCreateParams, // Original params from the client for this cycle
         client: OpenAIClient,
         metadata: InstrumentationMetadataInput,
     ): ChatCompletion {
         logger.info { "Handling tool calls for completion ID: ${chatCompletion.id()}" }
 
-        // Call the handler and get the result object
-        val toolHandlingResult =
-            toolHandler.handleCompletionToolCall(
-                chatCompletion = chatCompletion,
-                params = params,
-                openAIClient = client,
-            )
-
-        // Check the flag from the result
-        if (toolHandlingResult.hasUnresolvedClientTools) {
-            logger.info { "Non-native tool calls requiring client handling detected for completion ID: ${chatCompletion.id()}. Returning original completion." }
-            // Store the completion *before* returning, as it contains the tool calls the client needs
-            // Note: params here are the *original* params, not the updated ones
-            if (params.store().getOrDefault(false)) {
-                storeCompletion(chatCompletion, params)
+        when (val toolCallOutcome = toolHandler.handleCompletionToolCall(chatCompletion, originalParams, client)) {
+            is CompletionToolCallOutcome.Terminate -> {
+                logger.info { "Terminal tool executed (e.g. image_generation). Completion ID: ${toolCallOutcome.finalChatCompletion.id()}" }
+                if (originalParams.store().getOrDefault(false)) {
+                    // Store with the full message history leading to termination
+                    storeCompletion(toolCallOutcome.finalChatCompletion, originalParams, toolCallOutcome.messagesForStorage)
+                }
+                return toolCallOutcome.finalChatCompletion
             }
-            return chatCompletion // Return the original completion for client handling
+            is CompletionToolCallOutcome.Continue -> {
+                if (toolCallOutcome.hasUnresolvedClientTools) {
+                    logger.info { "Non-native tool calls requiring client handling detected for completion ID: ${chatCompletion.id()}. Returning original completion." }
+                    // Store the completion *before* returning, as it contains the tool calls the client needs
+                    if (originalParams.store().getOrDefault(false)) {
+                        // Store original completion with its original messages
+                        storeCompletion(chatCompletion, originalParams, originalParams.messages())
+                    }
+                    return chatCompletion // Return the original completion for client handling
+                }
+
+                // All tools were native and handled (and not terminal).
+                logger.debug { "All tool calls were native and handled. Proceeding with recursive call for completion ID: ${chatCompletion.id()}" }
+
+                val updatedMessages = toolCallOutcome.updatedMessages
+                if (exceedsMaxToolCalls(updatedMessages)) {
+                    val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS."
+                    logger.error { errorMsg }
+                    // TODO: Instead of throwing, maybe return an error ChatCompletion?
+                    throw IllegalStateException(errorMsg)
+                }
+
+                val nextParams = originalParams.toBuilder().messages(updatedMessages).build()
+                logger.debug { "Prepared updated parameters with ${updatedMessages.size} messages for recursive call." }
+                return create(client, nextParams, metadata) // Recursive call
+            }
         }
+    }
 
-        // If we reach here, all tools were native and handled.
-        logger.debug { "All tool calls were native. Proceeding with recursive call for completion ID: ${chatCompletion.id()}" }
-
-        // Use the messages returned by the handler (contains native outputs)
-        val updatedMessages = toolHandlingResult.updatedMessages
-
-        // Check if max tool calls reached *after* processing this round
-        if (exceedsMaxToolCalls(updatedMessages)) {
-            val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS."
-            logger.error { errorMsg }
-            throw IllegalStateException(errorMsg)
-        }
-
-        // Create new parameters with updated messages (including native tool outputs)
-        val updatedParams = params.toBuilder().messages(updatedMessages).build()
-        logger.debug { "Prepared updated parameters with ${updatedMessages.size} messages for recursive call." }
-
-        // Call create recursively with the updated params and original metadata
-        return create(client, updatedParams, metadata)
+    /**
+     * Helper to store completion with potentially overridden messages for context.
+     */
+    private suspend fun storeCompletion(
+        completion: ChatCompletion,
+        originalParams: ChatCompletionCreateParams,
+        messagesForStorage: List<ChatCompletionMessageParam>? = null,
+    ) {
+        val paramsForStorage =
+            if (messagesForStorage != null) {
+                originalParams.toBuilder().messages(messagesForStorage).build()
+            } else {
+                originalParams
+            }
+        // Create context with alias mappings
+        val aliasMap = toolService.buildAliasMap(paramsForStorage.tools().orElse(emptyList()))
+        val context = CompletionToolRequestContext(aliasMap, paramsForStorage)
+        completionStore.storeCompletion(completion, paramsForStorage.messages(), context)
+        logger.debug { "Stored completion with ID: ${completion.id()} with ${paramsForStorage.messages().size} messages in context." }
     }
 
     /**
      * Creates a streaming chat completion that emits ServerSentEvents.
      * This allows for real-time response processing.
-     * Supports native tool execution during streaming.
-     *
-     * @param client OpenAI client to use for the request
-     * @param params Parameters for creating the completion
-     * @param metadata Metadata for the completion
-     * @return Flow of ServerSentEvents containing completion chunks
+     * Supports native tool execution during streaming, including terminal tools like image_generation.
      */
     suspend fun createCompletionStream(
         client: OpenAIClient,
@@ -169,65 +173,143 @@ class MasaicOpenAiCompletionServiceImpl(
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming chat completion with model: ${params.model()}" }
 
-        // Start observation manually
         val observation = telemetryService.startObservation("chat", metadata.modelName)
-        logger.debug { "Started observation ${observation.context.name} for streaming chat completion with model: ${params.model()}" }
-        
-        // Variable to hold the final reconstructed completion
-        var finalCompletion: ChatCompletion? = null
-        
+        var finalCompletionForTelemetry: ChatCompletion? = null // To hold the very final completion for telemetry
+
         try {
             telemetryService.emitModelInputEvents(observation, params, metadata)
             
-            // Process the streaming request with tool call handling
             return flow {
-                // Process the initial streaming segment
-                val streamResult = processStreamSegment(client, params)
-                
-                // Store the completion from this segment if available
-                streamResult.completion?.let { finalCompletion = it }
-                
-                // Emit all the chunks from the first segment
-                emitAll(streamResult.chunks)
-                
-                // If a tool call was detected and we have a reconstructed completion
-                if (streamResult.completion != null && hasToolCalls(streamResult.completion)) {
-                    logger.info { "Tool calls detected in stream completion ${streamResult.completion.id()}, handling tool calls" }
-                    observation.stop()
-                    // Call the wrapper function to handle tool calls and prepare for possible next step
-                    val handlingResult =
-                        handleToolCallsAndPrepareNextStep(
-                            streamResult.completion, // Use completion from this segment
-                            params,
-                            client,
-                            metadata,
+                var currentParams = params
+                var continueLoop = true
+
+                while (continueLoop) {
+                    val streamResponse = client.chat().completions().createStreaming(currentParams)
+                    val currentIterationCompletionChunks = mutableListOf<ChatCompletionChunk>()
+                    var reconstructedCompletionFromStream: ChatCompletion? = null
+
+                    // Collect all chunks from the current stream segment
+                    streamResponse.stream().consumeAsFlow().collect { chunk ->
+                        currentIterationCompletionChunks.add(chunk)
+                        val jsonChunk = objectMapper.writeValueAsString(chunk)
+                        emit(
+                            ServerSentEvent
+                                .builder<String>()
+                                .id(chunk.id())
+                                .event("chunk") 
+                                .data(jsonChunk)
+                                .build(),
+                        )
+                    }
+                    
+                    // Try to reconstruct the completion from this segment's chunks for tool call detection
+                    // This reconstruction is a simplified view; a more robust one might be needed.
+                    reconstructedCompletionFromStream =
+                        ChatCompletionConverter.reconstructFromChunks(
+                            currentIterationCompletionChunks, 
+                            currentParams.model().toString(), // Pass model from current params
                         )
                     
-                    // Based on the result, we either stop, continue recursively, or return the original chunks
-                    when {
-                        handlingResult.hasUnresolvedClientTools -> {
-                            // Client needs to handle these tool calls, we're done (already emitted all chunks)
-                            logger.info { "Non-native tool calls detected for completion ${streamResult.completion.id()}, returning to client for handling" }
-                            // No further actions needed - chunks were already emitted above
-                            // The finalCompletion still holds the result with tool calls for client
-                        }
-                        handlingResult.updatedParams != null -> {
-                            // We have new parameters after handling native tools, make a recursive call
-                            logger.info { "Native tools handled successfully, continuing with updated conversation for completion ${streamResult.completion.id()}" }
-                            // Call createCompletionStream recursively and emit all its events
-                            // The recursive call's flow will eventually update finalCompletion in its onCompletion
-                            emitAll(createCompletionStream(client, handlingResult.updatedParams, metadata))
-                        }
-                        else -> {
-                            // This case shouldn't happen if logic is correct, but just in case
-                            logger.warn { "Tool handling complete but no next steps determined for completion ${streamResult.completion.id()}" }
-                        }
+                    if (reconstructedCompletionFromStream == null) {
+                        logger.warn { "Could not reconstruct completion from stream chunks. Cannot check for tool calls." }
+                        finalCompletionForTelemetry =
+                            ChatCompletion
+                                .builder() // Create a minimal one if needed for telemetry
+                                .id("unknown-stream-id-${UUID.randomUUID()}")
+                                .model(currentParams.model().toString())
+                                .created(System.currentTimeMillis() / 1000L)
+                                .choices(emptyList())
+                                .build()
+                        continueLoop = false // Stop if reconstruction fails
+                        break
                     }
-                }
-                // If no tool calls, the flow just finishes here after emitting chunks.
-                // The 'finalCompletion' variable holds the result from processStreamSegment.
+                    
+                    finalCompletionForTelemetry = reconstructedCompletionFromStream // Update for telemetry for this segment
+
+                    if (hasToolCalls(reconstructedCompletionFromStream)) {
+                        logger.info { "Tool calls detected in stream completion ${reconstructedCompletionFromStream.id()}, handling tool calls." }
+                        
+                        val toolHandlingResult =
+                            handleToolCallsAndPrepareNextStep(
+                                reconstructedCompletionFromStream,
+                                currentParams, // Pass current params of this iteration
+                                client,
+                                metadata,
+                            )
+
+                        when {
+                            toolHandlingResult.isTerminal && toolHandlingResult.terminalChatCompletion != null -> {
+                                logger.info { "Terminal tool executed in stream. Finalizing stream with ChatCompletion ID: ${toolHandlingResult.terminalChatCompletion.id()}" }
+                                finalCompletionForTelemetry = toolHandlingResult.terminalChatCompletion // This is the true final completion
+                                
+                                // Store this terminal completion
+                                if (currentParams.store().getOrDefault(false) && toolHandlingResult.messagesForStorage != null) {
+                                    storeCompletion(toolHandlingResult.terminalChatCompletion, currentParams, toolHandlingResult.messagesForStorage)
+                                } else if (currentParams.store().getOrDefault(false)) {
+                                    storeCompletion(toolHandlingResult.terminalChatCompletion, currentParams) // Fallback if messagesForStorage is null
+                                }
+
+                                // It's already an assistant message with content and STOP.
+                                val terminalChunk =
+                                    ChatCompletionChunk
+                                        .builder()
+                                        .id(toolHandlingResult.terminalChatCompletion.id())
+                                        .choices(
+                                            toolHandlingResult.terminalChatCompletion.choices().map { choice ->
+                                                ChatCompletionChunk.Choice
+                                                    .builder()
+                                                    .index(choice.index())
+                                                    .delta(
+                                                        ChatCompletionChunk.Choice.Delta
+                                                            .builder()
+                                                            .content(choice.message().content())
+                                                            .build(),
+                                                    ).finishReason(ChatCompletionChunk.Choice.FinishReason.STOP)
+                                                    .build()
+                                            },
+                                        ).model(toolHandlingResult.terminalChatCompletion.model())
+                                        .created(toolHandlingResult.terminalChatCompletion.created())
+                                        .usage(toolHandlingResult.terminalChatCompletion.usage().getOrNull())
+                                        .build()
+                                // emit(EventUtils.convertChunkEvent(terminalChunk, objectMapper))
+                                val jsonTerminalChunk = objectMapper.writeValueAsString(terminalChunk)
+                                emit(
+                                    ServerSentEvent
+                                        .builder<String>()
+                                        .id(terminalChunk.id())
+                                        .event("chunk") 
+                                        .data(jsonTerminalChunk)
+                                        .build(),
+                                )
+                                continueLoop = false // Stop the main loop
+                            }
+                            toolHandlingResult.hasUnresolvedClientTools -> {
+                                logger.info { "Non-native tool calls detected for completion ${reconstructedCompletionFromStream.id()}, client to handle." }
+                                // Chunks already emitted. Loop will stop.
+                                continueLoop = false
+                            }
+                            toolHandlingResult.updatedParams != null -> {
+                                logger.info { "Native tools handled, continuing stream with updated params for ${reconstructedCompletionFromStream.id()}." }
+                                currentParams = toolHandlingResult.updatedParams // Prepare for next iteration
+                                // continueLoop remains true
+                            }
+                            else -> { // No updated params, no client tools, not terminal -> effectively complete normally.
+                                logger.info { "Stream segment processed, no further tool actions or recursion needed for ${reconstructedCompletionFromStream.id()}." }
+                                continueLoop = false
+                            }
+                        }
+                    } else {
+                        // No tool calls in this segment, current loop ends.
+                        logger.info { "No tool calls in current stream segment for ${reconstructedCompletionFromStream.id()}." }
+                        continueLoop = false
+                    }
+
+                    if (!continueLoop) {
+                        emit(EventUtils.doneEvent()) // Emit [DONE] if loop is to be exited
+                    }
+                } // End of while(continueLoop)
             }.catch { error ->
-                logger.error { "Error in streaming chat completion flow" }
+                logger.error(error) { "Error in streaming chat completion flow" }
                 emit(
                     ServerSentEvent
                         .builder<String>()
@@ -235,557 +317,125 @@ class MasaicOpenAiCompletionServiceImpl(
                         .data("{\"message\":\"Error in streaming completion: ${error.message}\"}")
                         .build(),
                 )
+                // Ensure [DONE] is sent even on error if flow is broken by exception
+                emit(EventUtils.doneEvent())
             }.onCompletion { error ->
-                if (error == null) {
-                    logger.info { "Stream completed successfully. Processing final telemetry." }
-                    // Process final telemetry only if the stream completed without errors
-                    finalCompletion?.let { completion ->
-                        logger.debug { "Emitting final telemetry for completion ID: ${completion.id()}" }
-                        // Emit output events
-                        telemetryService.emitModelOutputEvents(observation, completion, metadata)
-
-                        // Set final observation attributes
-                        telemetryService.setChatCompletionObservationAttributes(observation, completion, params, metadata)
-
-                        // Record token usage if available
-                        if (completion.usage().isPresent) {
-                            val usage = completion.usage().get()
-                            // Note: We might not have accurate prompt tokens from the stream reconstructed object
-                            // Using the value from usage if present, otherwise might need alternative tracking
-                            telemetryService.recordChatCompletionTokenUsage(metadata, completion, params, "input", usage.promptTokens())
-                            telemetryService.recordChatCompletionTokenUsage(metadata, completion, params, "output", usage.completionTokens())
-                        } else {
-                            logger.warn { "Usage data not found in final reconstructed completion for ID: ${completion.id()}" }
-                        }
-
-                        // Store final completion AFTER telemetry
-                        if (params.store().getOrDefault(false)) {
-                            // Ensure storage happens within a suspend context if needed by the store implementation
-                            // Use runBlocking if storeCompletion is not suspend and needs blocking context
-                            runBlocking { storeCompletion(completion, params) }
-                        }
-                    } ?: run {
-                        logger.warn { "Final reconstructed completion was null, cannot record final telemetry." }
-                    }
-                } else {
-                    logger.error { "[OBS:${observation.context.name}] Stream completed with error. Final telemetry potentially incomplete." }
-                }
-                // Stop the observation here, after all final attributes/events are set
-                observation.stop()
-                logger.debug { "[OBS:${observation.context.name}] Observation stopped in onCompletion." }
-            }
-        } catch (e: Exception) {
-            // Handle exceptions during flow creation/initialization
-            logger.error { "[OBS:${observation.context.name}] Error during stream setup before flow execution." }
-            observation.error(e)
-            observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, e.javaClass.simpleName)
-            observation.lowCardinalityKeyValue("gen_ai.response.finish_reason", "error")
-            observation.stop() // Ensure observation is stopped on creation error
-            throw e
-        }
-    }
-
-    /**
-     * Process a single streaming segment (one call to OpenAI's streaming API).
-     * Collects all chunks and attempts to reconstruct a complete ChatCompletion if the
-     * stream ends with tool_calls finish reason.
-     *
-     * @param client OpenAI client to use
-     * @param params Chat completion parameters 
-     * @return StreamSegmentResult containing the flow of chunks and possibly a reconstructed completion
-     */
-    private suspend fun processStreamSegment(
-        client: OpenAIClient,
-        params: ChatCompletionCreateParams,
-    ): StreamSegmentResult {
-        logger.debug { "Processing stream segment with model: ${params.model()}" }
-        
-        // Set stream parameter to true explicitly
-        val streamingParams = params.toBuilder().additionalBodyProperties(mapOf("stream" to JsonValue.from(true))).build()
-        
-        // Create the streaming response
-        val response = client.chat().completions().createStreaming(streamingParams)
-        
-        // Convert to server-sent events 
-        val events = mutableListOf<ServerSentEvent<String>>()
-        
-        // Buffers to reconstruct the completion
-        var hasToolCallsFinishReason = false
-        var completionId: String? = null
-        val contentBuffers = mutableMapOf<Int, StringBuilder>()
-        val toolCallBuffers = mutableMapOf<Int, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>()
-        val finishReasons = mutableMapOf<Int, ChatCompletionChunk.Choice.FinishReason>() // Store finish reason per choice index
-        var usage: CompletionUsage? = null // Store usage data
-        
-        // Collect all chunks and detect tool call finish reason
-        response.stream().forEach { chunk ->
-            completionId = chunk.id()
-            
-            // Convert chunk to ServerSentEvent and collect it
-            val jsonChunk = objectMapper.writeValueAsString(chunk)
-            val event =
-                ServerSentEvent
-                    .builder<String>()
-                    .id(chunk.id())
-                    .event("chunk")
-                    .data(jsonChunk)
-                    .build()
-            events.add(event)
-            
-            // Buffer content and tool calls for possible reconstruction
-            chunk.choices().forEach { choice ->
-                val index = choice.index().toInt()
-                
-                // Buffer content
-                if (choice.delta().content().isPresent) {
-                    val content = choice.delta().content().get() ?: ""
-                    contentBuffers.getOrPut(index) { StringBuilder() }.append(content)
-                }
-                
-                // Buffer tool calls
-                if (choice.delta().toolCalls().isPresent) {
-                    val toolCalls = choice.delta().toolCalls().get()
-                    if (toolCalls.isNotEmpty()) {
-                        toolCallBuffers.getOrPut(index) { mutableListOf() }.addAll(toolCalls)
-                    }
-                }
-                
-                // Check for finish reason and store it
-                if (choice.finishReason().isPresent) {
-                    val reason = choice.finishReason().get()
-                    finishReasons[index] = reason // Store the specific finish reason
-                    if (reason.value().name ==
-                        ChatCompletion.Choice.FinishReason.TOOL_CALLS
-                            .value()
-                            .name
-                    ) {
-                        hasToolCallsFinishReason = true
-                    }
-                }
-            }
-            
-            // Capture usage data if present (usually in the last chunk)
-            if (chunk.usage().isPresent) {
-                usage = chunk.usage().get()
-            }
-        }
-        
-        // Add DONE event
-        events.add(
-            ServerSentEvent
-                .builder<String>()
-                .event("done")
-                .data("[DONE]")
-                .build(),
-        )
-        
-        // Fix for smart cast: Capture the potentially null completionId
-        val finalCompletionId = completionId
-        
-        // If we detected tool calls, reconstruct a ChatCompletion
-        val reconstructedCompletion =
-            if (finalCompletionId != null) { // Reconstruct always if we have an ID
-                reconstructChatCompletion(
-                    finalCompletionId,
-                    contentBuffers,
-                    toolCallBuffers,
-                    finishReasons, // Pass finish reasons
-                    params,
-                    usage, // Pass usage data
-                )
-            } else {
-                null
-            }
-        
-        // Create flow of events
-        val eventsFlow =
-            flow {
-                events.forEach { emit(it) }
-            }
-        
-        return StreamSegmentResult(eventsFlow, reconstructedCompletion)
-    }
-
-    /**
-     * Reconstructs a ChatCompletion object from buffered streaming chunks.
-     * 
-     * @param completionId ID of the completion
-     * @param contentBuffers Map of choice index to content StringBuilder
-     * @param toolCallBuffers Map of choice index to list of tool calls
-     * @param params Original parameters used for the completion
-     * @return Reconstructed ChatCompletion or null if reconstruction fails
-     */
-    private fun reconstructChatCompletion(
-        completionId: String,
-        contentBuffers: Map<Int, StringBuilder>,
-        toolCallBuffers: Map<Int, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>,
-        finishReasons: Map<Int, ChatCompletionChunk.Choice.FinishReason>, // Added finish reasons map
-        params: ChatCompletionCreateParams,
-        usage: CompletionUsage?, // Added usage data
-    ): ChatCompletion? {
-        try {
-            // Create choices from buffers
-            val choices = mutableListOf<ChatCompletion.Choice>()
-            
-            // Process each choice index
-            val allIndices = (contentBuffers.keys + toolCallBuffers.keys + finishReasons.keys).toSet()
-            
-            for (index in allIndices) {
-                // Get content
-                val content = contentBuffers[index]?.toString()
-                
-                // Get tool calls for this choice
-                val deltaToolCalls = toolCallBuffers[index]
-                
-                // Get finish reason, default to STOP if not present for this index but content/tools are
-                val finishReason = finishReasons[index] ?: ChatCompletion.Choice.FinishReason.STOP
-                
-                // Determine if this choice involves tool calls
-                val hasToolCallsForIndex = !deltaToolCalls.isNullOrEmpty()
-                
-                // Skip choice if it has no content, no tool calls, and no explicit finish reason
-                if (content.isNullOrEmpty() && !hasToolCallsForIndex && !finishReasons.containsKey(index)) {
-                    continue
-                }
-                
-                // Consolidate tool calls by their declared index within the tool_calls array
-                val completedToolCalls = mutableListOf<ChatCompletionMessageToolCall>()
-                if (hasToolCallsForIndex && deltaToolCalls.isNotEmpty()) {
-                    // Group tool call parts by their 'index' field (0, 1, ... for the tool_calls array)
-                    val toolPartsByMessageIndex = mutableMapOf<Long, MutableList<ChatCompletionChunk.Choice.Delta.ToolCall>>()
-                    deltaToolCalls.forEach { tcPart ->
-                        // tcPart.index() refers to the index within the tool_calls array of the message
-                        tcPart.index().let { messageIdx ->
-                            toolPartsByMessageIndex.getOrPut(messageIdx) { mutableListOf() }.add(tcPart)
-                        }
-                    }
-
-                    toolPartsByMessageIndex.forEach { (messageIndex, parts) ->
-                        var toolCallId: String? = null
-                        var functionName: String? = null
-                        val functionArguments = StringBuilder()
-                        var toolType: String? = null // Expected to be "function"
-
-                        parts.forEach { part ->
-                            if (toolCallId == null && part.id().isPresent) {
-                                toolCallId = part.id().get()
-                            }
-                            if (toolType == null && part.type().isPresent) {
-                                // part.type().get() is an enum like Type.FUNCTION
-                                // Convert to lowercase string e.g., "function"
-                                toolType =
-                                    part
-                                        .type()
-                                        .getOrNull()
-                                        ?.value()
-                                        ?.name
-                                        ?.lowercase()
-                            }
-                            part.function().ifPresent { func ->
-                                if (functionName == null && func.name().isPresent) {
-                                    functionName = func.name().get()
-                                }
-                                func.arguments().ifPresent { args ->
-                                    functionArguments.append(args)
-                                }
-                            }
-                        }
-
-                        if (toolCallId != null && functionName != null) {
-                            completedToolCalls.add(
-                                ChatCompletionMessageToolCall
-                                    .builder()
-                                    .id(toolCallId)
-                                    .type(JsonValue.from(toolType)) // Default to "function"
-                                    .function(
-                                        ChatCompletionMessageToolCall.Function
-                                            .builder()
-                                            .name(functionName)
-                                            .arguments(functionArguments.toString())
-                                            .build(),
-                                    ).build(),
-                            )
-                        } else {
-                            logger.warn { "Could not fully reconstruct tool call at messageIndex $messageIndex for choice $index due to missing ID or name." }
-                        }
-                    }
-                }
-                
-                // Build the message
-                val messageBuilder =
-                    ChatCompletionMessage
-                        .builder()
-                        .role(JsonValue.from("assistant"))
-                        .refusal(null)
-                
-                // Add content if present
-                content?.let { messageBuilder.content(it) }
-                
-                // Add tool calls if present
-                if (completedToolCalls.isNotEmpty()) {
-                    completedToolCalls.forEach { messageBuilder.addToolCall(it) }
-                    // If content is null/empty but we have tool calls, set content to empty string if needed by builder
-                    if (content.isNullOrEmpty()) {
-                        messageBuilder.content("")
-                    }
-                } else if (content.isNullOrEmpty()) {
-                    // If no content AND no tool calls, this choice might be invalid unless there's a finish reason only
-                    // If finishReason is STOP, allow empty content. If TOOL_CALLS, it's inconsistent.
-                    if (finishReason.toString().lowercase() ==
-                        ChatCompletion.Choice.FinishReason.STOP
-                            .value()
-                            .name
-                            .lowercase()
-                    ) {
-                        messageBuilder.content("") // Ensure content is non-null for the builder
+                finalCompletionForTelemetry?.let { completionToLog ->
+                    if (error == null) {
+                        logger.info { "Stream completed. Processing final telemetry for completion ID: ${completionToLog.id()}." }
                     } else {
-                        logger.warn { "Skipping choice index $index: No content or tool calls, but finish reason is $finishReason" }
-                        continue // Skip this potentially inconsistent choice
+                        logger.warn(error) { "Stream completed with error. Processing final telemetry for completion ID: ${completionToLog.id()}." }
                     }
+                    telemetryService.emitModelOutputEvents(observation, completionToLog, metadata)
+                    telemetryService.setChatCompletionObservationAttributes(observation, completionToLog, params, metadata)
+                    if (completionToLog.usage().isPresent) {
+                        telemetryService.recordChatCompletionTokenUsage(metadata, completionToLog, params, "input", completionToLog.usage().get().promptTokens())
+                        telemetryService.recordChatCompletionTokenUsage(metadata, completionToLog, params, "output", completionToLog.usage().get().completionTokens())
+                    }
+                } ?: run {
+                    logger.warn { "Final completion for telemetry was null." }
                 }
-                
-                // Create the choice
-                choices.add(
-                    ChatCompletion.Choice
-                        .builder()
-                        .index(index.toLong())
-                        .logprobs(null)
-                        .message(messageBuilder.build())
-                        .finishReason(ChatCompletion.Choice.FinishReason.of(finishReason.toString())) // Use the stored finish reason
-                        .build(),
-                )
+                observation.stop()
+                logger.debug { "Stopped observation ${observation.context.name} for streaming chat completion." }
             }
-            
-            // Only proceed if we have valid choices
-            if (choices.isEmpty()) {
-                logger.warn { "Reconstruction resulted in zero valid choices for completion ID: $completionId" }
-                return null
-            }
-            
-            // Build the complete ChatCompletion
-            val completionBuilder =
-                ChatCompletion
-                    .builder()
-                    .id(completionId)
-                    .created(System.currentTimeMillis() / 1000) // Current time in seconds
-                    .model(params.model().toString()) // Use request model as fallback
-                    .choices(choices)
-            
-            // Add usage if available
-            usage?.let { completionBuilder.usage(it) }
-            
-            return completionBuilder.build()
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to reconstruct ChatCompletion from stream chunks for ID: $completionId" }
-            return null
+        } catch (t: Throwable) {
+            logger.error(t) { "Outer error in createCompletionStream setup." }
+            observation.error(t)
+            observation.stop()
+            throw t
         }
     }
 
     /**
-     * Handles tool calls from a streaming completion and prepares for the next step.
-     * Similar to handleToolCalls but returns a structured result for streaming flow control.
-     *
-     * @param chatCompletion Reconstructed chat completion with tool calls
-     * @param params Original chat completion parameters
-     * @param parentObservation Parent observation for telemetry
-     * @param client OpenAI client
-     * @param metadata Metadata for the completion
-     * @return ToolHandlingStreamResult with information about next steps
+     * Handles tool calls detected in a streaming completion, prepares for the next step.
      */
     private suspend fun handleToolCallsAndPrepareNextStep(
-        chatCompletion: ChatCompletion,
-        params: ChatCompletionCreateParams,
+        chatCompletion: ChatCompletion, // The reconstructed completion from the current stream segment
+        currentIterationParams: ChatCompletionCreateParams,
         client: OpenAIClient,
         metadata: InstrumentationMetadataInput,
     ): ToolHandlingStreamResult {
-        val completionId = chatCompletion.id()
-        logger.info { "Handling tool calls for streaming completion ID: $completionId" }
-        
-        // Count and log the number of tool calls being processed
-        val totalToolCalls =
-            chatCompletion.choices().sumOf { choice ->
-                choice
-                    .message()
-                    .toolCalls()
-                    .getOrDefault(emptyList())
-                    .size
-            }
-        
-        logger.info { "Processing $totalToolCalls tool calls for streaming completion ID: $completionId" }
-        
-        // Log individual tool calls for debugging
-        chatCompletion.choices().forEach { choice ->
-            choice.message().toolCalls().getOrDefault(emptyList()).forEach { toolCall ->
-                val function = toolCall.function()
-                val toolName = function.name()
-                val toolId = toolCall.id()
-                val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
-                val context = CompletionToolRequestContext(aliasMap, params)
-                val isNative = toolService.getFunctionTool(toolName, context) != null
-                
-                logger.info { "Tool call in completion $completionId: name='$toolName', id='$toolId', isNative=$isNative" }
-            }
-        }
-        
-        // Call the handler and get the result object
-        val toolHandlingResult =
-            toolHandler.handleCompletionToolCall(
-                chatCompletion = chatCompletion,
-                params = params,
-                openAIClient = client,
-            )
-        
-        // Check if there are unresolved client tools
-        if (toolHandlingResult.hasUnresolvedClientTools) {
-            logger.info { "Non-native tool calls requiring client handling detected for completion ID: $completionId" }
-            
-            // Store the completion if requested (it contains the tool calls the client needs)
-            if (params.store().getOrDefault(false)) {
-                storeCompletion(chatCompletion, params)
-            }
-            
-            // Return result indicating client needs to handle tool calls
-            return ToolHandlingStreamResult(
-                hasUnresolvedClientTools = true,
-                updatedParams = null,
-            )
-        }
-        
-        // All tools were native and handled
-        logger.info { "All tool calls were native in streaming completion ID: $completionId" }
-        
-        // Get updated messages with tool results
-        val updatedMessages = toolHandlingResult.updatedMessages
-        logger.debug { "Updated message count after tool handling: ${updatedMessages.size}" }
-        
-        // Check if max tool calls reached
-        if (exceedsMaxToolCalls(updatedMessages)) {
-            val errorMsg = "Maximum tool call limit (${getAllowedMaxToolCalls()}) reached. Increase limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS."
-            logger.error { errorMsg }
-            throw IllegalStateException(errorMsg)
-        }
-        
-        // Create new parameters with updated messages
-        val updatedParams = params.toBuilder().messages(updatedMessages).build()
-        logger.debug { "Prepared updated parameters with ${updatedMessages.size} messages for next stream segment" }
-        
-        // Return result for continuing with updated parameters
-        return ToolHandlingStreamResult(
-            hasUnresolvedClientTools = false,
-            updatedParams = updatedParams,
-        )
-    }
+        logger.info { "Handling tool calls for streamed completion ID: ${chatCompletion.id()}" }
 
-    /**
-     * Converts a chat completion streaming response to server-sent events.
-     */
-    private fun streamChatCompletionToServerSentEvents(
-        response: StreamResponse<ChatCompletionChunk>,
-        observation: Observation,
-        metadata: InstrumentationMetadataInput,
-    ): Flow<ServerSentEvent<String>> =
-        EventUtils.convertChatCompletionStreamToServerSentEvents(
-            response,
-            objectMapper,
-            observation,
-            metadata,
-            telemetryService,
-        )
-
-    /**
-     * Stores a chat completion and its associated messages in the completion store.
-     * Only stores if the store flag is set to true in the parameters.
-     *
-     * @param completion The ChatCompletion to store
-     * @param params The original request parameters
-     */
-    private suspend fun storeCompletion(
-        completion: ChatCompletion,
-        params: ChatCompletionCreateParams,
-    ) {
-        val completionId = completion.id()
-        val shouldStore = params.store().getOrDefault(false)
-        
-        if (!shouldStore) {
-            logger.debug { "Skipping storage for completion ID: $completionId (store flag is false)" }
-            return
-        }
-        
-        logger.info { "Storing completion ID: $completionId in completion store" }
-        
-        try {
-            val messages = params.messages()
-            val aliasMap = toolService.buildAliasMap(params.tools().orElse(emptyList()))
-            val context = CompletionToolRequestContext(aliasMap, params)
-
-            // Use the injected completionStore
-            completionStore.storeCompletion(completion, messages, context)
-            logger.debug { "Successfully stored completion ID: $completionId" }
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to store completion ID: $completionId" }
-            // Don't rethrow - storage failures shouldn't break the user experience
+        return when (val toolCallOutcome = toolHandler.handleCompletionToolCall(chatCompletion, currentIterationParams, client)) {
+            is CompletionToolCallOutcome.Terminate -> {
+                logger.info { "Terminal tool executed in stream. ChatCompletion ID: ${toolCallOutcome.finalChatCompletion.id()}" }
+                ToolHandlingStreamResult(
+                    isTerminal = true, 
+                    terminalChatCompletion = toolCallOutcome.finalChatCompletion,
+                    messagesForStorage = toolCallOutcome.messagesForStorage, // Pass messages for storage
+                )
+            }
+            is CompletionToolCallOutcome.Continue -> {
+                if (toolCallOutcome.hasUnresolvedClientTools) {
+                    logger.info { "Non-native tools detected in stream for completion ID: ${chatCompletion.id()}. Client to handle." }
+                    ToolHandlingStreamResult(hasUnresolvedClientTools = true)
+                } else {
+                    // Native tools were handled, not terminal.
+                    val updatedMessages = toolCallOutcome.updatedMessages
+                    if (exceedsMaxToolCalls(updatedMessages)) {
+                        val errorMsg = "Max tool calls reached in stream for ${chatCompletion.id()}."
+                        logger.error { errorMsg }
+                        // How to propagate this error in stream? For now, log and treat as unresolved.
+                        // Ideally, an error event should be sent.
+                        return ToolHandlingStreamResult(hasUnresolvedClientTools = true) // Treat as unresolved for now
+                    }
+                    val nextParams = currentIterationParams.toBuilder().messages(updatedMessages).build()
+                    logger.debug { "Native tools handled in stream. Next params have ${nextParams.messages().size} messages for ${chatCompletion.id()}." }
+                    ToolHandlingStreamResult(updatedParams = nextParams)
+                }
+            }
         }
     }
 
     /**
-     * Returns true if the chat completion contains any tool_calls finish reason.
+     * Checks if the given ChatCompletion has any tool calls.
      */
     private fun hasToolCalls(chatCompletion: ChatCompletion): Boolean =
-        chatCompletion.choices().any { choice ->
-            // Check if finishReason is present and is TOOL_CALLS
-            choice.finishReason().value().name ==
-                ChatCompletion.Choice.FinishReason.TOOL_CALLS
-                    .value()
-                    .name
+        chatCompletion.choices().any {
+            it.message().toolCalls().isPresent &&
+                it
+                    .message()
+                    .toolCalls()
+                    .get()
+                    .isNotEmpty()
         }
 
     /**
-     * Returns true if the messages exceed the max allowed function calls set in the environment.
+     * Checks if the number of tool calls in messages exceeds the allowed limit.
+     * Counts assistant messages with tool_calls and subsequent tool messages.
      */
     private fun exceedsMaxToolCalls(messages: List<ChatCompletionMessageParam>): Boolean {
-        // Count assistant messages that contain tool calls.
-        val toolCallTurns =
+        val toolCallSequences =
             messages.count {
                 it.isAssistant() &&
+                    it.asAssistant().toolCalls().isPresent &&
                     it
                         .asAssistant()
                         .toolCalls()
-                        .getOrNull()
-                        ?.isNotEmpty() == true
-            } + // Also count tool messages as part of a turn
-                messages.count { it.isTool() } / 2 // Approximately, as each tool call usually gets one tool response
-
-        val maxAllowed = getAllowedMaxToolCalls()
-        // Using toolCallTurns seems more aligned with preventing infinite loops
-        val exceeds = toolCallTurns >= maxAllowed
-        if (exceeds) {
-            logger.warn { "Detected $toolCallTurns tool call turns, which meets or exceeds the limit of $maxAllowed." }
-        }
-        return exceeds
+                        .get()
+                        .isNotEmpty()
+            }
+        return toolCallSequences > getAllowedMaxToolCalls()
     }
 
     /**
      * Gets the maximum allowed tool calls from environment or default.
      */
     private fun getAllowedMaxToolCalls(): Int {
-        val maxToolCalls = System.getenv("OPEN_RESPONSES_MAX_TOOL_CALLS")?.toInt() ?: 25
+        val maxToolCalls = System.getenv("OPEN_RESPONSES_MAX_TOOL_CALLS")?.toInt() ?: 10 // Default to 10
         logger.trace { "Maximum allowed tool calls: $maxToolCalls" }
         return maxToolCalls
     }
+}
 
-    /**
-     * Result class for processStreamSegment
-     */
-    private data class StreamSegmentResult(
-        val chunks: Flow<ServerSentEvent<String>>,
-        val completion: ChatCompletion?,
-    )
-
-    /**
-     * Result class for handleToolCallsAndPrepareNextStep
-     */
-    private data class ToolHandlingStreamResult(
-        val hasUnresolvedClientTools: Boolean,
-        val updatedParams: ChatCompletionCreateParams?,
-    )
-} 
+/**
+ * Data class to hold the results of tool handling in streaming mode.
+ */
+private data class ToolHandlingStreamResult(
+    val updatedParams: ChatCompletionCreateParams? = null, // Params for next LLM call if any
+    val hasUnresolvedClientTools: Boolean = false, // True if client needs to handle tools
+    val isTerminal: Boolean = false, // True if a terminal tool (e.g., image_generation) was executed
+    val terminalChatCompletion: ChatCompletion? = null, // The direct ChatCompletion from a terminal tool
+    val messagesForStorage: List<ChatCompletionMessageParam>? = null, // Full message history for storage on termination
+)
