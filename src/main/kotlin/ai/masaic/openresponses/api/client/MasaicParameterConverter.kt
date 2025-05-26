@@ -418,31 +418,6 @@ class MasaicParameterConverter(
                                         ).build(),
                                 ).build(),
                         )
-                    } else if (responseTool.asWebSearch().type().toString() == "image_generation") {
-                        val nativeTool =
-                            nativeToolRegistry.findByName("image_generation") as? NativeToolDefinition
-                                ?: throw IllegalArgumentException("Native tool definition for 'image_generation' not found")
-                        val toolProperties = responseTool.asWebSearch()._additionalProperties()
-                        val toolName = toolProperties["alias"]?.toString() ?: nativeTool.name
-                        val description = toolProperties["alias_description"]?.toString() ?: nativeTool.description
-                        logger.trace { "Converting image generation tool: $toolName" }
-                        result.add(
-                            ChatCompletionTool
-                                .builder()
-                                .type(JsonValue.from("function"))
-                                .function(
-                                    FunctionDefinition
-                                        .builder()
-                                        .name(toolName)
-                                        .description(description)
-                                        .parameters(
-                                            objectMapper.readValue(
-                                                objectMapper.writeValueAsString(nativeTool.parameters),
-                                                FunctionParameters::class.java,
-                                            ),
-                                        ).build(),
-                                ).build(),
-                        )
                     } else {
                         val webSearchTool = responseTool.asWebSearch()
                         logger.trace { "Converting web search tool" }
@@ -459,6 +434,32 @@ class MasaicParameterConverter(
                                 ).build(),
                         )
                     }
+                }
+                responseTool.isImageGeneration() -> {
+                    val nativeTool =
+                        nativeToolRegistry.findByName("image_generation") as? NativeToolDefinition
+                            ?: throw IllegalArgumentException("Native tool definition for 'image_generation' not found")
+                    val toolProperties = responseTool.asImageGeneration()._additionalProperties()
+                    val toolName = toolProperties["alias"]?.toString() ?: nativeTool.name
+                    val description = toolProperties["alias_description"]?.toString() ?: nativeTool.description
+                    logger.trace { "Converting image generation tool: $toolName" }
+                    result.add(
+                        ChatCompletionTool
+                            .builder()
+                            .type(JsonValue.from("function"))
+                            .function(
+                                FunctionDefinition
+                                    .builder()
+                                    .name(toolName)
+                                    .description(description)
+                                    .parameters(
+                                        objectMapper.readValue(
+                                            objectMapper.writeValueAsString(nativeTool.parameters),
+                                            FunctionParameters::class.java,
+                                        ),
+                                    ).build(),
+                            ).build(),
+                    )
                 }
                 responseTool.isFileSearch() -> {
                     val nativeTool = nativeToolRegistry.findByName("file_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")

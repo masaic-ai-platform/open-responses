@@ -41,7 +41,7 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-slf4j")
     implementation("org.springdoc:springdoc-openapi-starter-webflux-ui:2.3.0")
-    implementation("com.openai:openai-java:2.0.0")
+    implementation("com.openai:openai-java:2.2.0")
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-onnx-scoring:1.0.0-beta2")

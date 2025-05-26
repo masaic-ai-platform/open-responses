@@ -255,6 +255,7 @@ class MasaicResponseService(
                                     .code(
                                         "stream_error",
                                     ).param("")
+                                    .sequenceNumber(System.nanoTime())
                                     .build(),
                             ),
                             payloadFormatter,

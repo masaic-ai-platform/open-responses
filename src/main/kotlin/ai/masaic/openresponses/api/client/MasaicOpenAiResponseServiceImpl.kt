@@ -56,6 +56,14 @@ class MasaicOpenAiResponseServiceImpl(
         throw UnsupportedOperationException("Not yet implemented")
     }
 
+    override fun cancel(
+        params: ResponseCancelParams,
+        requestOptions: RequestOptions,
+    ) {
+        logger.warn { "cancel() method not implemented" }
+        throw UnsupportedOperationException("Not yet implemented")
+    }
+
     override fun create(
         params: ResponseCreateParams,
         requestOptions: RequestOptions,
