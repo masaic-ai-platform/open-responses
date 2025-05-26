@@ -17,6 +17,23 @@ services:
     networks:
       - app-network
 
+  # Using python-notebook image which has more packages
+  notebook:
+    image: jupyter/scipy-notebook:python-3.11
+    ports:
+      - "8890:8888"
+    volumes:
+      - ./:/home/jovyan/work        # repo root inside the notebook
+    environment:
+      - OPENAI_BASE_URL=http://open-responses:8080/v1
+      - OPENAI_API_KEY=dummy
+    command: >                      
+      bash -c "pip install --no-cache-dir 'openai>=1.12.0' && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
+    depends_on:
+      - open-responses
+    networks:
+      - app-network
+
 networks:
   app-network:
-    driver: bridge 
+    driver: bridge
