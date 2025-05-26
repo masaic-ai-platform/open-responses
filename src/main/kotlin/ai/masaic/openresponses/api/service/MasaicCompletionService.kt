@@ -264,19 +264,19 @@ class MasaicCompletionService(
         modelName: String,
     ): OpenAIClient {
         val baseUrl = getApiBaseUri(headers, modelName).toURL().toString()
-        return  if (baseUrl.contains("azure")) {
-            OpenAIOkHttpClient
-                .builder()
-                .baseUrl(baseUrl)
-                .credential(
-                    BearerTokenCredential.create(
-                        AuthenticationUtil.getBearerTokenSupplier(
-                            DefaultAzureCredentialBuilder().build(),
-                            "https://cognitiveservices.azure.com/.default",
-                        ),
-                    ),
-                ).build()
-        } else {
+//        return  if (baseUrl.contains("azure")) {
+//            OpenAIOkHttpClient
+//                .builder()
+//                .baseUrl(baseUrl)
+//                .credential(
+//                    BearerTokenCredential.create(
+//                        AuthenticationUtil.getBearerTokenSupplier(
+//                            DefaultAzureCredentialBuilder().build(),
+//                            "https://cognitiveservices.azure.com/.default",
+//                        ),
+//                    ),
+//                ).build()
+//        } else {
             val authHeader =
                 headers.getFirst("Authorization")
                     ?: throw IllegalArgumentException("api-key is missing.")
@@ -285,12 +285,12 @@ class MasaicCompletionService(
                 BearerTokenCredential.create {
                     authHeader.split(" ").getOrNull(1) ?: throw IllegalArgumentException("api-key is missing.")
                 }
-            OpenAIOkHttpClient
+            return OpenAIOkHttpClient
                 .builder()
                 .credential(credential)
                 .baseUrl(baseUrl)
                 .build()
-        }
+//        }
     }
 
     /**
