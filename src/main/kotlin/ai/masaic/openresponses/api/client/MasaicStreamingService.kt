@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
@@ -130,6 +131,7 @@ class MasaicStreamingService(
 
             val subscription =
                 client
+                    .async()
                     .chat()
                     .completions()
                     .createStreaming(createParams)
@@ -140,7 +142,7 @@ class MasaicStreamingService(
             val internalToolItemIds = mutableSetOf<String>()
             val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
-            subscription.stream().forEach { completionResponse ->
+            subscription.subscribe { completionResponse ->
 
                 val completion =
                     if (completionResponse._id().isMissing()) { // special handling for gemini
@@ -403,13 +405,14 @@ class MasaicStreamingService(
                         }
                     }
                 }
-            }
 
-            launch {
-                close()
+                launch {
+                    subscription.onCompleteFuture().await()
+                    close()
+                }
             }
-
             awaitClose {
+                close()
             }
         }.collect { event ->
             emit(event)
