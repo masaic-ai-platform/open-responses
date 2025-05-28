@@ -784,7 +784,7 @@ class MasaicToolHandler(
                                     mapOf<String, String>(
                                         "item_id" to (function.id().getOrNull() ?: function.callId()),
                                         "output_index" to index.toString(),
-                                        "type" to "$eventPrefix.executing",
+                                        "type" to "$eventPrefix.generating",
                                     ),
                                 ),
                             ).build(),
