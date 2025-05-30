@@ -50,7 +50,7 @@ suspend fun ResponseCreateParams.Builder.fromBody(
 
         previousInputItems.addAll(previousResponseOutputItems.map { objectMapper.convertValue(it, ResponseInputItem::class.java) })
         previousInputItems.addAll(currentInputItems)
-        input(ResponseCreateParams.Input.ofResponse(removeImageBody(previousInputItems)))
+        input(ResponseCreateParams.Input.ofResponse(previousInputItems))
     } else {
         input(body.input())
     }
@@ -229,32 +229,6 @@ private fun extractBase64Content(content: String): String {
             content
         }
     }
-}
-
-fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>): List<ResponseInputItem> {
-    // Take all function and function output items
-    val imageFunctionIds = items.filter { it.isFunctionCall() && it.asFunctionCall().name() == "image_generation" }.map { it.asFunctionCall().callId() }.toSet()
-
-    val newItems = mutableListOf<ResponseInputItem>()
-
-    items.forEachIndexed { index, it ->
-        if (it.isFunctionCallOutput() && imageFunctionIds.contains(it.asFunctionCallOutput().callId())) {
-            // Check if the output content is an image
-            val outputContent = it.asFunctionCallOutput().output()
-            val imageInfo = isImageContent(outputContent)
-            val builder = it.asFunctionCallOutput().toBuilder()
-            
-            if (imageInfo.isImage) {
-                builder.output("<${imageInfo.format}>...")
-            } else {
-                builder.output("<image>...")
-            }
-            newItems.add(ResponseInputItem.ofFunctionCallOutput(builder.build()))
-        } else {
-            newItems.add(it)
-        }
-    }
-    return newItems
 }
 
 fun ChatCompletionMessage.toChatCompletionMessageParam(objectMapper: ObjectMapper): ChatCompletionMessageParam =

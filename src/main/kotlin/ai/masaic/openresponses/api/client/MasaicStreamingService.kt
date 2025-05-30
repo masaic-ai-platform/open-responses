@@ -362,15 +362,19 @@ class MasaicStreamingService(
                                     // A terminal tool (e.g., image_generation) was executed.
                                     logger.info { "Terminal tool executed in stream. Completing stream with tool output." }
 
+                                    val newParam = params.toBuilder()
+                                    val newInputItems = toolStreamingResult.toolResponseItems
+                                    newParam.input(ResponseCreateParams.Input.ofResponse(newInputItems))
+
                                     val finalTerminalResponse =
                                         ChatCompletionConverter.buildFinalResponse(
-                                            params,
+                                            newParam.build(),
                                             ResponseStatus.COMPLETED, // LLM's turn is complete, it requested tools.
                                             responseId,
                                             listOf(toolStreamingResult.terminalOutputItem), // Contains text and tool call requests from LLM
                                         )
 
-                                    runBlocking { storeResponseWithInputItems(finalTerminalResponse, params) }
+                                    runBlocking { storeResponseWithInputItems(finalTerminalResponse, newParam.build()) }
 
                                     trySend(
                                         EventUtils.convertEvent(

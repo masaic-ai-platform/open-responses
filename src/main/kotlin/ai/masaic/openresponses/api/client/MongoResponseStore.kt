@@ -13,6 +13,7 @@ import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.mapping.Document
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
+import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -69,6 +70,15 @@ class MongoResponseStore(
                                 call_id = functionCall.callId(),
                                 name = functionCall.name(),
                                 arguments = functionCall.arguments(),
+                            )
+                        }
+                        outputItem.isImageGenerationCall() -> {
+                            val imageGenerationCall = outputItem.asImageGenerationCall()
+                            InputMessageItem(
+                                id = imageGenerationCall.id(),
+                                role = "assistant",
+                                type = "image_generation_call",
+                                result = imageGenerationCall.result().getOrElse { "" },
                             )
                         }
                         else -> null

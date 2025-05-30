@@ -11,6 +11,7 @@ import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Component
+import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -75,6 +76,16 @@ class InMemoryResponseStore(
                                 call_id = functionCall.callId(),
                                 name = functionCall.name(),
                                 arguments = functionCall.arguments(),
+                            )
+                        }
+                        outputItem.isImageGenerationCall() -> {
+                            val imageGenerationCall = outputItem.asImageGenerationCall()
+                            InputMessageItem(
+                                id = imageGenerationCall.id(),
+                                role = "assistant",
+                                type = "image_generation_call",
+                                result = imageGenerationCall.result().getOrElse { "" },
+                                image_id = imageGenerationCall._additionalProperties()["image_id"]?.toString(),
                             )
                         }
                         else -> null

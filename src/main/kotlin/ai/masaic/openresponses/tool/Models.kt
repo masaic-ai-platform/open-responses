@@ -127,6 +127,7 @@ data class AgenticSearchIteration(
 data class ImageGenerationToolArguments(
     @JsonProperty("prompt")
     val prompt: String,
-    @JsonProperty("is_edit")
-    val isEdit: Boolean = false,
+    @JsonProperty("previous_image_id")
+    val previousImageId: String? = null,
+    val isEdit: Boolean = previousImageId != null,
 )

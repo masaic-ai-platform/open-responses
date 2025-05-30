@@ -13,14 +13,19 @@ import ai.masaic.openresponses.tool.agentic.AgenticSearchService
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
+import com.openai.core.JsonValue
+import com.openai.core.MultipartField
 import com.openai.credential.BearerTokenCredential
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
+import com.openai.models.images.ImageEditParams
 import com.openai.models.images.ImageGenerateParams
-import com.openai.models.responses.ResponseOutputItem
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
+import java.io.File
+import java.io.FileOutputStream
+import java.util.Base64
 import java.util.UUID
 import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
@@ -386,8 +391,7 @@ class NativeToolRegistry(
                 "properties" to
                     mutableMapOf<String, Any>(
                         "prompt" to mutableMapOf("type" to "string", "description" to "A text description of the desired image(s). Max 32000 chars. In a multi-turn scenario this should contain previous prompt instructions."),
-                        // TODO after image editing is implemented
-                        // "is_edit" to mutableMapOf("type" to "boolean", "description" to "Type of image generation: 'false' for new image, 'true' for editing an existing image. Choose 'true' if there is already an <image> in previous context and user's intent is to edit it. ", "default" to "false"),
+                        "previous_image_id" to mutableMapOf("type" to "string", "description" to "An image id to use as the starting point for the image generation. If this is not specified, a random image will be generated."),
                     ),
                 "required" to listOf("prompt"),
             )
@@ -418,11 +422,12 @@ class NativeToolRegistry(
             val imageData =
                 if (paramsAccessor is ResponseParamsAdapter && llmArgs.isEdit && paramsAccessor.params.previousResponseId().isPresent) {
                     val contentNode =
-                        responseStore
-                            .getResponse(paramsAccessor.params.previousResponseId().get())
-                            ?.output()
-                            ?.filterIsInstance<ResponseOutputItem.ImageGenerationCall>()
-                            ?.first()
+                        paramsAccessor.params
+                            .input()
+                            .asResponse()
+                            .lastOrNull { it.imageGenerationCall().isPresent }
+                            ?.imageGenerationCall()
+                            ?.getOrNull()
                     if (contentNode?.result()?.isPresent == true) {
                         if (isImageContent(contentNode.result().get()).isImage) contentNode.result().get() else null
                     } else {
@@ -470,24 +475,49 @@ class NativeToolRegistry(
                     if (config.third.contains("api.openai.com")) {
                         builder.outputFormat(ImageGenerateParams.OutputFormat.of((rawToolConfig.outputFormat?.lowercase() ?: "png")))
                     } else {
-                        builder.responseFormat(ImageGenerateParams.ResponseFormat.of((rawToolConfig.responseFormat?.lowercase() ?: "b64_json")))
+                        builder.responseFormat(ImageGenerateParams.ResponseFormat.of((rawToolConfig.responseFormat?.lowercase() ?: "url")))
                     }
                     client.images().generate(builder.build())
                 } else {
-                    // TODO Add support for image editing
-                    val builder =
-                        ImageGenerateParams
-                            .builder()
-                            .model(config.first)
-                            .prompt(llmArgs.prompt)
-                            .n(rawToolConfig.n?.toLong() ?: 1)
-
                     if (config.third.contains("api.openai.com")) {
-                        builder.outputFormat(ImageGenerateParams.OutputFormat.of((rawToolConfig.outputFormat?.lowercase() ?: "png")))
+                        // write image to temp file
+                        val format = isImageContent(imageData!!).format
+                        val tempFile = File.createTempFile("openai-image-edit", ".$format")
+                        tempFile.deleteOnExit()
+                        val imageBytes = Base64.getDecoder().decode(imageData)
+                        val outputStream = FileOutputStream(tempFile)
+                        outputStream.write(imageBytes)
+                        outputStream.close()
+
+                        val builder =
+                            ImageEditParams
+                                .builder()
+                                .model(config.first)
+                                .prompt(llmArgs.prompt)
+                                .image(
+                                    MultipartField
+                                        .builder<ImageEditParams.Image>()
+                                        .contentType("image/$format")
+                                        .filename(tempFile.name)
+                                        .value(
+                                            ImageEditParams.Image.ofInputStream(tempFile.inputStream()),
+                                        ).build(),
+                                ).n(rawToolConfig.n?.toLong() ?: 1)
+
+                        client.images().edit(builder.build())
                     } else {
-                        builder.responseFormat(ImageGenerateParams.ResponseFormat.of((rawToolConfig.responseFormat?.lowercase() ?: "b64_json")))
+                        val builder =
+                            ImageGenerateParams
+                                .builder()
+                                .model(config.first)
+                                .prompt(llmArgs.prompt)
+                                .n(rawToolConfig.n?.toLong() ?: 1)
+                                .putAdditionalBodyProperty("image_url", JsonValue.from(imageData))
+
+                        builder.responseFormat(ImageGenerateParams.ResponseFormat.of((rawToolConfig.responseFormat?.lowercase() ?: "url")))
+
+                        client.images().generate(builder.build())
                     }
-                    client.images().generate(builder.build())
                 }
 
             // Simulate a response based on prompt content for testing

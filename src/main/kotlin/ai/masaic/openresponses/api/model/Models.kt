@@ -296,12 +296,16 @@ data class InputMessageItem(
     val tool_call_id: String? = null,
     @JsonProperty("call_id")
     val call_id: String? = null,
+    @JsonProperty("result")
+    val result: String? = null,
     @JsonProperty("output")
     val output: String? = null,
     @JsonProperty("status")
     val status: String = "completed", // Note: This value is not returned by completion API, so we will assume completed.
     @JsonProperty("created_at")
     val createdAt: BigDecimal? = BigDecimal.valueOf(Instant.now().toEpochMilli()),
+    @JsonProperty("image_id")
+    val image_id: String? = null,
 ) {
     init {
         if (call_id != null) {

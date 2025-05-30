@@ -208,7 +208,13 @@ class MasaicToolHandler(
                                 ChatCompletionToolMessageParam
                                     .builder()
                                     .toolCallId(toolCallId)
-                                    .content(imageData) // Store the extracted image data
+                                    .content(
+                                        """
+                                        {
+                                            "image_id": "${UUID.randomUUID()}",
+                                        }
+                                        """.trimIndent(),
+                                    ) // Store the extracted image data
                                     .putAdditionalProperty("type", JsonValue.from("output_image"))
                                     .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
                                     .build(),
@@ -233,6 +239,7 @@ class MasaicToolHandler(
                                                     .content(imageData) // Use the extracted image data
                                                     .putAdditionalProperty("type", JsonValue.from("output_image"))
                                                     .putAdditionalProperty("output_format", JsonValue.from("b64_json"))
+                                                    .putAdditionalProperty("image_id", JsonValue.from(UUID.randomUUID().toString()))
                                                     .refusal(null)
                                                     .build(),
                                             ).logprobs(null)
@@ -473,8 +480,13 @@ class MasaicToolHandler(
                                             .builder()
                                             .callId(tool.id())
                                             .id(tool.id())
-                                            .output(toolOutputString["data"].toString())
-                                            .build(),
+                                            .output(
+                                                """
+                                                {
+                                                    "image_id": "${UUID.randomUUID()}"
+                                                }
+                                                """.trimIndent(),
+                                            ).build(),
                                     )
                                 responseInputItems.add(functionCallOutputItem)
 
@@ -827,6 +839,8 @@ class MasaicToolHandler(
                                     .build(),
                             ),
                         )
+
+                        val imageId = UUID.randomUUID().toString()
                         // Add the function call output to responseInputItems for storage/logging
                         responseInputItems.add(
                             ResponseInputItem.ofFunctionCallOutput(
@@ -834,8 +848,13 @@ class MasaicToolHandler(
                                     .builder()
                                     .callId(function.callId())
                                     .id(function.id())
-                                    .output((imageToolOutputString as Map<out String?, String?>)["data"].toString())
-                                    .build(),
+                                    .output(
+                                        """
+                                        {
+                                            "image_id": "$imageId"
+                                        }
+                                        """.trimIndent(),
+                                    ).build(),
                             ),
                         )
                         // Create the ResponseOutputItem for the image tool (this will be the final message)
@@ -848,6 +867,7 @@ class MasaicToolHandler(
                                     .status(ResponseOutputItem.ImageGenerationCall.Status.COMPLETED)
                                     .result(imageToolOutputString["data"].toString())
                                     .type(JsonValue.from("image_generation_call"))
+                                    .putAdditionalProperty("image_id", JsonValue.from(imageId))
                                     .build(),
                             )
 
