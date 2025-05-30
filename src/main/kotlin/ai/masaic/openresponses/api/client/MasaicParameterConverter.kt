@@ -828,6 +828,26 @@ class MasaicParameterConverter(
                     )
                 }
             }
+        } else if (item.isMessage()) {
+            val message = item.asMessage()
+            val instructions = if (params.instructions().isPresent) params.instructions().get() else ""
+            completionBuilder.addMessage(
+                ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(
+                        if (instructions.isNotEmpty()) {
+                            ChatCompletionSystemMessageParam.Content.ofText("$instructions\n${message.content().firstOrNull()?.asInputText()?.text()}")
+                        } else {
+                            ChatCompletionSystemMessageParam.Content.ofText(
+                                message
+                                    .content()
+                                    .firstOrNull()
+                                    ?.asInputText()
+                                    ?.text() ?: "",
+                            )
+                        },
+                    ).build(),
+            )
         }
     }
 
@@ -869,6 +889,19 @@ class MasaicParameterConverter(
                     )
                 }
             }
+        } else if (item.isMessage()) {
+            val message = item.asMessage()
+            completionBuilder.addMessage(
+                ChatCompletionDeveloperMessageParam
+                    .builder()
+                    .content(
+                        message
+                            .content()
+                            .firstOrNull()
+                            ?.asInputText()
+                            ?.text() ?: "",
+                    ).build(),
+            )
         }
     }
 
