@@ -10,7 +10,9 @@ import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
 import com.openai.models.ReasoningEffort
+import com.openai.models.ResponseFormatJsonObject
 import com.openai.models.ResponseFormatJsonSchema
+import com.openai.models.ResponseFormatText
 import com.openai.models.chat.completions.*
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
 import com.openai.models.responses.*
@@ -534,10 +536,10 @@ class MasaicParameterConverter(
                     .get()
             when {
                 format.isText() -> {
-                    completionBuilder.responseFormat(format.asText())
+                    completionBuilder.responseFormat(ResponseFormatText.builder().build())
                 }
                 format.isJsonObject() -> {
-                    completionBuilder.responseFormat(format.asJsonObject())
+                    completionBuilder.responseFormat(ResponseFormatJsonObject.builder().build())
                 }
                 format.isJsonSchema() -> {
                     completionBuilder.responseFormat(
@@ -553,8 +555,10 @@ class MasaicParameterConverter(
                                             objectMapper.writeValueAsString(format.asJsonSchema().schema()),
                                             ResponseFormatJsonSchema.JsonSchema.Schema::class.java,
                                         ),
-                                    ).build(),
-                            ).build(),
+                                    ).additionalProperties(mapOf())
+                                    .build(),
+                            ).additionalProperties(mapOf())
+                            .build(),
                     )
                 }
             }
