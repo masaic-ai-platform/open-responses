@@ -6,7 +6,9 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.openai.models.chat.completions.ChatCompletion
+import kotlinx.coroutines.flow.Flow
 import org.springframework.http.ResponseEntity
+import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import org.springframework.util.MultiValueMap
 
@@ -28,6 +30,27 @@ class ModelService(
         )
         val chat = response.body as ChatCompletion
         return chat.choices()[0].message().content().get()
+    }
+
+    suspend fun fetchCompletionStream(
+        request: CreateCompletionRequest,
+        apiKey: String
+    ): Flow<ServerSentEvent<String>> {
+        // build the headers exactly as you did before
+        val authHeaders = MultiValueMap.fromMultiValue(
+            mapOf("Authorization" to listOf(apiKey))
+        )
+        // any other query params (empty here)
+        val otherParams = MultiValueMap.fromMultiValue(emptyMap<String, List<String>>())
+
+        // delegate directly to your controller
+        val response = completionController.createCompletion(
+            request,
+            authHeaders,
+            otherParams
+        ) as ResponseEntity<Flow<ServerSentEvent<String>>>
+
+        return response.body as Flow<ServerSentEvent<String>>
     }
 }
 

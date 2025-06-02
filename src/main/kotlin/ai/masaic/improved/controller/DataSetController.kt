@@ -1,5 +1,6 @@
 package ai.masaic.improved.controller
 
+import ai.masaic.improved.AgentRunRepository
 import ai.masaic.improved.QDRANTCOLLECTIONS
 import ai.masaic.improved.model.*
 import ai.masaic.improved.repository.ConversationRepository
@@ -49,6 +50,7 @@ import java.util.*
 class DataSetController(
     private val modelClientService: ModelClientService,
     private val conversationRepository: ConversationRepository,
+    private val agentRunRepository: AgentRunRepository,
     private val embeddingsController: EmbeddingsController,
     private val completionController: CompletionController,
     private val qdrantClient: QdrantClient
@@ -77,6 +79,68 @@ class DataSetController(
         val intent: String,
         val response: String
     )
+
+    @GetMapping("/classified/conversations", produces = [MediaType.APPLICATION_JSON_VALUE])
+    suspend fun getClassifiedConversations(
+        @RequestParam(required = false, defaultValue = "20") limit: Int,
+        @RequestParam(required = false, defaultValue = "desc") order: String,
+        @RequestParam(required = false) after: String?,
+        @RequestParam(required = true) runId: String
+    ): List<Conversation> {
+        try {
+            // Get the agent run outcome which contains the conversation IDs
+            val agentRunOutcome = agentRunRepository.getAgentRunOutcomeByRunId(runId)
+            val conversationIds = agentRunOutcome.conversationIds
+            
+            if (conversationIds.isEmpty()) {
+                return emptyList()
+            }
+            
+            // Fetch all conversations
+            val conversations = conversationIds.mapNotNull { conversationId ->
+                conversationRepository.getConversation(conversationId)
+            }
+            
+            // Sort conversations by createdAt
+            val sortedConversations = if (order.equals("asc", ignoreCase = true)) {
+                conversations.sortedBy { it.createdAt }
+            } else {
+                conversations.sortedByDescending { it.createdAt }
+            }
+            
+            // Apply pagination if 'after' parameter is provided
+            val filteredConversations = if (after != null) {
+                val afterConversation = conversationRepository.getConversation(after)
+                if (afterConversation != null) {
+                    if (order.equals("asc", ignoreCase = true)) {
+                        sortedConversations.filter { it.createdAt > afterConversation.createdAt }
+                    } else {
+                        sortedConversations.filter { it.createdAt < afterConversation.createdAt }
+                    }
+                } else {
+                    sortedConversations
+                }
+            } else {
+                sortedConversations
+            }
+            
+            // Apply limit
+            return filteredConversations.take(limit)
+            
+        } catch (e: NoSuchElementException) {
+            logger.error(e) { "No AgentRunOutcome found for runId: $runId" }
+            throw IllegalArgumentException("No classification run found for runId: $runId")
+        } catch (e: Exception) {
+            logger.error(e) { "Error getting classified conversations for runId: $runId" }
+            throw IllegalStateException("Error retrieving classified conversations")
+        }
+    }
+
+    @GetMapping("/conversations/{conversationId}", produces = [MediaType.APPLICATION_JSON_VALUE])
+    suspend fun getConversation(
+        @PathVariable conversationId: String): Conversation {
+        return conversationRepository.getConversation(conversationId) ?: throw IllegalStateException("conversation not found")
+    }
 
     @GetMapping("/conversations/transcripts", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun getTranscripts(
