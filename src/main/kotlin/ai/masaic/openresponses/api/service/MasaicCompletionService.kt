@@ -232,7 +232,7 @@ class MasaicCompletionService(
     private fun createHeadersBuilder(headers: MultiValueMap<String, String>): Headers.Builder {
         val headerBuilder = Headers.builder()
         headers
-            .filter { it.key == "Authorization" }
+            .filter { it.key.equals("Authorization", ignoreCase = true) }
             .forEach { (key, value) -> headerBuilder.put(key, value) }
         return headerBuilder
     }
