@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.service.CompletionNotFoundException
 import ai.masaic.openresponses.api.service.MasaicCompletionService
 import ai.masaic.openresponses.api.utils.CoroutineMDCContext
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.api.validation.RequestValidator
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.chat.completions.ChatCompletion
 import io.swagger.v3.oas.annotations.Operation
@@ -32,6 +33,7 @@ class CompletionController(
     private val masaicCompletionService: MasaicCompletionService,
     private val payloadFormatter: PayloadFormatter,
     private val completionStore: CompletionStore,
+    private val requestValidator: RequestValidator,
 ) {
     private val log = LoggerFactory.getLogger(CompletionController::class.java)
     val mapper = jacksonObjectMapper()
@@ -54,6 +56,7 @@ class CompletionController(
         @RequestParam queryParams: MultiValueMap<String, String>,
         exchange: ServerWebExchange,
     ): ResponseEntity<*> {
+        requestValidator.validateCompletionRequest(request)
         payloadFormatter.formatCompletionRequest(request)
         // Use our custom coroutine-aware MDC context
         val requestBodyJson = mapper.writeValueAsString(request)
