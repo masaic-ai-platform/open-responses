@@ -74,7 +74,7 @@ class MasaicStreamingService(
             if (tooManyToolCalls(responseInputItems)) {
                 emitTooManyToolCallsError()
                 throw UnsupportedOperationException(
-                    "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.",
+                    "Too many tool calls. Increase the limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS environment variable.",
                 )
             }
 
