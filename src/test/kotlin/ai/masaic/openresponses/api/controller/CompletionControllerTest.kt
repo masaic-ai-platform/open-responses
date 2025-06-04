@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.api.service.CompletionNotFoundException
 import ai.masaic.openresponses.api.service.MasaicCompletionService
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.api.validation.RequestValidator
 import com.ninjasquad.springmockk.MockkBean
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionMessage
@@ -37,6 +38,9 @@ class CompletionControllerTest {
 
     @MockkBean
     private lateinit var completionStore: CompletionStore
+
+    @MockkBean
+    private lateinit var requestValidator: RequestValidator
 
     private lateinit var dummyRequest: CreateCompletionRequest
     private lateinit var dummyCompletion: ChatCompletion
@@ -82,6 +86,7 @@ class CompletionControllerTest {
 
         // Mock the payload formatter by default
         justRun { payloadFormatter.formatCompletionRequest(any()) }
+        justRun { requestValidator.validateCompletionRequest(any()) }
     }
 
     // --- Test cases will go here ---
