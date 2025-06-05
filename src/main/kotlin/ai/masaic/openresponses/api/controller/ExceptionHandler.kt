@@ -52,203 +52,50 @@ class GlobalExceptionHandler(
         }
     }
 
+    private fun parseOpenAIError(ex: OpenAIException, status: HttpStatus): ErrorResponse {
+        val bodyString = try {
+            ex.body()?.toString()
+        } catch (_: Exception) {
+            null
+        }
+
+        if (bodyString.isNullOrBlank()) {
+            return ErrorResponse(
+                type = "api_error",
+                message = ex.message ?: status.reasonPhrase,
+                param = bodyString,
+                code = status.value().toString(),
+                timestamp = System.currentTimeMillis(),
+            )
+        }
+
+        return runCatching {
+            val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
+            val parsed = objectMapper.readValue<Map<String, ErrorResponse>>(bodyString, typeRef)
+            parsed["error"] ?: ErrorResponse(
+                type = "api_error",
+                message = ex.message ?: status.reasonPhrase,
+                param = bodyString,
+                code = status.value().toString(),
+                timestamp = System.currentTimeMillis(),
+            )
+        }.getOrElse {
+            ErrorResponse(
+                type = "api_error",
+                message = ex.message ?: status.reasonPhrase,
+                param = bodyString,
+                code = status.value().toString(),
+                timestamp = System.currentTimeMillis(),
+            )
+        }
+    }
+
     @ExceptionHandler(OpenAIException::class)
     fun handleOpenAIException(ex: OpenAIException): ResponseEntity<ErrorResponse> {
-        if (ex is BadRequestException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Bad request",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Bad request",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else if (ex is PermissionDeniedException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Permission denied",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Permission denied",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else if (ex is NotFoundException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Not found",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Not found",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else if (ex is UnprocessableEntityException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Unprocessable entity",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Unprocessable entity",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else if (ex is RateLimitException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Rate limit exceeded",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Rate limit exceeded",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else if (ex is UnexpectedStatusCodeException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Unexpected status code",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Unexpected status code",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else if (ex is UnauthorizedException) {
-            val status = HttpStatus.valueOf(ex.statusCode())
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            try {
-                val typeRef = object : TypeReference<Map<String, ErrorResponse>>() {}
-                val errorResponse = objectMapper.readValue(ex.body().toString(), typeRef)
-                return ResponseEntity.status(status).body(
-                    errorResponse["error"] ?: ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Unauthorized",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            } catch (e: Exception) {
-                val errorResponse =
-                    ErrorResponse(
-                        type = "api_error",
-                        message = ex.message ?: "Unauthorized",
-                        param = ex.body().toString(),
-                        code = status.value().toString(),
-                        timestamp = System.currentTimeMillis(),
-                    )
-                return ResponseEntity.status(status).body(errorResponse)
-            }
-        } else {
-            val status = HttpStatus.INTERNAL_SERVER_ERROR
-            logError(status, ex, "OpenAI API error: ${ex.message}")
-            val errorResponse =
-                ErrorResponse(
-                    type = "api_error",
-                    message = ex.message ?: "An unexpected error occurred",
-                    param = null,
-                    code = status.value().toString(),
-                    timestamp = System.currentTimeMillis(),
-                )
-            return ResponseEntity.status(status).body(errorResponse)
-        }
+        val status = HttpStatus.resolve(ex.statusCode()) ?: HttpStatus.INTERNAL_SERVER_ERROR
+        logError(status, ex, "OpenAI API error: ${ex.message}")
+        val errorResponse = parseOpenAIError(ex, status)
+        return ResponseEntity.status(status).body(errorResponse)
     }
 
     @ExceptionHandler(ResponseNotFoundException::class)
