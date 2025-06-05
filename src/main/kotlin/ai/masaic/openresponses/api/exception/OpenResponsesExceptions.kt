@@ -94,4 +94,4 @@ class VectorSearchException(
 class VectorIndexingException(
     message: String,
     cause: Throwable? = null,
-) : VectorStoreException(message, cause) 
+) : VectorStoreException(message, cause)
