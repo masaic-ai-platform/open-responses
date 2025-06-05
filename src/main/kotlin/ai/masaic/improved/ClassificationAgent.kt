@@ -1,6 +1,7 @@
 package ai.masaic.improved
 
 import ai.masaic.improved.model.Conversation
+import ai.masaic.improved.model.CLASSIFICATION
 import ai.masaic.improved.repository.ConversationRepository
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -967,10 +968,7 @@ data class FunctionResult<T>(
     val data: T? = null
 )
 
-enum class CLASSIFICATION {
-    RESOLVED,
-    UNRESOLVED
-}
+
 
 const val planningResponseFormat = """
 {

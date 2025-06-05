@@ -16,7 +16,7 @@ import java.util.concurrent.ConcurrentHashMap
  * 
  * It is only enabled when open-responses.store.type=memory
  */
-@Repository
+@Repository("baseConversationRepository")
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory")
 class InMemoryConversationRepository : ConversationRepository {
     private val logger = KotlinLogging.logger {}

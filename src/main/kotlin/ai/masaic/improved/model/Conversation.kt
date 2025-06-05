@@ -1,6 +1,5 @@
 package ai.masaic.improved.model
 
-import ai.masaic.improved.CLASSIFICATION
 import java.time.Instant
 
 /**
@@ -16,7 +15,7 @@ data class Conversation(
     val nps: Int? = null,
     val meta: Map<String, Any> = emptyMap(),
     val version: Int = 1,
-    val classification: CLASSIFICATION ?= null
+    val classification: CLASSIFICATION? = null
 ) {
 //    init {
 //        require(messages.isNotEmpty()) { "Conversation must contain at least one message" }
@@ -80,3 +79,11 @@ data class ListConversationsParams(
     val labels: List<String>? = null,
     val meta: Map<String, Any>? = null
 ) 
+
+/**
+ * Enum representing the classification status of a conversation.
+ */
+enum class CLASSIFICATION {
+    RESOLVED,
+    UNRESOLVED
+}

@@ -1,5 +1,9 @@
 package ai.masaic.improved
 
+import org.neo4j.driver.AuthTokens
+import org.neo4j.driver.Driver
+import org.neo4j.driver.GraphDatabase
+import org.springframework.beans.factory.annotation.Value
 import io.grpc.ManagedChannelBuilder
 import io.qdrant.client.QdrantClient
 import io.qdrant.client.QdrantGrpcClient
@@ -47,6 +51,18 @@ class ImprovementConfig {
                     .build(),
             ).get()
     }
+
+    @Configuration
+    class MemgraphConfig(
+        @Value("\${memgraph.uri}") private val uri: String,
+        @Value("\${memgraph.username}") private val username: String,
+        @Value("\${memgraph.password}") private val password: String,
+    ) {
+        @Bean
+        fun memgraphDriver(): Driver =
+            GraphDatabase.driver(uri, AuthTokens.basic(username, password))
+    }
+
 }
 
 object QDRANTCOLLECTIONS {

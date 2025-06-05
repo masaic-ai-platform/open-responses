@@ -30,7 +30,7 @@ import java.time.Instant
  * 
  * It is only enabled when open-responses.store.type=mongodb
  */
-@Repository
+@Repository("baseConversationRepository")
 @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "mongodb")
 class MongoConversationRepository(
     private val reactiveMongoTemplate: ReactiveMongoTemplate,
