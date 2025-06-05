@@ -51,7 +51,7 @@ class CompletionController(
     suspend fun createCompletion(
         @RequestBody request: CreateCompletionRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
-        @RequestParam queryParams: MultiValueMap<String, String>
+        @RequestParam queryParams: MultiValueMap<String, String>,
     ): ResponseEntity<*> {
         payloadFormatter.formatCompletionRequest(request)
         // Use our custom coroutine-aware MDC context

@@ -15,7 +15,7 @@ data class Conversation(
     val nps: Int? = null,
     val meta: Map<String, Any> = emptyMap(),
     val version: Int = 1,
-    val classification: CLASSIFICATION? = null
+    val classification: CLASSIFICATION? = null,
 ) {
 //    init {
 //        require(messages.isNotEmpty()) { "Conversation must contain at least one message" }
@@ -27,19 +27,20 @@ data class Conversation(
  */
 data class Message(
     val role: Role,
-    val text: String
+    val text: String,
 )
 
 /**
  * Enum representing the possible roles for a message.
  */
 enum class Role {
-    USER, ASSISTANT, SYSTEM;
-    
+    USER,
+    ASSISTANT,
+    SYSTEM,
+    ;
+
     companion object {
-        fun fromString(value: String): Role {
-            return valueOf(value.uppercase())
-        }
+        fun fromString(value: String): Role = valueOf(value.uppercase())
     }
 }
 
@@ -49,21 +50,22 @@ enum class Role {
 data class Label(
     val path: String,
     val source: LabelSource,
-    val status: String,          // final | suggested | rejected
+    val status: String, // final | suggested | rejected
     val reason: String = "NA",
-    val createdAt: Instant? = null
+    val createdAt: Instant? = null,
 )
 
 /**
  * Enum representing the source of a label.
  */
 enum class LabelSource {
-    AUTO, AUTO_ALGO, MANUAL;
-    
+    AUTO,
+    AUTO_ALGO,
+    MANUAL,
+    ;
+
     companion object {
-        fun fromString(value: String): LabelSource {
-            return valueOf(value.uppercase())
-        }
+        fun fromString(value: String): LabelSource = valueOf(value.uppercase())
     }
 }
 
@@ -77,13 +79,13 @@ data class ListConversationsParams(
     val order: String = "desc",
     val resolved: Boolean? = null,
     val labels: List<String>? = null,
-    val meta: Map<String, Any>? = null
-) 
+    val meta: Map<String, Any>? = null,
+)
 
 /**
  * Enum representing the classification status of a conversation.
  */
 enum class CLASSIFICATION {
     RESOLVED,
-    UNRESOLVED
+    UNRESOLVED,
 }

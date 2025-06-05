@@ -1,33 +1,34 @@
 package ai.masaic.improved
 
-import org.neo4j.driver.AuthTokens
-import org.neo4j.driver.Driver
-import org.neo4j.driver.GraphDatabase
-import org.springframework.beans.factory.annotation.Value
 import io.grpc.ManagedChannelBuilder
 import io.qdrant.client.QdrantClient
 import io.qdrant.client.QdrantGrpcClient
 import io.qdrant.client.grpc.Collections
+import org.neo4j.driver.AuthTokens
+import org.neo4j.driver.Driver
+import org.neo4j.driver.GraphDatabase
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 @Configuration
 class ImprovementConfig {
-
     @Bean
     fun qdrantClient(): QdrantClient {
         // 1. Build the low-level gRPC channel (adjust host/port as needed)
-        val channel = ManagedChannelBuilder
-            .forAddress("localhost", 6334)
-            .usePlaintext()
-            .build()
+        val channel =
+            ManagedChannelBuilder
+                .forAddress("localhost", 6334)
+                .usePlaintext()
+                .build()
 
         // 2. Create the high-level Qdrant client
-        val qdrantClient = QdrantClient(
-            QdrantGrpcClient
-                .newBuilder(channel)
-                .build()
-        )
+        val qdrantClient =
+            QdrantClient(
+                QdrantGrpcClient
+                    .newBuilder(channel)
+                    .build(),
+            )
 
         val collections = qdrantClient.listCollectionsAsync().get()
         if (collections.none { it == QDRANTCOLLECTIONS.CONVERSATIONS }) {
@@ -40,7 +41,10 @@ class ImprovementConfig {
         return qdrantClient
     }
 
-    private fun createCollection(qdrantClient: QdrantClient, collectionName: String) {
+    private fun createCollection(
+        qdrantClient: QdrantClient,
+        collectionName: String,
+    ) {
         qdrantClient
             .createCollectionAsync(
                 collectionName,
@@ -59,10 +63,8 @@ class ImprovementConfig {
         @Value("\${memgraph.password}") private val password: String,
     ) {
         @Bean
-        fun memgraphDriver(): Driver =
-            GraphDatabase.driver(uri, AuthTokens.basic(username, password))
+        fun memgraphDriver(): Driver = GraphDatabase.driver(uri, AuthTokens.basic(username, password))
     }
-
 }
 
 object QDRANTCOLLECTIONS {

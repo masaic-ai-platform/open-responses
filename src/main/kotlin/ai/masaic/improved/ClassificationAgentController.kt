@@ -18,12 +18,12 @@ data class RunRequest(
 
 data class CommandRequest(
     val type: String,
-    val feedback: String? = null
+    val feedback: String? = null,
 )
 
 data class ErrorResponse(
     val error: String,
-    val message: String
+    val message: String,
 )
 
 /**
@@ -36,10 +36,10 @@ data class ErrorResponse(
 @RequestMapping("/agents/classificationAgent")
 class ClassificationAgentController(
     private val classificationAgent: ClassificationAgent,
-    private val agentRunRepository: AgentRunRepository
+    private val agentRunRepository: AgentRunRepository,
 ) {
     private val logger = KotlinLogging.logger {}
-    
+
     /**
      * Start a new classification run.
      * 
@@ -50,11 +50,11 @@ class ClassificationAgentController(
      */
     @PostMapping(
         "/runs",
-        produces = [MediaType.TEXT_EVENT_STREAM_VALUE]
+        produces = [MediaType.TEXT_EVENT_STREAM_VALUE],
     )
     suspend fun startRun(
         @RequestBody body: RunRequest,
-        @RequestHeader("Authorization") apiKey: String
+        @RequestHeader("Authorization") apiKey: String,
     ): Flow<ServerSentEvent<String>> {
         val runId = UUID.randomUUID().toString()
         logger.info { "Starting new classification run: runId=$runId" }
@@ -70,10 +70,10 @@ class ClassificationAgentController(
      */
     @PostMapping(
         "/runs/{runId}/resume",
-        produces = [MediaType.TEXT_EVENT_STREAM_VALUE]
+        produces = [MediaType.TEXT_EVENT_STREAM_VALUE],
     )
     suspend fun resumeRun(
-        @PathVariable runId: String
+        @PathVariable runId: String,
     ): Flow<ServerSentEvent<String>> {
         logger.info { "Resuming classification run: runId=$runId" }
         return classificationAgent.resumeFromCheckpoint(runId)
@@ -89,11 +89,11 @@ class ClassificationAgentController(
      */
     @PostMapping(
         "/runs/{runId}/command",
-        produces = [MediaType.TEXT_EVENT_STREAM_VALUE]
+        produces = [MediaType.TEXT_EVENT_STREAM_VALUE],
     )
     suspend fun command(
         @PathVariable runId: String,
-        @RequestBody req: CommandRequest
+        @RequestBody req: CommandRequest,
     ): Flow<ServerSentEvent<String>> {
         validateCommand(req)
         val cmd = toAgentCommand(req)
@@ -112,7 +112,7 @@ class ClassificationAgentController(
      */
     @GetMapping("/runs/{runId}")
     suspend fun status(
-        @PathVariable runId: String
+        @PathVariable runId: String,
     ): ResponseEntity<AgentContext> {
         val context = agentRunRepository.loadCheckpoint(runId)
         return if (context != null) {
@@ -135,7 +135,7 @@ class ClassificationAgentController(
     @GetMapping("/runs", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun listRuns(
         @RequestParam(required = false, defaultValue = "20") limit: Int,
-        @RequestParam(required = false) after: String?
+        @RequestParam(required = false) after: String?,
     ): ResponseEntity<List<AgentContext>> {
         try {
             logger.debug { "Listing runs with limit=$limit, after=$after" }
@@ -146,15 +146,13 @@ class ClassificationAgentController(
             return ResponseEntity.internalServerError().build()
         }
     }
-    
+
     /**
      * Global exception handler for non-SSE endpoints.
      */
     @ExceptionHandler(IllegalArgumentException::class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    fun handleValidationException(e: IllegalArgumentException): ErrorResponse {
-        return ErrorResponse("BadRequest", e.message ?: "Invalid request")
-    }
+    fun handleValidationException(e: IllegalArgumentException): ErrorResponse = ErrorResponse("BadRequest", e.message ?: "Invalid request")
 
     /**
      * Validate command request according to business rules.
@@ -173,12 +171,12 @@ class ClassificationAgentController(
             }
         }
     }
-    
+
     /**
      * Convert CommandRequest to AgentCommand domain object.
      */
-    private fun toAgentCommand(req: CommandRequest): AgentCommand {
-        return when (req.type) {
+    private fun toAgentCommand(req: CommandRequest): AgentCommand =
+        when (req.type) {
             "ApproveFetch" -> AgentCommand.ApproveFetch
             "ApproveAllFetch" -> AgentCommand.ApproveAllFetch
             "RejectFetch" -> AgentCommand.RejectFetch(req.feedback!!)
@@ -187,5 +185,4 @@ class ClassificationAgentController(
             "Stop" -> AgentCommand.Stop
             else -> error("Command type validation should have caught this: ${req.type}")
         }
-    }
 } 

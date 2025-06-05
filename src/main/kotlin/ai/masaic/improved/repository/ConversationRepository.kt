@@ -48,7 +48,10 @@ interface ConversationRepository {
      * @param limit The maximum number of conversations to return
      * @return A list of conversations that match the label path
      */
-    suspend fun getConversations(labelPath: String, limit: Int): List<Conversation>
+    suspend fun getConversations(
+        labelPath: String,
+        limit: Int,
+    ): List<Conversation>
 
     /**
      * Update a conversation.

@@ -53,7 +53,7 @@ class DataSetController(
     private val agentRunRepository: AgentRunRepository,
     private val embeddingsController: EmbeddingsController,
     private val completionController: CompletionController,
-    private val qdrantClient: QdrantClient
+    private val qdrantClient: QdrantClient,
 ) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper()
@@ -63,12 +63,12 @@ class DataSetController(
 
     // Data class to deserialize the model response
     data class ConversationResponse(
-        val messages: List<MessageResponse>
+        val messages: List<MessageResponse>,
     )
 
     data class MessageResponse(
         val role: String,
-        val content: String
+        val content: String,
     )
 
     // Data class to represent a row in the CSV
@@ -77,7 +77,7 @@ class DataSetController(
         val instruction: String,
         val category: String,
         val intent: String,
-        val response: String
+        val response: String,
     )
 
     @GetMapping("/classified/conversations", produces = [MediaType.APPLICATION_JSON_VALUE])
@@ -85,7 +85,7 @@ class DataSetController(
         @RequestParam(required = false, defaultValue = "20") limit: Int,
         @RequestParam(required = false, defaultValue = "desc") order: String,
         @RequestParam(required = false) after: String?,
-        @RequestParam(required = true) runId: String
+        @RequestParam(required = true) runId: String,
     ): List<Conversation> {
         try {
             // Get the agent run outcome which contains the conversation IDs
@@ -97,36 +97,38 @@ class DataSetController(
             }
             
             // Fetch all conversations
-            val conversations = conversationIds.mapNotNull { conversationId ->
-                conversationRepository.getConversation(conversationId)
-            }
+            val conversations =
+                conversationIds.mapNotNull { conversationId ->
+                    conversationRepository.getConversation(conversationId)
+                }
             
             // Sort conversations by createdAt
-            val sortedConversations = if (order.equals("asc", ignoreCase = true)) {
-                conversations.sortedBy { it.createdAt }
-            } else {
-                conversations.sortedByDescending { it.createdAt }
-            }
+            val sortedConversations =
+                if (order.equals("asc", ignoreCase = true)) {
+                    conversations.sortedBy { it.createdAt }
+                } else {
+                    conversations.sortedByDescending { it.createdAt }
+                }
             
             // Apply pagination if 'after' parameter is provided
-            val filteredConversations = if (after != null) {
-                val afterConversation = conversationRepository.getConversation(after)
-                if (afterConversation != null) {
-                    if (order.equals("asc", ignoreCase = true)) {
-                        sortedConversations.filter { it.createdAt > afterConversation.createdAt }
+            val filteredConversations =
+                if (after != null) {
+                    val afterConversation = conversationRepository.getConversation(after)
+                    if (afterConversation != null) {
+                        if (order.equals("asc", ignoreCase = true)) {
+                            sortedConversations.filter { it.createdAt > afterConversation.createdAt }
+                        } else {
+                            sortedConversations.filter { it.createdAt < afterConversation.createdAt }
+                        }
                     } else {
-                        sortedConversations.filter { it.createdAt < afterConversation.createdAt }
+                        sortedConversations
                     }
                 } else {
                     sortedConversations
                 }
-            } else {
-                sortedConversations
-            }
             
             // Apply limit
             return filteredConversations.take(limit)
-            
         } catch (e: NoSuchElementException) {
             logger.error(e) { "No AgentRunOutcome found for runId: $runId" }
             throw IllegalArgumentException("No classification run found for runId: $runId")
@@ -138,25 +140,24 @@ class DataSetController(
 
     @GetMapping("/conversations/{conversationId}", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun getConversation(
-        @PathVariable conversationId: String): Conversation {
-        return conversationRepository.getConversation(conversationId) ?: throw IllegalStateException("conversation not found")
-    }
+        @PathVariable conversationId: String,
+    ): Conversation = conversationRepository.getConversation(conversationId) ?: throw IllegalStateException("conversation not found")
 
     @GetMapping("/conversations/transcripts", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun getTranscripts(
         @RequestParam(required = false, defaultValue = "20") limit: Int,
         @RequestParam(required = false, defaultValue = "desc") order: String,
         @RequestParam(required = false) after: String?,
-        @RequestParam(required = true) domainLabel: String
+        @RequestParam(required = true) domainLabel: String,
     ): List<Transcript> {
-
         // Create params for conversation repository, including the label filter
-        val params = ListConversationsParams(
-            limit = limit,
-            after = after,
-            order = order, // Always desc on createdAt as specified in comments
-            labels = listOf(domainLabel) // Filter by domainLabel at the database layer
-        )
+        val params =
+            ListConversationsParams(
+                limit = limit,
+                after = after,
+                order = order, // Always desc on createdAt as specified in comments
+                labels = listOf(domainLabel), // Filter by domainLabel at the database layer
+            )
 
         // Get conversations already filtered by domainLabel from the repository
         val conversations = conversationRepository.listConversations(params)
@@ -164,38 +165,43 @@ class DataSetController(
         // Map conversations to transcripts, checking if each one has a generic label
         return conversations.map { conversation ->
             // Check if the conversation has any label that starts with "generic"
-            val isGenericLabelAvailable = conversation.labels.any { label ->
-                label.path.startsWith("generic")
-            }
+            val isGenericLabelAvailable =
+                conversation.labels.any { label ->
+                    label.path.startsWith("generic")
+                }
 
             // Create and return a Transcript object
             Transcript(
                 conversationId = conversation.id,
                 messages = conversation.messages,
                 isGenericLabelAvailable = isGenericLabelAvailable,
-                createdAt = conversation.createdAt
+                createdAt = conversation.createdAt,
             )
         }
     }
 
     @PostMapping("/backfill/conversations/embeddings", produces = [MediaType.APPLICATION_JSON_VALUE])
-    suspend fun backFillEmbeddings(@RequestHeader("Authorization") authHeader: String): ResponseEntity<HttpStatusCode> {
+    suspend fun backFillEmbeddings(
+        @RequestHeader("Authorization") authHeader: String,
+    ): ResponseEntity<HttpStatusCode> {
         val conversations = conversationRepository.listConversations()
         val messages = conversations.map { objectMapper.writeValueAsString(it.messages) }
 
         var globalOffset = 0
         messages.chunked(50).forEach { batchMessages ->
-            val request = CreateEmbeddingRequest(
-                input = batchMessages,
-                model = "default"
-            )
+            val request =
+                CreateEmbeddingRequest(
+                    input = batchMessages,
+                    model = "default",
+                )
 
             val embedResp = embeddingsController.createEmbedding(request, authHeader)
             val embeddings = embedResp.body?.data as List<EmbeddingData>
-            val points = embeddings.map { embedData ->
-                val conversation = conversations[globalOffset + embedData.index]
-                createConversationVectorPoint(embedData, globalOffset, conversation)
-            }
+            val points =
+                embeddings.map { embedData ->
+                    val conversation = conversations[globalOffset + embedData.index]
+                    createConversationVectorPoint(embedData, globalOffset, conversation)
+                }
             globalOffset += batchMessages.size
             qdrantClient
                 .upsertAsync(QDRANTCOLLECTIONS.CONVERSATIONS, points)
@@ -206,19 +212,20 @@ class DataSetController(
     suspend fun createConversationVectorPoint(
         embeddingData: EmbeddingData,
         offset: Int,
-        conversation: Conversation
+        conversation: Conversation,
     ): Points.PointStruct {
-        val floatArray = (embeddingData.embedding as List<*>)
-            .map { (it as Number).toFloat() }
-            .toFloatArray()
+        val floatArray =
+            (embeddingData.embedding as List<*>)
+                .map { (it as Number).toFloat() }
+                .toFloatArray()
 
-        return Points.PointStruct.newBuilder()
+        return Points.PointStruct
+            .newBuilder()
             // Use the embedding's index as the point ID (or UUID if you prefer)
             .setId(id(UUID.randomUUID()))
             // Attach the vector
             .setVectors(vectors(*floatArray))
             // Add any metadata you like; here, we store the original index and model name
-
             .putAllPayload(
                 mapOf(
                     "conversationId" to value(conversation.id),
@@ -226,61 +233,78 @@ class DataSetController(
 //                    "category" to value(conversation.meta["category"] as String),
 //                    "intent" to value(conversation.meta["intent"] as String),
                     "messages" to value(objectMapper.writeValueAsString(conversation.messages)),
-                    "createdAt" to value(conversation.createdAt.toString())
-                    )
-            )
-            .build()
+                    "createdAt" to value(conversation.createdAt.toString()),
+                ),
+            ).build()
     }
 
     @PostMapping("/backfill/conversations/domainlabels", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun assignDomainLabels(): ResponseEntity<List<String>> {
         val conversations = conversationRepository.listConversations()
-        val conversationIds = conversations.map {
-            assignDomainLabels(it.id).body?.id ?: "not_available for ${it.id}"
-        }
+        val conversationIds =
+            conversations.map {
+                assignDomainLabels(it.id).body?.id ?: "not_available for ${it.id}"
+            }
         return ResponseEntity.ok().body(conversationIds)
     }
 
     @PostMapping("/backfill/conversations/domainlabels/{conversationId}", produces = [MediaType.APPLICATION_JSON_VALUE])
-    suspend fun assignDomainLabels(@PathVariable conversationId: String): ResponseEntity<Conversation> {
-        val filter = Points.Filter.newBuilder()
-            .addMust(matchKeyword("conversationId", conversationId))
-            .build()
+    suspend fun assignDomainLabels(
+        @PathVariable conversationId: String,
+    ): ResponseEntity<Conversation> {
+        val filter =
+            Points.Filter
+                .newBuilder()
+                .addMust(matchKeyword("conversationId", conversationId))
+                .build()
 
-        val scrollReq = ScrollPoints.newBuilder()
-            .setCollectionName(QDRANTCOLLECTIONS.CONVERSATIONS)
-            .setFilter(filter)
-            .setWithVectors(Points.WithVectorsSelector.newBuilder().setEnable(true))
-            .setLimit(1)
-            .build()
+        val scrollReq =
+            ScrollPoints
+                .newBuilder()
+                .setCollectionName(QDRANTCOLLECTIONS.CONVERSATIONS)
+                .setFilter(filter)
+                .setWithVectors(Points.WithVectorsSelector.newBuilder().setEnable(true))
+                .setLimit(1)
+                .build()
 
         val points = qdrantClient.scrollAsync(scrollReq).get()
-        val messagesVector = points.resultList.first().vectors.vector.dataList.toFloatArray()
+        val messagesVector =
+            points.resultList
+                .first()
+                .vectors.vector.dataList
+                .toFloatArray()
 
-        val ruleSearchPoint = SearchPoints.newBuilder()
-            .setCollectionName(QDRANTCOLLECTIONS.LABEL_RULES)
-            .addAllVector(messagesVector.map { it })
-            .setLimit(1)
-            .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true))
-            .build()
+        val ruleSearchPoint =
+            SearchPoints
+                .newBuilder()
+                .setCollectionName(QDRANTCOLLECTIONS.LABEL_RULES)
+                .addAllVector(messagesVector.map { it })
+                .setLimit(1)
+                .setWithPayload(WithPayloadSelector.newBuilder().setEnable(true))
+                .build()
 
-        val results: List<Points.ScoredPoint> = qdrantClient
-            .searchAsync(ruleSearchPoint)
-            .get()
+        val results: List<Points.ScoredPoint> =
+            qdrantClient
+                .searchAsync(ruleSearchPoint)
+                .get()
 
-        val labelPath = results.firstOrNull { it.score >= (it.getPayloadOrThrow("threshold").doubleValue) }.let { hit ->
-            hit?.getPayloadOrDefault("label", value(""))?.stringValue
-        } ?: ""
+        val labelPath =
+            results.firstOrNull { it.score >= (it.getPayloadOrThrow("threshold").doubleValue) }.let { hit ->
+                hit?.getPayloadOrDefault("label", value(""))?.stringValue
+            } ?: ""
 
-        var conversation = conversationRepository.getConversation(conversationId)
-            ?: throw IllegalStateException("Conversation with id=$conversationId not found.")
+        var conversation =
+            conversationRepository.getConversation(conversationId)
+                ?: throw IllegalStateException("Conversation with id=$conversationId not found.")
         if (labelPath.isNotEmpty()) {
-            val labels = conversation.labels + Label(
-                path = labelPath,
-                source = LabelSource.AUTO_ALGO,
-                status = "final",
-                createdAt = Instant.now()
-            )
+            val labels =
+                conversation.labels +
+                    Label(
+                        path = labelPath,
+                        source = LabelSource.AUTO_ALGO,
+                        status = "final",
+                        createdAt = Instant.now(),
+                    )
             conversation = conversation.copy(labels = labels)
         } else {
             val metaMap = mutableMapOf<String, Any>()
@@ -294,7 +318,7 @@ class DataSetController(
 
     @GetMapping(
         "/data/export",
-        produces = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]
+        produces = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
     )
     suspend fun exportDataSet(): ResponseEntity<ByteArray> {
         logger.info { "Exporting conversations to Excel file" }
@@ -325,7 +349,7 @@ class DataSetController(
             val messagesJson = objectMapper.writeValueAsString(conversation.conversation)
             row.createCell(1).setCellValue(messagesJson)
             val labels = conversation.domainLabel.split("/")
-            if(labels.size == 3) {
+            if (labels.size == 3) {
                 row.createCell(2).setCellValue(labels[1])
                 row.createCell(3).setCellValue(labels[2])
             }
@@ -357,13 +381,13 @@ class DataSetController(
     @PostMapping(
         "/data/import",
         consumes = [MediaType.MULTIPART_FORM_DATA_VALUE, MediaType.MULTIPART_MIXED_VALUE],
-        produces = [MediaType.APPLICATION_JSON_VALUE]
+        produces = [MediaType.APPLICATION_JSON_VALUE],
     )
     suspend fun importDataSet(
         @RequestPart("file") file: FilePart,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-        @RequestParam(required = false) labelConvWithDomain: Boolean = false
+        @RequestParam(required = false) labelConvWithDomain: Boolean = false,
     ): List<String> {
         logger.info { "Processing Excel file: ${file.filename()}" }
 
@@ -390,17 +414,20 @@ class DataSetController(
         val inputStream = ByteArrayInputStream(outputStream.toByteArray())
 
         // Create the workbook from the collected data
-        val workbook = try {
-            WorkbookFactory.create(inputStream)
-        } catch (e: Exception) {
-            logger.error(e) { "Failed to open Excel file" }
-            throw IllegalArgumentException("Failed to open Excel file: ${e.message}")
-        }
+        val workbook =
+            try {
+                WorkbookFactory.create(inputStream)
+            } catch (e: Exception) {
+                logger.error(e) { "Failed to open Excel file" }
+                throw IllegalArgumentException("Failed to open Excel file: ${e.message}")
+            }
 
         val sheet = workbook.getSheetAt(0)
         val conversations = mutableListOf<Conversation>()
         val conversationMessages = mutableListOf<String>()
-        val formatter = org.apache.poi.ss.usermodel.DataFormatter()
+        val formatter =
+            org.apache.poi.ss.usermodel
+                .DataFormatter()
 
         // Iterate through rows (skip header row)
         for (rowIdx in 1 until sheet.physicalNumberOfRows) {
@@ -408,26 +435,28 @@ class DataSetController(
 
             // Get conversation_id from column 0 - handle both numeric and string cell types
             val cell0 = row.getCell(0) ?: continue
-            val conversationId = when (cell0.cellType) {
-                org.apache.poi.ss.usermodel.CellType.NUMERIC -> cell0.numericCellValue.toLong().toString()
-                org.apache.poi.ss.usermodel.CellType.STRING -> cell0.stringCellValue.trim()
-                else -> {
-                    // Try to get any value as string using DataFormatter
-                    formatter.formatCellValue(cell0).trim()
+            val conversationId =
+                when (cell0.cellType) {
+                    org.apache.poi.ss.usermodel.CellType.NUMERIC -> cell0.numericCellValue.toLong().toString()
+                    org.apache.poi.ss.usermodel.CellType.STRING -> cell0.stringCellValue.trim()
+                    else -> {
+                        // Try to get any value as string using DataFormatter
+                        formatter.formatCellValue(cell0).trim()
+                    }
                 }
-            }
 
             if (conversationId.isBlank()) continue
 
             // Get conversation JSON from column 1 - handle both string and other cell types
             val cell1 = row.getCell(1) ?: continue
-            val conversationJson = when (cell1.cellType) {
-                org.apache.poi.ss.usermodel.CellType.STRING -> cell1.stringCellValue.trim()
-                else -> {
-                    // Try to get any value as string using DataFormatter
-                    formatter.formatCellValue(cell1).trim()
+            val conversationJson =
+                when (cell1.cellType) {
+                    org.apache.poi.ss.usermodel.CellType.STRING -> cell1.stringCellValue.trim()
+                    else -> {
+                        // Try to get any value as string using DataFormatter
+                        formatter.formatCellValue(cell1).trim()
+                    }
                 }
-            }
 
             if (conversationJson.isBlank()) continue
 
@@ -439,21 +468,22 @@ class DataSetController(
                 val endDate = Instant.parse("2025-05-20T23:59:59Z")
                 val randomCreatedAt = generateRandomTimestamp(startDate, endDate)
                 // Create a Conversation object
-                val conversation = Conversation(
-                    id = conversationId,
-                    createdAt = randomCreatedAt,
-                    labels = emptyList(),
-                    meta = mapOf(
-                        "source" to "excel_import"
-                    ),
-                    version = 1
-                )
+                val conversation =
+                    Conversation(
+                        id = conversationId,
+                        createdAt = randomCreatedAt,
+                        labels = emptyList(),
+                        meta =
+                            mapOf(
+                                "source" to "excel_import",
+                            ),
+                        version = 1,
+                    )
 
                 // Save to the repository
                 conversations.add(conversation)
                 conversationMessages.add(conversationJson)
                 logger.info { "Processed conversation ID: $conversationId" }
-
             } catch (e: Exception) {
                 logger.error(e) { "Error processing row $rowIdx with conversation ID $conversationId: ${e.message}" }
                 // Continue processing other rows even if one fails
@@ -471,11 +501,12 @@ class DataSetController(
             throw IllegalStateException("no conversations found for processing.")
         }
 
-        val savedConvLog = conversations.mapIndexed{ index, converstion ->
-            val savedConversation =
-                processConversation(converstion, conversationMessages[index], headers, queryParams, labelConvWithDomain)
-            "saved conversation: ${savedConversation.id}"
-        }
+        val savedConvLog =
+            conversations.mapIndexed { index, converstion ->
+                val savedConversation =
+                    processConversation(converstion, conversationMessages[index], headers, queryParams, labelConvWithDomain)
+                "saved conversation: ${savedConversation.id}"
+            }
 
         return savedConvLog
     }
@@ -508,7 +539,7 @@ class DataSetController(
 
                         Message(
                             role = Role.fromString(role),
-                            text = content
+                            text = content,
                         )
                     }
                 } catch (e: Exception) {
@@ -587,7 +618,10 @@ class DataSetController(
     /**
      * Helper method to parse a single message string and add it to the messages list
      */
-    private fun parseMessageAndAddToList(messageStr: String, messages: MutableList<Message>) {
+    private fun parseMessageAndAddToList(
+        messageStr: String,
+        messages: MutableList<Message>,
+    ) {
         try {
             // Clean up the message string
             val cleanMessageStr = messageStr.replace("'", "\"").trim()
@@ -603,8 +637,8 @@ class DataSetController(
                 messages.add(
                     Message(
                         role = Role.fromString(role),
-                        text = content
-                    )
+                        text = content,
+                    ),
                 )
                 return
             } catch (e: Exception) {
@@ -693,8 +727,8 @@ class DataSetController(
                 messages.add(
                     Message(
                         role = Role.fromString(roleValue.toString()),
-                        text = contentValue.toString()
-                    )
+                        text = contentValue.toString(),
+                    ),
                 )
             } else {
                 logger.warn { "Could not extract role or content values: role=$roleValue, content=$contentValue" }
@@ -710,7 +744,7 @@ class DataSetController(
         @RequestParam queryParams: MultiValueMap<String, String>,
         @RequestParam(required = false) index: Int? = null,
         @RequestParam(required = false, defaultValue = "false") processAll: Boolean = false,
-        @RequestBody(required = false) requestBody: ProcessRangeRequest
+        @RequestBody(required = false) requestBody: ProcessRangeRequest,
     ): ResponseEntity<*> {
         val apiKey = headers["Authorization"]?.first() ?: throw IllegalStateException("apiKey is mandatory")
         try {
@@ -754,8 +788,8 @@ class DataSetController(
                     mapOf(
                         "message" to "Processed entries from index $startIndex to $endIndex",
                         "totalProcessed" to (endIndex - startIndex + 1),
-                        "results" to results
-                    )
+                        "results" to results,
+                    ),
                 )
             } else if (processAll) {
                 logger.info { "Processing all ${entries.size} entries from dataset" }
@@ -781,16 +815,17 @@ class DataSetController(
                 return ResponseEntity.ok().body(
                     mapOf(
                         "message" to "Processed ${entries.size} entries",
-                        "results" to results
-                    )
+                        "results" to results,
+                    ),
                 )
             } else {
                 // Process a single entry (either random or specified by index)
-                val entry = if (index != null && index < entries.size) {
-                    entries[index]
-                } else {
-                    entries.random()
-                }
+                val entry =
+                    if (index != null && index < entries.size) {
+                        entries[index]
+                    } else {
+                        entries.random()
+                    }
 
                 logger.info { "Selected entry - Category: ${entry.category}, Intent: ${entry.intent}" }
 
@@ -809,7 +844,7 @@ class DataSetController(
         entry: DataSetEntry,
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
-        labelConvWithDomain: Boolean
+        labelConvWithDomain: Boolean,
     ): Conversation {
         val apiKey = headers["Authorization"]?.first() ?: throw IllegalStateException("apiKey is mandatory")
         val conversation = generateConversationForEntry(entry, headers, queryParams)
@@ -821,18 +856,22 @@ class DataSetController(
         conversationMessages: String,
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
-        labelConvWithDomain: Boolean
+        labelConvWithDomain: Boolean,
     ): Conversation {
         val apiKey = headers["Authorization"]?.first() ?: throw IllegalStateException("apiKey is mandatory")
         val labellingResponse = generateGenericLabel(conversationMessages, headers, queryParams)
-        val messages = if (labellingResponse.messages.last().role == Role.ASSISTANT) {
-            labellingResponse.messages.dropLast(1)
-        } else labellingResponse.messages
-        val updatedConversation = conversation.copy(
-            labels = listOf(labellingResponse.toLabel()),
-            summary = labellingResponse.summary,
-            messages = messages
-        )
+        val messages =
+            if (labellingResponse.messages.last().role == Role.ASSISTANT) {
+                labellingResponse.messages.dropLast(1)
+            } else {
+                labellingResponse.messages
+            }
+        val updatedConversation =
+            conversation.copy(
+                labels = listOf(labellingResponse.toLabel()),
+                summary = labellingResponse.summary,
+                messages = messages,
+            )
 
         val savedConversation = conversationRepository.createConversation(updatedConversation)
         saveConversationVector(savedConversation, apiKey)
@@ -845,7 +884,7 @@ class DataSetController(
         conversation: Conversation,
         headers: MultiValueMap<String, String>,
         queryParams: MultiValueMap<String, String>,
-        labelConvWithDomain: Boolean
+        labelConvWithDomain: Boolean,
     ): Conversation {
         val apiKey = headers["Authorization"]?.first() ?: throw IllegalStateException("apiKey is mandatory")
         var savedConversation = conversationRepository.createConversation(conversation)
@@ -861,10 +900,11 @@ class DataSetController(
 
         if (!labelConvWithDomain || convNotLabelled) {
             val labellingResponse = generateGenericLabel(savedConversation.messages, headers, queryParams)
-            val updatedConversation = savedConversation.copy(
-                labels = listOf(labellingResponse.toLabel()),
-                summary = labellingResponse.summary
-            )
+            val updatedConversation =
+                savedConversation.copy(
+                    labels = listOf(labellingResponse.toLabel()),
+                    summary = labellingResponse.summary,
+                )
             savedConversation = conversationRepository.createConversation(updatedConversation)
         }
         return savedConversation
@@ -887,13 +927,14 @@ class DataSetController(
             var line: Array<String>?
             while (reader.readNext().also { line = it } != null) {
                 if (line!!.size >= 5 && line!![2].isNotBlank() && line!![3].isNotBlank()) {
-                    val entry = DataSetEntry(
-                        flags = line!![0],
-                        instruction = line!![1],
-                        category = line!![2],
-                        intent = line!![3],
-                        response = line!![4]
-                    )
+                    val entry =
+                        DataSetEntry(
+                            flags = line!![0],
+                            instruction = line!![1],
+                            category = line!![2],
+                            intent = line!![3],
+                            response = line!![4],
+                        )
                     entries.add(entry)
                 }
             }
@@ -914,7 +955,10 @@ class DataSetController(
      * @param endInclusive The ending Instant (inclusive)
      * @return A random Instant between the two provided Instants
      */
-    private fun generateRandomTimestamp(startInclusive: Instant, endInclusive: Instant): Instant {
+    private fun generateRandomTimestamp(
+        startInclusive: Instant,
+        endInclusive: Instant,
+    ): Instant {
         val startSeconds = startInclusive.epochSecond
         val endSeconds = endInclusive.epochSecond
         val randomSeconds = startSeconds + (Math.random() * (endSeconds - startSeconds)).toLong()
@@ -931,30 +975,32 @@ class DataSetController(
     private suspend fun generateConversationForEntry(
         entry: DataSetEntry,
         headers: MultiValueMap<String, String>,
-        queryParams: MultiValueMap<String, String>
+        queryParams: MultiValueMap<String, String>,
     ): Conversation {
         val random = Math.random()
-        val (numberOfTurns, userState) = if (random > 0.7) {
-            Pair(5, "satisfied")
-        } else if (random > 0.3 && random <= 0.6) {
-            Pair(4, "unsatisfied")
-        } else {
-            Pair(3, "negative with sentiments")
-        }
+        val (numberOfTurns, userState) =
+            if (random > 0.7) {
+                Pair(5, "satisfied")
+            } else if (random > 0.3 && random <= 0.6) {
+                Pair(4, "unsatisfied")
+            } else {
+                Pair(3, "negative with sentiments")
+            }
 
-        var pointsToRemember = if (Math.random() > 0.4) {
-            """
+        var pointsToRemember =
+            if (Math.random() > 0.4) {
+                """
             1. most of the reply form user are abstract and few words rather than complete sentences.
             2. sometime reply from user is ambiguous and assistant can ask fro clarification. 
             3. End when the user is $userState.
             4. Some of the times user never explicitly state that he is not satisfied.
             """
-        } else {
-            """
+            } else {
+                """
             1. End when the user is $userState. 
             2. Some of the times user never explicitly state that he is not satisfied.                          
             """
-        }
+            }
 
         if (userState != "satisfied") {
             pointsToRemember = """
@@ -981,37 +1027,47 @@ class DataSetController(
         User: $question
         Assistant: $answer
         """
-        val responseFormat = mapOf(
-            "type" to "json_schema",
-            "json_schema" to mapOf(
-                "name" to "conversationSchema",
-                "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(responseFormat)
+        val responseFormat =
+            mapOf(
+                "type" to "json_schema",
+                "json_schema" to
+                    mapOf(
+                        "name" to "conversationSchema",
+                        "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(responseFormat),
+                    ),
             )
-        )
-        val createCompletionRequest = CreateCompletionRequest(
-            messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
-            model = "openai@gpt-4o-mini",
-            response_format = responseFormat,
-            stream = false,
-            store = false
-        )
+        val createCompletionRequest =
+            CreateCompletionRequest(
+                messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
+                model = "openai@gpt-4o-mini",
+                response_format = responseFormat,
+                stream = false,
+                store = false,
+            )
 
         val response = completionController.createCompletion(createCompletionRequest, headers, queryParams)
         // Deserialize response into List<Message>
-        val objectMapper = jacksonObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        val objectMapper =
+            jacksonObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-        val conversationResponse = objectMapper.readValue<ConversationResponse>(
-            (response.body as ChatCompletion).choices()[0].message().content().get()
-        )
+        val conversationResponse =
+            objectMapper.readValue<ConversationResponse>(
+                (response.body as ChatCompletion)
+                    .choices()[0]
+                    .message()
+                    .content()
+                    .get(),
+            )
 
         // Instantiate Conversation without labels, nps
-        val messages = conversationResponse.messages.map { messageResponse ->
-            Message(
-                role = Role.fromString(messageResponse.role),
-                text = messageResponse.content
-            )
-        }
+        val messages =
+            conversationResponse.messages.map { messageResponse ->
+                Message(
+                    role = Role.fromString(messageResponse.role),
+                    text = messageResponse.content,
+                )
+            }
 
         // Set resolved = true if userState = satisfied
         val resolved = userState == "satisfied"
@@ -1028,23 +1084,28 @@ class DataSetController(
             labels = emptyList(),
             resolved = resolved,
             nps = null,
-            meta = mapOf(
-                "userState" to userState,
-                "numberOfTurns" to numberOfTurns,
-                "category" to entry.category,
-                "intent" to entry.intent,
-                "flags" to entry.flags
-            ),
-            version = 1
+            meta =
+                mapOf(
+                    "userState" to userState,
+                    "numberOfTurns" to numberOfTurns,
+                    "category" to entry.category,
+                    "intent" to entry.intent,
+                    "flags" to entry.flags,
+                ),
+            version = 1,
         )
     }
 
-    private suspend fun saveConversationVector(conversation: Conversation, apiKey: String) {
+    private suspend fun saveConversationVector(
+        conversation: Conversation,
+        apiKey: String,
+    ) {
         val messages = objectMapper.writeValueAsString(conversation.messages)
-        val request = CreateEmbeddingRequest(
-            input = messages,
-            model = "default"
-        )
+        val request =
+            CreateEmbeddingRequest(
+                input = messages,
+                model = "default",
+            )
 
         val embedResp = embeddingsController.createEmbedding(request, apiKey)
         val embeddings = embedResp.body?.data as List<EmbeddingData>
@@ -1054,16 +1115,18 @@ class DataSetController(
     }
 
     private suspend fun generateGenericLabel(
-        messages: List<Message>, headers: MultiValueMap<String, String>,
-        queryParams: MultiValueMap<String, String>
+        messages: List<Message>,
+        headers: MultiValueMap<String, String>,
+        queryParams: MultiValueMap<String, String>,
     ): LabellingResponse {
         val messagesJson = jacksonObjectMapper().writeValueAsString(messages.toString())
         return generateGenericLabel(messagesJson, headers, queryParams)
     }
 
     private suspend fun generateGenericLabel(
-        messagesJson: String, headers: MultiValueMap<String, String>,
-        queryParams: MultiValueMap<String, String>
+        messagesJson: String,
+        headers: MultiValueMap<String, String>,
+        queryParams: MultiValueMap<String, String>,
     ): LabellingResponse {
         val systemPrompt = """
 You are **HandoverJudgeGPT**, an expert in labeling chat transcripts with exactly one Level‑1 (L1) and one Level‑2 (L2) hand‑over code or query_resolved in case customer query is resolved.
@@ -1117,28 +1180,36 @@ For hand‑over codes:
  3. Prefer missing_info_for_context over no_kb_article when bot asked for data.
  """
 
-        val responseFormat = mapOf(
-            "type" to "json_schema",
-            "json_schema" to mapOf(
-                "name" to "labellingSchema",
-                "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(labelling_response_format)
+        val responseFormat =
+            mapOf(
+                "type" to "json_schema",
+                "json_schema" to
+                    mapOf(
+                        "name" to "labellingSchema",
+                        "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(labelling_response_format),
+                    ),
             )
-        )
-        val createCompletionRequest = CreateCompletionRequest(
-            messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
-            model = "o3-mini",
-            response_format = responseFormat,
-            stream = false,
-            store = false
-        )
+        val createCompletionRequest =
+            CreateCompletionRequest(
+                messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
+                model = "o3-mini",
+                response_format = responseFormat,
+                stream = false,
+                store = false,
+            )
 
         val response = completionController.createCompletion(createCompletionRequest, headers, queryParams)
         // Deserialize response into List<Message>
-        val objectMapper = jacksonObjectMapper()
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+        val objectMapper =
+            jacksonObjectMapper()
+                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
         return objectMapper.readValue<LabellingResponse>(
-            (response.body as ChatCompletion).choices()[0].message().content().get()
+            (response.body as ChatCompletion)
+                .choices()[0]
+                .message()
+                .content()
+                .get(),
         )
     }
 }
@@ -1240,24 +1311,29 @@ const val labelling_response_format = """
 data class ProcessRangeRequest(
     val startIndex: Int? = null,
     val endIndex: Int? = null,
-    val labelConvWithDomain: Boolean = false
+    val labelConvWithDomain: Boolean = false,
 )
 
-data class LabellingResponse(val level1: String, val level2: String, val reason: String, val summary: String, val messages: List<Message> = emptyList()) {
-    fun toLabel(): Label {
-        return Label(
+data class LabellingResponse(
+    val level1: String,
+    val level2: String,
+    val reason: String,
+    val summary: String,
+    val messages: List<Message> = emptyList(),
+) {
+    fun toLabel(): Label =
+        Label(
             path = "generic/$level1/$level2",
             source = LabelSource.AUTO,
             status = "final",
             reason = reason,
-            createdAt = Instant.now()
+            createdAt = Instant.now(),
         )
-    }
 }
 
 data class Transcript(
     val conversationId: String,
     val messages: List<Message>,
     val isGenericLabelAvailable: Boolean,
-    val createdAt: Instant
+    val createdAt: Instant,
 )

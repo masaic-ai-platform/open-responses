@@ -3,6 +3,16 @@ memgraph:
   username: ""
   password: ""
 
+# E2B Code Interpreter configuration
+e2b:
+  api:
+    key: ${E2B_API_KEY:}
+
+# Piston Code Executor configuration
+piston:
+  api:
+    url: ${PISTON_API_URL:http://localhost:2000}
+
 improved:
   graph:
     enabled: true

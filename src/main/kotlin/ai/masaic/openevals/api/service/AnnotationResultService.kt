@@ -294,10 +294,9 @@ class AnnotationResultService(
                 Level1Aggregation(
                     name = level1Value,
                     count = level2Counts.values.sum(),
-                    level2 = createLevel2Aggregations(level2Counts)
+                    level2 = createLevel2Aggregations(level2Counts),
                 )
-            }
-            .sortedByDescending { it.count }
+            }.sortedByDescending { it.count }
     }
 
     /**

@@ -5,7 +5,6 @@ import ai.masaic.improved.model.ListConversationsParams
 import mu.KotlinLogging
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Repository
-import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -33,7 +32,11 @@ class InMemoryConversationRepository : ConversationRepository {
             // Generate an id if it's not provided or empty
             val conversationWithId =
                 if (conversation.id.isBlank()) {
-                    val uuid = java.util.UUID.randomUUID().toString().replace("-", "")
+                    val uuid =
+                        java.util.UUID
+                            .randomUUID()
+                            .toString()
+                            .replace("-", "")
                     conversation.copy(id = "conv_$uuid")
                 } else {
                     conversation
@@ -96,39 +99,43 @@ class InMemoryConversationRepository : ConversationRepository {
             
             // Apply label filter if provided
             if (params.labels != null && params.labels.isNotEmpty()) {
-                filteredConversations = filteredConversations.filter { conversation ->
-                    params.labels.any { labelPath ->
-                        conversation.labels.any { it.path == labelPath }
+                filteredConversations =
+                    filteredConversations.filter { conversation ->
+                        params.labels.any { labelPath ->
+                            conversation.labels.any { it.path == labelPath }
+                        }
                     }
-                }
             }
             
             // Apply metadata filter if provided
             if (params.meta != null && params.meta.isNotEmpty()) {
-                filteredConversations = filteredConversations.filter { conversation ->
-                    params.meta.all { (key, value) ->
-                        conversation.meta[key] == value
+                filteredConversations =
+                    filteredConversations.filter { conversation ->
+                        params.meta.all { (key, value) ->
+                            conversation.meta[key] == value
+                        }
                     }
-                }
             }
             
             // Apply sorting
-            filteredConversations = if (params.order.equals("asc", ignoreCase = true)) {
-                filteredConversations.sortedBy { it.createdAt }
-            } else {
-                filteredConversations.sortedByDescending { it.createdAt }
-            }
+            filteredConversations =
+                if (params.order.equals("asc", ignoreCase = true)) {
+                    filteredConversations.sortedBy { it.createdAt }
+                } else {
+                    filteredConversations.sortedByDescending { it.createdAt }
+                }
             
             // Apply "after" cursor pagination
             if (params.after != null) {
                 val afterConversation = getConversation(params.after)
                 if (afterConversation != null) {
                     val afterTimestamp = afterConversation.createdAt
-                    filteredConversations = if (params.order.equals("asc", ignoreCase = true)) {
-                        filteredConversations.filter { it.createdAt > afterTimestamp }
-                    } else {
-                        filteredConversations.filter { it.createdAt < afterTimestamp }
-                    }
+                    filteredConversations =
+                        if (params.order.equals("asc", ignoreCase = true)) {
+                            filteredConversations.filter { it.createdAt > afterTimestamp }
+                        } else {
+                            filteredConversations.filter { it.createdAt < afterTimestamp }
+                        }
                 }
             }
             
@@ -137,11 +144,12 @@ class InMemoryConversationRepository : ConversationRepository {
                 val beforeConversation = getConversation(params.before)
                 if (beforeConversation != null) {
                     val beforeTimestamp = beforeConversation.createdAt
-                    filteredConversations = if (params.order.equals("asc", ignoreCase = true)) {
-                        filteredConversations.filter { it.createdAt < beforeTimestamp }
-                    } else {
-                        filteredConversations.filter { it.createdAt > beforeTimestamp }
-                    }
+                    filteredConversations =
+                        if (params.order.equals("asc", ignoreCase = true)) {
+                            filteredConversations.filter { it.createdAt < beforeTimestamp }
+                        } else {
+                            filteredConversations.filter { it.createdAt > beforeTimestamp }
+                        }
                 }
             }
             
@@ -204,13 +212,15 @@ class InMemoryConversationRepository : ConversationRepository {
      * @param limit The maximum number of conversations to return
      * @return A list of conversations that match the label path
      */
-    override suspend fun getConversations(labelPath: String, limit: Int): List<Conversation> {
+    override suspend fun getConversations(
+        labelPath: String,
+        limit: Int,
+    ): List<Conversation> {
         try {
             return conversations.values
                 .filter { conversation ->
                     conversation.labels.any { it.path == labelPath }
-                }
-                .sortedByDescending { it.createdAt }
+                }.sortedByDescending { it.createdAt }
                 .take(limit)
         } catch (e: Exception) {
             logger.error(e) { "Error finding conversations with label path: $labelPath" }

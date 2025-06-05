@@ -12,8 +12,9 @@ import org.springframework.stereotype.Repository
 import java.time.Instant
 
 @Repository
-class AgentRunRepository(private val reactiveMongoTemplate: ReactiveMongoTemplate) {
-
+class AgentRunRepository(
+    private val reactiveMongoTemplate: ReactiveMongoTemplate,
+) {
     private val logger = KotlinLogging.logger {}
 
     companion object {
@@ -21,9 +22,7 @@ class AgentRunRepository(private val reactiveMongoTemplate: ReactiveMongoTemplat
         const val AGENT_RUNS_OUTCOME_COLLECTION = "agent_runs_outcome"
     }
 
-    suspend fun loadCheckpoint(runId: String): AgentContext? {
-        return reactiveMongoTemplate.findById<AgentContext>(runId, AGENT_RUNS_COLLECTION).awaitSingleOrNull()
-    }
+    suspend fun loadCheckpoint(runId: String): AgentContext? = reactiveMongoTemplate.findById<AgentContext>(runId, AGENT_RUNS_COLLECTION).awaitSingleOrNull()
 
     suspend fun saveCheckpoint(context: AgentContext) {
         val updatedContext = context.copy(updatedAt = java.time.Instant.now(), stateName = context.state.javaClass.simpleName)
@@ -37,9 +36,10 @@ class AgentRunRepository(private val reactiveMongoTemplate: ReactiveMongoTemplat
 
     suspend fun getAgentRunOutcomeByRunId(runId: String): AgentRunOutcome {
         val query = Query(Criteria.where("runId").`is`(runId))
-        val result = reactiveMongoTemplate
-            .findOne(query, AgentRunOutcome::class.java, AGENT_RUNS_OUTCOME_COLLECTION)
-            .awaitSingleOrNull()
+        val result =
+            reactiveMongoTemplate
+                .findOne(query, AgentRunOutcome::class.java, AGENT_RUNS_OUTCOME_COLLECTION)
+                .awaitSingleOrNull()
 
         return result
             ?: throw NoSuchElementException("No AgentRunOutcome found for runId: $runId")
@@ -47,7 +47,7 @@ class AgentRunRepository(private val reactiveMongoTemplate: ReactiveMongoTemplat
 
     suspend fun listRuns(
         limit: Int = 20,
-        after: String? = null
+        after: String? = null,
     ): List<AgentContext> {
         try {
             val query = Query()
@@ -66,7 +66,8 @@ class AgentRunRepository(private val reactiveMongoTemplate: ReactiveMongoTemplat
             // Set limit
             query.limit(limit)
             
-            return reactiveMongoTemplate.find(query, AgentContext::class.java, AGENT_RUNS_COLLECTION)
+            return reactiveMongoTemplate
+                .find(query, AgentContext::class.java, AGENT_RUNS_COLLECTION)
                 .collectList()
                 .awaitFirst()
         } catch (e: Exception) {
@@ -74,5 +75,4 @@ class AgentRunRepository(private val reactiveMongoTemplate: ReactiveMongoTemplat
             return emptyList()
         }
     }
-
 }

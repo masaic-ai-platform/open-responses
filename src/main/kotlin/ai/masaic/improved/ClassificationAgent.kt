@@ -1,7 +1,7 @@
 package ai.masaic.improved
 
-import ai.masaic.improved.model.Conversation
 import ai.masaic.improved.model.CLASSIFICATION
+import ai.masaic.improved.model.Conversation
 import ai.masaic.improved.repository.ConversationRepository
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -31,7 +31,7 @@ data class AgentConfig(
     val maxModelCalls: Int = 10,
     val maxPlans: Int = 5,
     val maxBatch: Int = 10,
-    val checkIntervalMs: Long = 1000
+    val checkIntervalMs: Long = 1000,
 )
 
 /**
@@ -39,15 +39,31 @@ data class AgentConfig(
  */
 sealed interface AgentState {
     data object Planning : AgentState
+
     data object Fetching : AgentState
+
     data object Classifying : AgentState
+
     data object Saving : AgentState
+
     data object Summarizing : AgentState
+
     data object Completed : AgentState
+
     data object Stopped : AgentState
-    data class Error(val message: String) : AgentState
-    data class AwaitingFetchApproval(val fetchedConversations: List<Conversation>, val plan: ConvClassificationPlan) : AgentState
-    data class AwaitingBatchApproval(val classifications: List<ClassificationOutput>) : AgentState
+
+    data class Error(
+        val message: String,
+    ) : AgentState
+
+    data class AwaitingFetchApproval(
+        val fetchedConversations: List<Conversation>,
+        val plan: ConvClassificationPlan,
+    ) : AgentState
+
+    data class AwaitingBatchApproval(
+        val classifications: List<ClassificationOutput>,
+    ) : AgentState
 }
 
 /**
@@ -55,12 +71,22 @@ sealed interface AgentState {
  */
 sealed interface AgentCommand {
     data object ApproveFetch : AgentCommand
+
     data object ApproveAllFetch : AgentCommand
-    data class RejectFetch(val feedback: String) : AgentCommand
+
+    data class RejectFetch(
+        val feedback: String,
+    ) : AgentCommand
+
     data object ApproveBatch : AgentCommand
-    data class RejectBatch(val feedback: String) : AgentCommand
+
+    data class RejectBatch(
+        val feedback: String,
+    ) : AgentCommand
+
     data object Stop : AgentCommand
-    data object NoOpCommand: AgentCommand
+
+    data object NoOpCommand : AgentCommand
     
     // Keep legacy commands for backward compatibility
 //    data object ApprovePlan : AgentCommand
@@ -70,7 +96,7 @@ sealed interface AgentCommand {
 /**
  * Context object that holds the agent's execution state and progress.
  */
-data class  AgentContext(
+data class AgentContext(
     @Id
     val runId: String,
     val apiKey: String,
@@ -92,13 +118,13 @@ data class  AgentContext(
     var createdAt: Instant = Instant.now(),
     var updatedAt: Instant = Instant.now(),
     var approvalFetchCommandExecuted: AgentCommand = AgentCommand.NoOpCommand,
-    var approvalBatchCommandExecuted: AgentCommand = AgentCommand.NoOpCommand
+    var approvalBatchCommandExecuted: AgentCommand = AgentCommand.NoOpCommand,
 )
 
 data class AgentRunOutcome(
     val conversationIds: List<String>,
     val runId: String,
-    val createdAt: Instant = Instant.now()
+    val createdAt: Instant = Instant.now(),
 )
 
 /**
@@ -107,7 +133,7 @@ data class AgentRunOutcome(
 data class BatchData(
     val conversationIds: List<String>,
     val classifications: List<Map<String, String>>,
-    val progress: Int
+    val progress: Int,
 )
 
 /**
@@ -116,7 +142,7 @@ data class BatchData(
 data class FinalData(
     val allConversationIds: List<String>,
     val totalClassified: Int,
-    val runId: String
+    val runId: String,
 )
 
 /**
@@ -144,7 +170,7 @@ suspend fun FlowCollector<ServerSentEvent<String>>.streamText(
  */
 suspend fun FlowCollector<ServerSentEvent<String>>.emitDataEvent(
     eventType: String,
-    data: Any
+    data: Any,
 ) {
     val eventData = BroadcastEvent(eventType, "", data = data)
     emit(eventData.toSSE())
@@ -168,16 +194,20 @@ class ClassificationAgent(
     private val conversationRepository: ConversationRepository,
     private val reactiveMongoTemplate: ReactiveMongoTemplate,
     private val agentRunRepository: AgentRunRepository,
-    private val config: AgentConfig
+    private val config: AgentConfig,
 ) {
     private val logger = KotlinLogging.logger {}
     private val mapper = jacksonObjectMapper()
-    
+
     /**
      * Start a new classification run.
      * Returns a Flow of Server-Sent Events for real-time progress updates.
      */
-    suspend fun run(runId: String, apiKey: String, userInstructions: String = ""): Flow<ServerSentEvent<String>> {
+    suspend fun run(
+        runId: String,
+        apiKey: String,
+        userInstructions: String = "",
+    ): Flow<ServerSentEvent<String>> {
         val context = AgentContext(runId, apiKey, userInstructions)
         return executeAgent(context, isResume = false)
     }
@@ -186,29 +216,35 @@ class ClassificationAgent(
      * Resume agent from checkpoint.
      */
     suspend fun resumeFromCheckpoint(runId: String): Flow<ServerSentEvent<String>> {
-        val context = agentRunRepository.loadCheckpoint(runId)
-            ?: return flowOf(BroadcastEvent("agent.run.error", "No checkpoint found for runId: $runId").toSSE())
+        val context =
+            agentRunRepository.loadCheckpoint(runId)
+                ?: return flowOf(BroadcastEvent("agent.run.error", "No checkpoint found for runId: $runId").toSSE())
         
         return executeAgent(context, isResume = true)
     }
-    
+
     /**
      * Submit a command to handle HITL interactions for a specific run.
      * Handles both plan and batch approval workflows.
      */
-    suspend fun handleCommand(runId: String, command: AgentCommand): Flow<ServerSentEvent<String>> {
-        val context = agentRunRepository.loadCheckpoint(runId)
-            ?: return flowOf(BroadcastEvent("agent.run.error", "No checkpoint found for runId: $runId").toSSE())
+    suspend fun handleCommand(
+        runId: String,
+        command: AgentCommand,
+    ): Flow<ServerSentEvent<String>> {
+        val context =
+            agentRunRepository.loadCheckpoint(runId)
+                ?: return flowOf(BroadcastEvent("agent.run.error", "No checkpoint found for runId: $runId").toSSE())
         
         return flow {
-            val result = when (context.state) {
-                is AgentState.AwaitingFetchApproval -> handleFetchApproval(context, command)
-                is AgentState.AwaitingBatchApproval -> handleBatchApproval(context, command)
-                else -> {
-                    event("agent.run.error", "Agent is not awaiting user input. Current state: ${context.state::class.simpleName}")
-                    return@flow
+            val result =
+                when (context.state) {
+                    is AgentState.AwaitingFetchApproval -> handleFetchApproval(context, command)
+                    is AgentState.AwaitingBatchApproval -> handleBatchApproval(context, command)
+                    else -> {
+                        event("agent.run.error", "Agent is not awaiting user input. Current state: ${context.state::class.simpleName}")
+                        return@flow
+                    }
                 }
-            }
             
             if (result.shouldContinue) {
                 agentRunRepository.saveCheckpoint(context)
@@ -218,13 +254,13 @@ class ClassificationAgent(
             }
         }
     }
-    
+
     /**
      * Handle fetch approval commands
      */
     private suspend fun FlowCollector<ServerSentEvent<String>>.handleFetchApproval(
-        context: AgentContext, 
-        command: AgentCommand
+        context: AgentContext,
+        command: AgentCommand,
     ): CommandResult {
         val fetchState = context.state as AgentState.AwaitingFetchApproval
         
@@ -270,13 +306,13 @@ class ClassificationAgent(
             }
         }
     }
-    
+
     /**
      * Handle batch approval commands
      */
-    private suspend fun FlowCollector<ServerSentEvent<String>>. handleBatchApproval(
-        context: AgentContext, 
-        command: AgentCommand
+    private suspend fun FlowCollector<ServerSentEvent<String>>.handleBatchApproval(
+        context: AgentContext,
+        command: AgentCommand,
     ): CommandResult {
         val batchState = context.state as AgentState.AwaitingBatchApproval
         
@@ -290,13 +326,15 @@ class ClassificationAgent(
                 context.allConversationIds.addAll(batchState.classifications.map { it.conversationId })
                 
                 // Emit batch data
-                val batchData = BatchData(
-                    conversationIds = batchState.classifications.map { it.conversationId },
-                    classifications = batchState.classifications.map { 
-                        mapOf("id" to it.conversationId, "label" to it.classification.name)
-                    },
-                    progress = progressPercent(context.totalConversationsClassified, context.targetSampleSize)
-                )
+                val batchData =
+                    BatchData(
+                        conversationIds = batchState.classifications.map { it.conversationId },
+                        classifications =
+                            batchState.classifications.map { 
+                                mapOf("id" to it.conversationId, "label" to it.classification.name)
+                            },
+                        progress = progressPercent(context.totalConversationsClassified, context.targetSampleSize),
+                    )
 
                 // Generate and stream batch summary
                 val batchSummary = generateBatchSummary(context, batchState.classifications)
@@ -305,10 +343,11 @@ class ClassificationAgent(
                 context.approvalBatchCommandExecuted = AgentCommand.ApproveBatch
                 
                 // Continue to next state
-                context.state = when {
-                    context.totalConversationsClassified >= context.targetSampleSize -> AgentState.Summarizing
-                    else -> AgentState.Fetching
-                }
+                context.state =
+                    when {
+                        context.totalConversationsClassified >= context.targetSampleSize -> AgentState.Summarizing
+                        else -> AgentState.Fetching
+                    }
                 
                 CommandResult(shouldContinue = true)
             }
@@ -330,16 +369,21 @@ class ClassificationAgent(
             }
         }
     }
-    
+
     /**
      * Result of command processing
      */
-    private data class CommandResult(val shouldContinue: Boolean)
+    private data class CommandResult(
+        val shouldContinue: Boolean,
+    )
 
     /**
      * Core execution engine shared by run() and resumeFromCheckpoint()
      */
-    private suspend fun executeAgent(context: AgentContext, isResume: Boolean): Flow<ServerSentEvent<String>> {
+    private suspend fun executeAgent(
+        context: AgentContext,
+        isResume: Boolean,
+    ): Flow<ServerSentEvent<String>> {
         return flow {
             if (!isResume) {
                 event("agent.run.started", "Classification agent started successfully", runId = context.runId)
@@ -389,15 +433,19 @@ class ClassificationAgent(
                         }
                         is AgentState.Completed -> {
                             // Emit final data
-                            val finalData = FinalData(
-                                allConversationIds = context.allConversationIds,
-                                totalClassified = context.totalConversationsClassified,
-                                runId = context.runId
-                            )
+                            val finalData =
+                                FinalData(
+                                    allConversationIds = context.allConversationIds,
+                                    totalClassified = context.totalConversationsClassified,
+                                    runId = context.runId,
+                                )
 
                             agentRunRepository.saveAgentRunOutcome(AgentRunOutcome(runId = context.runId, conversationIds = context.allConversationIds))
-                            event("agent.run.completed", 
-                                  "Classification completed successfully! ${context.totalConversationsClassified} conversations classified.", runId = context.runId)
+                            event(
+                                "agent.run.completed", 
+                                "Classification completed successfully! ${context.totalConversationsClassified} conversations classified.",
+                                runId = context.runId,
+                            )
                         }
                         is AgentState.Stopped -> {
                             event("agent.run.stopped", "Agent execution stopped")
@@ -420,14 +468,14 @@ class ClassificationAgent(
     /**
      * Check if the agent should continue executing based on current state.
      */
-    private fun shouldContinueExecution(context: AgentContext): Boolean {
-        return when (context.state) {
+    private fun shouldContinueExecution(context: AgentContext): Boolean =
+        when (context.state) {
             is AgentState.Completed, 
             is AgentState.Stopped, 
-            is AgentState.Error -> false
+            is AgentState.Error,
+            -> false
             else -> true
         }
-    }
 
     /**
      * Handle the Planning state - create or update the classification plan.
@@ -460,7 +508,7 @@ class ClassificationAgent(
             return
         }
 
-        if(isAllFetchNotApproved) {
+        if (isAllFetchNotApproved) {
             event("agent.run.fetching.started", "Fetching up to $batchSize conversations for classification...")
         }
 
@@ -506,7 +554,7 @@ class ClassificationAgent(
         event("agent.run.fetching.completed", "Fetched ${conversations.size} conversations successfully")
         
         // Transition to awaiting fetch approval with the fetched data and current plan
-        when(context.approvalFetchCommandExecuted) {
+        when (context.approvalFetchCommandExecuted) {
             is AgentCommand.ApproveAllFetch -> context.state = AgentState.Classifying
             else -> context.state = AgentState.AwaitingFetchApproval(conversations, context.currentPlan!!)
         }
@@ -531,21 +579,24 @@ class ClassificationAgent(
             return
         }
 
-        if(context.approvalBatchCommandExecuted == AgentCommand.ApproveBatch) {
+        if (context.approvalBatchCommandExecuted == AgentCommand.ApproveBatch) {
             event("agent.run.classifying_next_batch", "Starting with next batch of size: ${conversations.size}")
             streamText("agent.run.classifying_next_batch", "Starting with next batch for classification of ${conversations.size} conversations.")
         }
 
-        event("agent.run.classifying.started", 
-              "Classifying ${conversations.size} conversations using AI model...")
+        event(
+            "agent.run.classifying.started", 
+            "Classifying ${conversations.size} conversations using AI model...",
+        )
         
         event("agent.run.output_text.started", "Generating classifications...")
         
-        val classifications = classifyConversations(
-            context.apiKey, 
-            conversations, 
-            context.currentPlan?.additionalInstructions ?: ""
-        )
+        val classifications =
+            classifyConversations(
+                context.apiKey, 
+                conversations, 
+                context.currentPlan?.additionalInstructions ?: "",
+            )
         
         event("agent.run.output_text.done")
         context.modelCallCount++
@@ -555,8 +606,11 @@ class ClassificationAgent(
 
         val progressPercent = progressPercent(context.totalConversationsClassified + classifications.size, context.targetSampleSize)
         
-        event("agent.run.classifying.completed", 
-              "Successfully classified ${classifications.size} conversations ($progressPercent% complete)", runId = context.runId)
+        event(
+            "agent.run.classifying.completed", 
+            "Successfully classified ${classifications.size} conversations ($progressPercent% complete)",
+            runId = context.runId,
+        )
 
         // Transition to awaiting batch approval
         context.state = AgentState.AwaitingBatchApproval(classifications)
@@ -581,8 +635,11 @@ class ClassificationAgent(
 
         val progressPercent = progressPercent(context.totalConversationsClassified, context.targetSampleSize)
         
-        event("agent.run.saving.completed", 
-              "Saved $savedCount classifications. Total progress: ${context.totalConversationsClassified}/${context.targetSampleSize} ($progressPercent%)", runId = context.runId)
+        event(
+            "agent.run.saving.completed", 
+            "Saved $savedCount classifications. Total progress: ${context.totalConversationsClassified}/${context.targetSampleSize} ($progressPercent%)",
+            runId = context.runId,
+        )
 
         // Clear the processed data from context
         context.fetchedConversations = emptyList()
@@ -610,7 +667,7 @@ class ClassificationAgent(
         streamText("agent.run.summary", summary)
         event("agent.run.summarizing.completed", "Summary generated successfully")
 
-        if(context.totalConversationsClassified == 0) {
+        if (context.totalConversationsClassified == 0) {
             context.state = AgentState.Stopped
         } else {
             context.state = AgentState.Completed
@@ -625,22 +682,27 @@ class ClassificationAgent(
         val fetchState = context.state as AgentState.AwaitingFetchApproval
         
         // Prepare approval data with both plan and fetched conversations
-        val approvalData = mapOf(
-            "plan" to mapOf(
-                "targetSampleSize" to fetchState.plan.targetSampleSize,
-                "planDetails" to fetchState.plan.planDetails,
-                "additionalInstructions" to fetchState.plan.additionalInstructions
-            ),
-            "fetchedData" to mapOf(
-                "conversationCount" to fetchState.fetchedConversations.size,
-                "conversationIds" to fetchState.fetchedConversations.map { it.id }, // Show first 10 IDs
+        val approvalData =
+            mapOf(
+                "plan" to
+                    mapOf(
+                        "targetSampleSize" to fetchState.plan.targetSampleSize,
+                        "planDetails" to fetchState.plan.planDetails,
+                        "additionalInstructions" to fetchState.plan.additionalInstructions,
+                    ),
+                "fetchedData" to
+                    mapOf(
+                        "conversationCount" to fetchState.fetchedConversations.size,
+                        "conversationIds" to fetchState.fetchedConversations.map { it.id }, // Show first 10 IDs
+                    ),
             )
-        )
         
-        event("agent.run.awaiting_fetch_approval", 
-              "Waiting for approval of fetched data (${fetchState.fetchedConversations.size} conversations)", 
-              approvalData, 
-              context.runId)
+        event(
+            "agent.run.awaiting_fetch_approval", 
+            "Waiting for approval of fetched data (${fetchState.fetchedConversations.size} conversations)", 
+            approvalData, 
+            context.runId,
+        )
         
         // Save state and exit flow - user will submit command separately
         agentRunRepository.saveCheckpoint(context)
@@ -651,9 +713,10 @@ class ClassificationAgent(
      */
     private suspend fun FlowCollector<ServerSentEvent<String>>.handleAwaitingBatchApprovalState(context: AgentContext) {
         // Show first 5 classifications for approval
-        val previewClassifications = context.pendingClassifications.map {
-            mapOf("id" to it.conversationId, "label" to it.classification.name)
-        }
+        val previewClassifications =
+            context.pendingClassifications.map {
+                mapOf("id" to it.conversationId, "label" to it.classification.name)
+            }
         
         event("agent.run.awaiting_batch_approval", "Waiting for batch approval", previewClassifications)
         
@@ -669,7 +732,7 @@ class ClassificationAgent(
         type: String,
         msg: String = "",
         details: Any? = null,
-        runId: String ?= null
+        runId: String? = null,
     ) {
         val eventData = BroadcastEvent(type, msg, details, runId)
         emit(eventData.toSSE())
@@ -678,9 +741,10 @@ class ClassificationAgent(
     /**
      * Calculate progress percentage rounded to nearest integer.
      */
-    private fun progressPercent(current: Int, target: Int): Int {
-        return if (target > 0) ((current.toDouble() / target) * 100).roundToInt() else 0
-    }
+    private fun progressPercent(
+        current: Int,
+        target: Int,
+    ): Int = if (target > 0) ((current.toDouble() / target) * 100).roundToInt() else 0
 
     /**
      * Create a classification plan using LLM with structured output.
@@ -691,15 +755,22 @@ class ClassificationAgent(
             throw IllegalStateException("Maximum number of plans (${config.maxPlans}) reached")
         }
         
-        val progressInfo = if (context.totalConversationsClassified > 0) {
-            "Progress so far: ${context.totalConversationsClassified} conversations already classified."
-        } else ""
+        val progressInfo =
+            if (context.totalConversationsClassified > 0) {
+                "Progress so far: ${context.totalConversationsClassified} conversations already classified."
+            } else {
+                ""
+            }
         
-        val replanningContext = if (context.replanningReason.isNotEmpty()) {
-            "REPLANNING CONTEXT: This is a replanning attempt triggered by: ${context.replanningReason}. Please analyze failures and adjust strategy accordingly."
-        } else ""
+        val replanningContext =
+            if (context.replanningReason.isNotEmpty()) {
+                "REPLANNING CONTEXT: This is a replanning attempt triggered by: ${context.replanningReason}. Please analyze failures and adjust strategy accordingly."
+            } else {
+                ""
+            }
 
-        val prompt = """
+        val prompt =
+            """
 You are a conversation classification planner. Your task is to analyze user instructions and create a plan for 
 sampling and classifying conversations. You need to determine:
 
@@ -727,15 +798,17 @@ Today's date is ${Instant.now()}
 $progressInfo
 
 $replanningContext
-""".trimIndent()
+            """.trimIndent()
 
-        val responseFormat = mapOf(
-            "type" to "json_schema",
-            "json_schema" to mapOf(
-                "name" to "planningSchema",
-                "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(planningResponseFormat)
+        val responseFormat =
+            mapOf(
+                "type" to "json_schema",
+                "json_schema" to
+                    mapOf(
+                        "name" to "planningSchema",
+                        "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(planningResponseFormat),
+                    ),
             )
-        )
 
         val messages = mutableListOf(mapOf("role" to "system", "content" to prompt))
         if (context.userInstructions.isNotEmpty()) {
@@ -745,18 +818,19 @@ $replanningContext
             messages.add(mapOf("role" to "user", "content" to "Failures in the past runs: ${context.failureLogs}"))
         }
 
-        val request = CreateCompletionRequest(
-            messages = messages,
-            model = "openai@gpt-4.1",
-            response_format = responseFormat,
-            stream = false,
-            store = false
-        )
+        val request =
+            CreateCompletionRequest(
+                messages = messages,
+                model = "openai@gpt-4.1",
+                response_format = responseFormat,
+                stream = false,
+                store = false,
+            )
 
         val response = modelService.fetchCompletionPayload(request, context.apiKey)
         val plan = mapper.readValue<ConvClassificationPlan>(response)
 
-        //TEMP hack to deal with mongo plan persistence issue with key like map.category etc
+        // TEMP hack to deal with mongo plan persistence issue with key like map.category etc
         val finalPlanForPersistence = plan.copy(mongoQueryMapJson = mapper.writeValueAsString(plan.mongoQueryMap), mongoQueryMap = emptyMap())
 
         // Update context with plan details
@@ -781,63 +855,73 @@ $replanningContext
      */
     private suspend fun fetchUnclassifiedConversations(
         limit: Int,
-        mongoQueryMapJson: String
-    ): FunctionResult<List<Conversation>> {
-        return try {
+        mongoQueryMapJson: String,
+    ): FunctionResult<List<Conversation>> =
+        try {
             val queryDoc = Document.parse(mongoQueryMapJson)
             val basicQuery = BasicQuery(queryDoc).limit(limit)
 
-            FunctionResult(data = reactiveMongoTemplate
-                .find(basicQuery, Conversation::class.java, "labelled_conversations")
-                .collectList()
-                .awaitSingle())
-
+            FunctionResult(
+                data =
+                    reactiveMongoTemplate
+                        .find(basicQuery, Conversation::class.java, "labelled_conversations")
+                        .collectList()
+                        .awaitSingle(),
+            )
         } catch (ex: Exception) {
             FunctionResult(isSuccess = false, failureLog = ex.message ?: "Unknown error during fetch")
         }
-    }
 
     /**
      * Classify conversations using LLM with structured output.
      */
     private suspend fun classifyConversations(
-        apiKey: String, 
-        conversations: List<Conversation>, 
-        userInstructions: String
+        apiKey: String,
+        conversations: List<Conversation>,
+        userInstructions: String,
     ): List<ClassificationOutput> {
         require(conversations.isNotEmpty()) { "conversations can't be empty" }
         
-        val prompt = """
+        val prompt =
+            """
 You are a customer service conversations Classification Agent. Your goal is to classify the given set of conversations into two categories RESOLVED / UNRESOLVED.
 You are provided with:
 - conversationId : unique identifier for conversation.
 - messages: array of conversation messages between user and assistant.
-""".trimIndent()
+            """.trimIndent()
 
-        val responseFormat = mapOf(
-            "type" to "json_schema",
-            "json_schema" to mapOf(
-                "name" to "classificationSchema",
-                "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(classificationResponseFormat)
+        val responseFormat =
+            mapOf(
+                "type" to "json_schema",
+                "json_schema" to
+                    mapOf(
+                        "name" to "classificationSchema",
+                        "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(classificationResponseFormat),
+                    ),
             )
-        )
 
-        val userMessage = mapOf("role" to "user", "content" to conversations.joinToString("\n") { 
-            "conversationId: ${it.id}, messages: ${it.messages}" 
-        })
+        val userMessage =
+            mapOf(
+                "role" to "user",
+                "content" to
+                    conversations.joinToString("\n") { 
+                        "conversationId: ${it.id}, messages: ${it.messages}" 
+                    },
+            )
         
         val messages = mutableListOf(mapOf("role" to "system", "content" to prompt), userMessage)
         if (userInstructions.isNotEmpty()) {
             messages.add(mapOf("role" to "user", "content" to userInstructions))
         }
 
-        val request = CreateCompletionRequest(
-            messages = messages,
-            model = "openai@gpt-4o-mini",
-            response_format = responseFormat,
-            stream = false,
-            store = false
-        )
+        val request =
+            CreateCompletionRequest(
+                messages = messages,
+                model = "openai@gpt-4o-mini",
+                response_format = responseFormat,
+                stream = false,
+                store = false,
+            )
 
         return try {
             val response: ClassificationOutputResponse = modelService.createCompletion(request, apiKey)
@@ -856,8 +940,9 @@ You are provided with:
         
         for (classification in classifications) {
             try {
-                val conversation = conversationRepository.getConversation(classification.conversationId)
-                    ?: continue
+                val conversation =
+                    conversationRepository.getConversation(classification.conversationId)
+                        ?: continue
 
                 val updatedConversation = conversation.copy(classification = classification.classification)
                 conversationRepository.createConversation(updatedConversation)
@@ -876,7 +961,8 @@ You are provided with:
      * Generate a summary of the classification run using LLM.
      */
     private suspend fun generateSummary(context: AgentContext): String {
-        val prompt = """
+        val prompt =
+            """
 Summarize today's conversation classification run for the user in 3 bullet points.
 
 Run details:
@@ -887,14 +973,15 @@ Run details:
 - User instructions: ${context.userInstructions}
 
 Keep it concise and user-friendly.
-""".trimIndent()
+            """.trimIndent()
 
-        val request = CreateCompletionRequest(
-            messages = listOf(mapOf("role" to "system", "content" to prompt)),
-            model = "openai@gpt-4o-mini",
-            stream = false,
-            store = false
-        )
+        val request =
+            CreateCompletionRequest(
+                messages = listOf(mapOf("role" to "system", "content" to prompt)),
+                model = "openai@gpt-4o-mini",
+                stream = false,
+                store = false,
+            )
 
         return try {
             modelService.fetchCompletionPayload(request, context.apiKey)
@@ -907,11 +994,15 @@ Keep it concise and user-friendly.
     /**
      * Generate a summary of the current batch classification using LLM.
      */
-    private suspend fun generateBatchSummary(context: AgentContext, classifications: List<ClassificationOutput>): String {
+    private suspend fun generateBatchSummary(
+        context: AgentContext,
+        classifications: List<ClassificationOutput>,
+    ): String {
         val resolvedCount = classifications.count { it.classification.name == "RESOLVED" }
         val unresolvedCount = classifications.count { it.classification.name == "UNRESOLVED" }
         
-        val prompt = """
+        val prompt =
+            """
 Summarize this batch of conversation classifications in 2-3 sentences for the user.
 
 Batch details:
@@ -921,14 +1012,15 @@ Batch details:
 - Overall progress: ${context.totalConversationsClassified}/${context.targetSampleSize}
 
 Keep it concise and informative.
-""".trimIndent()
+            """.trimIndent()
 
-        val request = CreateCompletionRequest(
-            messages = listOf(mapOf("role" to "system", "content" to prompt)),
-            model = "openai@gpt-4o-mini",
-            stream = false,
-            store = false
-        )
+        val request =
+            CreateCompletionRequest(
+                messages = listOf(mapOf("role" to "system", "content" to prompt)),
+                model = "openai@gpt-4o-mini",
+                stream = false,
+                store = false,
+            )
 
         return try {
             modelService.fetchCompletionPayload(request, context.apiKey)
@@ -940,7 +1032,12 @@ Keep it concise and informative.
 }
 
 // Reuse existing data classes and constants from ConvClassificationAgent
-data class BroadcastEvent(val type: String, val logMessage: String, val data: Any ?= null, val runId: String ?= null) {
+data class BroadcastEvent(
+    val type: String,
+    val logMessage: String,
+    val data: Any? = null,
+    val runId: String? = null,
+) {
     fun toSSE(): ServerSentEvent<String> {
         val eventData = jacksonObjectMapper().writeValueAsString(this)
         return ServerSentEvent
@@ -950,8 +1047,14 @@ data class BroadcastEvent(val type: String, val logMessage: String, val data: An
     }
 }
 
-data class ClassificationOutput(val conversationId: String, val classification: CLASSIFICATION)
-data class ClassificationOutputResponse(val outputs: List<ClassificationOutput>)
+data class ClassificationOutput(
+    val conversationId: String,
+    val classification: CLASSIFICATION,
+)
+
+data class ClassificationOutputResponse(
+    val outputs: List<ClassificationOutput>,
+)
 
 data class ConvClassificationPlan(
     val targetSampleSize: Int,
@@ -959,16 +1062,14 @@ data class ConvClassificationPlan(
     val additionalInstructions: String,
     val mongoQueryMap: Map<String, Any>,
     val mongoQueryMapJson: String = "",
-    val planDetails: String
+    val planDetails: String,
 )
 
 data class FunctionResult<T>(
-    val isSuccess: Boolean = true, 
-    val failureLog: String = "", 
-    val data: T? = null
+    val isSuccess: Boolean = true,
+    val failureLog: String = "",
+    val data: T? = null,
 )
-
-
 
 const val planningResponseFormat = """
 {
@@ -1137,4 +1238,3 @@ const val conversationJsonSchema = """
   "additionalProperties": false
 }
 """
-

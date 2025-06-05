@@ -1,32 +1,32 @@
-//package ai.masaic.improved
+// package ai.masaic.improved
 //
-//import ai.masaic.improved.model.Conversation
-//import ai.masaic.improved.repository.ConversationRepository
-//import ai.masaic.openresponses.api.model.CreateCompletionRequest
-//import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-//import com.fasterxml.jackson.module.kotlin.readValue
-//import com.openai.core.JsonValue
-//import kotlinx.coroutines.flow.*
-//import kotlinx.coroutines.reactive.awaitSingle
-//import mu.KotlinLogging
-//import org.bson.Document
-//import org.springframework.data.mongodb.core.ReactiveMongoTemplate
-//import org.springframework.data.mongodb.core.query.BasicQuery
-//import org.springframework.http.codec.ServerSentEvent
-//import org.springframework.stereotype.Component
-//import java.time.Instant
+// import ai.masaic.improved.model.Conversation
+// import ai.masaic.improved.repository.ConversationRepository
+// import ai.masaic.openresponses.api.model.CreateCompletionRequest
+// import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+// import com.fasterxml.jackson.module.kotlin.readValue
+// import com.openai.core.JsonValue
+// import kotlinx.coroutines.flow.*
+// import kotlinx.coroutines.reactive.awaitSingle
+// import mu.KotlinLogging
+// import org.bson.Document
+// import org.springframework.data.mongodb.core.ReactiveMongoTemplate
+// import org.springframework.data.mongodb.core.query.BasicQuery
+// import org.springframework.http.codec.ServerSentEvent
+// import org.springframework.stereotype.Component
+// import java.time.Instant
 //
-//@Component
-//class ConvClassificationAgent(
+// @Component
+// class ConvClassificationAgent(
 //    private val modelService: ModelService,
 //    private val conversationRepository: ConversationRepository,
 //    private val reactiveMongoTemplate: ReactiveMongoTemplate
-//) {
+// ) {
 //    private val logger = KotlinLogging.logger {}
 //
 //    // Event flow for sending updates to the frontend
-////    private val _eventFlow = MutableSharedFlow<SamplingAgentEvent>(replay = 0)
-////    val eventFlow: Flow<SamplingAgentEvent> = _eventFlow.asSharedFlow()
+// //    private val _eventFlow = MutableSharedFlow<SamplingAgentEvent>(replay = 0)
+// //    val eventFlow: Flow<SamplingAgentEvent> = _eventFlow.asSharedFlow()
 //
 //    // Constants for limiting the agent's execution
 //    private val MAX_MODEL_CALLS = 10
@@ -186,7 +186,7 @@
 //     * Force stop the agent loop
 //     */
 //    suspend fun stop() {
-////        _eventFlow.emit(SamplingAgentEvent.ForceStop("User requested to stop the agent"))
+// //        _eventFlow.emit(SamplingAgentEvent.ForceStop("User requested to stop the agent"))
 //    }
 //
 //    /**
@@ -194,23 +194,23 @@
 //     */
 //    private suspend fun createPlan(apiKey: String, userInstructions: String, failureLogs: String, onChunk: suspend (TextChunkEvent) -> Unit): ConvClassificationPlan {
 //        val prompt = """
-//You are a conversation classification planner. Your task is to analyze user instructions and create a plan for
-//sampling and classifying conversations. You need to determine:
+// You are a conversation classification planner. Your task is to analyze user instructions and create a plan for
+// sampling and classifying conversations. You need to determine:
 //
-//1. Target sample size (maximum 100, default 20 if not specified)
-//2. A Mongo query to pull the required conversations from MongoDB.
+// 1. Target sample size (maximum 100, default 20 if not specified)
+// 2. A Mongo query to pull the required conversations from MongoDB.
 //   **Make sure any date‐time comparisons use the shell’s `ISODate("YYYY-MM-DDTHH:mm:ss.SSSZ")` syntax.**
 //   **Make sure only conversations with classification == null are pulled.
-//3. Any additional instructions for classification. Do not include conversation filtering instructions as additional instructions.
-//4. Whether the user has requested to stop the process.
-//5. Provide user readable plan details in markdown format. Details should clearly mention if any deviation is made from user instructions.
-//6. If there are failures in the previous run then pay attention to those failures while generating new plan.
+// 3. Any additional instructions for classification. Do not include conversation filtering instructions as additional instructions.
+// 4. Whether the user has requested to stop the process.
+// 5. Provide user readable plan details in markdown format. Details should clearly mention if any deviation is made from user instructions.
+// 6. If there are failures in the previous run then pay attention to those failures while generating new plan.
 //
-//Json schema of conversation document in DB is:
-//$conversationJsonSchema
+// Json schema of conversation document in DB is:
+// $conversationJsonSchema
 //
-//Today's date is ${Instant.now()}
-//""".trimIndent()
+// Today's date is ${Instant.now()}
+// """.trimIndent()
 //
 //        val responseFormat = mapOf(
 //            "type" to "json_schema",
@@ -235,11 +235,11 @@
 //        return mapper.readValue<ConvClassificationPlan>(response)
 //    }
 //
-////    private fun generateTextOutput(): String {
-////        val prompt = """
-////
-////        """.trimIndent()
-////    }
+// //    private fun generateTextOutput(): String {
+// //        val prompt = """
+// //
+// //        """.trimIndent()
+// //    }
 //
 //
 //
@@ -254,7 +254,7 @@
 //            val queryDoc = Document.parse(json)
 //
 //            // 2. Convert any ISO-8601 date strings under comparison operators into actual Dates
-////        convertDateStrings(queryDoc)
+// //        convertDateStrings(queryDoc)
 //
 //            // 3. Build and execute the BasicQuery against the *plural* collection name
 //            val basicQuery = BasicQuery(queryDoc).limit(limit)
@@ -294,7 +294,7 @@
 //                logger.info { "Saved classification ${classification.classification} for conversation ${classification.conversationId}" }
 //            } catch (e: Exception) {
 //                logger.error(e) { "Failed to save classification for conversation ${classification.conversationId}" }
-////                _eventFlow.emit(SamplingAgentEvent.Error("Failed to save classification for conversation ${classification.conversationId}: ${e.message}"))
+// //                _eventFlow.emit(SamplingAgentEvent.Error("Failed to save classification for conversation ${classification.conversationId}: ${e.message}"))
 //            }
 //        }
 //
@@ -337,21 +337,21 @@
 //        return response.outputs
 //        } catch (e: Exception) {
 //            logger.error(e) { "Error during classification" }
-////            _eventFlow.emit(SamplingAgentEvent.Error("Error during classification: ${e.message}"))
+// //            _eventFlow.emit(SamplingAgentEvent.Error("Error during classification: ${e.message}"))
 //            throw e
 //        }
 //    }
-//}
+// }
 //
-///**
+// /**
 // * Possible events:
 // * 1. sampling.started
 // * 2. sampling.completed
 // * 3. sampling.failed
 // * 4.
 // */
-//val mapper = jacksonObjectMapper()
-//data class BroadcastEvent(val type: String, val logMessage: String, val message: String = "") {
+// val mapper = jacksonObjectMapper()
+// data class BroadcastEvent(val type: String, val logMessage: String, val message: String = "") {
 //    fun toSSE(): ServerSentEvent<String> {
 //        val eventData = mapper.writeValueAsString(this)
 //        return ServerSentEvent
@@ -359,9 +359,9 @@
 //            .event(" $type")
 //            .build()
 //    }
-//}
+// }
 //
-//data class TextChunkEvent(val type: String, val text: String = "") {
+// data class TextChunkEvent(val type: String, val text: String = "") {
 //    fun toSSE(): ServerSentEvent<String> {
 //        val eventData = mapper.writeValueAsString(this)
 //        return ServerSentEvent
@@ -369,9 +369,9 @@
 //            .event(" $type")
 //            .build()
 //    }
-//}
+// }
 //
-//data class ClassifiedConvEvent(val type: String, val logMessage: String, val message: String = "", val conversationIds: List<String>) {
+// data class ClassifiedConvEvent(val type: String, val logMessage: String, val message: String = "", val conversationIds: List<String>) {
 //    fun toSSE(): ServerSentEvent<String> {
 //        val eventData = mapper.writeValueAsString(this)
 //        return ServerSentEvent
@@ -379,12 +379,12 @@
 //            .event(" $type")
 //            .build()
 //    }
-//}
+// }
 //
-///**
+// /**
 // * Events that can be emitted by the SamplingAgent to provide progress updates
 // */
-//sealed class SamplingAgentEvent {
+// sealed class SamplingAgentEvent {
 //
 //
 //    data class Started(val instructions: String) : SamplingAgentEvent()
@@ -409,30 +409,30 @@
 //    data class Terminated(val reason: String, val totalClassified: Int, val targetSampleSize: Int) : SamplingAgentEvent()
 //    data class ForceStop(val reason: String) : SamplingAgentEvent()
 //    data class Error(val message: String) : SamplingAgentEvent()
-//}
+// }
 //
-//data class ClassificationResult(val conversationId: String, val classification: String)
+// data class ClassificationResult(val conversationId: String, val classification: String)
 //
-//enum class CLASSIFICATION {
+// enum class CLASSIFICATION {
 //    RESOLVED,
 //    UNRESOLVED
-//}
-//data class ClassificationOutput(val conversationId: String, val classification: CLASSIFICATION)
+// }
+// data class ClassificationOutput(val conversationId: String, val classification: CLASSIFICATION)
 //
-//data class ClassificationOutputResponse(val outputs: List<ClassificationOutput>)
+// data class ClassificationOutputResponse(val outputs: List<ClassificationOutput>)
 //
-//data class ConvClassificationPlan(
+// data class ConvClassificationPlan(
 //    val targetSampleSize: Int,
 //    val stopRequested: Boolean,
 //    val additionalInstructions: String,
 //    val mongoQueryMap: Map<String, Any>,
 //    val planDetails: String
-//)
+// )
 //
-//data class FunctionResult<T>(val isSuccess: Boolean = true, val failureLog: String = "", val data: T ? = null) //TODO: need success and failure result
+// data class FunctionResult<T>(val isSuccess: Boolean = true, val failureLog: String = "", val data: T ? = null) //TODO: need success and failure result
 //
-//const val planningResponseFormat = """
-//{
+// const val planningResponseFormat = """
+// {
 //  "type": "object",
 //  "properties": {
 //    "targetSampleSize": {
@@ -458,11 +458,11 @@
 //  },
 //  "required": ["targetSampleSize", "filters", "stopRequested", "additionalInstructions"],
 //  "additionalProperties": false
-//}
-//"""
+// }
+// """
 //
-//const val classificationResponseFormat = """
-//{
+// const val classificationResponseFormat = """
+// {
 //  "type": "object",
 //  "properties": {
 //    "outputs": {
@@ -485,10 +485,10 @@
 //  },
 //  "required": ["outputs"],
 //  "additionalProperties": false
-//}
-//"""
+// }
+// """
 //
-//const val conversationJsonSchema = """
+// const val conversationJsonSchema = """
 //    {
 //  "type": "object",
 //  "properties": {
@@ -596,5 +596,5 @@
 //    "_class"
 //  ],
 //  "additionalProperties": false
-//}
-//"""
+// }
+// """

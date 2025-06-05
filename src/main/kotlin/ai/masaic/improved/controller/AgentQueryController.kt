@@ -1,10 +1,11 @@
 package ai.masaic.improved.controller
 
+import ai.masaic.improved.model.AgentConversation
 import ai.masaic.improved.model.AgentQueryRequest
 import ai.masaic.improved.model.AgentQueryResponse
-import ai.masaic.improved.model.AgentConversation
 import ai.masaic.improved.service.AgentQueryService
 import ai.masaic.improved.service.AgentQueryStreamingService
+import ai.masaic.improved.service.IntelligentVisualizationService
 import ai.masaic.improved.service.VisualizationService
 import kotlinx.coroutines.flow.Flow
 import mu.KotlinLogging
@@ -30,8 +31,9 @@ class AgentQueryController(
     private val agentQueryService: AgentQueryService,
     private val agentQueryStreamingService: AgentQueryStreamingService,
     private val visualizationService: VisualizationService,
+    private val intelligentVisualizationService: IntelligentVisualizationService,
     @Value("\${openai.api.key}")
-    private val apiKey: String
+    private val apiKey: String,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -40,7 +42,7 @@ class AgentQueryController(
      * 
      * This endpoint provides:
      * - Real-time progress updates during query processing
-     * - Visualization generation and recommendations  
+     * - Visualization generation and recommendations 
      * - Better UX with immediate feedback
      * - Support for progress tracking
      *
@@ -50,12 +52,12 @@ class AgentQueryController(
      */
     @PostMapping("/query/stream", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     suspend fun queryAgentStream(
-        @RequestBody request: AgentQueryRequest
+        @RequestBody request: AgentQueryRequest,
     ): Flow<ServerSentEvent<String>> {
         logger.info { "Received streaming agent query: ${request.query}" }
         
         return try {
-            agentQueryStreamingService.processQueryStream(request,"Bearer $apiKey")
+            agentQueryStreamingService.processQueryStream(request, "Bearer $apiKey")
         } catch (e: Exception) {
             logger.error(e) { "Error in streaming agent query: ${e.message}" }
             throw e
@@ -75,12 +77,12 @@ class AgentQueryController(
      */
     @PostMapping("/query")
     suspend fun queryAgent(
-        @RequestBody request: AgentQueryRequest
+        @RequestBody request: AgentQueryRequest,
     ): ResponseEntity<AgentQueryResponse> {
         logger.info { "Received agent query: ${request.query}" }
         
         return try {
-            val response = agentQueryService.processQuery(request, apiKey)
+            val response = agentQueryService.processQuery(request, "Bearer $apiKey")
             
             if (response.error != null) {
                 logger.warn { "Agent query completed with error: ${response.error}" }
@@ -89,15 +91,15 @@ class AgentQueryController(
             }
             
             ResponseEntity.ok(response)
-            
         } catch (e: Exception) {
             logger.error(e) { "Error processing agent query: ${e.message}" }
             
-            val errorResponse = AgentQueryResponse(
-                conversationId = request.conversationId ?: "error",
-                naturalLanguageResponse = "I encountered an unexpected error while processing your request. Please try again later.",
-                error = "Internal server error: ${e.message}"
-            )
+            val errorResponse =
+                AgentQueryResponse(
+                    conversationId = request.conversationId ?: "error",
+                    naturalLanguageResponse = "I encountered an unexpected error while processing your request. Please try again later.",
+                    error = "Internal server error: ${e.message}",
+                )
             
             ResponseEntity.internalServerError().body(errorResponse)
         }
@@ -112,13 +114,14 @@ class AgentQueryController(
      */
     @GetMapping("/conversations/{conversationId}")
     fun getConversationHistory(
-        @PathVariable conversationId: String
+        @PathVariable conversationId: String,
     ): ResponseEntity<AgentConversation> {
         logger.debug { "Retrieving conversation history for: $conversationId" }
         
         // Try to get from streaming service first, then fallback to regular service
-        val conversation = agentQueryStreamingService.getConversationHistory(conversationId)
-            ?: agentQueryService.getConversationHistory(conversationId)
+        val conversation =
+            agentQueryStreamingService.getConversationHistory(conversationId)
+                ?: agentQueryService.getConversationHistory(conversationId)
         
         return if (conversation != null) {
             ResponseEntity.ok(conversation)
@@ -133,13 +136,14 @@ class AgentQueryController(
      * @return Simple status message indicating the agent is available
      */
     @GetMapping("/health")
-    fun healthCheck(): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.ok(mapOf(
-            "status" to "Agent service is available",
-            "service" to "AgentQueryService",
-            "features" to "Cypher generation, Natural language responses, Error retry, Streaming, Visualization"
-        ))
-    }
+    fun healthCheck(): ResponseEntity<Map<String, String>> =
+        ResponseEntity.ok(
+            mapOf(
+                "status" to "Agent service is available",
+                "service" to "AgentQueryService",
+                "features" to "Cypher generation, Natural language responses, Error retry, Streaming, Visualization",
+            ),
+        )
 
     /**
      * Get agent service statistics and information.
@@ -152,61 +156,70 @@ class AgentQueryController(
         agentQueryService.cleanupOldConversations()
         agentQueryStreamingService.cleanupOldConversations()
         
-        return ResponseEntity.ok(mapOf(
-            "name" to "Business Intelligence Agent",
-            "description" to "AI agent for analyzing conversation data using natural language queries",
-            "capabilities" to listOf(
-                "Natural language to Cypher query translation",
-                "Business KPI analysis and insights",
-                "Conversation data exploration", 
-                "Error handling and query retry logic",
-                "Contextual conversation memory",
-                "Real-time streaming responses",
-                "Automatic visualization generation",
-                "Plotly.js chart generation",
-                "Progress tracking and updates"
-            ),
-            "endpoints" to mapOf(
-                "query" to "POST /api/v1/agent/query - Standard query processing",
-                "queryStream" to "POST /api/v1/agent/query/stream - Streaming query with real-time updates",
-                "conversations" to "GET /api/v1/agent/conversations/{id} - Get conversation history",
-                "health" to "GET /api/v1/agent/health - Service health check",
-                "info" to "GET /api/v1/agent/info - Service information",
-                "cleanup" to "POST /api/v1/agent/cleanup - Manual conversation cleanup"
-            ),
-            "supportedQuestions" to listOf(
-                "How many conversations do we have in total?",
-                "What are the top conversation categories?", 
-                "Show me the NPS distribution",
-                "How many resolved vs unresolved conversations?",
-                "Which domains have the most conversations?",
-                "What's the average NPS score by category?",
-                "Show me conversation trends over time",
-                "What are the busiest hours for conversations?"
-            ),
-            "visualizationSupport" to mapOf(
-                "enabled" to true,
-                "chartTypes" to listOf("BAR", "LINE", "PIE", "SCATTER", "HISTOGRAM", "HEATMAP", "TREEMAP", "FUNNEL", "AREA"),
-                "framework" to "Plotly.js",
-                "features" to listOf("Interactive charts", "Responsive design", "Professional styling", "Accessibility support")
-            ),
-            "graphSchema" to mapOf(
-                "nodes" to listOf(
-                    mapOf(
-                        "label" to "Conversation",
-                        "properties" to listOf("id", "createdAt", "summary", "resolved", "nps", "version", "classification", "messageCount")
+        return ResponseEntity.ok(
+            mapOf(
+                "name" to "Business Intelligence Agent",
+                "description" to "AI agent for analyzing conversation data using natural language queries",
+                "capabilities" to
+                    listOf(
+                        "Natural language to Cypher query translation",
+                        "Business KPI analysis and insights",
+                        "Conversation data exploration", 
+                        "Error handling and query retry logic",
+                        "Contextual conversation memory",
+                        "Real-time streaming responses",
+                        "Automatic visualization generation",
+                        "Plotly.js chart generation",
+                        "Progress tracking and updates",
                     ),
+                "endpoints" to
                     mapOf(
-                        "label" to "PathNode", 
-                        "properties" to listOf("path", "name")
-                    )
-                ),
-                "relationships" to listOf(
-                    mapOf("type" to "HAS_CHILD", "description" to "PathNode to PathNode hierarchy"),
-                    mapOf("type" to "CONTAINS", "description" to "PathNode contains Conversation")
-                )
-            )
-        ))
+                        "query" to "POST /api/v1/agent/query - Standard query processing",
+                        "queryStream" to "POST /api/v1/agent/query/stream - Streaming query with real-time updates",
+                        "conversations" to "GET /api/v1/agent/conversations/{id} - Get conversation history",
+                        "health" to "GET /api/v1/agent/health - Service health check",
+                        "info" to "GET /api/v1/agent/info - Service information",
+                        "cleanup" to "POST /api/v1/agent/cleanup - Manual conversation cleanup",
+                    ),
+                "supportedQuestions" to
+                    listOf(
+                        "How many conversations do we have in total?",
+                        "What are the top conversation categories?", 
+                        "Show me the NPS distribution",
+                        "How many resolved vs unresolved conversations?",
+                        "Which domains have the most conversations?",
+                        "What's the average NPS score by category?",
+                        "Show me conversation trends over time",
+                        "What are the busiest hours for conversations?",
+                    ),
+                "visualizationSupport" to
+                    mapOf(
+                        "enabled" to true,
+                        "chartTypes" to listOf("BAR", "LINE", "PIE", "SCATTER", "HISTOGRAM", "HEATMAP", "TREEMAP", "FUNNEL", "AREA"),
+                        "framework" to "Plotly.js",
+                        "features" to listOf("Interactive charts", "Responsive design", "Professional styling", "Accessibility support"),
+                    ),
+                "graphSchema" to
+                    mapOf(
+                        "nodes" to
+                            listOf(
+                                mapOf(
+                                    "label" to "Conversation",
+                                    "properties" to listOf("id", "createdAt", "summary", "resolved", "nps", "version", "classification", "messageCount"),
+                                ),
+                                mapOf(
+                                    "label" to "PathNode", 
+                                    "properties" to listOf("path", "name"),
+                                ),
+                            ),
+                        "relationships" to
+                            listOf(
+                                mapOf("type" to "HAS_CHILD", "description" to "PathNode to PathNode hierarchy"),
+                                mapOf("type" to "CONTAINS", "description" to "PathNode contains Conversation"),
+                            ),
+                    ),
+            ),
+        )
     }
 
     /**
@@ -218,61 +231,129 @@ class AgentQueryController(
      */
     @PostMapping("/cleanup")
     suspend fun cleanupConversations(
-        @RequestParam(defaultValue = "24") maxAgeHours: Int
+        @RequestParam(defaultValue = "24") maxAgeHours: Int,
     ): ResponseEntity<Map<String, Any>> {
         agentQueryService.cleanupOldConversations(maxAgeHours)
-        return ResponseEntity.ok(mapOf(
-            "message" to "Cleanup completed",
-            "maxAgeHours" to maxAgeHours
-        ))
+        return ResponseEntity.ok(
+            mapOf(
+                "message" to "Cleanup completed",
+                "maxAgeHours" to maxAgeHours,
+            ),
+        )
     }
-    
+
     /**
      * Debug endpoint to test visualization generation with sample data
      */
     @PostMapping("/debug/visualization")
     suspend fun debugVisualization(): ResponseEntity<Map<String, Any>> {
-
         // Sample data similar to your conversation count query
-        val sampleResults = listOf(
-            mapOf("last_month_conversations" to 394)
-        )
+        val sampleResults =
+            listOf(
+                mapOf("last_month_conversations" to 394),
+            )
         
         try {
             logger.info { "Testing visualization with sample data..." }
             
-            val recommendation = visualizationService.analyzeForVisualization(
-                originalQuery = "How many conversations were created last month?",
-                cypherQuery = "MATCH (c:Conversation) WHERE c.createdAt >= '2025-05-01T00:00:00Z' AND c.createdAt < '2025-06-01T00:00:00Z' RETURN count(c) as last_month_conversations",
-                queryResults = sampleResults,
-                apiKey = apiKey
-            )
+            val recommendation =
+                visualizationService.analyzeForVisualization(
+                    originalQuery = "How many conversations were created last month?",
+                    cypherQuery = "MATCH (c:Conversation) WHERE c.createdAt >= '2025-05-01T00:00:00Z' AND c.createdAt < '2025-06-01T00:00:00Z' RETURN count(c) as last_month_conversations",
+                    queryResults = sampleResults,
+                    apiKey = "Bearer $apiKey",
+                )
             
             logger.info { "Debug: Recommendation = $recommendation" }
             
-            val visualization = if (recommendation.shouldVisualize && recommendation.chartType != null) {
-                visualizationService.generateVisualization(
-                    recommendation = recommendation,
-                    queryResults = sampleResults,
-                    originalQuery = "How many conversations were created last month?",
-                    apiKey = apiKey
-                )
-            } else null
+            val visualization =
+                if (recommendation.shouldVisualize && recommendation.chartType != null) {
+                    visualizationService.generateVisualization(
+                        recommendation = recommendation,
+                        queryResults = sampleResults,
+                        originalQuery = "How many conversations were created last month?",
+                        apiKey = "Bearer $apiKey",
+                    )
+                } else {
+                    null
+                }
             
             logger.info { "Debug: Visualization = ${if (visualization != null) "SUCCESS" else "NULL"}" }
             
-            return ResponseEntity.ok(mapOf(
-                "recommendation" to recommendation,
-                "visualization" to visualization,
-                "sampleData" to sampleResults
-            )) as ResponseEntity<Map<String, Any>>
-            
+            return ResponseEntity.ok(
+                mapOf(
+                    "recommendation" to recommendation,
+                    "visualization" to visualization,
+                    "sampleData" to sampleResults,
+                ),
+            ) as ResponseEntity<Map<String, Any>>
         } catch (e: Exception) {
             logger.error(e) { "Error in debug visualization: ${e.message}" }
-            return ResponseEntity.ok(mapOf(
-                "error" to e.message,
-                "sampleData" to sampleResults
-            )) as ResponseEntity<Map<String, Any>>
+            return ResponseEntity.ok(
+                mapOf(
+                    "error" to e.message,
+                    "sampleData" to sampleResults,
+                ),
+            ) as ResponseEntity<Map<String, Any>>
+        }
+    }
+
+    /**
+     * Test endpoint for intelligent visualization service
+     */
+    @PostMapping("/debug/intelligent-visualization")
+    suspend fun debugIntelligentVisualization(
+        @RequestBody testData: Map<String, Any>,
+    ): ResponseEntity<Map<String, Any>> {
+        logger.info { "Testing intelligent visualization service" }
+        
+        // Create sample data if none provided
+        val sampleResults =
+            (testData["queryResults"] as? List<Map<String, Any>>) ?: listOf(
+                mapOf("date" to "2024-01-01", "conversations" to 45, "nps" to 7.2),
+                mapOf("date" to "2024-01-02", "conversations" to 52, "nps" to 6.8),
+                mapOf("date" to "2024-01-03", "conversations" to 38, "nps" to 8.1),
+                mapOf("date" to "2024-01-04", "conversations" to 61, "nps" to 7.5),
+                mapOf("date" to "2024-01-05", "conversations" to 29, "nps" to 8.3),
+            )
+        
+        val originalQuery = testData["query"] as? String ?: "Show me daily conversation trends with NPS analysis"
+        val cypherQuery = testData["cypherQuery"] as? String ?: "MATCH (c:Conversation) RETURN substring(c.createdAt, 0, 10) as date, count(c) as conversations, avg(c.nps) as nps ORDER BY date"
+        val naturalResponse = testData["naturalResponse"] as? String ?: "Here's the daily conversation trend analysis showing conversation volume and average NPS scores."
+        
+        return try {
+            logger.info { "Calling intelligent visualization service with sample data" }
+            
+            val visualization =
+                intelligentVisualizationService.generateIntelligentVisualization(
+                    originalQuery = originalQuery,
+                    cypherQuery = cypherQuery,
+                    queryResults = sampleResults,
+                    naturalLanguageResponse = naturalResponse,
+                    apiKey = "Bearer $apiKey",
+                    enablePythonAnalysis = testData["enablePythonAnalysis"] as? Boolean ?: true,
+                )
+            
+            ResponseEntity.ok(
+                mapOf(
+                    "visualization" to visualization,
+                    "sampleData" to sampleResults,
+                    "testConfiguration" to
+                        mapOf(
+                            "originalQuery" to originalQuery,
+                            "cypherQuery" to cypherQuery,
+                            "naturalResponse" to naturalResponse,
+                        ),
+                ),
+            ) as ResponseEntity<Map<String, Any>>
+        } catch (e: Exception) {
+            logger.error(e) { "Error in intelligent visualization debug: ${e.message}" }
+            return ResponseEntity.ok(
+                mapOf(
+                    "error" to e.message,
+                    "sampleData" to sampleResults,
+                ),
+            ) as ResponseEntity<Map<String, Any>>
         }
     }
 }

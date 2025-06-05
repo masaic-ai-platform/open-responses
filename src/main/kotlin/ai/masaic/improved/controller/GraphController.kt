@@ -1,8 +1,8 @@
 package ai.masaic.improved.controller
 
 import ai.masaic.improved.repository.ConversationRepository
-import ai.masaic.improved.service.ConversationGraphService
 import ai.masaic.improved.service.BatchMigrationResult
+import ai.masaic.improved.service.ConversationGraphService
 import ai.masaic.improved.service.MigrationStatistics
 import ai.masaic.improved.service.NodeInfo
 import ai.masaic.improved.service.NodeTreeNode
@@ -17,10 +17,8 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/graph")
 class GraphController(
     private val graphService: ConversationGraphService,
-    @Qualifier("baseConversationRepository") 
-    private val conversationRepository: ConversationRepository
+    @Qualifier("baseConversationRepository") private val conversationRepository: ConversationRepository,
 ) {
-
     /**
      * Get the full tree structure of all nodes using graph hierarchy.
      *
@@ -42,13 +40,14 @@ class GraphController(
     @PostMapping("/migrate")
     suspend fun batchMigrateConversations(
         @RequestParam(defaultValue = "100") batchSize: Int,
-        @RequestParam(required = false) maxConversations: Int?
+        @RequestParam(required = false) maxConversations: Int?,
     ): ResponseEntity<BatchMigrationResult> {
-        val result = graphService.batchMigrateConversations(
-            conversationRepository = conversationRepository,
-            batchSize = batchSize,
-            maxConversations = maxConversations
-        )
+        val result =
+            graphService.batchMigrateConversations(
+                conversationRepository = conversationRepository,
+                batchSize = batchSize,
+                maxConversations = maxConversations,
+            )
         return ResponseEntity.ok(result)
     }
 
@@ -72,7 +71,7 @@ class GraphController(
      */
     @GetMapping("/conversations/by-node")
     suspend fun getConversationsUnderNode(
-        @RequestParam nodeName: String
+        @RequestParam nodeName: String,
     ): ResponseEntity<List<String>> {
         val conversationIds = graphService.getConversationsUnderNode(nodeName)
         return ResponseEntity.ok(conversationIds)
@@ -86,13 +85,11 @@ class GraphController(
      */
     @GetMapping("/nodes")
     suspend fun getNodesUnderNode(
-        @RequestParam nodeName: String
+        @RequestParam nodeName: String,
     ): ResponseEntity<List<NodeInfo>> {
         val nodeInfos = graphService.getNodesUnderNode(nodeName)
         return ResponseEntity.ok(nodeInfos)
     }
-
-
 
     /**
      * Health check endpoint to verify graph database connectivity.
@@ -100,7 +97,5 @@ class GraphController(
      * @return Simple status message
      */
     @GetMapping("/health")
-    fun healthCheck(): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.ok(mapOf("status" to "Graph service is available"))
-    }
+    fun healthCheck(): ResponseEntity<Map<String, String>> = ResponseEntity.ok(mapOf("status" to "Graph service is available"))
 } 

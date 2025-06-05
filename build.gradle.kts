@@ -32,6 +32,12 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.module:jackson-module-jsonSchema")
+    implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
+    
+    // HTTP clients for code execution services (E2B and Piston)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-jackson:2.9.0")
     implementation("org.neo4j.driver:neo4j-java-driver:5.16.0")
     implementation("io.pebbletemplates:pebble:3.1.5")
     implementation("com.github.ben-manes.caffeine:caffeine:3.2.0")

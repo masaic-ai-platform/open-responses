@@ -31,9 +31,8 @@ class DomainLabelSuggester(
     private val embeddingsController: EmbeddingsController,
     private val qdrantClient: QdrantClient,
     private val conversationRepository: ConversationRepository,
-    private val ruleRepository: RuleRepository
+    private val ruleRepository: RuleRepository,
 ) {
-
     //    suspend fun suggest(bucketPath: String, apiKey: String): List<SuggestedLabel> {
     suspend fun suggest(request: SuggestLabelsRequest): Map<Int, SuggestedLabelResponse> {
         val sample = conversationRepository.getConversations(request.bucketPath, 50)
@@ -50,60 +49,76 @@ class DomainLabelSuggester(
         request: SuggestLabelsRequest,
         systemPrompts: List<String>,
         clusters: List<Cluster>,
-        existingLabels: Set<String>
+        existingLabels: Set<String>,
     ): Map<Int, SuggestedLabelResponse> {
         val labelsMap = mutableMapOf<Int, SuggestedLabelResponse>()
         val labelsFromThisSession = mutableSetOf<String>()
         systemPrompts.forEachIndexed { index, prompt ->
             var updatedSystemPrompt = prompt
             if (labelsFromThisSession.isNotEmpty()) {
-                updatedSystemPrompt = prompt.replace(
-                    "{{labelsFromThisSession}}",
-                    labelsFromThisSession.joinToString(separator = "\n") { it })
+                updatedSystemPrompt =
+                    prompt.replace(
+                        "{{labelsFromThisSession}}",
+                        labelsFromThisSession.joinToString(separator = "\n") { it },
+                    )
             }
 
-            val responseFormat = mapOf(
-                "type" to "json_schema",
-                "json_schema" to mapOf(
-                    "name" to "suggestedLabelsSchema",
-                    "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(suggestedLabelSchema)
+            val responseFormat =
+                mapOf(
+                    "type" to "json_schema",
+                    "json_schema" to
+                        mapOf(
+                            "name" to "suggestedLabelsSchema",
+                            "schema" to jacksonObjectMapper().readValue<Map<String, JsonValue>>(suggestedLabelSchema),
+                        ),
                 )
-            )
-            val createCompletionRequest = CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to updatedSystemPrompt)),
-                model = request.model,
-                response_format = responseFormat,
-                stream = false,
-                store = false
-            )
+            val createCompletionRequest =
+                CreateCompletionRequest(
+                    messages = listOf(mapOf("role" to "system", "content" to updatedSystemPrompt)),
+                    model = request.model,
+                    response_format = responseFormat,
+                    stream = false,
+                    store = false,
+                )
 
-            val response = completionController.createCompletion(
-                createCompletionRequest, MultiValueMap.fromMultiValue(
-                    mapOf("Authorization" to listOf(request.apiKey))
-                ), MultiValueMap.fromMultiValue(
-                    mapOf("Authorization" to listOf(request.apiKey))
+            val response =
+                completionController.createCompletion(
+                    createCompletionRequest,
+                    MultiValueMap.fromMultiValue(
+                        mapOf("Authorization" to listOf(request.apiKey)),
+                    ),
+                    MultiValueMap.fromMultiValue(
+                        mapOf("Authorization" to listOf(request.apiKey)),
+                    ),
                 )
-            )
 
             // Deserialize response into List<Message>
-            val objectMapper = jacksonObjectMapper()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            val objectMapper =
+                jacksonObjectMapper()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-            val suggestedLabelsResponse = objectMapper.readValue<SuggestedLabelResponse>(
-                (response.body as ChatCompletion).choices()[0].message().content().get()
-            )
+            val suggestedLabelsResponse =
+                objectMapper.readValue<SuggestedLabelResponse>(
+                    (response.body as ChatCompletion)
+                        .choices()[0]
+                        .message()
+                        .content()
+                        .get(),
+                )
 
-            val exampleConversations = suggestedLabelsResponse.exampleIds.map { id ->
-                conversationRepository.getConversation(id)?.summary ?: ""
-            }
-
-            val suggestedLabels = suggestedLabelsResponse.suggestedLabels.map {
-                var suggestedLabel = it
-                if(it.path in existingLabels) {
-                    suggestedLabel = it.copy(existing = true)
+            val exampleConversations =
+                suggestedLabelsResponse.exampleIds.map { id ->
+                    conversationRepository.getConversation(id)?.summary ?: ""
                 }
-                suggestedLabel
-            }
+
+            val suggestedLabels =
+                suggestedLabelsResponse.suggestedLabels.map {
+                    var suggestedLabel = it
+                    if (it.path in existingLabels) {
+                        suggestedLabel = it.copy(existing = true)
+                    }
+                    suggestedLabel
+                }
 
             val updatedSuggestedLabelsResponse = suggestedLabelsResponse.copy(suggestedLabels = suggestedLabels, exampleIds = exampleConversations, cluster = clusters[index])
             labelsFromThisSession.addAll(updatedSuggestedLabelsResponse.suggestedLabels.map { it.path }.toSet())
@@ -116,7 +131,7 @@ class DomainLabelSuggester(
         domainOfLabeller: String,
         clusters: List<Cluster>,
         samples: List<Conversation>,
-        existingLabels: Set<String>
+        existingLabels: Set<String>,
     ): List<String> {
         val labelsFromThisSession = ""
         val clusterWisePrompt = mutableListOf<String>()
@@ -127,7 +142,8 @@ class DomainLabelSuggester(
                 .take(10)
                 .forEach { i -> samplesFromCluster.append("- \"${samples[i].summary}    (id: ${samples[i].id})\"\n") }
 
-            val systemPrompt = """           
+            val systemPrompt =
+                """           
 You are a $domainOfLabeller domain-expert assistant.
 TASK:
 For the cluster below, return **up to THREE** label candidates.  
@@ -151,34 +167,39 @@ NEW labels already proposed in this session:
 {{labelsFromThisSession}}
 
 $samplesFromCluster
-        """.trimIndent()
+                """.trimIndent()
 
             clusterWisePrompt.add(systemPrompt)
         }
         return clusterWisePrompt
     }
 
-    fun floatVectors(embeddings: List<EmbeddingData>): List<FloatArray> = embeddings
-        .sortedBy { it.index }
-        .map { ed ->
-            // safe‐cast the embedding field
-            val rawList = ed.embedding as? List<*>
-                ?: error("Expected embedding to be a List, but was ${ed.embedding::class}")
+    fun floatVectors(embeddings: List<EmbeddingData>): List<FloatArray> =
+        embeddings
+            .sortedBy { it.index }
+            .map { ed ->
+                // safe‐cast the embedding field
+                val rawList =
+                    ed.embedding as? List<*>
+                        ?: error("Expected embedding to be a List, but was ${ed.embedding::class}")
 
-            // convert each element to Float
-            rawList
-                .map { elem ->
-                    when (elem) {
-                        is Number -> elem.toFloat()
-                        else -> error("Expected Number in embedding list, but got $elem")
-                    }
-                }
-                .toFloatArray()
-        }
+                // convert each element to Float
+                rawList
+                    .map { elem ->
+                        when (elem) {
+                            is Number -> elem.toFloat()
+                            else -> error("Expected Number in embedding list, but got $elem")
+                        }
+                    }.toFloatArray()
+            }
 
 // now `floatVectors` is exactly a List<FloatArray>
 
-    suspend fun cluster(samples: List<Conversation>, vectors: List<FloatArray>, k: Int): List<Cluster> {
+    suspend fun cluster(
+        samples: List<Conversation>,
+        vectors: List<FloatArray>,
+        k: Int,
+    ): List<Cluster> {
         val defaultK = 10
         val kUsed = if (k > 0) k else defaultK
 
@@ -193,34 +214,42 @@ $samplesFromCluster
             val doubleVec = DoubleArray(vec.size) { vec[it].toDouble() }
             val point = DoublePoint(doubleVec)
             points += point
-            pointToInputIndex[point] = idx        // original index in `vectors`
+            pointToInputIndex[point] = idx // original index in `vectors`
         }
 
         /* ------------------------------------------------------------------ *
          * 2) Run K‑Means++                                                   *
          * ------------------------------------------------------------------ */
-        val commonsClusters = KMeansPlusPlusClusterer<DoublePoint>(kUsed, 1000,                      // max iterations
-            EuclideanDistance(),
-            RandomGeneratorFactory.createRandomGenerator(Random(42)))
-            .cluster(points)                      // Collection<…Cluster<DoublePoint>>
+        val commonsClusters =
+            KMeansPlusPlusClusterer<DoublePoint>(
+                kUsed,
+                1000, // max iterations
+                EuclideanDistance(),
+                RandomGeneratorFactory.createRandomGenerator(Random(42)),
+            ).cluster(points) // Collection<…Cluster<DoublePoint>>
 
         /* ------------------------------------------------------------------ *
          * 3) Adapt commons‑math clusters -> your Cluster(id, indices)        *
          * ------------------------------------------------------------------ */
         return commonsClusters.mapIndexed { cid, commonsCluster ->
-            val memberIndices = commonsCluster.points.map { pt ->
-                pointToInputIndex.getValue(pt)   // O(1) lookup
-            }
+            val memberIndices =
+                commonsCluster.points.map { pt ->
+                    pointToInputIndex.getValue(pt) // O(1) lookup
+                }
             val conversationsIds = memberIndices.map { samples[it].id }
             Cluster(cid, memberIndices, conversationsIds)
         }
     }
 
-    suspend fun createEmbeddings(conversations: List<Conversation>, apiKey: String): List<EmbeddingData> {
-        val request = CreateEmbeddingRequest(
-            input = conversations.map { it.summary }.toList(),
-            model = "default"
-        )
+    suspend fun createEmbeddings(
+        conversations: List<Conversation>,
+        apiKey: String,
+    ): List<EmbeddingData> {
+        val request =
+            CreateEmbeddingRequest(
+                input = conversations.map { it.summary }.toList(),
+                model = "default",
+            )
         val response = embeddingsController.createEmbedding(request, apiKey)
         return (response.body?.data as List<EmbeddingData>)
     }
@@ -287,19 +316,34 @@ const val suggestedLabelSchema = """
 """
 
 enum class LabelConfidence {
-    HIGH, LOW, MEDIUM
+    HIGH,
+    LOW,
+    MEDIUM,
 }
 
-data class SuggestedLabel(val path: String, val definition: String, val confidence: LabelConfidence, val reason: String, val existing: Boolean = false)
+data class SuggestedLabel(
+    val path: String,
+    val definition: String,
+    val confidence: LabelConfidence,
+    val reason: String,
+    val existing: Boolean = false,
+)
 
-data class Cluster(val id: Int, val indices: List<Int>, val conversationIds: List<String>)
+data class Cluster(
+    val id: Int,
+    val indices: List<Int>,
+    val conversationIds: List<String>,
+)
 
 // Data class to deserialize the model response
 data class SuggestedLabelResponse(
     val suggestedLabels: List<SuggestedLabel>,
     val exampleIds: List<String>,
-    val cluster: Cluster ?= null
+    val cluster: Cluster? = null,
 )
 
-data class SuggestLabelsRequest(val bucketPath: String, val model: String, val apiKey: String = "")
-
+data class SuggestLabelsRequest(
+    val bucketPath: String,
+    val model: String,
+    val apiKey: String = "",
+)

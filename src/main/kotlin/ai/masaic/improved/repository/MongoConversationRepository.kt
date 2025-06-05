@@ -6,20 +6,20 @@ import kotlinx.coroutines.reactive.awaitFirst
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactive.awaitSingle
 import mu.KotlinLogging
+import org.bson.Document
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.data.domain.Sort
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.aggregation.Aggregation
 import org.springframework.data.mongodb.core.aggregation.Aggregation.*
+import org.springframework.data.mongodb.core.aggregation.DateOperators
+import org.springframework.data.mongodb.core.aggregation.Fields
 import org.springframework.data.mongodb.core.find
 import org.springframework.data.mongodb.core.findById
 import org.springframework.data.mongodb.core.query.Criteria
 import org.springframework.data.mongodb.core.query.Query
 import org.springframework.data.mongodb.core.remove
 import org.springframework.stereotype.Repository
-import org.bson.Document
-import org.springframework.data.mongodb.core.aggregation.DateOperators
-import org.springframework.data.mongodb.core.aggregation.Fields
 import java.time.Instant
 
 /**
@@ -52,7 +52,11 @@ class MongoConversationRepository(
             // Generate an id if it's not provided or empty
             val conversationWithId =
                 if (conversation.id.isBlank()) {
-                    val uuid = java.util.UUID.randomUUID().toString().replace("-", "")
+                    val uuid =
+                        java.util.UUID
+                            .randomUUID()
+                            .toString()
+                            .replace("-", "")
                     conversation.copy(id = "conv_$uuid")
                 } else {
                     conversation
@@ -116,7 +120,7 @@ class MongoConversationRepository(
                 val labelsCriteria = Criteria()
                 params.labels.forEach { labelPath ->
                     labelsCriteria.orOperator(
-                        Criteria.where("labels").elemMatch(Criteria.where("path").`is`(labelPath))
+                        Criteria.where("labels").elemMatch(Criteria.where("path").`is`(labelPath)),
                     )
                 }
                 query.addCriteria(labelsCriteria)
@@ -210,10 +214,12 @@ class MongoConversationRepository(
      */
     override suspend fun deleteConversation(conversationId: String): Boolean =
         try {
-            val result = reactiveMongoTemplate.remove<Conversation>(
-                Query(Criteria.where("_id").`is`(conversationId)),
-                CONVERSATION_COLLECTION
-            ).awaitFirst()
+            val result =
+                reactiveMongoTemplate
+                    .remove<Conversation>(
+                        Query(Criteria.where("_id").`is`(conversationId)),
+                        CONVERSATION_COLLECTION,
+                    ).awaitFirst()
             
             val deleted = result.deletedCount > 0
             if (deleted) {
@@ -235,7 +241,10 @@ class MongoConversationRepository(
      * @param limit The maximum number of conversations to return
      * @return A list of conversations that match the label path
      */
-    override suspend fun getConversations(labelPath: String, limit: Int): List<Conversation> {
+    override suspend fun getConversations(
+        labelPath: String,
+        limit: Int,
+    ): List<Conversation> {
         try {
             val query = Query()
             query.addCriteria(Criteria.where("labels").elemMatch(Criteria.where("path").`is`(labelPath)))
@@ -254,26 +263,28 @@ class MongoConversationRepository(
         // 2) $group by labels.path, summing 1 into "count"
         // 3) $sort by count descending
 
-        val agg: Aggregation = if(labelPrefix.isNotEmpty()) {
-            newAggregation(
-                unwind("labels"),
-                match(Criteria.where("labels.path").regex("^$labelPrefix")),
-                group("labels.path").count().`as`("count"),
-                sort(Sort.by(Sort.Direction.DESC, "count"))
-            )
-        } else {
-            newAggregation(
-                unwind("labels"),
-                group("labels.path").count().`as`("count"),
-                sort(Sort.by(Sort.Direction.DESC, "count"))
-            )
-        }
+        val agg: Aggregation =
+            if (labelPrefix.isNotEmpty()) {
+                newAggregation(
+                    unwind("labels"),
+                    match(Criteria.where("labels.path").regex("^$labelPrefix")),
+                    group("labels.path").count().`as`("count"),
+                    sort(Sort.by(Sort.Direction.DESC, "count")),
+                )
+            } else {
+                newAggregation(
+                    unwind("labels"),
+                    group("labels.path").count().`as`("count"),
+                    sort(Sort.by(Sort.Direction.DESC, "count")),
+                )
+            }
 
         // run the aggregation against the "labelled_conversations" collection
-        val docs: List<Document> = reactiveMongoTemplate
-            .aggregate(agg, CONVERSATION_COLLECTION, Document::class.java)
-            .collectList()
-            .awaitSingle()
+        val docs: List<Document> =
+            reactiveMongoTemplate
+                .aggregate(agg, CONVERSATION_COLLECTION, Document::class.java)
+                .collectList()
+                .awaitSingle()
 
         return docs.map {
             GenericLabel(it.getString("_id"), it.getInteger("count"))
@@ -282,43 +293,49 @@ class MongoConversationRepository(
 
     suspend fun aggregateLabels(): List<Document> {
         val start = Instant.parse("2025-05-01T00:00:00.000Z")
-        val end   = Instant.parse("2025-05-31T00:00:00.000Z")
+        val end = Instant.parse("2025-05-31T00:00:00.000Z")
 
         // 1) date filter on the root document
         val dateMatch = Criteria.where("createdAt").gte(start).lte(end)
         // 2) unwind labels, then filter to only your domain/final labels
-        val labelMatch = Criteria.where("labels.path").regex("^domain")
-            .and("labels.status").`is`("final")
+        val labelMatch =
+            Criteria
+                .where("labels.path")
+                .regex("^domain")
+                .and("labels.status")
+                .`is`("final")
 
-        val pipeline = newAggregation(
-            match(dateMatch),
-            unwind("labels"),
-            match(labelMatch),
-
-            // 3) project both the day-string and the label path
-            project()
-                .and(
-                    DateOperators.DateToString
-                        .dateOf("\$createdAt")
-                        .toString("%Y-%m-%d")
-                        .withTimezone(DateOperators.Timezone.valueOf("UTC"))
-                ).`as`("day")
-                .and("labels.path").`as`("path"),
-
-            // 4) group by the composite key { day, path } and count
-            group(Fields.from(
-                Fields.field("day"),
-                Fields.field("path")
-            )).count().`as`("count"),
-
-            // 5) flatten the _id so we end up with top‐level "day" and "path"
-            project("count")
-                .and("_id.path").`as`("path")
-                .and("_id.day").`as`("day"),
-
-            // 6) sort by day ascending (and maybe count descending if you like)
-            sort(Sort.by(Sort.Direction.ASC, "day"))
-        )
+        val pipeline =
+            newAggregation(
+                match(dateMatch),
+                unwind("labels"),
+                match(labelMatch),
+                // 3) project both the day-string and the label path
+                project()
+                    .and(
+                        DateOperators.DateToString
+                            .dateOf("\$createdAt")
+                            .toString("%Y-%m-%d")
+                            .withTimezone(DateOperators.Timezone.valueOf("UTC")),
+                    ).`as`("day")
+                    .and("labels.path")
+                    .`as`("path"),
+                // 4) group by the composite key { day, path } and count
+                group(
+                    Fields.from(
+                        Fields.field("day"),
+                        Fields.field("path"),
+                    ),
+                ).count().`as`("count"),
+                // 5) flatten the _id so we end up with top‐level "day" and "path"
+                project("count")
+                    .and("_id.path")
+                    .`as`("path")
+                    .and("_id.day")
+                    .`as`("day"),
+                // 6) sort by day ascending (and maybe count descending if you like)
+                sort(Sort.by(Sort.Direction.ASC, "day")),
+            )
 
         return reactiveMongoTemplate
             .aggregate(pipeline, "labelled_conversations", Document::class.java)
@@ -327,15 +344,19 @@ class MongoConversationRepository(
     }
 
     suspend fun aggregateDomainConversations(): List<DomainConversation> {
-        val agg = newAggregation(
-            unwind("labels"),
-            match(Criteria.where("labels.path").regex("^domain/")),
-            group("_id")
-                .first("messages").`as`("conversation")
-                .first("labels.path").`as`("domainLabel"),
-            project("conversation", "domainLabel")
-                .and("_id").`as`("conversationId")
-        )
+        val agg =
+            newAggregation(
+                unwind("labels"),
+                match(Criteria.where("labels.path").regex("^domain/")),
+                group("_id")
+                    .first("messages")
+                    .`as`("conversation")
+                    .first("labels.path")
+                    .`as`("domainLabel"),
+                project("conversation", "domainLabel")
+                    .and("_id")
+                    .`as`("conversationId"),
+            )
 
         return reactiveMongoTemplate
             .aggregate(agg, CONVERSATION_COLLECTION, DomainConversation::class.java)
@@ -347,7 +368,10 @@ class MongoConversationRepository(
 data class DomainConversation(
     val conversationId: String,
     val conversation: List<Document>,
-    val domainLabel: String
+    val domainLabel: String,
 )
 
-data class GenericLabel(val path: String, val count: Int)
+data class GenericLabel(
+    val path: String,
+    val count: Int,
+)

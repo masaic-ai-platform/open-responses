@@ -1,6 +1,5 @@
 package ai.masaic.improved.model
 
-import com.fasterxml.jackson.annotation.JsonProperty
 import java.time.Instant
 
 /**
@@ -11,7 +10,8 @@ data class AgentQueryRequest(
     val conversationId: String? = null,
     val includeContext: Boolean = true,
     val maxRetries: Int = 2,
-    val enableVisualization: Boolean = true
+    val enableVisualization: Boolean = true,
+    val enablePythonAnalysis: Boolean = true,
 )
 
 /**
@@ -25,11 +25,11 @@ data class AgentQueryResponse(
     val retryCount: Int = 0,
     val timestamp: Instant = Instant.now(),
     val error: String? = null,
-    val visualization: VisualizationData? = null
+    val visualization: VisualizationData? = null,
 )
 
 /**
- * Visualization data for Plotly.js charts
+ * Enhanced visualization data for Plotly.js charts with optional Python analysis
  */
 data class VisualizationData(
     val chartType: ChartType,
@@ -37,14 +37,35 @@ data class VisualizationData(
     val layout: Map<String, Any>,
     val config: Map<String, Any> = mapOf("responsive" to true),
     val title: String,
-    val description: String
+    val description: String,
+    val pythonAnalysis: PythonAnalysisResult? = null,
+)
+
+/**
+ * Result of Python-based data analysis
+ */
+data class PythonAnalysisResult(
+    val code: String,
+    val output: String,
+    val variables: Map<String, Any> = emptyMap(),
+    val executionTime: Long,
+    val success: Boolean,
+    val error: String? = null,
 )
 
 /**
  * Supported chart types for visualization
  */
 enum class ChartType {
-    BAR, LINE, PIE, SCATTER, HISTOGRAM, HEATMAP, TREEMAP, FUNNEL, AREA
+    BAR,
+    LINE,
+    PIE,
+    SCATTER,
+    HISTOGRAM,
+    HEATMAP,
+    TREEMAP,
+    FUNNEL,
+    AREA,
 }
 
 /**
@@ -52,76 +73,87 @@ enum class ChartType {
  */
 sealed class AgentResponseEvent(
     val type: String,
-    val timestamp: Instant = Instant.now()
+    val timestamp: Instant = Instant.now(),
 ) {
     data class QueryStarted(
         val query: String,
-        val conversationId: String
+        val conversationId: String,
     ) : AgentResponseEvent("query_started")
-    
+
     data class ContextBuilding(
-        val message: String
+        val message: String,
     ) : AgentResponseEvent("context_building")
-    
+
     data class CypherGeneration(
         val status: String,
         val attempt: Int,
-        val maxRetries: Int
+        val maxRetries: Int,
     ) : AgentResponseEvent("cypher_generation")
-    
+
     data class CypherGenerated(
         val cypherQuery: String,
         val explanation: String,
-        val confidence: String?
+        val confidence: String?,
     ) : AgentResponseEvent("cypher_generated")
-    
+
     data class QueryExecution(
-        val cypherQuery: String
+        val cypherQuery: String,
     ) : AgentResponseEvent("query_execution")
-    
+
     data class QueryExecuted(
         val success: Boolean,
         val resultCount: Int,
-        val executionTime: Long? = null
+        val executionTime: Long? = null,
     ) : AgentResponseEvent("query_executed")
-    
+
     data class QueryRetry(
         val attempt: Int,
         val maxRetries: Int,
-        val error: String
+        val error: String,
     ) : AgentResponseEvent("query_retry")
-    
+
     data class NaturalLanguageGeneration(
-        val status: String
+        val status: String,
     ) : AgentResponseEvent("natural_language_generation")
-    
+
     data class NaturalLanguageGenerated(
-        val naturalLanguageResponse: String
+        val naturalLanguageResponse: String,
     ) : AgentResponseEvent("natural_language_generated")
-    
+
     data class VisualizationGeneration(
-        val status: String
+        val status: String,
     ) : AgentResponseEvent("visualization_generation")
-    
+
     data class VisualizationGenerated(
         val chartType: ChartType,
         val title: String,
-        val description: String
+        val description: String,
     ) : AgentResponseEvent("visualization_generated")
-    
+
+    data class PythonAnalysisStarted(
+        val code: String,
+        val description: String,
+    ) : AgentResponseEvent("python_analysis_started")
+
+    data class PythonAnalysisCompleted(
+        val output: String,
+        val executionTime: Long,
+        val success: Boolean,
+    ) : AgentResponseEvent("python_analysis_completed")
+
     data class Complete(
-        val response: AgentQueryResponse
+        val response: AgentQueryResponse,
     ) : AgentResponseEvent("complete")
-    
+
     data class Error(
         val error: String,
-        val retryable: Boolean = false
+        val retryable: Boolean = false,
     ) : AgentResponseEvent("error")
-    
+
     data class Progress(
         val currentStep: String,
         val progress: Float,
-        val details: String
+        val details: String,
     ) : AgentResponseEvent("progress")
 }
 
@@ -134,7 +166,7 @@ data class VisualizationRecommendation(
     val title: String?,
     val description: String?,
     val reasoning: String,
-    val dataTransformation: String? = null
+    val dataTransformation: String? = null,
 )
 
 /**
@@ -144,7 +176,7 @@ data class AgentConversation(
     val id: String,
     val messages: MutableList<AgentMessage> = mutableListOf(),
     val createdAt: Instant = Instant.now(),
-    val lastUpdated: Instant = Instant.now()
+    val lastUpdated: Instant = Instant.now(),
 ) {
     fun addMessage(message: AgentMessage) {
         messages.add(message)
@@ -158,14 +190,16 @@ data class AgentMessage(
     val role: AgentRole,
     val content: String,
     val timestamp: Instant = Instant.now(),
-    val metadata: Map<String, Any> = emptyMap()
+    val metadata: Map<String, Any> = emptyMap(),
 )
 
 /**
  * Roles for agent messages.
  */
 enum class AgentRole {
-    USER, ASSISTANT, SYSTEM
+    USER,
+    ASSISTANT,
+    SYSTEM,
 }
 
 /**
@@ -177,7 +211,7 @@ data class GraphContext(
     val totalRelationships: Int,
     val rootPaths: List<String>,
     val samplePaths: List<String>,
-    val pathTreeSummary: String
+    val pathTreeSummary: String,
 )
 
 /**
@@ -187,7 +221,7 @@ data class CypherExecutionResult(
     val success: Boolean,
     val results: List<Map<String, Any>>? = null,
     val error: String? = null,
-    val queryExecuted: String
+    val queryExecuted: String,
 )
 
 /**
@@ -196,5 +230,25 @@ data class CypherExecutionResult(
 data class CypherGenerationResponse(
     val cypherQuery: String,
     val explanation: String,
-    val confidence: String? = null
+    val confidence: String? = null,
+)
+
+/**
+ * Enhanced analysis type for intelligent decision making
+ */
+enum class AnalysisType {
+    DIRECT_PLOTLY, // Simple data, direct Plotly generation
+    PYTHON_ANALYSIS, // Complex analysis needed, use Python
+    NO_VISUALIZATION, // No visualization beneficial
+}
+
+/**
+ * Intelligent analysis recommendation
+ */
+data class IntelligentAnalysisRecommendation(
+    val analysisType: AnalysisType,
+    val reasoning: String,
+    val chartType: ChartType? = null,
+    val pythonRequirements: List<String> = emptyList(),
+    val complexity: String = "low", // low, medium, high
 ) 

@@ -28,14 +28,14 @@ import java.util.concurrent.ConcurrentHashMap
 class AgentQueryService(
     private val modelService: ModelService,
     private val graphService: ConversationGraphService,
-    private val memgraphDriver: Driver
+    private val memgraphDriver: Driver,
 ) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper()
     
     // Store active agent conversations in memory
     private val activeConversations = ConcurrentHashMap<String, AgentConversation>()
-    
+
     /**
      * Process an agent query and return a natural language response.
      *
@@ -43,7 +43,10 @@ class AgentQueryService(
      * @param apiKey The API key for LLM calls
      * @return The agent query response with natural language answer
      */
-    suspend fun processQuery(request: AgentQueryRequest, apiKey: String): AgentQueryResponse {
+    suspend fun processQuery(
+        request: AgentQueryRequest,
+        apiKey: String,
+    ): AgentQueryResponse {
         logger.info { "Processing agent query: ${request.query}" }
         
         try {
@@ -54,9 +57,12 @@ class AgentQueryService(
             conversation.addMessage(AgentMessage(AgentRole.USER, request.query))
             
             // Get graph context if requested
-            val graphContext = if (request.includeContext) {
-                buildGraphContext()
-            } else null
+            val graphContext =
+                if (request.includeContext) {
+                    buildGraphContext()
+                } else {
+                    null
+                }
             
             // Generate and execute query with retry logic
             var retryCount = 0
@@ -65,44 +71,49 @@ class AgentQueryService(
             while (retryCount <= request.maxRetries) {
                 try {
                     // Generate Cypher query
-                    val cypherResponse = generateCypherQuery(
-                        request.query, 
-                        conversation, 
-                        graphContext, 
-                        lastError,
-                        apiKey
-                    )
+                    val cypherResponse =
+                        generateCypherQuery(
+                            request.query, 
+                            conversation, 
+                            graphContext, 
+                            lastError,
+                            apiKey,
+                        )
                     
                     // Execute Cypher query
                     val executionResult = executeCypherQuery(cypherResponse.cypherQuery)
                     
                     if (executionResult.success) {
                         // Generate natural language response
-                        val naturalResponse = generateNaturalLanguageResponse(
-                            request.query,
-                            cypherResponse.cypherQuery,
-                            executionResult.results ?: emptyList(),
-                            graphContext,
-                            conversation,
-                            apiKey
-                        )
+                        val naturalResponse =
+                            generateNaturalLanguageResponse(
+                                request.query,
+                                cypherResponse.cypherQuery,
+                                executionResult.results ?: emptyList(),
+                                graphContext,
+                                conversation,
+                                apiKey,
+                            )
                         
                         // Add assistant message to conversation
-                        conversation.addMessage(AgentMessage(
-                            AgentRole.ASSISTANT, 
-                            naturalResponse,
-                            metadata = mapOf(
-                                "cypherQuery" to cypherResponse.cypherQuery,
-                                "queryResults" to (executionResult.results ?: emptyList())
-                            )
-                        ))
+                        conversation.addMessage(
+                            AgentMessage(
+                                AgentRole.ASSISTANT, 
+                                naturalResponse,
+                                metadata =
+                                    mapOf(
+                                        "cypherQuery" to cypherResponse.cypherQuery,
+                                        "queryResults" to (executionResult.results ?: emptyList()),
+                                    ),
+                            ),
+                        )
                         
                         return AgentQueryResponse(
                             conversationId = conversation.id,
                             naturalLanguageResponse = naturalResponse,
                             cypherQuery = cypherResponse.cypherQuery,
                             queryResults = executionResult.results,
-                            retryCount = retryCount
+                            retryCount = retryCount,
                         )
                     } else {
                         // Query failed, prepare for retry
@@ -125,25 +136,24 @@ class AgentQueryService(
                 conversationId = conversation.id,
                 naturalLanguageResponse = "I apologize, but I'm having trouble generating a valid query for your request. Please try rephrasing your question or asking something more specific about the conversation data.",
                 retryCount = retryCount - 1,
-                error = errorMessage
+                error = errorMessage,
             )
-            
         } catch (e: Exception) {
             logger.error(e) { "Unexpected error processing agent query: ${e.message}" }
             
             return AgentQueryResponse(
                 conversationId = request.conversationId ?: UUID.randomUUID().toString(),
                 naturalLanguageResponse = "I encountered an unexpected error while processing your request. Please try again.",
-                error = "Unexpected error: ${e.message}"
+                error = "Unexpected error: ${e.message}",
             )
         }
     }
-    
+
     /**
      * Get or create an agent conversation.
      */
-    private fun getOrCreateConversation(conversationId: String?): AgentConversation {
-        return if (conversationId != null && activeConversations.containsKey(conversationId)) {
+    private fun getOrCreateConversation(conversationId: String?): AgentConversation =
+        if (conversationId != null && activeConversations.containsKey(conversationId)) {
             activeConversations[conversationId]!!.copy(lastUpdated = Instant.now())
         } else {
             val newId = conversationId ?: "agent_conv_${UUID.randomUUID().toString().replace("-", "").substring(0, 10)}"
@@ -151,8 +161,7 @@ class AgentQueryService(
             activeConversations[newId] = conversation
             conversation
         }
-    }
-    
+
     /**
      * Build graph context for the LLM.
      */
@@ -161,20 +170,21 @@ class AgentQueryService(
             val statistics = graphService.getMigrationStatistics()
             
             // Try to get tree structure, but fall back to flat list if it fails
-            val (rootNodes, sampleNodes, summary) = try {
-                val nodeTree = graphService.getFullNodeTree()
-                val roots = nodeTree.map { it.name }
-                val samples = nodeTree.flatMap { getAllNodes(it) }.take(20)
-                val treeSummary = buildNodeTreeSummary(nodeTree)
-                Triple(roots, samples, treeSummary)
-            } catch (e: Exception) {
-                logger.warn(e) { "Failed to build tree structure, using flat node list" }
-                val allNodes = graphService.getAllNodes()
-                val roots = allNodes.map { it.name }
-                val samples = allNodes.map { it.name }.take(20)
-                val flatSummary = buildFlatNodeSummary(allNodes)
-                Triple(roots, samples, flatSummary)
-            }
+            val (rootNodes, sampleNodes, summary) =
+                try {
+                    val nodeTree = graphService.getFullNodeTree()
+                    val roots = nodeTree.map { it.name }
+                    val samples = nodeTree.flatMap { getAllNodes(it) }.take(20)
+                    val treeSummary = buildNodeTreeSummary(nodeTree)
+                    Triple(roots, samples, treeSummary)
+                } catch (e: Exception) {
+                    logger.warn(e) { "Failed to build tree structure, using flat node list" }
+                    val allNodes = graphService.getAllNodes()
+                    val roots = allNodes.map { it.name }
+                    val samples = allNodes.map { it.name }.take(20)
+                    val flatSummary = buildFlatNodeSummary(allNodes)
+                    Triple(roots, samples, flatSummary)
+                }
             
             return GraphContext(
                 totalConversations = statistics.conversationsInGraph,
@@ -182,14 +192,14 @@ class AgentQueryService(
                 totalRelationships = statistics.totalRelationships,
                 rootPaths = rootNodes,
                 samplePaths = sampleNodes,
-                pathTreeSummary = summary
+                pathTreeSummary = summary,
             )
         } catch (e: Exception) {
             logger.error(e) { "Error building graph context: ${e.message}" }
             return GraphContext(0, 0, 0, emptyList(), emptyList(), "Error retrieving graph context")
         }
     }
-    
+
     /**
      * Recursively get all nodes from a node tree.
      */
@@ -200,7 +210,7 @@ class AgentQueryService(
         }
         return nodes
     }
-    
+
     /**
      * Build a summary of the node tree structure.
      */
@@ -221,7 +231,7 @@ class AgentQueryService(
         
         return summary.toString()
     }
-    
+
     private fun buildFlatNodeSummary(nodes: List<NodeInfo>): String {
         val summary = StringBuilder()
         summary.appendLine("Graph Structure Overview (Flat):")
@@ -234,7 +244,7 @@ class AgentQueryService(
         
         return summary.toString()
     }
-    
+
     /**
      * Generate a Cypher query using the LLM.
      */
@@ -243,56 +253,71 @@ class AgentQueryService(
         conversation: AgentConversation,
         graphContext: GraphContext?,
         previousError: String?,
-        apiKey: String
+        apiKey: String,
     ): CypherGenerationResponse {
-        
         val systemPrompt = buildCypherGenerationPrompt(graphContext, previousError)
         val conversationHistory = buildConversationHistory(conversation)
         
-        val messages = mutableListOf<Map<String, Any>>().apply {
-            add(mapOf("role" to "system", "content" to systemPrompt))
-            if (conversationHistory.isNotEmpty()) {
-                addAll(conversationHistory)
+        val messages =
+            mutableListOf<Map<String, Any>>().apply {
+                add(mapOf("role" to "system", "content" to systemPrompt))
+                if (conversationHistory.isNotEmpty()) {
+                    addAll(conversationHistory)
+                }
+                add(mapOf("role" to "user", "content" to userQuery))
             }
-            add(mapOf("role" to "user", "content" to userQuery))
-        }
         
-        val request = CreateCompletionRequest(
-            model = "gpt-4.1",
-            messages = messages,
-            temperature = 0.1,
-            response_format = mapOf(
-                "type" to "json_schema",
-                "json_schema" to mapOf(
-                    "name" to "cypher_response",
-                    "schema" to mapOf(
-                        "type" to "object",
-                        "properties" to mapOf(
-                            "cypherQuery" to mapOf("type" to "string"),
-                            "explanation" to mapOf("type" to "string"),
-                            "confidence" to mapOf("type" to "string")
-                        ),
-                        "required" to listOf("cypherQuery", "explanation")
-                    )
-                )
+        val request =
+            CreateCompletionRequest(
+                model = "gpt-4.1",
+                messages = messages,
+                temperature = 0.1,
+                response_format =
+                    mapOf(
+                        "type" to "json_schema",
+                        "json_schema" to
+                            mapOf(
+                                "name" to "cypher_response",
+                                "schema" to
+                                    mapOf(
+                                        "type" to "object",
+                                        "properties" to
+                                            mapOf(
+                                                "cypherQuery" to mapOf("type" to "string"),
+                                                "explanation" to mapOf("type" to "string"),
+                                                "confidence" to mapOf("type" to "string"),
+                                            ),
+                                        "required" to listOf("cypherQuery", "explanation"),
+                                    ),
+                            ),
+                    ),
             )
-        )
         
         val response: CypherGenerationResponse = modelService.createCompletion(request, apiKey)
         logger.debug { "Generated Cypher query: ${response.cypherQuery}" }
         
         return response
     }
-    
+
     /**
      * Build the system prompt for Cypher generation.
      */
-    private fun buildCypherGenerationPrompt(graphContext: GraphContext?, previousError: String?): String {
+    private fun buildCypherGenerationPrompt(
+        graphContext: GraphContext?,
+        previousError: String?,
+    ): String {
         val prompt = StringBuilder()
-        val currentDate = java.time.LocalDate.now().toString() // YYYY-MM-DD format
-        val currentDateTime = java.time.Instant.now().toString() // ISO format
+        val currentDate =
+            java.time.LocalDate
+                .now()
+                .toString() // YYYY-MM-DD format
+        val currentDateTime =
+            java.time.Instant
+                .now()
+                .toString() // ISO format
         
-        prompt.appendLine("""
+        prompt.appendLine(
+            """
             You are a Neo4j Cypher query expert specializing in analyzing conversation data stored in a graph database.
             
             CURRENT DATE CONTEXT:
@@ -345,7 +370,8 @@ class AgentQueryService(
             15. Last 30 days trends: MATCH (c:Conversation) WHERE c.createdAt >= '${java.time.LocalDate.now().minusDays(30)}T00:00:00Z' RETURN substring(c.createdAt, 0, 10) as date, count(c) as conversations ORDER BY date
             16. Hierarchy structure: MATCH (root:PathNode)-[:HAS_CHILD]->(child:PathNode) RETURN root.name as parent, child.name as child ORDER BY parent, child
             17. All nodes under domain: MATCH (root:PathNode {name: 'domain'})-[:HAS_CHILD*0..]->(descendant:PathNode) RETURN descendant.name as node_name ORDER BY node_name
-        """.trimIndent())
+            """.trimIndent(),
+        )
         
         if (graphContext != null) {
             prompt.appendLine("\nCURRENT GRAPH STATE:")
@@ -361,7 +387,8 @@ class AgentQueryService(
             prompt.appendLine("\nPlease correct the query to avoid this error.")
         }
         
-        prompt.appendLine("""
+        prompt.appendLine(
+            """
             
             INSTRUCTIONS:
             1. Generate a valid Cypher query that answers the user's question
@@ -375,57 +402,58 @@ class AgentQueryService(
             - cypherQuery: The Cypher query string
             - explanation: What the query does and what insights it provides
             - confidence: Your confidence level (high/medium/low)
-        """.trimIndent())
+            """.trimIndent(),
+        )
         
         return prompt.toString()
     }
-    
+
     /**
      * Build conversation history for context.
      */
-    private fun buildConversationHistory(conversation: AgentConversation): List<Map<String, Any>> {
-        return conversation.messages.takeLast(10).map { message ->
+    private fun buildConversationHistory(conversation: AgentConversation): List<Map<String, Any>> =
+        conversation.messages.takeLast(10).map { message ->
             mapOf(
                 "role" to message.role.name.lowercase(),
-                "content" to message.content
+                "content" to message.content,
             )
         }
-    }
-    
+
     /**
      * Execute a Cypher query against the graph database.
      */
-    private suspend fun executeCypherQuery(cypherQuery: String): CypherExecutionResult {
-        return try {
+    private suspend fun executeCypherQuery(cypherQuery: String): CypherExecutionResult =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
                 logger.debug { "Executing Cypher query: $cypherQuery" }
                 
                 val result = session.run(cypherQuery)
-                val records = result.list { record ->
-                    val map = mutableMapOf<String, Any>()
-                    record.keys().forEach { key ->
-                        val value = record.get(key)
-                        map[key] = when {
-                            value.isNull() -> null
-                            else -> {
-                                try {
-                                    when (value.type().name()) {
-                                        "INTEGER" -> value.asLong()
-                                        "FLOAT" -> value.asDouble()
-                                        "STRING" -> value.asString()
-                                        "BOOLEAN" -> value.asBoolean()
-                                        "LIST" -> value.asList()
-                                        "MAP" -> value.asMap()
-                                        else -> value.toString()
+                val records =
+                    result.list { record ->
+                        val map = mutableMapOf<String, Any>()
+                        record.keys().forEach { key ->
+                            val value = record.get(key)
+                            map[key] = when {
+                                value.isNull() -> null
+                                else -> {
+                                    try {
+                                        when (value.type().name()) {
+                                            "INTEGER" -> value.asLong()
+                                            "FLOAT" -> value.asDouble()
+                                            "STRING" -> value.asString()
+                                            "BOOLEAN" -> value.asBoolean()
+                                            "LIST" -> value.asList()
+                                            "MAP" -> value.asMap()
+                                            else -> value.toString()
+                                        }
+                                    } catch (e: Exception) {
+                                        value.toString()
                                     }
-                                } catch (e: Exception) {
-                                    value.toString()
                                 }
-                            }
-                        } ?: "null"
+                            } ?: "null"
+                        }
+                        map
                     }
-                    map
-                }
                 
                 logger.debug { "Query executed successfully, returned ${records.size} records" }
                 CypherExecutionResult(success = true, results = records, queryExecuted = cypherQuery)
@@ -435,11 +463,10 @@ class AgentQueryService(
             CypherExecutionResult(
                 success = false,
                 error = e.message ?: "Unknown error executing query",
-                queryExecuted = cypherQuery
+                queryExecuted = cypherQuery,
             )
         }
-    }
-    
+
     /**
      * Generate a natural language response based on query results.
      */
@@ -449,10 +476,10 @@ class AgentQueryService(
         queryResults: List<Map<String, Any>>,
         graphContext: GraphContext?,
         conversation: AgentConversation,
-        apiKey: String
+        apiKey: String,
     ): String {
-        
-        val systemPrompt = """
+        val systemPrompt =
+            """
             You are a business analyst expert at interpreting data query results and providing clear, actionable insights.
             
             Your task is to analyze the query results and provide a natural language response that:
@@ -463,9 +490,10 @@ class AgentQueryService(
             5. Uses clear, non-technical language
             
             Format your response as a conversational analysis, not just raw data presentation.
-        """.trimIndent()
+            """.trimIndent()
         
-        val userPrompt = """
+        val userPrompt =
+            """
             Original Question: $originalQuery
             
             Cypher Query Used: $cypherQuery
@@ -473,18 +501,20 @@ class AgentQueryService(
             Query Results: ${objectMapper.writeValueAsString(queryResults)}
             
             Please provide a comprehensive analysis of these results in natural language.
-        """.trimIndent()
+            """.trimIndent()
         
-        val messages = listOf(
-            mapOf("role" to "system", "content" to systemPrompt),
-            mapOf("role" to "user", "content" to userPrompt)
-        )
+        val messages =
+            listOf(
+                mapOf("role" to "system", "content" to systemPrompt),
+                mapOf("role" to "user", "content" to userPrompt),
+            )
         
-        val request = CreateCompletionRequest(
-            model = "gpt-4.1",
-            messages = messages,
-            temperature = 0.3
-        )
+        val request =
+            CreateCompletionRequest(
+                model = "gpt-4.1",
+                messages = messages,
+                temperature = 0.3,
+            )
         
         return try {
             val response = modelService.fetchCompletionPayload(request, apiKey)
@@ -494,22 +524,22 @@ class AgentQueryService(
             "I found the data you requested, but I'm having trouble summarizing it clearly. Here are the raw results: ${objectMapper.writeValueAsString(queryResults)}"
         }
     }
-    
+
     /**
      * Get conversation history for a specific conversation ID.
      */
-    fun getConversationHistory(conversationId: String): AgentConversation? {
-        return activeConversations[conversationId]
-    }
-    
+    fun getConversationHistory(conversationId: String): AgentConversation? = activeConversations[conversationId]
+
     /**
      * Clear old conversations to prevent memory leaks.
      */
     fun cleanupOldConversations(maxAgeHours: Int = 24) {
         val cutoffTime = Instant.now().minusSeconds(maxAgeHours * 3600L)
-        val toRemove = activeConversations.filter { (_, conversation) ->
-            conversation.lastUpdated.isBefore(cutoffTime)
-        }.keys
+        val toRemove =
+            activeConversations
+                .filter { (_, conversation) ->
+                    conversation.lastUpdated.isBefore(cutoffTime)
+                }.keys
         
         toRemove.forEach { key ->
             activeConversations.remove(key)

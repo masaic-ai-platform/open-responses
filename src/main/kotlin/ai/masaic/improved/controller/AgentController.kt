@@ -5,27 +5,23 @@ import com.fasterxml.jackson.annotation.JsonSubTypes
 import com.fasterxml.jackson.annotation.JsonTypeInfo
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
 import mu.KotlinLogging
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.web.bind.annotation.*
 import java.time.Instant
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.awaitClose
-import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 
 @RestController
 @RequestMapping("/v1")
 @CrossOrigin(origins = ["*"], allowedHeaders = ["*"])
 class AgentController(
-    private val convClassificationAgent: ClassificationAgent
+    private val convClassificationAgent: ClassificationAgent,
 ) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper()
@@ -40,20 +36,19 @@ class AgentController(
     private val runEvents = ConcurrentHashMap<String, MutableList<SseEvent>>()
     
     // Terminal event types that should close the stream
-    private val terminalEventTypes = setOf(
-        "RUN_COMPLETED", 
-        "RUN_ABORTED", 
-        "ERROR"
-    )
+    private val terminalEventTypes =
+        setOf(
+            "RUN_COMPLETED", 
+            "RUN_ABORTED", 
+            "ERROR",
+        )
 
     @PostMapping("/agents/{agentId}/ask", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
     suspend fun ask(
         @PathVariable agentId: String,
         @RequestBody request: RunRequest,
-        @RequestHeader(name = "Authorization", required = true) apiKey: String
-    ): Flow<ServerSentEvent<String>> {
-        return convClassificationAgent.run(apiKey, request.instruction)
-    }
+        @RequestHeader(name = "Authorization", required = true) apiKey: String,
+    ): Flow<ServerSentEvent<String>> = convClassificationAgent.run(apiKey, request.instruction)
     
     /**
      * Start a new agent run
@@ -307,17 +302,17 @@ class AgentController(
 //            channel.close()
 //        }
 //    }
-    
+
     /**
      * Create a ServerSentEvent from an SseEvent
      */
-    private fun createServerSentEvent(event: SseEvent): ServerSentEvent<String> {
-        return ServerSentEvent.builder<String>()
+    private fun createServerSentEvent(event: SseEvent): ServerSentEvent<String> =
+        ServerSentEvent
+            .builder<String>()
             .id(event.id) // Safe to use non-null assertion after the check above
             .event(event.type)
             .data(objectMapper.writeValueAsString(event))
             .build()
-    }
     
 //    /**
 //     * Map a SamplingAgentEvent to our SSE event format
@@ -423,7 +418,7 @@ class AgentController(
  */
 data class RunRequest(
     val instruction: String,
-    val context: Map<String, Any>? = null
+    val context: Map<String, Any>? = null,
 )
 
 /**
@@ -431,7 +426,7 @@ data class RunRequest(
  */
 data class RunCreated(
     val runId: String,
-    val status: String
+    val status: String,
 )
 
 /**
@@ -440,11 +435,11 @@ data class RunCreated(
 @JsonTypeInfo(
     use = JsonTypeInfo.Id.NAME,
     include = JsonTypeInfo.As.PROPERTY,
-    property = "mode"
+    property = "mode",
 )
 @JsonSubTypes(
     JsonSubTypes.Type(value = Answer::class, name = "ANSWER"),
-    JsonSubTypes.Type(value = Abort::class, name = "ABORT")
+    JsonSubTypes.Type(value = Abort::class, name = "ABORT"),
 )
 sealed class ReplyRequest
 
@@ -454,7 +449,7 @@ sealed class ReplyRequest
 data class Answer(
     val mode: String = "ANSWER",
     val requestId: String,
-    val text: String
+    val text: String,
 ) : ReplyRequest()
 
 /**
@@ -462,7 +457,7 @@ data class Answer(
  */
 data class Abort(
     val mode: String = "ABORT",
-    val reason: String? = null
+    val reason: String? = null,
 ) : ReplyRequest()
 
 /**
@@ -473,7 +468,7 @@ data class SseEvent(
     val data: Any,
     var id: String = UUID.randomUUID().toString(), // Default to a new UUID instead of allowing null
     val timestamp: String = Instant.now().toString(),
-    val v: Int = 1
+    val v: Int = 1,
 )
 
 /**
@@ -485,7 +480,7 @@ enum class RunStatus {
     WAITING_FOR_INPUT,
     COMPLETED,
     ABORTED,
-    ERROR
+    ERROR,
 }
 
 /**
@@ -500,46 +495,78 @@ data class AgentRun(
     var status: RunStatus,
     val startTime: Instant,
     val jobContext: CoroutineScope,
-    var currentRequestId: String? = null
+    var currentRequestId: String? = null,
 )
 
 // Event data types
-data class StatusChangeData(val status: String)
-data class StepStartedData(val step: String, val details: String)
-data class StepCompletedData(val step: String, val details: String, val data: Map<String, Any> = emptyMap())
-data class ProgressUpdateData(val progress: Float, val currentCount: Int, val targetCount: Int, val details: String)
-data class RunCompletedData(val result: String)
-data class RunAbortedData(val reason: String)
-data class ErrorData(val message: String)
-data class ClarificationRequestData(val requestId: String, val question: String)
-data class ClarificationReceivedData(val requestId: String, val text: String)
+data class StatusChangeData(
+    val status: String,
+)
+
+data class StepStartedData(
+    val step: String,
+    val details: String,
+)
+
+data class StepCompletedData(
+    val step: String,
+    val details: String,
+    val data: Map<String, Any> = emptyMap(),
+)
+
+data class ProgressUpdateData(
+    val progress: Float,
+    val currentCount: Int,
+    val targetCount: Int,
+    val details: String,
+)
+
+data class RunCompletedData(
+    val result: String,
+)
+
+data class RunAbortedData(
+    val reason: String,
+)
+
+data class ErrorData(
+    val message: String,
+)
+
+data class ClarificationRequestData(
+    val requestId: String,
+    val question: String,
+)
+
+data class ClarificationReceivedData(
+    val requestId: String,
+    val text: String,
+)
 
 // Custom exceptions
-class NotFoundException(message: String) : RuntimeException(message)
-class ConflictException(message: String) : RuntimeException(message)
+class NotFoundException(
+    message: String,
+) : RuntimeException(message)
+
+class ConflictException(
+    message: String,
+) : RuntimeException(message)
 
 // Exception handlers
 @ControllerAdvice
 class AgentControllerExceptionHandler {
-    
     @ExceptionHandler(NotFoundException::class)
     @ResponseStatus(HttpStatus.NOT_FOUND)
     @ResponseBody
-    suspend fun handleNotFoundException(ex: NotFoundException): Map<String, String> {
-        return mapOf("message" to ex.message!!)
-    }
-    
+    suspend fun handleNotFoundException(ex: NotFoundException): Map<String, String> = mapOf("message" to ex.message!!)
+
     @ExceptionHandler(ConflictException::class)
     @ResponseStatus(HttpStatus.CONFLICT)
     @ResponseBody
-    suspend fun handleConflictException(ex: ConflictException): Map<String, String> {
-        return mapOf("message" to ex.message!!)
-    }
-    
+    suspend fun handleConflictException(ex: ConflictException): Map<String, String> = mapOf("message" to ex.message!!)
+
     @ExceptionHandler(Exception::class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     @ResponseBody
-    suspend fun handleException(ex: Exception): Map<String, String> {
-        return mapOf("message" to (ex.message ?: "Internal server error"))
-    }
+    suspend fun handleException(ex: Exception): Map<String, String> = mapOf("message" to (ex.message ?: "Internal server error"))
 }

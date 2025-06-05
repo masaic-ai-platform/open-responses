@@ -264,7 +264,7 @@ class MasaicCompletionService(
         modelName: String,
     ): OpenAIClient {
         val baseUrl = getApiBaseUri(headers, modelName).toURL().toString()
-        return  if (baseUrl.contains("azure")) {
+        return if (baseUrl.contains("azure")) {
             OpenAIOkHttpClient
                 .builder()
                 .baseUrl(baseUrl)

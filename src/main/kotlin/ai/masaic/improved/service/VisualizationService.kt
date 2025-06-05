@@ -20,11 +20,11 @@ import org.springframework.stereotype.Service
  */
 @Service
 class VisualizationService(
-    private val modelService: ModelService
+    private val modelService: ModelService,
 ) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
-    
+
     /**
      * Analyze query results and generate visualization recommendation
      */
@@ -32,12 +32,13 @@ class VisualizationService(
         originalQuery: String,
         cypherQuery: String,
         queryResults: List<Map<String, Any>>,
-        apiKey: String
+        apiKey: String,
     ): VisualizationRecommendation {
         logger.debug { "Analyzing query for visualization potential: $originalQuery" }
         logger.info { "VisualizationService.analyzeForVisualization called with ${queryResults.size} results" }
         
-        val systemPrompt = """
+        val systemPrompt =
+            """
             You are a data visualization expert. Analyze the provided query and results to determine if visualization would be beneficial and recommend the best chart type.
             
             Consider these factors:
@@ -63,9 +64,10 @@ class VisualizationService(
             - Data must have clear parent-child hierarchy (like "parent" and "child" columns)
             - Values must be summable (parent = sum of children)
             - Use BAR charts instead if data is just categorical without hierarchy
-        """.trimIndent()
+            """.trimIndent()
         
-        val userPrompt = """
+        val userPrompt =
+            """
             Original Question: $originalQuery
             
             Cypher Query: $cypherQuery
@@ -75,39 +77,46 @@ class VisualizationService(
             Number of result rows: ${queryResults.size}
             
             Please analyze this data and provide a visualization recommendation.
-        """.trimIndent()
+            """.trimIndent()
         
-        val messages = listOf(
-            mapOf("role" to "system", "content" to systemPrompt),
-            mapOf("role" to "user", "content" to userPrompt)
-        )
-        
-        val request = CreateCompletionRequest(
-            model = "gpt-4.1",
-            messages = messages,
-            temperature = 0.2,
-            response_format = mapOf(
-                "type" to "json_schema",
-                "json_schema" to mapOf(
-                    "name" to "visualization_recommendation",
-                    "schema" to mapOf(
-                        "type" to "object",
-                        "properties" to mapOf(
-                            "shouldVisualize" to mapOf("type" to "boolean"),
-                            "chartType" to mapOf(
-                                "type" to "string",
-                                "enum" to ChartType.values().map { it.name }
-                            ),
-                            "title" to mapOf("type" to "string"),
-                            "description" to mapOf("type" to "string"),
-                            "reasoning" to mapOf("type" to "string"),
-                            "dataTransformation" to mapOf("type" to "string")
-                        ),
-                        "required" to listOf("shouldVisualize", "reasoning")
-                    )
-                )
+        val messages =
+            listOf(
+                mapOf("role" to "system", "content" to systemPrompt),
+                mapOf("role" to "user", "content" to userPrompt),
             )
-        )
+        
+        val request =
+            CreateCompletionRequest(
+                model = "gpt-4.1",
+                messages = messages,
+                temperature = 0.2,
+                response_format =
+                    mapOf(
+                        "type" to "json_schema",
+                        "json_schema" to
+                            mapOf(
+                                "name" to "visualization_recommendation",
+                                "schema" to
+                                    mapOf(
+                                        "type" to "object",
+                                        "properties" to
+                                            mapOf(
+                                                "shouldVisualize" to mapOf("type" to "boolean"),
+                                                "chartType" to
+                                                    mapOf(
+                                                        "type" to "string",
+                                                        "enum" to ChartType.values().map { it.name },
+                                                    ),
+                                                "title" to mapOf("type" to "string"),
+                                                "description" to mapOf("type" to "string"),
+                                                "reasoning" to mapOf("type" to "string"),
+                                                "dataTransformation" to mapOf("type" to "string"),
+                                            ),
+                                        "required" to listOf("shouldVisualize", "reasoning"),
+                                    ),
+                            ),
+                    ),
+            )
         
         try {
             logger.info { "Making LLM call for visualization recommendation..." }
@@ -121,11 +130,11 @@ class VisualizationService(
                 chartType = null,
                 title = null,
                 description = null,
-                reasoning = "Error occurred during analysis: ${e.message}"
+                reasoning = "Error occurred during analysis: ${e.message}",
             )
         }
     }
-    
+
     /**
      * Generate Plotly.js visualization data based on recommendation
      */
@@ -133,7 +142,7 @@ class VisualizationService(
         recommendation: VisualizationRecommendation,
         queryResults: List<Map<String, Any>>,
         originalQuery: String,
-        apiKey: String
+        apiKey: String,
     ): VisualizationData? {
         if (!recommendation.shouldVisualize || recommendation.chartType == null) {
             logger.info { "Skipping visualization generation: shouldVisualize=${recommendation.shouldVisualize}, chartType=${recommendation.chartType}" }
@@ -143,7 +152,8 @@ class VisualizationService(
         logger.debug { "Generating ${recommendation.chartType} visualization" }
         logger.info { "VisualizationService.generateVisualization called for ${recommendation.chartType} chart" }
         
-        val systemPrompt = """
+        val systemPrompt =
+            """
             You are a Plotly.js expert. Generate a complete Plotly.js configuration for the specified chart type.
             
             Your response must include:
@@ -181,9 +191,10 @@ class VisualizationService(
             - Appropriate colors and styling
             - Proper sorting/ordering when relevant
             - TREEMAP: Parent values must equal sum of children to avoid Plotly errors
-        """.trimIndent()
+            """.trimIndent()
         
-        val userPrompt = """
+        val userPrompt =
+            """
             Chart Type: ${recommendation.chartType}
             Title: ${recommendation.title ?: "Data Visualization"}
             Description: ${recommendation.description ?: ""}
@@ -195,57 +206,65 @@ class VisualizationService(
             Data transformation instructions: ${recommendation.dataTransformation ?: "Use data as-is"}
             
             Generate a complete Plotly.js configuration.
-        """.trimIndent()
+            """.trimIndent()
         
-        val messages = listOf(
-            mapOf("role" to "system", "content" to systemPrompt),
-            mapOf("role" to "user", "content" to userPrompt)
-        )
-        
-        val request = CreateCompletionRequest(
-            model = "gpt-4.1",
-            messages = messages,
-            temperature = 0.1,
-            response_format = mapOf(
-                "type" to "json_schema",
-                "json_schema" to mapOf(
-                    "name" to "plotly_config",
-                    "schema" to mapOf(
-                        "type" to "object",
-                        "properties" to mapOf(
-                            "data" to mapOf(
-                                "type" to "array",
-                                "items" to mapOf("type" to "object")
-                            ),
-                            "layout" to mapOf("type" to "object"),
-                            "title" to mapOf("type" to "string"),
-                            "description" to mapOf("type" to "string")
-                        ),
-                        "required" to listOf("data", "layout", "title", "description")
-                    )
-                )
+        val messages =
+            listOf(
+                mapOf("role" to "system", "content" to systemPrompt),
+                mapOf("role" to "user", "content" to userPrompt),
             )
-        )
+        
+        val request =
+            CreateCompletionRequest(
+                model = "gpt-4.1",
+                messages = messages,
+                temperature = 0.1,
+                response_format =
+                    mapOf(
+                        "type" to "json_schema",
+                        "json_schema" to
+                            mapOf(
+                                "name" to "plotly_config",
+                                "schema" to
+                                    mapOf(
+                                        "type" to "object",
+                                        "properties" to
+                                            mapOf(
+                                                "data" to
+                                                    mapOf(
+                                                        "type" to "array",
+                                                        "items" to mapOf("type" to "object"),
+                                                    ),
+                                                "layout" to mapOf("type" to "object"),
+                                                "title" to mapOf("type" to "string"),
+                                                "description" to mapOf("type" to "string"),
+                                            ),
+                                        "required" to listOf("data", "layout", "title", "description"),
+                                    ),
+                            ),
+                    ),
+            )
         
         return try {
             data class PlotlyConfig(
                 val data: List<Map<String, Any>>,
                 val layout: Map<String, Any>,
                 val title: String,
-                val description: String
+                val description: String,
             )
             
             logger.info { "Making LLM call for Plotly.js configuration..." }
             val response: PlotlyConfig = modelService.createCompletion(request, apiKey)
             logger.info { "LLM Plotly config received: title='${response.title}', data.size=${response.data.size}" }
             
-            val visualizationData = VisualizationData(
-                chartType = recommendation.chartType,
-                data = response.data,
-                layout = response.layout,
-                title = response.title,
-                description = response.description
-            )
+            val visualizationData =
+                VisualizationData(
+                    chartType = recommendation.chartType,
+                    data = response.data,
+                    layout = response.layout,
+                    title = response.title,
+                    description = response.description,
+                )
             
             logger.info { "Successfully created VisualizationData: ${visualizationData.chartType} chart with title '${visualizationData.title}'" }
             visualizationData
@@ -254,7 +273,7 @@ class VisualizationService(
             null
         }
     }
-    
+
     /**
      * Quick heuristics-based chart type detection (fallback)
      */

@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service
  */
 @Service
 class ConversationGraphService(
-    private val memgraphDriver: Driver
+    private val memgraphDriver: Driver,
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -54,7 +54,7 @@ class ConversationGraphService(
     suspend fun batchMigrateConversations(
         conversationRepository: ConversationRepository,
         batchSize: Int = 100,
-        maxConversations: Int? = null
+        maxConversations: Int? = null,
     ): BatchMigrationResult {
         logger.info { "Starting batch migration of conversations to graph database" }
         
@@ -110,7 +110,6 @@ class ConversationGraphService(
             }
             
             logger.info { "Batch migration completed. Total: $processedCount, Success: ${result.successCount}, Errors: ${result.errorCount}, Skipped: ${result.skippedCount}" }
-            
         } catch (e: Exception) {
             logger.error(e) { "Fatal error during batch migration: ${e.message}" }
             result.errors.add("Fatal migration error: ${e.message}")
@@ -122,8 +121,8 @@ class ConversationGraphService(
     /**
      * Check if a conversation already exists in the graph.
      */
-    private suspend fun conversationExistsInGraph(conversationId: String): Boolean {
-        return try {
+    private suspend fun conversationExistsInGraph(conversationId: String): Boolean =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
                 val query = "MATCH (c:Conversation {id: \$conversationId}) RETURN count(c) as count"
                 val result = session.run(query, mapOf("conversationId" to conversationId))
@@ -134,7 +133,6 @@ class ConversationGraphService(
             logger.error(e) { "Error checking if conversation $conversationId exists in graph" }
             false
         }
-    }
 
     /**
      * Fetch a batch of conversations from the repository.
@@ -142,9 +140,9 @@ class ConversationGraphService(
     private suspend fun fetchConversationBatch(
         conversationRepository: ConversationRepository,
         offset: Int,
-        batchSize: Int
-    ): List<Conversation> {
-        return try {
+        batchSize: Int,
+    ): List<Conversation> =
+        try {
             // Get all conversations and apply manual pagination
             val allConversations = conversationRepository.listConversations()
             allConversations.drop(offset).take(batchSize)
@@ -152,30 +150,28 @@ class ConversationGraphService(
             logger.error(e) { "Error fetching conversation batch at offset $offset" }
             emptyList()
         }
-    }
-
-
 
     /**
      * Get all nodes as a flat list (simpler alternative to tree structure).
      *
      * @return List of all nodes with their conversation counts
      */
-    suspend fun getAllNodes(): List<NodeInfo> {
-        return try {
+    suspend fun getAllNodes(): List<NodeInfo> =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
-                val query = """
+                val query =
+                    """
                     MATCH (p:PathNode)
                     OPTIONAL MATCH (p)-[:CONTAINS]->(c:Conversation)
                     RETURN p.name as nodeName, count(c) as conversationCount
                     ORDER BY nodeName
-                """.trimIndent()
+                    """.trimIndent()
                 
                 val result = session.run(query)
                 result.list { record ->
                     NodeInfo(
                         name = record.get("nodeName").asString(),
-                        conversationCount = record.get("conversationCount").asInt()
+                        conversationCount = record.get("conversationCount").asInt(),
                     )
                 }
             }
@@ -183,39 +179,56 @@ class ConversationGraphService(
             logger.error(e) { "Error getting all nodes: ${e.message}" }
             emptyList()
         }
-    }
 
     /**
      * Get migration statistics for monitoring.
      */
-    suspend fun getMigrationStatistics(): MigrationStatistics {
-        return try {
+    suspend fun getMigrationStatistics(): MigrationStatistics =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
                 val conversationCountQuery = "MATCH (c:Conversation) RETURN count(c) as conversationCount"
                 val pathNodeCountQuery = "MATCH (p:PathNode) RETURN count(p) as pathNodeCount"
                 val relationshipCountQuery = "MATCH ()-[r]->() RETURN count(r) as relationshipCount"
                 
-                val conversationCount = session.run(conversationCountQuery).single().get("conversationCount").asInt()
-                val pathNodeCount = session.run(pathNodeCountQuery).single().get("pathNodeCount").asInt()
-                val relationshipCount = session.run(relationshipCountQuery).single().get("relationshipCount").asInt()
+                val conversationCount =
+                    session
+                        .run(conversationCountQuery)
+                        .single()
+                        .get("conversationCount")
+                        .asInt()
+                val pathNodeCount =
+                    session
+                        .run(pathNodeCountQuery)
+                        .single()
+                        .get("pathNodeCount")
+                        .asInt()
+                val relationshipCount =
+                    session
+                        .run(relationshipCountQuery)
+                        .single()
+                        .get("relationshipCount")
+                        .asInt()
                 
                 MigrationStatistics(
                     conversationsInGraph = conversationCount,
                     pathNodesInGraph = pathNodeCount,
-                    totalRelationships = relationshipCount
+                    totalRelationships = relationshipCount,
                 )
             }
         } catch (e: Exception) {
             logger.error(e) { "Error getting migration statistics: ${e.message}" }
             MigrationStatistics()
         }
-    }
 
     /**
      * Creates or updates a conversation node in the graph.
      */
-    private fun createConversationNode(session: org.neo4j.driver.Session, conversation: Conversation) {
-        val query = """
+    private fun createConversationNode(
+        session: org.neo4j.driver.Session,
+        conversation: Conversation,
+    ) {
+        val query =
+            """
             MERGE (c:Conversation {id: ${'$'}conversationId})
             SET c.createdAt = ${'$'}createdAt,
                 c.summary = ${'$'}summary,
@@ -224,7 +237,7 @@ class ConversationGraphService(
                 c.version = ${'$'}version,
                 c.classification = ${'$'}classification,
                 c.messageCount = ${'$'}messageCount
-        """.trimIndent()
+            """.trimIndent()
 
         session.run(
             query,
@@ -236,8 +249,8 @@ class ConversationGraphService(
                 "nps" to conversation.nps,
                 "version" to conversation.version,
                 "classification" to conversation.classification?.name,
-                "messageCount" to conversation.messages.size
-            )
+                "messageCount" to conversation.messages.size,
+            ),
         )
     }
 
@@ -246,7 +259,11 @@ class ConversationGraphService(
      * IMPROVED: Uses proper graph hierarchy instead of path-based approach.
      * For example, path "domain/tech/api" creates individual nodes: domain -[:HAS_CHILD]-> tech -[:HAS_CHILD]-> api
      */
-    private fun createPathAndConnectConversation(session: org.neo4j.driver.Session, path: String, conversationId: String) {
+    private fun createPathAndConnectConversation(
+        session: org.neo4j.driver.Session,
+        path: String,
+        conversationId: String,
+    ) {
         val pathSegments = path.split("/").filter { it.isNotBlank() }
         
         if (pathSegments.isEmpty()) {
@@ -256,9 +273,10 @@ class ConversationGraphService(
 
         // Create individual nodes for each segment (not path-based)
         pathSegments.forEach { segment ->
-            val createNodeQuery = """
+            val createNodeQuery =
+                """
                 MERGE (p:PathNode {name: ${'$'}segmentName})
-            """.trimIndent()
+                """.trimIndent()
             
             session.run(createNodeQuery, mapOf("segmentName" to segment))
         }
@@ -268,35 +286,37 @@ class ConversationGraphService(
             val parentSegment = pathSegments[i - 1]
             val childSegment = pathSegments[i]
             
-            val relationshipQuery = """
+            val relationshipQuery =
+                """
                 MATCH (parent:PathNode {name: ${'$'}parentName})
                 MATCH (child:PathNode {name: ${'$'}childName})
                 MERGE (parent)-[:HAS_CHILD]->(child)
-            """.trimIndent()
+                """.trimIndent()
             
             session.run(
                 relationshipQuery,
                 mapOf(
                     "parentName" to parentSegment,
-                    "childName" to childSegment
-                )
+                    "childName" to childSegment,
+                ),
             )
         }
 
         // Connect conversation to the leaf node (not path-based)
         val leafSegment = pathSegments.last()
-        val connectConversationQuery = """
+        val connectConversationQuery =
+            """
             MATCH (p:PathNode {name: ${'$'}leafName})
             MATCH (c:Conversation {id: ${'$'}conversationId})
             MERGE (p)-[:CONTAINS]->(c)
-        """.trimIndent()
+            """.trimIndent()
         
         session.run(
             connectConversationQuery,
             mapOf(
                 "leafName" to leafSegment,
-                "conversationId" to conversationId
-            )
+                "conversationId" to conversationId,
+            ),
         )
     }
 
@@ -308,10 +328,11 @@ class ConversationGraphService(
     suspend fun removeConversationFromGraph(conversationId: String) {
         try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
-                val query = """
+                val query =
+                    """
                     MATCH (c:Conversation {id: ${'$'}conversationId})
                     DETACH DELETE c
-                """.trimIndent()
+                    """.trimIndent()
                 
                 session.run(query, mapOf("conversationId" to conversationId))
             }
@@ -346,15 +367,16 @@ class ConversationGraphService(
      * @param nodeName The node name to search under (e.g., "domain")
      * @return List of conversation IDs under the node
      */
-    suspend fun getConversationsUnderNode(nodeName: String): List<String> {
-        return try {
+    suspend fun getConversationsUnderNode(nodeName: String): List<String> =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
-                val query = """
+                val query =
+                    """
                     MATCH (root:PathNode {name: ${'$'}nodeName})
                     MATCH (root)-[:HAS_CHILD*0..]->(descendant:PathNode)
                     MATCH (descendant)-[:CONTAINS]->(c:Conversation)
                     RETURN DISTINCT c.id as conversationId
-                """.trimIndent()
+                    """.trimIndent()
                 
                 val result = session.run(query, mapOf("nodeName" to nodeName))
                 result.list { record -> record.get("conversationId").asString() }
@@ -363,9 +385,6 @@ class ConversationGraphService(
             logger.error(e) { "Error getting conversations under node $nodeName: ${e.message}" }
             emptyList()
         }
-    }
-
-
 
     /**
      * Get all nodes and their descendants using proper graph traversal.
@@ -373,22 +392,23 @@ class ConversationGraphService(
      * @param nodeName The node name to search under
      * @return List of node information including descendants
      */
-    suspend fun getNodesUnderNode(nodeName: String): List<NodeInfo> {
-        return try {
+    suspend fun getNodesUnderNode(nodeName: String): List<NodeInfo> =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
-                val query = """
+                val query =
+                    """
                     MATCH (root:PathNode {name: ${'$'}nodeName})
                     MATCH (root)-[:HAS_CHILD*0..]->(descendant:PathNode)
                     OPTIONAL MATCH (descendant)-[:CONTAINS]->(c:Conversation)
                     RETURN descendant.name as nodeName, count(c) as conversationCount
                     ORDER BY descendant.name
-                """.trimIndent()
+                    """.trimIndent()
                 
                 val result = session.run(query, mapOf("nodeName" to nodeName))
                 result.list { record -> 
                     NodeInfo(
                         name = record.get("nodeName").asString(),
-                        conversationCount = record.get("conversationCount").asInt()
+                        conversationCount = record.get("conversationCount").asInt(),
                     )
                 }
             }
@@ -396,36 +416,35 @@ class ConversationGraphService(
             logger.error(e) { "Error getting nodes under node $nodeName: ${e.message}" }
             emptyList()
         }
-    }
-
-
 
     /**
      * Get the full tree structure of all nodes using graph hierarchy.
      *
      * @return List of root nodes with their complete hierarchy
      */
-    suspend fun getFullNodeTree(): List<NodeTreeNode> {
-        return try {
+    suspend fun getFullNodeTree(): List<NodeTreeNode> =
+        try {
             memgraphDriver.session(SessionConfig.forDatabase("memgraph")).use { session ->
                 // Get all nodes with their conversation counts and relationships
-                val nodeQuery = """
+                val nodeQuery =
+                    """
                     MATCH (p:PathNode)
                     OPTIONAL MATCH (p)-[:CONTAINS]->(c:Conversation)
                     OPTIONAL MATCH (parent:PathNode)-[:HAS_CHILD]->(p)
                     WITH p.name as nodeName, count(DISTINCT c) as directConversationCount, collect(DISTINCT parent.name) as parents
                     RETURN nodeName, directConversationCount, parents
                     ORDER BY nodeName
-                """.trimIndent()
+                    """.trimIndent()
                 
                 val nodeResult = session.run(nodeQuery)
-                val allNodes = nodeResult.list { record ->
-                    val parentsList = record.get("parents").asList { it.asString() }
-                    NodeInfo(
-                        name = record.get("nodeName").asString(),
-                        conversationCount = record.get("directConversationCount").asInt()
-                    ) to parentsList.filter { it.isNotEmpty() } // Filter out empty parent names
-                }
+                val allNodes =
+                    nodeResult.list { record ->
+                        val parentsList = record.get("parents").asList { it.asString() }
+                        NodeInfo(
+                            name = record.get("nodeName").asString(),
+                            conversationCount = record.get("directConversationCount").asInt(),
+                        ) to parentsList.filter { it.isNotEmpty() } // Filter out empty parent names
+                    }
                 
                 // Log node information for debugging
                 logger.debug { "Retrieved ${allNodes.size} nodes from graph" }
@@ -439,19 +458,19 @@ class ConversationGraphService(
                 } catch (e: Exception) {
                     logger.error(e) { "Failed to build node tree, falling back to flat structure" }
                     // Fallback: return flat structure as individual root nodes
-                    allNodes.map { (nodeInfo, _) ->
-                        NodeTreeNode(
-                            name = nodeInfo.name,
-                            conversationCount = nodeInfo.conversationCount
-                        )
-                    }.sortedBy { it.name }
+                    allNodes
+                        .map { (nodeInfo, _) ->
+                            NodeTreeNode(
+                                name = nodeInfo.name,
+                                conversationCount = nodeInfo.conversationCount,
+                            )
+                        }.sortedBy { it.name }
                 }
             }
         } catch (e: Exception) {
             logger.error(e) { "Error getting full node tree: ${e.message}" }
             emptyList()
         }
-    }
 
     /**
      * Build a tree structure from nodes and their parent relationships.
@@ -462,10 +481,11 @@ class ConversationGraphService(
         
         // Create all nodes first
         nodesWithParents.forEach { (nodeInfo, parents) ->
-            val node = NodeTreeNode(
-                name = nodeInfo.name,
-                conversationCount = nodeInfo.conversationCount
-            )
+            val node =
+                NodeTreeNode(
+                    name = nodeInfo.name,
+                    conversationCount = nodeInfo.conversationCount,
+                )
             nodeMap[nodeInfo.name] = node
         }
         
@@ -486,9 +506,12 @@ class ConversationGraphService(
                 }
             }
         }
-        
+
         // Calculate cumulative conversation counts and sort with cycle detection
-        fun calculateCumulativeAndSort(node: NodeTreeNode, visited: MutableSet<String> = mutableSetOf()): Int {
+        fun calculateCumulativeAndSort(
+            node: NodeTreeNode,
+            visited: MutableSet<String> = mutableSetOf(),
+        ): Int {
             // Cycle detection - if we've already visited this node, return its current count
             if (visited.contains(node.name)) {
                 logger.warn { "Detected cycle in graph at node: ${node.name}, skipping recursive calculation" }
@@ -503,9 +526,10 @@ class ConversationGraphService(
                 node.children.sortBy { it.name }
                 
                 // Process children recursively and get their cumulative counts
-                val childrenTotal = node.children.sumOf { child ->
-                    calculateCumulativeAndSort(child, visited.toMutableSet()) // Pass a copy of visited set
-                }
+                val childrenTotal =
+                    node.children.sumOf { child ->
+                        calculateCumulativeAndSort(child, visited.toMutableSet()) // Pass a copy of visited set
+                    }
                 
                 // Update this node's count to include its own conversations plus all children
                 val originalCount = node.conversationCount
@@ -540,7 +564,7 @@ data class BatchMigrationResult(
     var successCount: Int = 0,
     var errorCount: Int = 0,
     var skippedCount: Int = 0,
-    val errors: MutableList<String> = mutableListOf()
+    val errors: MutableList<String> = mutableListOf(),
 ) {
     val hasErrors: Boolean get() = errorCount > 0
     val successRate: Double get() = if (totalProcessed > 0) (successCount.toDouble() / totalProcessed) * 100 else 0.0
@@ -552,7 +576,7 @@ data class BatchMigrationResult(
 data class MigrationStatistics(
     val conversationsInGraph: Int = 0,
     val pathNodesInGraph: Int = 0,
-    val totalRelationships: Int = 0
+    val totalRelationships: Int = 0,
 )
 
 /**
@@ -560,7 +584,7 @@ data class MigrationStatistics(
  */
 data class NodeInfo(
     val name: String,
-    val conversationCount: Int
+    val conversationCount: Int,
 )
 
 /**
@@ -569,5 +593,5 @@ data class NodeInfo(
 data class NodeTreeNode(
     val name: String,
     var conversationCount: Int = 0,
-    val children: MutableList<NodeTreeNode> = mutableListOf()
+    val children: MutableList<NodeTreeNode> = mutableListOf(),
 ) 

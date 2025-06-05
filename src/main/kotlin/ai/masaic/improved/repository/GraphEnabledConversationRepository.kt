@@ -21,11 +21,9 @@ import org.springframework.stereotype.Repository
 @Primary
 @ConditionalOnProperty(name = ["improved.graph.enabled"], havingValue = "true", matchIfMissing = true)
 class GraphEnabledConversationRepository(
-    @Qualifier("baseConversationRepository") 
-    private val baseRepository: ConversationRepository,
-    private val graphService: ConversationGraphService
+    @Qualifier("baseConversationRepository") private val baseRepository: ConversationRepository,
+    private val graphService: ConversationGraphService,
 ) : ConversationRepository {
-    
     private val logger = KotlinLogging.logger {}
 
     /**
@@ -34,8 +32,8 @@ class GraphEnabledConversationRepository(
      * @param conversation The conversation to create
      * @return The created conversation
      */
-    override suspend fun createConversation(conversation: Conversation): Conversation {
-        return try {
+    override suspend fun createConversation(conversation: Conversation): Conversation =
+        try {
             // Create in the base repository first
             val createdConversation = baseRepository.createConversation(conversation)
             
@@ -54,7 +52,6 @@ class GraphEnabledConversationRepository(
             logger.error(e) { "Error creating conversation: ${e.message}" }
             throw e
         }
-    }
 
     /**
      * Get a conversation by ID.
@@ -62,18 +59,14 @@ class GraphEnabledConversationRepository(
      * @param conversationId The ID of the conversation to retrieve
      * @return The conversation, or null if not found
      */
-    override suspend fun getConversation(conversationId: String): Conversation? {
-        return baseRepository.getConversation(conversationId)
-    }
+    override suspend fun getConversation(conversationId: String): Conversation? = baseRepository.getConversation(conversationId)
 
     /**
      * List all conversations.
      *
      * @return A list of all conversations
      */
-    override suspend fun listConversations(): List<Conversation> {
-        return baseRepository.listConversations()
-    }
+    override suspend fun listConversations(): List<Conversation> = baseRepository.listConversations()
 
     /**
      * List conversations with pagination and filtering.
@@ -81,9 +74,7 @@ class GraphEnabledConversationRepository(
      * @param params The parameters for listing conversations
      * @return A list of conversations that match the criteria
      */
-    override suspend fun listConversations(params: ListConversationsParams): List<Conversation> {
-        return baseRepository.listConversations(params)
-    }
+    override suspend fun listConversations(params: ListConversationsParams): List<Conversation> = baseRepository.listConversations(params)
 
     /**
      * Get conversations that match a specific label path with a limit.
@@ -92,9 +83,10 @@ class GraphEnabledConversationRepository(
      * @param limit The maximum number of conversations to return
      * @return A list of conversations that match the label path
      */
-    override suspend fun getConversations(labelPath: String, limit: Int): List<Conversation> {
-        return baseRepository.getConversations(labelPath, limit)
-    }
+    override suspend fun getConversations(
+        labelPath: String,
+        limit: Int,
+    ): List<Conversation> = baseRepository.getConversations(labelPath, limit)
 
     /**
      * Update a conversation and sync with the graph.
@@ -102,8 +94,8 @@ class GraphEnabledConversationRepository(
      * @param conversation The conversation to update
      * @return The updated conversation, or null if not found
      */
-    override suspend fun updateConversation(conversation: Conversation): Conversation? {
-        return try {
+    override suspend fun updateConversation(conversation: Conversation): Conversation? =
+        try {
             // Update in the base repository first
             val updatedConversation = baseRepository.updateConversation(conversation)
             
@@ -122,7 +114,6 @@ class GraphEnabledConversationRepository(
             logger.error(e) { "Error updating conversation: ${e.message}" }
             throw e
         }
-    }
 
     /**
      * Delete a conversation and remove it from the graph.
@@ -130,8 +121,8 @@ class GraphEnabledConversationRepository(
      * @param conversationId The ID of the conversation to delete
      * @return True if the conversation was deleted, false otherwise
      */
-    override suspend fun deleteConversation(conversationId: String): Boolean {
-        return try {
+    override suspend fun deleteConversation(conversationId: String): Boolean =
+        try {
             // Delete from the base repository first
             val deleted = baseRepository.deleteConversation(conversationId)
             
@@ -150,5 +141,4 @@ class GraphEnabledConversationRepository(
             logger.error(e) { "Error deleting conversation: ${e.message}" }
             throw e
         }
-    }
 } 
