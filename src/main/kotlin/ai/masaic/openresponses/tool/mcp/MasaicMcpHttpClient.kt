@@ -158,7 +158,12 @@ class McpClient {
  */
 class HttpSseTransport(
     private val endpoint: String,
-    private val client: OkHttpClient = OkHttpClient(),
+    private val client: OkHttpClient =
+        OkHttpClient
+            .Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .build(),
 ) {
     private val mapper = jacksonObjectMapper()
     private val jsonMediaType = "application/json".toMediaType()

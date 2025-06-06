@@ -8,10 +8,7 @@ import com.openai.models.chat.completions.ChatCompletionMessage
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.responses.EasyInputMessage
 import com.openai.models.responses.ResponseCreateParams
-import com.openai.models.responses.ResponseInputContent
 import com.openai.models.responses.ResponseInputItem
-import com.openai.models.responses.ResponseOutputMessage
-import com.openai.models.responses.ResponseOutputText
 
 /**
  * Extension function to copy properties from a ResponseCreateParams.Body to a ResponseCreateParams.Builder.
@@ -253,117 +250,10 @@ fun ResponseCreateParams.Builder.removeImageBody(items: List<ResponseInputItem>)
                 builder.output("<image>...")
             }
             newItems.add(ResponseInputItem.ofFunctionCallOutput(builder.build()))
-        } else if (it.isEasyInputMessage() &&
-            it.asEasyInputMessage().content().isResponseInputMessageContentList()
-        ) {
-            // Check if any content in the list is an image and replace only those items
-            val contentList = it.asEasyInputMessage().content().asResponseInputMessageContentList()
-            val newContentList = mutableListOf<ResponseInputContent>()
-            var hasAnyReplacement = false
-            
-            for (contentItem in contentList) {
-                if (contentItem.isInputText()) {
-                    val textContent = contentItem.asInputText().text()
-                    val imageInfo = isImageContent(textContent)
-                    if (imageInfo.isImage) {
-                        // Replace this specific image content
-                        newContentList.add(
-                            ResponseInputContent.ofInputText(
-                                contentItem
-                                    .asInputText()
-                                    .toBuilder()
-                                    .text("<${imageInfo.format}>...")
-                                    .build(),
-                            ),
-                        )
-                        hasAnyReplacement = true
-                    } else if (contentItem.asInputText()._additionalProperties()["type"].toString() == "output_image") {
-                        // Also handle the old detection method for backward compatibility
-                        newContentList.add(
-                            ResponseInputContent.ofInputText(
-                                contentItem
-                                    .asInputText()
-                                    .toBuilder()
-                                    .text("<image>...")
-                                    .build(),
-                            ),
-                        )
-                        hasAnyReplacement = true
-                    } else {
-                        // Keep the original content item
-                        newContentList.add(contentItem)
-                    }
-                } else {
-                    // Keep non-text content items as they are
-                    newContentList.add(contentItem)
-                }
-            }
-            
-            if (hasAnyReplacement) {
-                val builder = it.asEasyInputMessage().toBuilder()
-                builder.content(EasyInputMessage.Content.ofResponseInputMessageContentList(newContentList))
-                newItems.add(ResponseInputItem.ofEasyInputMessage(builder.build()))
-            } else {
-                newItems.add(it)
-            }
-        } else if (it.isResponseOutputMessage()) {
-            // Check if any content is an image and replace only those items
-            val contentList = it.asResponseOutputMessage().content()
-            val newContentList = mutableListOf<ResponseOutputMessage.Content>()
-            var hasAnyReplacement = false
-            
-            for (contentItem in contentList) {
-                val jsonContent = contentItem._json().get().toString()
-                
-                // Check for old detection patterns
-                if (jsonContent.contains("output_format=b64_json") || jsonContent.contains("type=output_image")) {
-                    newContentList.add(
-                        ResponseOutputMessage.Content.ofOutputText(
-                            ResponseOutputText
-                                .builder()
-                                .text("<image>...")
-                                .annotations(listOf())
-                                .build(),
-                        ),
-                    )
-                    hasAnyReplacement = true
-                } else if (contentItem.isOutputText()) {
-                    // Try to check actual content for image signatures
-                    val textContent = contentItem.asOutputText().text()
-                    val imageInfo = isImageContent(textContent)
-                    if (imageInfo.isImage) {
-                        newContentList.add(
-                            ResponseOutputMessage.Content.ofOutputText(
-                                ResponseOutputText
-                                    .builder()
-                                    .text("<${imageInfo.format}>...")
-                                    .annotations(contentItem.asOutputText().annotations())
-                                    .build(),
-                            ),
-                        )
-                        hasAnyReplacement = true
-                    } else {
-                        // Keep the original content item
-                        newContentList.add(contentItem)
-                    }
-                } else {
-                    // Keep non-text content items as they are
-                    newContentList.add(contentItem)
-                }
-            }
-            
-            if (hasAnyReplacement) {
-                val builder = it.asResponseOutputMessage().toBuilder()
-                builder.content(newContentList)
-                newItems.add(ResponseInputItem.ofResponseOutputMessage(builder.build()))
-            } else {
-                newItems.add(it)
-            }
         } else {
             newItems.add(it)
         }
     }
-
     return newItems
 }
 

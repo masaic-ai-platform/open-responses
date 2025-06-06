@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.future.await
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
@@ -73,7 +74,7 @@ class MasaicStreamingService(
             if (tooManyToolCalls(responseInputItems)) {
                 emitTooManyToolCallsError()
                 throw UnsupportedOperationException(
-                    "Too many tool calls. Increase the limit by setting MASAIC_MAX_TOOL_CALLS environment variable.",
+                    "Too many tool calls. Increase the limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS environment variable.",
                 )
             }
 
@@ -130,6 +131,7 @@ class MasaicStreamingService(
 
             val subscription =
                 client
+                    .async()
                     .chat()
                     .completions()
                     .createStreaming(createParams)
@@ -140,7 +142,7 @@ class MasaicStreamingService(
             val internalToolItemIds = mutableSetOf<String>()
             val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
-            subscription.stream().forEach { completionResponse ->
+            subscription.subscribe { completionResponse ->
 
                 val completion =
                     if (completionResponse._id().isMissing()) { // special handling for gemini
@@ -165,7 +167,8 @@ class MasaicStreamingService(
                                                 ResponseStatus.IN_PROGRESS,
                                                 responseId,
                                             ),
-                                        ).build(),
+                                        ).sequenceNumber(System.nanoTime())
+                                        .build(),
                                 ),
                                 payloadFormatter,
                                 objectMapper,
@@ -195,6 +198,7 @@ class MasaicStreamingService(
                                                     .contentIndex(index.toLong())
                                                     .itemId(completion.id())
                                                     .putAllAdditionalProperties(choice._additionalProperties())
+                                                    .sequenceNumber(System.nanoTime())
                                                     .build(),
                                             ),
                                         )
@@ -233,6 +237,7 @@ class MasaicStreamingService(
                                             ResponseCompletedEvent
                                                 .builder()
                                                 .response(finalResponse)
+                                                .sequenceNumber(System.nanoTime())
                                                 .build(),
                                         ),
                                         payloadFormatter,
@@ -273,6 +278,7 @@ class MasaicStreamingService(
                                             ResponseIncompleteEvent
                                                 .builder()
                                                 .response(finalResponse)
+                                                .sequenceNumber(System.nanoTime())
                                                 .build(),
                                         ),
                                         payloadFormatter,
@@ -328,6 +334,7 @@ class MasaicStreamingService(
                                             ResponseCompletedEvent
                                                 .builder()
                                                 .response(responseWithToolRequests) // Send the response that includes the tool requests
+                                                .sequenceNumber(System.nanoTime())
                                                 .build(),
                                         ),
                                         payloadFormatter,
@@ -368,7 +375,11 @@ class MasaicStreamingService(
                                     trySend(
                                         EventUtils.convertEvent(
                                             ResponseStreamEvent.ofCompleted(
-                                                ResponseCompletedEvent.builder().response(finalTerminalResponse).build(),
+                                                ResponseCompletedEvent
+                                                    .builder()
+                                                    .response(finalTerminalResponse)
+                                                    .sequenceNumber(System.nanoTime())
+                                                    .build(),
                                             ),
                                             payloadFormatter,
                                             objectMapper,
@@ -394,13 +405,14 @@ class MasaicStreamingService(
                         }
                     }
                 }
-            }
 
-            launch {
-                close()
+                launch {
+                    subscription.onCompleteFuture().await()
+                    close()
+                }
             }
-
             awaitClose {
+                close()
             }
         }.collect { event ->
             emit(event)
@@ -458,7 +470,8 @@ class MasaicStreamingService(
                                 ResponseStatus.IN_PROGRESS,
                                 responseId,
                             ),
-                        ).build(),
+                        ).sequenceNumber(System.nanoTime())
+                        .build(),
                 ),
                 payloadFormatter,
                 objectMapper,
@@ -484,6 +497,7 @@ class MasaicStreamingService(
                             "Too many tool calls. Increase the limit by setting OPEN_RESPONSES_MAX_TOOL_CALLS environment variable.",
                         ).code("too_many_tool_calls")
                         .param(null)
+                        .sequenceNumber(System.nanoTime())
                         .build(),
                 ),
                 payloadFormatter,
@@ -506,6 +520,7 @@ class MasaicStreamingService(
                         ).code("timeout")
                         .param(null)
                         .type(JsonValue.from("response.error"))
+                        .sequenceNumber(System.nanoTime())
                         .build(),
                 ),
                 payloadFormatter,
@@ -535,6 +550,7 @@ class MasaicStreamingService(
                                 .text(content)
                                 .outputIndex(index)
                                 .itemId(events.first().asOutputTextDelta().itemId())
+                                .sequenceNumber(System.nanoTime())
                                 .build(),
                         ),
                         payloadFormatter,
@@ -706,6 +722,7 @@ class MasaicStreamingService(
                                 .arguments(content)
                                 .itemId(events.first().asFunctionCallArgumentsDelta().itemId())
                                 .putAllAdditionalProperties(events.first().asFunctionCallArgumentsDelta()._additionalProperties())
+                                .sequenceNumber(System.nanoTime())
                                 .build(),
                         ),
                         payloadFormatter,

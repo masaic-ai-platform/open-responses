@@ -10,7 +10,9 @@ import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
 import com.openai.models.ReasoningEffort
+import com.openai.models.ResponseFormatJsonObject
 import com.openai.models.ResponseFormatJsonSchema
+import com.openai.models.ResponseFormatText
 import com.openai.models.chat.completions.*
 import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam.Content.ChatCompletionRequestAssistantMessageContentPart
 import com.openai.models.responses.*
@@ -460,6 +462,32 @@ class MasaicParameterConverter(
                         )
                     }
                 }
+                responseTool.isImageGeneration() -> {
+                    val nativeTool =
+                        nativeToolRegistry.findByName("image_generation") as? NativeToolDefinition
+                            ?: throw IllegalArgumentException("Native tool definition for 'image_generation' not found")
+                    val toolProperties = responseTool.asImageGeneration()._additionalProperties()
+                    val toolName = toolProperties["alias"]?.toString() ?: nativeTool.name
+                    val description = toolProperties["alias_description"]?.toString() ?: nativeTool.description
+                    logger.trace { "Converting image generation tool: $toolName" }
+                    result.add(
+                        ChatCompletionTool
+                            .builder()
+                            .type(JsonValue.from("function"))
+                            .function(
+                                FunctionDefinition
+                                    .builder()
+                                    .name(toolName)
+                                    .description(description)
+                                    .parameters(
+                                        objectMapper.readValue(
+                                            objectMapper.writeValueAsString(nativeTool.parameters),
+                                            FunctionParameters::class.java,
+                                        ),
+                                    ).build(),
+                            ).build(),
+                    )
+                }
                 responseTool.isFileSearch() -> {
                     val nativeTool = nativeToolRegistry.findByName("file_search") as? NativeToolDefinition ?: throw IllegalArgumentException("Tool not found")
                     val toolName = responseTool.asFileSearch()._additionalProperties()["alias"]?.toString() ?: nativeTool.name
@@ -533,10 +561,10 @@ class MasaicParameterConverter(
                     .get()
             when {
                 format.isText() -> {
-                    completionBuilder.responseFormat(format.asText())
+                    completionBuilder.responseFormat(ResponseFormatText.builder().build())
                 }
                 format.isJsonObject() -> {
-                    completionBuilder.responseFormat(format.asJsonObject())
+                    completionBuilder.responseFormat(ResponseFormatJsonObject.builder().build())
                 }
                 format.isJsonSchema() -> {
                     completionBuilder.responseFormat(
@@ -552,8 +580,10 @@ class MasaicParameterConverter(
                                             objectMapper.writeValueAsString(format.asJsonSchema().schema()),
                                             ResponseFormatJsonSchema.JsonSchema.Schema::class.java,
                                         ),
-                                    ).build(),
-                            ).build(),
+                                    ).additionalProperties(mapOf())
+                                    .build(),
+                            ).additionalProperties(mapOf())
+                            .build(),
                     )
                 }
             }
@@ -823,6 +853,26 @@ class MasaicParameterConverter(
                     )
                 }
             }
+        } else if (item.isMessage()) {
+            val message = item.asMessage()
+            val instructions = if (params.instructions().isPresent) params.instructions().get() else ""
+            completionBuilder.addMessage(
+                ChatCompletionSystemMessageParam
+                    .builder()
+                    .content(
+                        if (instructions.isNotEmpty()) {
+                            ChatCompletionSystemMessageParam.Content.ofText("$instructions\n${message.content().firstOrNull()?.asInputText()?.text()}")
+                        } else {
+                            ChatCompletionSystemMessageParam.Content.ofText(
+                                message
+                                    .content()
+                                    .firstOrNull()
+                                    ?.asInputText()
+                                    ?.text() ?: "",
+                            )
+                        },
+                    ).build(),
+            )
         }
     }
 
@@ -864,6 +914,19 @@ class MasaicParameterConverter(
                     )
                 }
             }
+        } else if (item.isMessage()) {
+            val message = item.asMessage()
+            completionBuilder.addMessage(
+                ChatCompletionDeveloperMessageParam
+                    .builder()
+                    .content(
+                        message
+                            .content()
+                            .firstOrNull()
+                            ?.asInputText()
+                            ?.text() ?: "",
+                    ).build(),
+            )
         }
     }
 

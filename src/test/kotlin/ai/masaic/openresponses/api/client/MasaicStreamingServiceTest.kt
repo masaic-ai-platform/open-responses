@@ -10,10 +10,10 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.openai.client.OpenAIClient
+import com.openai.client.OpenAIClientAsync
 import com.openai.core.JsonField
 import com.openai.core.JsonValue
 import com.openai.core.http.AsyncStreamResponse
-import com.openai.core.http.StreamResponse
 import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -21,8 +21,8 @@ import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.Tool
-import com.openai.services.blocking.ChatService
-import com.openai.services.blocking.chat.ChatCompletionService
+import com.openai.services.async.ChatServiceAsync
+import com.openai.services.async.chat.ChatCompletionServiceAsync
 import io.micrometer.core.instrument.Timer.Sample
 import io.micrometer.observation.Observation
 import io.mockk.*
@@ -37,7 +37,6 @@ import org.junit.jupiter.api.assertThrows
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
-import java.util.stream.Stream
 
 class MasaicStreamingServiceTest {
     private lateinit var toolHandler: MasaicToolHandler
@@ -103,18 +102,39 @@ class MasaicStreamingServiceTest {
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
             coEvery { parameterConverter.prepareCompletion(any()) } returns mockedPreparedCompletion
 
-            // Mock the client's streaming call -> empty stream
-            val mockedSubscription = mockk<StreamResponse<ChatCompletionChunk>>()
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
+            // Create a chunk with STOP finish reason to trigger completion
+            val chunkChoice =
+                ChatCompletionChunk.Choice
+                    .builder()
+                    .index(0)
+                    .finishReason(ChatCompletionChunk.Choice.FinishReason.STOP)
+                    .delta(
+                        ChatCompletionChunk.Choice.Delta
+                            .builder()
+                            .content("Test content")
+                            .build(),
+                    ).build()
+            val chunk =
+                ChatCompletionChunk
+                    .builder()
+                    .choices(listOf(chunkChoice))
+                    .id("test_id")
+                    .created(123456)
+                    .model("gpt-4")
+                    .build()
+
+            // Mock the client's streaming call with our chunk
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
             // stub openAIClient.chat() to return your mockChat
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
-            every { mockedSubscription.stream() }
-                .returns(Stream.empty())
-            // When
+
             val resultEvents =
                 streamingService
                     .createCompletionStream(openAIClient, params, metadata)
@@ -194,15 +214,15 @@ class MasaicStreamingServiceTest {
                     .model("gpt-4")
                     .build()
 
-            val mockedSubscription = mockk<StreamResponse<ChatCompletionChunk>>()
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
-            every { mockedSubscription.stream() }
-                .returns(Stream.of(chunk))
 
             // When
             val flow = streamingService.createCompletionStream(openAIClient, params, metadata)
@@ -249,15 +269,16 @@ class MasaicStreamingServiceTest {
                     .model("gpt-4")
                     .build()
 
-            val mockedSubscription = mockk<StreamResponse<ChatCompletionChunk>>()
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
             every { mockCompletions.createStreaming(any()) } returns mockedSubscription
-            every { mockedSubscription.stream() }
-                .returns(Stream.of(chunk))
+
             every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
             coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
 
@@ -400,18 +421,17 @@ class MasaicStreamingServiceTest {
                     .id("second_call")
                     .build()
 
-            val firstSub = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
-            val secondSub = mockk<StreamResponse<ChatCompletionChunk>>(relaxed = true)
-
-            every { firstSub.stream() } returns listOf(chunk).stream()
-            every { secondSub.stream() } returns listOf(chunk2).stream()
+            // Create proper MockSubscription instances for each call
+            val firstSub = MockSubscription(listOf(chunk))
+            val secondSub = MockSubscription(listOf(chunk2))
 
             // 5) We track how many times createStreaming(...) is invoked,
             //    so we know the second iteration actually occurred.
             var subscriptionCount = 0
-            val mockChat = mockk<ChatService>(relaxed = false)
-            val mockCompletions = mockk<ChatCompletionService>(relaxed = false)
+            val mockChat = mockk<ChatServiceAsync>(relaxed = false)
+            val mockCompletions = mockk<ChatCompletionServiceAsync>(relaxed = false)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
             coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
 
@@ -423,11 +443,13 @@ class MasaicStreamingServiceTest {
             every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
 
             // Now stub the openAIClient usage
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
-            // Each time createStreaming(...) is called, we return a different subscription
+
+            // This is the key part - set up the streaming mock to return our different subscriptions
             every { mockCompletions.createStreaming(any()) } answers {
-                subscriptionCount += 1
+                subscriptionCount++
                 if (subscriptionCount == 1) firstSub else secondSub
             }
 
@@ -437,6 +459,7 @@ class MasaicStreamingServiceTest {
                     mockk<ResponseInputItem>(relaxed = false).apply {
                         every { isEasyInputMessage() } returns false
                         every { isResponseOutputMessage() } returns true
+                        every { isFunctionCallOutput() } returns false
                     },
                 )
             every { toolHandler.handleMasaicToolCall(any(), any(), any(), any(), any()) } returns MasaicToolCallStreamingResult(toolHandlerItems)
@@ -508,7 +531,9 @@ class MasaicStreamingServiceTest {
 
         override fun onCompleteFuture(): CompletableFuture<Void?> = onComplete
 
-        override fun close() {}
+        override fun close() {
+            onComplete.complete(null)
+        }
 
         class CompletableMockFuture : CompletableFuture<Void?>() {
             init {

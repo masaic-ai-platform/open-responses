@@ -224,7 +224,8 @@ class PayloadFormatterTest {
                         .builder()
                         .response(
                             response,
-                        ).build(),
+                        ).sequenceNumber(System.nanoTime())
+                        .build(),
                 )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
@@ -249,7 +250,8 @@ class PayloadFormatterTest {
                         .builder()
                         .response(
                             response,
-                        ).build(),
+                        ).sequenceNumber(System.nanoTime())
+                        .build(),
                 )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
@@ -274,7 +276,8 @@ class PayloadFormatterTest {
                         .builder()
                         .response(
                             response,
-                        ).build(),
+                        ).sequenceNumber(System.nanoTime())
+                        .build(),
                 )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)
@@ -301,7 +304,8 @@ class PayloadFormatterTest {
                         .builder()
                         .response(
                             response,
-                        ).build(),
+                        ).sequenceNumber(System.nanoTime())
+                        .build(),
                 )
 
             val node = payloadFormatter.formatResponseStreamEvent(event)

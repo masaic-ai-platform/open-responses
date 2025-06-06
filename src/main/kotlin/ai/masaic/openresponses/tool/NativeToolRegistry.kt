@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.client.ResponseStore
+import ai.masaic.openresponses.api.extensions.isImageContent
 import ai.masaic.openresponses.api.model.AgenticSeachTool
 import ai.masaic.openresponses.api.model.FileSearchTool
 import ai.masaic.openresponses.api.model.Filter
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.client.okhttp.OpenAIOkHttpClient
 import com.openai.credential.BearerTokenCredential
+import com.openai.models.chat.completions.ChatCompletionAssistantMessageParam
 import com.openai.models.images.ImageGenerateParams
 import com.openai.models.responses.ResponseOutputItem
 import org.slf4j.LoggerFactory
@@ -20,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
+import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 
 @Component
@@ -414,18 +417,31 @@ class NativeToolRegistry(
 
             val imageData =
                 if (paramsAccessor is ResponseParamsAdapter && llmArgs.isEdit && paramsAccessor.params.previousResponseId().isPresent) {
-                    val contentNode = responseStore.getOutputItems(paramsAccessor.params.previousResponseId().get()).first()
-                    if (contentNode.content?.toString()?.contains("b64_json") == true) {
-                        val responseOutputItem = objectMapper.readValue(objectMapper.writeValueAsString(contentNode.content), ResponseOutputItem::class.java)
-                        responseOutputItem
-                            ._json()
-                            .get()
-                            .asArray()
-                            .get()
-                            .first()
-                            .asObject()
-                            .get()["text"]
-                            .toString()
+                    val contentNode =
+                        responseStore
+                            .getResponse(paramsAccessor.params.previousResponseId().get())
+                            ?.output()
+                            ?.filterIsInstance<ResponseOutputItem.ImageGenerationCall>()
+                            ?.first()
+                    if (contentNode?.result()?.isPresent == true) {
+                        if (isImageContent(contentNode.result().get()).isImage) contentNode.result().get() else null
+                    } else {
+                        null
+                    }
+                } else if (paramsAccessor is ChatCompletionParamsAdapter && llmArgs.isEdit) {
+                    val imageData =
+                        paramsAccessor.params
+                            .messages()
+                            .filterIsInstance<ChatCompletionAssistantMessageParam>()
+                            .last()
+                            .content()
+                            .getOrElse { null }
+                    if (imageData?.isText() == true) {
+                        if (isImageContent(imageData.asText()).isImage) imageData.asText() else null
+                    } else if (imageData?.isArrayOfContentParts() == true) {
+                        imageData.asArrayOfContentParts().firstOrNull()?.text()?.getOrNull()?.let { content ->
+                            if (isImageContent(content.text()).isImage) content.text() else null
+                        }
                     } else {
                         null
                     }
