@@ -160,9 +160,9 @@
             <label><input type="checkbox" id="enable-viz" checked> Visualization</label>
             <label><input type="checkbox" id="enable-python" checked> Python Analysis</label>
             <select id="service-select">
-                <option value="unified">Unified Pipeline</option>
-                <option value="streaming">Streaming Service</option>
-                <option value="intelligent">Intelligent Pipeline</option>
+                <option value="unified">Unified Pipeline (Primary)</option>
+                <option value="streaming">Legacy Streaming</option>
+                <option value="standard">Legacy Standard</option>
             </select>
             <button onclick="runQuery()" id="run-button">🚀 Run Query</button>
         </div>
@@ -214,9 +214,9 @@
         let vizCount = 0;
 
         const endpoints = {
-            unified: '/api/v1/agent/query/unified',
+            unified: '/api/v1/agent/query',
             streaming: '/api/v1/agent/query/stream', 
-            intelligent: '/api/v1/agent/query/intelligent'
+            standard: '/api/v1/agent/query/standard'
         };
 
         function updateStatus() {
@@ -314,150 +314,150 @@
             }
         }
 
-                 function handleEvent(eventData) {
-             console.log('Event:', eventData);
-             
-             const eventType = eventData.type || 'Unknown';
-             addEvent(eventType, eventData);
+        function handleEvent(eventData) {
+            console.log('Event:', eventData);
+            
+            const eventType = eventData.type || 'Unknown';
+            addEvent(eventType, eventData);
 
-             switch (eventType) {
-                 case 'query_started':
-                     document.getElementById('connection-status').textContent = '🟢';
-                     break;
-                     
-                 case 'progress':
-                     if (eventData.progress) {
-                         // Update progress if available (though we don't have a progress bar in this simple version)
-                         console.log(`Progress: ${Math.round(eventData.progress * 100)}% - ${eventData.currentStep}`);
-                     }
-                     break;
-                     
-                 case 'cypher_generated':
-                     if (eventData.cypherQuery) {
-                         console.log('Generated Cypher:', eventData.cypherQuery);
-                     }
-                     break;
-                     
-                 case 'query_executed':
-                     if (eventData.success) {
-                         console.log(`Query executed successfully: ${eventData.resultCount} results in ${eventData.executionTime}ms`);
-                     }
-                     break;
-                 
-                 case 'natural_language_generated':
-                     if (eventData.naturalLanguageResponse) {
-                         displayResponse(eventData.naturalLanguageResponse);
-                     }
-                     break;
-                 
-                 case 'visualization_generated':
-                     // This event only contains metadata, actual data comes in visualization_generated_with_data
-                     console.log('Visualization metadata received:', eventData);
-                     break;
-                 
-                 case 'visualization_generated_with_data':
-                     if (eventData.visualization) {
-                         const vizContainer = document.getElementById('visualizations-container');
-                         createVisualization(eventData.visualization, vizContainer, 'Generated Visualization');
-                     }
-                     break;
-                 
-                 case 'complete':
-                     if (eventData) {
-                         if (eventData.naturalLanguageResponse) {
-                             displayResponse(eventData.naturalLanguageResponse);
-                         }
-                         
-                         if (eventData.visualization) {
-                             const vizContainer = document.getElementById('visualizations-container');
-                             createVisualization(eventData.visualization, vizContainer, 'Primary Visualization');
-                         }
-                         
-                         if (eventData.parallelVisualizations) {
-                             const vizContainer = document.getElementById('visualizations-container');
-                             const parallelData = eventData.parallelVisualizations;
-                             if (parallelData.primaryVisualization) {
-                                 createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
-                             }
-                             if (parallelData.additionalVisualizations) {
-                                 parallelData.additionalVisualizations.forEach((viz, i) => {
-                                     createVisualization(viz, vizContainer, `Additional ${i + 1}`);
-                                 });
-                             }
-                         }
-                     }
-                     document.getElementById('connection-status').textContent = '✅';
-                     break;
-                 
-                 case 'visualization_unit_completed_with_data':
-                     if (eventData.visualization) {
-                         const vizContainer = document.getElementById('visualizations-container');
-                         createVisualization(eventData.visualization, vizContainer, `Unit ${eventData.unitIndex + 1}: ${eventData.unitName}`);
-                     }
-                     break;
-                 
-                 case 'parallel_visualization_completed_with_data':
-                     if (eventData.parallelVisualizations) {
-                         const vizContainer = document.getElementById('visualizations-container');
-                         const parallelData = eventData.parallelVisualizations;
-                         if (parallelData.primaryVisualization) {
-                             createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
-                         }
-                         if (parallelData.additionalVisualizations) {
-                             parallelData.additionalVisualizations.forEach((viz, i) => {
-                                 createVisualization(viz, vizContainer, `Additional ${i + 1}`);
-                             });
-                         }
-                     }
-                     break;
-                 
-                 case 'error':
-                     document.getElementById('connection-status').textContent = '❌';
-                     break;
-                     
-                 // Handle legacy event types (with camelCase)
-                 case 'NaturalLanguageGenerated':
-                     if (eventData.data) {
-                         const text = typeof eventData.data === 'string' ? eventData.data : JSON.stringify(eventData.data);
-                         displayResponse(text);
-                     }
-                     break;
-                 
-                 case 'VisualizationGenerated':
-                     if (eventData.data) {
-                         const vizContainer = document.getElementById('visualizations-container');
-                         createVisualization(eventData.data, vizContainer, 'Generated Visualization');
-                     }
-                     break;
-                 
-                 case 'Complete':
-                     if (eventData.data) {
-                         if (eventData.data.naturalLanguageResponse) {
-                             displayResponse(eventData.data.naturalLanguageResponse);
-                         }
-                         
-                         if (eventData.data.visualization) {
-                             const vizContainer = document.getElementById('visualizations-container');
-                             createVisualization(eventData.data.visualization, vizContainer, 'Primary Visualization');
-                         }
-                         
-                         if (eventData.data.parallelVisualizations) {
-                             const vizContainer = document.getElementById('visualizations-container');
-                             const parallelData = eventData.data.parallelVisualizations;
-                             if (parallelData.primaryVisualization) {
-                                 createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
-                             }
-                             if (parallelData.additionalVisualizations) {
-                                 parallelData.additionalVisualizations.forEach((viz, i) => {
-                                     createVisualization(viz, vizContainer, `Additional ${i + 1}`);
-                                 });
-                             }
-                         }
-                     }
-                     document.getElementById('connection-status').textContent = '✅';
-                     break;
-             }
-         }
+            switch (eventType) {
+                case 'query_started':
+                    document.getElementById('connection-status').textContent = '🟢';
+                    break;
+                    
+                case 'progress':
+                    if (eventData.progress) {
+                        // Update progress if available (though we don't have a progress bar in this simple version)
+                        console.log(`Progress: ${Math.round(eventData.progress * 100)}% - ${eventData.currentStep}`);
+                    }
+                    break;
+                    
+                case 'cypher_generated':
+                    if (eventData.cypherQuery) {
+                        console.log('Generated Cypher:', eventData.cypherQuery);
+                    }
+                    break;
+                    
+                case 'query_executed':
+                    if (eventData.success) {
+                        console.log(`Query executed successfully: ${eventData.resultCount} results in ${eventData.executionTime}ms`);
+                    }
+                    break;
+                
+                case 'natural_language_generated':
+                    if (eventData.naturalLanguageResponse) {
+                        displayResponse(eventData.naturalLanguageResponse);
+                    }
+                    break;
+                
+                case 'visualization_generated':
+                    // This event only contains metadata, actual data comes in visualization_generated_with_data
+                    console.log('Visualization metadata received:', eventData);
+                    break;
+                
+                case 'visualization_generated_with_data':
+                    if (eventData.visualization) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(eventData.visualization, vizContainer, 'Generated Visualization');
+                    }
+                    break;
+                
+                case 'complete':
+                    if (eventData) {
+                        if (eventData.naturalLanguageResponse) {
+                            displayResponse(eventData.naturalLanguageResponse);
+                        }
+                        
+                        if (eventData.visualization) {
+                            const vizContainer = document.getElementById('visualizations-container');
+                            createVisualization(eventData.visualization, vizContainer, 'Primary Visualization');
+                        }
+                        
+                        if (eventData.parallelVisualizations) {
+                            const vizContainer = document.getElementById('visualizations-container');
+                            const parallelData = eventData.parallelVisualizations;
+                            if (parallelData.primaryVisualization) {
+                                createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
+                            }
+                            if (parallelData.additionalVisualizations) {
+                                parallelData.additionalVisualizations.forEach((viz, i) => {
+                                    createVisualization(viz, vizContainer, `Additional ${i + 1}`);
+                                });
+                            }
+                        }
+                    }
+                    document.getElementById('connection-status').textContent = '✅';
+                    break;
+                
+                case 'visualization_unit_completed_with_data':
+                    if (eventData.visualization) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(eventData.visualization, vizContainer, `Unit ${eventData.unitIndex + 1}: ${eventData.unitName}`);
+                    }
+                    break;
+                
+                case 'parallel_visualization_completed_with_data':
+                    if (eventData.parallelVisualizations) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        const parallelData = eventData.parallelVisualizations;
+                        if (parallelData.primaryVisualization) {
+                            createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
+                        }
+                        if (parallelData.additionalVisualizations) {
+                            parallelData.additionalVisualizations.forEach((viz, i) => {
+                                createVisualization(viz, vizContainer, `Additional ${i + 1}`);
+                            });
+                        }
+                    }
+                    break;
+                
+                case 'error':
+                    document.getElementById('connection-status').textContent = '❌';
+                    break;
+                    
+                // Handle legacy event types (with camelCase)
+                case 'NaturalLanguageGenerated':
+                    if (eventData.data) {
+                        const text = typeof eventData.data === 'string' ? eventData.data : JSON.stringify(eventData.data);
+                        displayResponse(text);
+                    }
+                    break;
+                
+                case 'VisualizationGenerated':
+                    if (eventData.data) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(eventData.data, vizContainer, 'Generated Visualization');
+                    }
+                    break;
+                
+                case 'Complete':
+                    if (eventData.data) {
+                        if (eventData.data.naturalLanguageResponse) {
+                            displayResponse(eventData.data.naturalLanguageResponse);
+                        }
+                        
+                        if (eventData.data.visualization) {
+                            const vizContainer = document.getElementById('visualizations-container');
+                            createVisualization(eventData.data.visualization, vizContainer, 'Primary Visualization');
+                        }
+                        
+                        if (eventData.data.parallelVisualizations) {
+                            const vizContainer = document.getElementById('visualizations-container');
+                            const parallelData = eventData.data.parallelVisualizations;
+                            if (parallelData.primaryVisualization) {
+                                createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
+                            }
+                            if (parallelData.additionalVisualizations) {
+                                parallelData.additionalVisualizations.forEach((viz, i) => {
+                                    createVisualization(viz, vizContainer, `Additional ${i + 1}`);
+                                });
+                            }
+                        }
+                    }
+                    document.getElementById('connection-status').textContent = '✅';
+                    break;
+            }
+        }
 
         async function runQuery() {
             const query = document.getElementById('query-input').value.trim();
@@ -490,18 +490,65 @@
             document.getElementById('connection-status').textContent = '🟡';
 
             try {
+                const requestBody = {
+                    query: query,
+                    enableVisualization: document.getElementById('enable-viz').checked,
+                    enablePythonAnalysis: document.getElementById('enable-python').checked,
+                    conversationId: `demo_${Date.now()}`
+                };
+
+                // Handle standard endpoint differently (non-streaming)
+                if (service === 'standard') {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestBody)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    document.getElementById('connection-status').textContent = '✅';
+                    addEvent('Complete', 'Standard response received');
+                    
+                    if (data.naturalLanguageResponse) {
+                        displayResponse(data.naturalLanguageResponse);
+                    }
+                    
+                    if (data.visualization) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(data.visualization, vizContainer, 'Generated Visualization');
+                    }
+                    
+                    if (data.parallelVisualizations) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        const parallelData = data.parallelVisualizations;
+                        if (parallelData.primaryVisualization) {
+                            createVisualization(parallelData.primaryVisualization, vizContainer, 'Primary');
+                        }
+                        if (parallelData.additionalVisualizations) {
+                            parallelData.additionalVisualizations.forEach((viz, i) => {
+                                createVisualization(viz, vizContainer, `Additional ${i + 1}`);
+                            });
+                        }
+                    }
+                    
+                    return;
+                }
+
+                // Handle streaming endpoints
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'text/event-stream'
                     },
-                    body: JSON.stringify({
-                        query: query,
-                        enableVisualization: document.getElementById('enable-viz').checked,
-                        enablePythonAnalysis: document.getElementById('enable-python').checked,
-                        conversationId: `demo_${Date.now()}`
-                    })
+                    body: JSON.stringify(requestBody)
                 });
 
                 if (!response.ok) {

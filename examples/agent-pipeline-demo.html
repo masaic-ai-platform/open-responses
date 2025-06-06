@@ -474,9 +474,9 @@
                     <div class="input-group">
                         <label for="service-select">Service:</label>
                         <select id="service-select">
-                            <option value="unified">Unified Pipeline</option>
-                            <option value="streaming">Streaming Service</option>
-                            <option value="intelligent">Intelligent Pipeline</option>
+                            <option value="unified">Unified Pipeline (Primary)</option>
+                            <option value="streaming">Legacy Streaming</option>
+                            <option value="standard">Legacy Standard</option>
                         </select>
                     </div>
                     <div class="input-group">
@@ -565,9 +565,9 @@
 
         // Service endpoints
         const endpoints = {
-            unified: '/api/v1/agent/query/unified',
+            unified: '/api/v1/agent/query',
             streaming: '/api/v1/agent/query/stream',
-            intelligent: '/api/v1/agent/query/intelligent'
+            standard: '/api/v1/agent/query/standard'
         };
 
         // Set predefined query
@@ -1205,6 +1205,48 @@
 
                 addDebug(`Request data: ${JSON.stringify(requestData)}`);
 
+                // Handle standard endpoint differently (non-streaming)
+                if (service === 'standard') {
+                    const response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(requestData)
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+
+                    const data = await response.json();
+                    
+                    document.getElementById('connection-status').textContent = '✅';
+                    addEvent('Complete', 'Standard response received', 'success');
+                    addDebug('Standard response processing completed');
+                    
+                    if (data.naturalLanguageResponse) {
+                        displayResponse(data.naturalLanguageResponse);
+                        addDebug('Natural language response displayed');
+                    }
+                    
+                    if (data.visualization) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(data.visualization, vizContainer, 'Generated Visualization');
+                        addDebug('Single visualization created');
+                    }
+                    
+                    if (data.parallelVisualizations) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        handleMultipleVisualizations(data.parallelVisualizations, vizContainer);
+                        addDebug('Multiple visualizations created');
+                    }
+                    
+                    progressFill.style.width = '100%';
+                    return;
+                }
+
+                // Handle streaming endpoints (unified and streaming)
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {

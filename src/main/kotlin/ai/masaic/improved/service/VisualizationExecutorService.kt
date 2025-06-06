@@ -19,8 +19,8 @@ import org.springframework.stereotype.Service
  * - Multiple parallel visualizations
  * - Python analysis when required
  * 
- * Replaces the scattered logic across VisualizationService, IntelligentVisualizationService, 
- * and ParallelVisualizationService.
+ * Unified service that handles all visualization execution strategies in one place.
+ * Replaced the previous scattered visualization logic across multiple services.
  */
 @Service
 class VisualizationExecutorService(
