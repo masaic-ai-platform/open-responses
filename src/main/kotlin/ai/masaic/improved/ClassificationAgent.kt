@@ -821,7 +821,7 @@ $replanningContext
         val request =
             CreateCompletionRequest(
                 messages = messages,
-                model = "openai@gpt-4.1",
+                model = System.getenv("OPENAI_MODEL"),
                 response_format = responseFormat,
                 stream = false,
                 store = false,
@@ -917,7 +917,7 @@ You are provided with:
         val request =
             CreateCompletionRequest(
                 messages = messages,
-                model = "openai@gpt-4o-mini",
+                model = System.getenv("OPENAI_MODEL"),
                 response_format = responseFormat,
                 stream = false,
                 store = false,
@@ -981,7 +981,7 @@ Keep it concise and user-friendly.
                     mapOf("role" to "system", "content" to "You are a helpful assistant that summarizes classification runs."),
                     mapOf("role" to "user", "content" to prompt)
                 ),
-                model = "openai@gpt-4o-mini",
+                model = System.getenv("OPENAI_MODEL"),
                 stream = false,
                 store = false,
             )
@@ -1023,7 +1023,7 @@ Keep it concise and informative.
                     mapOf("role" to "system", "content" to "You are a helpful assistant that summarizes batch processing results."),
                     mapOf("role" to "user", "content" to prompt)
                 ),
-                model = "openai@gpt-4o-mini",
+                model = System.getenv("OPENAI_MODEL"),
                 stream = false,
                 store = false,
             )

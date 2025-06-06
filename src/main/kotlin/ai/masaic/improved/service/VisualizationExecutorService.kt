@@ -586,7 +586,7 @@ class VisualizationExecutorService(
         return try {
             val response = modelService.fetchCompletionPayload(
                 CreateCompletionRequest(
-                    model = "gpt-4.1",
+                    model = System.getenv("OPENAI_MODEL"),
                     messages = listOf(
                         mapOf("role" to "system", "content" to systemPrompt),
                         mapOf("role" to "user", "content" to userPrompt)
@@ -783,7 +783,7 @@ class VisualizationExecutorService(
     // Helper methods
     private suspend fun callLlmForVisualizationUnits(systemPrompt: String, userPrompt: String, apiKey: String): List<Map<String, Any>> {
         val request = CreateCompletionRequest(
-            model = "gpt-4.1",
+            model = System.getenv("OPENAI_MODEL"),
             messages = listOf(
                 mapOf("role" to "system", "content" to systemPrompt),
                 mapOf("role" to "user", "content" to userPrompt)
@@ -837,7 +837,7 @@ class VisualizationExecutorService(
 
     private suspend fun generatePlotlyConfig(systemPrompt: String, userPrompt: String, apiKey: String): PlotlyConfig {
         val request = CreateCompletionRequest(
-            model = "gpt-4.1",
+            model = System.getenv("OPENAI_MODEL"),
             messages = listOf(
                 mapOf("role" to "system", "content" to systemPrompt),
                 mapOf("role" to "user", "content" to userPrompt)

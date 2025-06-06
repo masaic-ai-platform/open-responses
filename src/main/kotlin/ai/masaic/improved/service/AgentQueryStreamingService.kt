@@ -504,7 +504,7 @@ class AgentQueryStreamingService(
         
         val request =
             CreateCompletionRequest(
-                model = "gpt-4.1",
+                model = System.getenv("OPENAI_MODEL"),
                 messages = messages,
                 temperature = 0.1,
                 response_format =
@@ -774,7 +774,7 @@ class AgentQueryStreamingService(
         
         val request =
             CreateCompletionRequest(
-                model = "gpt-4.1",
+                model = System.getenv("OPENAI_MODEL"),
                 messages = messages,
                 temperature = 0.3,
             )

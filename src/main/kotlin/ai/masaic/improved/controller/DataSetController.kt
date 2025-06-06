@@ -1042,7 +1042,7 @@ class DataSetController(
                     mapOf("role" to "system", "content" to "You are a conversation generator that creates realistic customer service chat transcripts."),
                     mapOf("role" to "user", "content" to systemPrompt)
                 ),
-                model = "openai@gpt-4o-mini",
+                model = System.getenv("OPENAI_MODEL"),
                 response_format = responseFormat,
                 stream = false,
                 store = false,

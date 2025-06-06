@@ -407,7 +407,7 @@ class UnifiedAgentPipelineService(
         }
         
         val request = CreateResponseRequest(
-            model = "openai@gpt-4.1",
+            model = System.getenv("OPENAI_MODEL"),
             input = messages,
             temperature = 0.1,
             text = objectMapper.readValue(objectMapper.writeValueAsString(mapOf(
@@ -478,7 +478,7 @@ class UnifiedAgentPipelineService(
         )
 
         val request = CreateResponseRequest(
-            model = "openai@gpt-4.1",
+            model = System.getenv("OPENAI_MODEL"),
             input = messages,
             temperature = 0.3
         )
