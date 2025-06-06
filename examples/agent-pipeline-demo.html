@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Pipeline Demo - Complete</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.8em;
+            margin-bottom: 10px;
+            font-weight: 300;
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .input-section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .quick-queries {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .quick-query {
+            background: white;
+            border: 2px solid #eee;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .quick-query:hover {
+            border-color: #667eea;
+            background: #f8f9fa;
+            transform: translateY(-2px);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .input-group {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s ease;
+            min-width: 140px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+        }
+
+        .button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-section {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .status-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-left: 4px solid #667eea;
+        }
+
+        .status-value {
+            font-size: 2.2em;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .status-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #eee;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: white;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .panel-content {
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            border-left: 4px solid #667eea;
+        }
+
+        .event-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .event-type {
+            font-weight: 600;
+            color: #667eea;
+            font-size: 14px;
+        }
+
+        .event-time {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .event-data {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            color: #666;
+            white-space: pre-wrap;
+            max-height: 150px;
+            overflow-y: auto;
+            background: #fff;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+
+        .response-content {
+            line-height: 1.6;
+            color: #333;
+        }
+
+        .response-content h2 {
+            color: #667eea;
+            margin: 20px 0 10px 0;
+        }
+
+        .response-content h3 {
+            color: #555;
+            margin: 15px 0 8px 0;
+        }
+
+        .response-content strong {
+            color: #667eea;
+        }
+
+        .response-content ul {
+            margin: 10px 0 10px 20px;
+        }
+
+        .response-content li {
+            margin: 5px 0;
+        }
+
+        .visualization-container {
+            background: white;
+            border: 2px solid #eee;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .viz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .viz-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .viz-type {
+            background: #667eea;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .viz-description {
+            color: #666;
+            margin-bottom: 15px;
+            font-style: italic;
+        }
+
+        .error {
+            background: #ffe6e6;
+            color: #d63031;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #d63031;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: #e6ffe6;
+            color: #00b894;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #00b894;
+            margin: 10px 0;
+        }
+
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #ffc107;
+            margin: 10px 0;
+        }
+
+        .multiple-visualizations {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .viz-unit {
+            border: 2px solid #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .viz-unit-header {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .viz-unit-content {
+            padding: 16px;
+        }
+
+        .debug-info {
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            color: #999;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .markdown-content {
+            line-height: 1.6;
+        }
+
+        .markdown-content h2 {
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+            margin: 20px 0 10px 0;
+        }
+
+        .markdown-content h3 {
+            color: #555;
+            margin: 15px 0 8px 0;
+        }
+
+        .markdown-content code {
+            background: #f1f1f1;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .markdown-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+
+        .markdown-content th, .markdown-content td {
+            border: 1px solid #ddd;
+            padding: 8px 12px;
+            text-align: left;
+        }
+
+        .markdown-content th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Agent Pipeline Demo</h1>
+            <p>Complete testing interface for unified agent query processing with real-time streaming, visualization, and debugging</p>
+        </div>
+
+        <div class="content">
+            <!-- Input Section -->
+            <div class="input-section">
+                <h3>💬 Query Interface</h3>
+                <p style="margin-bottom: 20px; color: #666;">
+                    Ask business questions about conversation data. The system will analyze your query, generate appropriate database queries, 
+                    provide natural language responses, and create relevant visualizations.
+                </p>
+                
+                <div class="quick-queries">
+                    <div class="quick-query" onclick="setQuery('Show me conversation trends over the last 30 days')">
+                        📈 Conversation Trends
+                    </div>
+                    <div class="quick-query" onclick="setQuery('What is the NPS distribution by category?')">
+                        📊 NPS Analysis
+                    </div>
+                    <div class="quick-query" onclick="setQuery('How many conversations are resolved vs unresolved?')">
+                        ✅ Resolution Status
+                    </div>
+                    <div class="quick-query" onclick="setQuery('Show me peak conversation hours and daily patterns')">
+                        ⏰ Time Patterns
+                    </div>
+                </div>
+
+                <div class="input-row">
+                    <div class="input-group">
+                        <label for="query-input">Your Business Question:</label>
+                        <textarea id="query-input" placeholder="Ask any business question about conversation data...">Show me conversation trends over the last 30 days</textarea>
+                    </div>
+                </div>
+
+                <div class="input-row">
+                    <div class="input-group">
+                        <label>
+                            <input type="checkbox" id="enable-visualization" checked> Enable Visualizations
+                        </label>
+                    </div>
+                    <div class="input-group">
+                        <label>
+                            <input type="checkbox" id="enable-python" checked> Enable Python Analysis
+                        </label>
+                    </div>
+                    <div class="input-group">
+                        <label for="service-select">Service:</label>
+                        <select id="service-select">
+                            <option value="unified">Unified Pipeline</option>
+                            <option value="streaming">Streaming Service</option>
+                            <option value="intelligent">Intelligent Pipeline</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <button class="button" onclick="runQuery()" id="run-button">
+                            🚀 Run Query
+                        </button>
+                    </div>
+                </div>
+
+                <div class="progress-bar" id="progress-container" style="display: none;">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- Status Section -->
+            <div class="status-section" id="status-section" style="display: none;">
+                <div class="status-card">
+                    <div class="status-value" id="connection-status">🔴</div>
+                    <div class="status-label">Connection</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-value" id="events-count">0</div>
+                    <div class="status-label">Events Received</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-value" id="processing-time">0s</div>
+                    <div class="status-label">Processing Time</div>
+                </div>
+                <div class="status-card">
+                    <div class="status-value" id="visualizations-count">0</div>
+                    <div class="status-label">Visualizations</div>
+                </div>
+            </div>
+
+            <!-- Main Content Grid -->
+            <div class="main-grid">
+                <!-- Event Stream Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        📡 Live Event Stream
+                    </div>
+                    <div class="panel-content" id="events-content">
+                        <div style="text-align: center; color: #999; padding: 40px;">
+                            Run a query to see live events...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Natural Language Response Panel -->
+                <div class="panel">
+                    <div class="panel-header">
+                        💬 Natural Language Response
+                    </div>
+                    <div class="panel-content" id="response-content">
+                        <div style="text-align: center; color: #999; padding: 40px;">
+                            Response will appear here...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualizations Section -->
+            <div id="visualizations-section" style="display: none;">
+                <h2 style="color: #667eea; margin-bottom: 20px;">📊 Generated Visualizations</h2>
+                <div id="visualizations-container"></div>
+            </div>
+
+            <!-- Debug Information -->
+            <div class="panel" id="debug-panel" style="display: none; margin-top: 30px;">
+                <div class="panel-header">
+                    🔧 Debug Information
+                </div>
+                <div class="panel-content">
+                    <div id="debug-content"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let startTime = null;
+        let eventCount = 0;
+        let visualizationCount = 0;
+        let currentReader = null;
+
+        // Service endpoints
+        const endpoints = {
+            unified: '/api/v1/agent/query/unified',
+            streaming: '/api/v1/agent/query/stream',
+            intelligent: '/api/v1/agent/query/intelligent'
+        };
+
+        // Set predefined query
+        function setQuery(query) {
+            document.getElementById('query-input').value = query;
+        }
+
+        // Update status display
+        function updateStatus() {
+            document.getElementById('events-count').textContent = eventCount;
+            document.getElementById('visualizations-count').textContent = visualizationCount;
+            
+            if (startTime) {
+                const elapsed = Math.round((Date.now() - startTime) / 1000);
+                document.getElementById('processing-time').textContent = `${elapsed}s`;
+            }
+        }
+
+        // Add event to stream
+        function addEvent(type, data, category = 'info') {
+            const eventsContent = document.getElementById('events-content');
+            
+            // Clear placeholder text on first event
+            if (eventCount === 0) {
+                eventsContent.innerHTML = '';
+            }
+
+            const eventItem = document.createElement('div');
+            eventItem.className = `event-item ${category}`;
+
+            const eventHeader = document.createElement('div');
+            eventHeader.className = 'event-header';
+            
+            const eventType = document.createElement('div');
+            eventType.className = 'event-type';
+            eventType.textContent = type;
+            
+            const eventTime = document.createElement('div');
+            eventTime.className = 'event-time';
+            eventTime.textContent = new Date().toLocaleTimeString();
+
+            eventHeader.appendChild(eventType);
+            eventHeader.appendChild(eventTime);
+
+            const eventData = document.createElement('div');
+            eventData.className = 'event-data';
+            
+            if (typeof data === 'object') {
+                eventData.textContent = JSON.stringify(data, null, 2);
+            } else {
+                eventData.textContent = data;
+            }
+
+            eventItem.appendChild(eventHeader);
+            eventItem.appendChild(eventData);
+            eventsContent.appendChild(eventItem);
+
+            // Auto-scroll to bottom
+            eventsContent.scrollTop = eventsContent.scrollHeight;
+
+            eventCount++;
+            updateStatus();
+        }
+
+        // Add debug information
+        function addDebug(info) {
+            const debugPanel = document.getElementById('debug-panel');
+            const debugContent = document.getElementById('debug-content');
+            
+            debugPanel.style.display = 'block';
+            
+            const debugItem = document.createElement('div');
+            debugItem.className = 'debug-info';
+            debugItem.textContent = `[${new Date().toLocaleTimeString()}] ${info}`;
+            
+            debugContent.appendChild(debugItem);
+            debugContent.scrollTop = debugContent.scrollHeight;
+        }
+
+        // Display natural language response
+        function displayResponse(responseText) {
+            const responseContent = document.getElementById('response-content');
+            responseContent.innerHTML = '';
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'markdown-content';
+            
+            // Simple markdown parsing
+            let html = responseText
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/## (.*?)\n/g, '<h2>$1</h2>')
+                .replace(/### (.*?)\n/g, '<h3>$1</h3>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/\n/g, '<br>');
+
+            contentDiv.innerHTML = html;
+            responseContent.appendChild(contentDiv);
+        }
+
+        // Create visualization
+        function createVisualization(vizData, container, title) {
+            console.log('Creating visualization:', vizData);
+            addDebug(`Creating visualization: ${title}`);
+            
+            if (!vizData) {
+                addDebug('No visualization data provided');
+                return;
+            }
+
+            let plotData, plotLayout, chartTitle, chartDescription, chartType;
+            
+            if (vizData.data && vizData.layout) {
+                // Standard Plotly format
+                plotData = vizData.data;
+                plotLayout = vizData.layout;
+                chartTitle = vizData.title || title;
+                chartDescription = vizData.description || 'Generated visualization';
+                chartType = vizData.chartType || 'CHART';
+                addDebug(`Standard format: ${plotData.length} traces, layout: ${JSON.stringify(plotLayout).substring(0, 100)}...`);
+            } else if (Array.isArray(vizData.data) && vizData.data.length > 0) {
+                // Data array with layout
+                plotData = vizData.data;
+                plotLayout = vizData.layout || {
+                    title: vizData.title || title,
+                    autosize: true,
+                    margin: { t: 50, r: 50, b: 50, l: 50 }
+                };
+                chartTitle = vizData.title || title;
+                chartDescription = vizData.description || 'Generated visualization';
+                chartType = vizData.chartType || 'CHART';
+                addDebug(`Data array format: ${plotData.length} traces`);
+            } else if (Array.isArray(vizData)) {
+                // Raw array - try to create simple chart
+                addDebug('Raw array data, creating simple visualization');
+                plotData = [{
+                    y: vizData,
+                    type: 'bar',
+                    marker: { color: '#667eea' }
+                }];
+                plotLayout = {
+                    title: title,
+                    autosize: true,
+                    margin: { t: 50, r: 50, b: 50, l: 50 }
+                };
+                chartTitle = title;
+                chartDescription = 'Generated from raw data array';
+                chartType = 'BAR';
+            } else if (vizData.type && (vizData.x || vizData.y)) {
+                // Single trace format
+                plotData = [vizData];
+                plotLayout = {
+                    title: title,
+                    autosize: true,
+                    margin: { t: 50, r: 50, b: 50, l: 50 }
+                };
+                chartTitle = title;
+                chartDescription = 'Single trace visualization';
+                chartType = (vizData.type || 'chart').toUpperCase();
+                addDebug(`Single trace format: type=${vizData.type}`);
+            } else {
+                addDebug(`Unsupported visualization format. Keys: ${Object.keys(vizData).join(', ')}`);
+                addDebug(`Sample data: ${JSON.stringify(vizData).substring(0, 200)}...`);
+                
+                // Try to salvage by looking for common patterns
+                if (vizData.title || vizData.chartType) {
+                    addDebug('Found title/chartType, attempting to create placeholder');
+                    plotData = [{
+                        y: [1, 2, 3],
+                        type: 'bar',
+                        marker: { color: '#ccc' },
+                        name: 'No data available'
+                    }];
+                    plotLayout = {
+                        title: vizData.title || 'Visualization Data Available',
+                        autosize: true,
+                        margin: { t: 50, r: 50, b: 50, l: 50 },
+                        annotations: [{
+                            text: 'Visualization data received but format not recognized',
+                            x: 0.5,
+                            y: 0.5,
+                            xref: 'paper',
+                            yref: 'paper',
+                            showarrow: false
+                        }]
+                    };
+                    chartTitle = vizData.title || 'Data Available';
+                    chartDescription = 'Visualization data received but needs format adjustment';
+                    chartType = vizData.chartType || 'UNKNOWN';
+                } else {
+                    return;
+                }
+            }
+
+            const vizContainer = document.createElement('div');
+            vizContainer.className = 'visualization-container';
+
+            const header = document.createElement('div');
+            header.className = 'viz-header';
+            header.innerHTML = `
+                <div class="viz-title">${chartTitle}</div>
+                <div class="viz-type">${chartType}</div>
+            `;
+
+            if (chartDescription) {
+                const description = document.createElement('div');
+                description.className = 'viz-description';
+                description.textContent = chartDescription;
+                vizContainer.appendChild(description);
+            }
+
+            const plotDiv = document.createElement('div');
+            plotDiv.style.width = '100%';
+            plotDiv.style.height = '450px';
+            plotDiv.id = `plot_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            vizContainer.appendChild(header);
+            vizContainer.appendChild(plotDiv);
+            container.appendChild(vizContainer);
+
+            // Show visualizations section
+            document.getElementById('visualizations-section').style.display = 'block';
+
+            // Create Plotly chart
+            try {
+                Plotly.newPlot(plotDiv, plotData, plotLayout, {
+                    responsive: true,
+                    displayModeBar: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+                }).then(() => {
+                    addDebug(`Plotly chart created successfully: ${chartTitle}`);
+                    visualizationCount++;
+                    updateStatus();
+                }).catch((error) => {
+                    console.error('Plotly creation error:', error);
+                    addDebug(`Plotly error: ${error.message}`);
+                    plotDiv.innerHTML = `<div class="error">Error rendering chart: ${error.message}</div>`;
+                });
+            } catch (error) {
+                console.error('Error creating Plotly chart:', error);
+                addDebug(`Chart creation error: ${error.message}`);
+                plotDiv.innerHTML = `<div class="error">Error creating visualization: ${error.message}</div>`;
+            }
+        }
+
+        // Create simple visualization from raw query data
+        function createSimpleVisualizationFromData(data, container) {
+            addDebug(`Creating simple visualization from ${data.length} data points`);
+            console.log('Raw data for visualization:', data);
+            
+            if (!data || data.length === 0) {
+                addDebug('No data available for visualization');
+                return;
+            }
+
+            // Analyze the data structure
+            const firstRow = data[0];
+            const keys = Object.keys(firstRow);
+            addDebug(`Data keys: ${keys.join(', ')}`);
+
+            // Determine chart type based on data structure
+            let chartType = 'bar';
+            let xKey = keys[0];
+            let yKey = keys[1];
+
+            // Look for date/time fields
+            const dateKeys = keys.filter(key => 
+                key.toLowerCase().includes('date') || 
+                key.toLowerCase().includes('time') ||
+                (typeof firstRow[key] === 'string' && firstRow[key].match(/^\d{4}-\d{2}-\d{2}/))
+            );
+
+            if (dateKeys.length > 0) {
+                chartType = 'scatter'; // Use scatter for time series
+                xKey = dateKeys[0];
+                yKey = keys.find(key => key !== xKey && typeof firstRow[key] === 'number') || keys[1];
+                addDebug(`Detected time series data: x=${xKey}, y=${yKey}`);
+            }
+
+            // Extract data for plotting
+            const xData = data.map(row => row[xKey]);
+            const yData = data.map(row => row[yKey]);
+
+            // Create Plotly data structure
+            const plotData = [{
+                x: xData,
+                y: yData,
+                type: chartType,
+                mode: chartType === 'scatter' ? 'lines+markers' : undefined,
+                marker: {
+                    color: '#667eea'
+                },
+                name: `${yKey} vs ${xKey}`
+            }];
+
+            const plotLayout = {
+                title: {
+                    text: `${yKey} by ${xKey}`,
+                    font: { size: 16 }
+                },
+                xaxis: {
+                    title: xKey,
+                    tickangle: xData.length > 10 ? -45 : 0
+                },
+                yaxis: {
+                    title: yKey
+                },
+                autosize: true,
+                margin: { t: 60, r: 50, b: 80, l: 80 },
+                paper_bgcolor: 'white',
+                plot_bgcolor: '#f8f9fa'
+            };
+
+            // Create visualization object
+            const vizData = {
+                data: plotData,
+                layout: plotLayout,
+                title: `${yKey} by ${xKey}`,
+                description: `Automatically generated ${chartType} chart from query results`,
+                chartType: chartType.toUpperCase()
+            };
+
+            createVisualization(vizData, container, 'Auto-Generated Chart');
+        }
+
+        // Handle multiple visualizations
+        function handleMultipleVisualizations(data, container) {
+            addDebug('Handling multiple visualizations');
+            
+            let visualizations = [];
+            
+            if (data.visualizations && Array.isArray(data.visualizations)) {
+                visualizations = data.visualizations;
+            } else if (data.primaryVisualization) {
+                visualizations = [data.primaryVisualization];
+                if (data.additionalVisualizations && Array.isArray(data.additionalVisualizations)) {
+                    visualizations = visualizations.concat(data.additionalVisualizations);
+                }
+            }
+
+            if (visualizations.length === 0) {
+                addDebug('No visualizations found in data');
+                return;
+            }
+
+            const multiVizContainer = document.createElement('div');
+            multiVizContainer.className = 'multiple-visualizations';
+
+            const headerDiv = document.createElement('h3');
+            headerDiv.textContent = `Multiple Visualizations (${visualizations.length} total)`;
+            headerDiv.style.marginBottom = '20px';
+            headerDiv.style.color = '#333';
+            container.appendChild(headerDiv);
+
+            visualizations.forEach((viz, index) => {
+                const vizUnit = document.createElement('div');
+                vizUnit.className = 'viz-unit';
+
+                const header = document.createElement('div');
+                header.className = 'viz-unit-header';
+                header.textContent = viz.unitName || viz.title || `Visualization ${index + 1}`;
+
+                const content = document.createElement('div');
+                content.className = 'viz-unit-content';
+
+                vizUnit.appendChild(header);
+                vizUnit.appendChild(content);
+                multiVizContainer.appendChild(vizUnit);
+
+                createVisualization(viz, content, `Unit ${index + 1}`);
+            });
+
+            container.appendChild(multiVizContainer);
+        }
+
+        // Handle incoming events
+        function handleEvent(eventData) {
+            console.log('Handling event:', eventData);
+            
+            const eventType = eventData.type || 'Unknown';
+            
+            // Update progress if available
+            if (eventData.progress && typeof eventData.progress === 'number') {
+                const progressFill = document.getElementById('progress-fill');
+                progressFill.style.width = `${eventData.progress * 100}%`;
+            }
+
+            // Add event to stream
+            addEvent(eventType, eventData);
+
+            // Handle specific event types
+            switch (eventType) {
+                case 'query_started':
+                    document.getElementById('connection-status').textContent = '🟢';
+                    addDebug('Query processing started');
+                    break;
+                    
+                case 'progress':
+                    if (eventData.progress) {
+                        const progressPercent = Math.round(eventData.progress * 100);
+                        addDebug(`Progress: ${progressPercent}% - ${eventData.currentStep}`);
+                    }
+                    break;
+                    
+                case 'cypher_generated':
+                    if (eventData.cypherQuery) {
+                        addDebug(`Generated Cypher: ${eventData.cypherQuery}`);
+                    }
+                    break;
+                    
+                case 'query_executed':
+                    if (eventData.success) {
+                        addDebug(`Query executed successfully: ${eventData.resultCount} results in ${eventData.executionTime}ms`);
+                    } else {
+                        addDebug(`Query execution failed: ${eventData.error || 'Unknown error'}`);
+                    }
+                    break;
+                
+                case 'natural_language_generated':
+                    if (eventData.naturalLanguageResponse) {
+                        displayResponse(eventData.naturalLanguageResponse);
+                        addDebug('Natural language response generated');
+                    }
+                    break;
+                
+                case 'visualization_generated':
+                    addDebug('Visualization metadata event received');
+                    console.log('Visualization metadata:', eventData);
+                    // This event only contains metadata, actual data comes in visualization_generated_with_data
+                    break;
+                
+                case 'visualization_generated_with_data':
+                    addDebug('Visualization data event received');
+                    console.log('Visualization data:', eventData);
+                    if (eventData.visualization) {
+                        addDebug(`Creating visualization: ${eventData.visualization.title || 'Untitled'}`);
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(eventData.visualization, vizContainer, 'Generated Visualization');
+                    } else {
+                        addDebug('No visualization data found in visualization_generated_with_data event');
+                    }
+                    break;
+                
+                case 'parallel_visualization_completed':
+                    addDebug('Parallel visualization metadata completed');
+                    console.log('Parallel visualization metadata:', eventData);
+                    // This event only contains metadata, actual data comes in parallel_visualization_completed_with_data
+                    break;
+                
+                case 'visualization_unit_completed_with_data':
+                    addDebug(`Visualization unit completed: ${eventData.unitName} (${eventData.unitIndex + 1}/${eventData.totalUnits})`);
+                    console.log('Visualization unit data:', eventData);
+                    if (eventData.visualization) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        createVisualization(eventData.visualization, vizContainer, `Unit ${eventData.unitIndex + 1}: ${eventData.unitName}`);
+                    }
+                    break;
+                
+                case 'parallel_visualization_completed_with_data':
+                    addDebug('Parallel visualization data received');
+                    console.log('Parallel visualization data:', eventData);
+                    if (eventData.parallelVisualizations) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        handleMultipleVisualizations(eventData.parallelVisualizations, vizContainer);
+                    }
+                    break;
+                
+                case 'complete':
+                    addDebug('Complete event received');
+                    console.log('Complete event data:', eventData);
+                    if (eventData) {
+                        // Handle final response
+                        if (eventData.naturalLanguageResponse) {
+                            displayResponse(eventData.naturalLanguageResponse);
+                            addDebug('Final natural language response displayed');
+                        }
+                        
+                        // Handle single visualization
+                        if (eventData.visualization) {
+                            addDebug(`Creating final visualization: ${eventData.visualization.title || 'Untitled'}`);
+                            const vizContainer = document.getElementById('visualizations-container');
+                            createVisualization(eventData.visualization, vizContainer, 'Primary Visualization');
+                        }
+                        
+                        // Handle parallel visualizations
+                        if (eventData.parallelVisualizations) {
+                            addDebug(`Creating parallel visualizations: ${eventData.parallelVisualizations.totalUnits || 'unknown count'}`);
+                            const vizContainer = document.getElementById('visualizations-container');
+                            handleMultipleVisualizations(eventData.parallelVisualizations, vizContainer);
+                        }
+                        
+                        // Check if there's visualization data at the root level
+                        if (eventData.data && eventData.data.length && !eventData.visualization && !eventData.parallelVisualizations) {
+                            addDebug('Found raw data, attempting to create basic visualization');
+                            // Try to create a simple visualization from raw data
+                            const vizContainer = document.getElementById('visualizations-container');
+                            createSimpleVisualizationFromData(eventData.data, vizContainer);
+                        }
+                    }
+                    
+                    document.getElementById('connection-status').textContent = '✅';
+                    addDebug('Query processing completed');
+                    break;
+                
+                case 'error':
+                    document.getElementById('connection-status').textContent = '❌';
+                    addDebug(`Error occurred: ${JSON.stringify(eventData)}`);
+                    break;
+                    
+                // Handle legacy camelCase event types for backward compatibility
+                case 'QueryStarted':
+                    document.getElementById('connection-status').textContent = '🟢';
+                    addDebug('Query processing started');
+                    break;
+                
+                case 'CypherGenerated':
+                    if (eventData.data && eventData.data.cypherQuery) {
+                        addDebug(`Generated Cypher: ${eventData.data.cypherQuery}`);
+                    }
+                    break;
+                
+                case 'NaturalLanguageGenerated':
+                    if (eventData.data) {
+                        const responseText = typeof eventData.data === 'string' ? eventData.data : eventData.data.response || JSON.stringify(eventData.data);
+                        displayResponse(responseText);
+                        addDebug('Natural language response generated');
+                    }
+                    break;
+                
+                case 'VisualizationGenerated':
+                    if (eventData.data) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        const vizData = eventData.data.visualization || eventData.data;
+                        createVisualization(vizData, vizContainer, 'Generated Visualization');
+                    }
+                    break;
+                
+                case 'ParallelVisualizationCompleted':
+                    if (eventData.data) {
+                        const vizContainer = document.getElementById('visualizations-container');
+                        handleMultipleVisualizations(eventData.data, vizContainer);
+                    }
+                    break;
+                
+                case 'Complete':
+                    if (eventData.data) {
+                        // Handle final response
+                        if (eventData.data.naturalLanguageResponse) {
+                            displayResponse(eventData.data.naturalLanguageResponse);
+                        }
+                        
+                        // Handle single visualization
+                        if (eventData.data.visualization) {
+                            const vizContainer = document.getElementById('visualizations-container');
+                            createVisualization(eventData.data.visualization, vizContainer, 'Primary Visualization');
+                        }
+                        
+                        // Handle parallel visualizations
+                        if (eventData.data.parallelVisualizations) {
+                            const vizContainer = document.getElementById('visualizations-container');
+                            handleMultipleVisualizations(eventData.data.parallelVisualizations, vizContainer);
+                        }
+                    }
+                    
+                    document.getElementById('connection-status').textContent = '✅';
+                    addDebug('Query processing completed');
+                    break;
+                
+                case 'Error':
+                    document.getElementById('connection-status').textContent = '❌';
+                    addDebug(`Error occurred: ${JSON.stringify(eventData.data)}`);
+                    break;
+            }
+        }
+
+        // Main query execution function
+        async function runQuery() {
+            const query = document.getElementById('query-input').value.trim();
+            if (!query) {
+                alert('Please enter a query');
+                return;
+            }
+
+            const service = document.getElementById('service-select').value;
+            const endpoint = `http://localhost:8080${endpoints[service]}`;
+
+            // Reset state
+            eventCount = 0;
+            visualizationCount = 0;
+            startTime = Date.now();
+
+            // UI elements
+            const button = document.getElementById('run-button');
+            const progressContainer = document.getElementById('progress-container');
+            const progressFill = document.getElementById('progress-fill');
+            const statusSection = document.getElementById('status-section');
+            const eventsContent = document.getElementById('events-content');
+            const responseContent = document.getElementById('response-content');
+            const visualizationsContainer = document.getElementById('visualizations-container');
+            const visualizationsSection = document.getElementById('visualizations-section');
+
+            // Reset UI
+            button.disabled = true;
+            button.textContent = 'Processing...';
+            progressContainer.style.display = 'block';
+            statusSection.style.display = 'grid';
+            visualizationsSection.style.display = 'none';
+            progressFill.style.width = '0%';
+            eventsContent.innerHTML = '';
+            responseContent.innerHTML = '<div style="text-align: center; color: #999; padding: 40px;">Processing your query...</div>';
+            visualizationsContainer.innerHTML = '';
+            document.getElementById('connection-status').textContent = '🟡';
+            
+            updateStatus();
+
+            // Cancel any existing reader
+            if (currentReader) {
+                try {
+                    currentReader.cancel();
+                } catch (e) {
+                    console.log('Error canceling reader:', e);
+                }
+            }
+
+            try {
+                addDebug(`Starting ${service} query: ${query}`);
+                addDebug(`Endpoint: ${endpoint}`);
+
+                const requestData = {
+                    query: query,
+                    enableVisualization: document.getElementById('enable-visualization').checked,
+                    enablePythonAnalysis: document.getElementById('enable-python').checked,
+                    conversationId: `demo_${service}_${Date.now()}`
+                };
+
+                addDebug(`Request data: ${JSON.stringify(requestData)}`);
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                addDebug(`Response status: ${response.status} ${response.statusText}`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                document.getElementById('connection-status').textContent = '🟢';
+                addEvent('Connection', 'Connected to server', 'success');
+
+                // Read the streaming response
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                currentReader = reader;
+
+                try {
+                    let buffer = '';
+                    let currentEvent = { id: null, event: null, data: null };
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n');
+                        
+                        // Keep the last incomplete line in the buffer
+                        buffer = lines.pop() || '';
+
+                        for (const line of lines) {
+                            if (line.startsWith('id:')) {
+                                currentEvent.id = line.substring(3).trim();
+                                addDebug(`Event ID: ${currentEvent.id}`);
+                            } else if (line.startsWith('event:')) {
+                                currentEvent.event = line.substring(6).trim();
+                                addDebug(`Event type: ${currentEvent.event}`);
+                            } else if (line.startsWith('data:')) {
+                                currentEvent.data = line.substring(5).trim();
+                            } else if (line.trim() === '') {
+                                // Empty line signals end of event
+                                if (currentEvent.data) {
+                                    try {
+                                        const eventData = JSON.parse(currentEvent.data);
+                                        // Add the event type from the SSE header if available
+                                        if (currentEvent.event && !eventData.type) {
+                                            eventData.type = currentEvent.event;
+                                        }
+                                        handleEvent(eventData);
+                                    } catch (e) {
+                                        console.error('Error parsing event data:', e);
+                                        addDebug(`Parse error: ${e.message}`);
+                                        addEvent('Parse Error', currentEvent.data, 'error');
+                                    }
+                                }
+                                // Reset for next event
+                                currentEvent = { id: null, event: null, data: null };
+                            } else if (line.startsWith(':')) {
+                                // Ignore comment lines
+                                addDebug(`Comment: ${line}`);
+                            } else if (line.trim()) {
+                                addDebug(`Unhandled line: ${line}`);
+                            }
+                        }
+                    }
+
+                    // Process any remaining data in buffer
+                    if (buffer.trim()) {
+                        addDebug(`Remaining buffer: ${buffer}`);
+                    }
+
+                    // Stream completed successfully
+                    progressFill.style.width = '100%';
+                    addEvent('Stream Complete', 'Server closed connection normally', 'success');
+
+                } catch (readError) {
+                    console.error('Error reading stream:', readError);
+                    addDebug(`Stream read error: ${readError.message}`);
+                    addEvent('Stream Error', readError.message, 'error');
+                    document.getElementById('connection-status').textContent = '❌';
+                } finally {
+                    try {
+                        reader.releaseLock();
+                    } catch (e) {
+                        console.log('Error releasing reader:', e);
+                    }
+                    currentReader = null;
+                }
+
+            } catch (error) {
+                console.error('Error in query execution:', error);
+                addDebug(`Query error: ${error.message}`);
+                addEvent('Connection Error', error.message, 'error');
+                document.getElementById('connection-status').textContent = '❌';
+                
+                responseContent.innerHTML = `
+                    <div class="error">
+                        <strong>Error:</strong> ${error.message}<br>
+                        <small>Check the console for more details and ensure the server is running on http://localhost:8080</small>
+                    </div>
+                `;
+            } finally {
+                button.disabled = false;
+                button.textContent = '🚀 Run Query';
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Agent Pipeline Demo initialized');
+            addDebug('Demo page loaded and ready');
+        });
+    </script>
+</body>
+</html> 

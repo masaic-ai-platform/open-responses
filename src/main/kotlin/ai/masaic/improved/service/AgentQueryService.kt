@@ -116,10 +116,11 @@ class AgentQueryService(
                             retryCount = retryCount,
                         )
                     } else {
-                        // Query failed, prepare for retry
-                        lastError = executionResult.error
+                        // Query failed, prepare for retry with enhanced error context
+                        lastError = buildEnhancedErrorMessage(executionResult.error, cypherResponse.cypherQuery)
                         retryCount++
                         logger.warn { "Cypher query failed (attempt $retryCount): ${executionResult.error}" }
+                        logger.warn { "Failed query: ${cypherResponse.cypherQuery}" }
                     }
                 } catch (e: Exception) {
                     lastError = "LLM generation error: ${e.message}"
@@ -352,6 +353,22 @@ class AgentQueryService(
             - Boolean fields (resolved) should be compared directly: c.resolved = true or c.resolved = false
             - NPS scores are integers from 0-10, use standard integer comparisons
             
+            CRITICAL RESTRICTIONS:
+            - DO NOT use APOC functions (apoc.date.*, apoc.convert.*, etc.) - they are not available
+            - DO NOT use datetime(), date(), time() functions - use string operations instead
+            - For date calculations, use string concatenation and hardcoded date strings
+            - For relative dates like "last 30 days", calculate the target date string manually
+            - Use toInteger(), toString(), substring() for data conversion
+            - Avoid CALL subqueries with APOC functions
+            - For "last 30 days" use: c.createdAt >= '${java.time.LocalDate.now().minusDays(30)}T00:00:00Z'
+            
+            CYPHER SYNTAX REQUIREMENTS:
+            - Use ONLY ONE RETURN statement per query - multiple RETURN statements are invalid
+            - If you need multiple aggregations, use WITH clauses to pipe results between steps
+            - Proper clause ordering: MATCH, WHERE, WITH, RETURN, ORDER BY
+            - Ensure all variables are defined before use
+            - Use proper parentheses and bracket matching
+            
             SAMPLE QUERIES (IMPROVED - PURE GRAPH TRAVERSAL):
             1. Count conversations: MATCH (c:Conversation) RETURN count(c) as total
             2. Count by specific node: MATCH (p:PathNode {name: 'domain'})-[:CONTAINS]->(c:Conversation) RETURN count(c) as total
@@ -478,18 +495,34 @@ class AgentQueryService(
         conversation: AgentConversation,
         apiKey: String,
     ): String {
+        // Enhanced date context for natural language generation
+        val currentDate = java.time.LocalDate.now()
+        val currentDateTime = java.time.Instant.now()
+        val enhancedDateContext = buildEnhancedDateContextForNLG(currentDate, currentDateTime)
+        
         val systemPrompt =
             """
             You are a business analyst expert at interpreting data query results and providing clear, actionable insights.
             
+            ENHANCED DATE & TIME AWARENESS:
+            $enhancedDateContext
+            
+            When discussing time-related data, use this current date context to:
+            - Make relative time references more meaningful ("as of today", "in the last week", "this month so far")
+            - Provide context for trends and patterns
+            - Suggest time-aware follow-up questions
+            - Identify seasonality or time-based patterns
+            
             Your task is to analyze the query results and provide a natural language response that:
-            1. Directly answers the user's question
-            2. Highlights key insights and patterns
+            1. Directly answers the user's question with enhanced time awareness
+            2. Highlights key insights and patterns (especially time-based trends)
             3. Provides business context and implications
             4. Suggests follow-up questions or actions when relevant
             5. Uses clear, non-technical language
+            6. Incorporates current date context when relevant to the analysis
             
             Format your response as a conversational analysis, not just raw data presentation.
+            Include time-aware insights when dealing with temporal data.
             """.trimIndent()
         
         val userPrompt =
@@ -526,9 +559,90 @@ class AgentQueryService(
     }
 
     /**
+     * Build enhanced date context specifically for natural language generation.
+     */
+    private fun buildEnhancedDateContextForNLG(
+        currentDate: java.time.LocalDate,
+        currentDateTime: java.time.Instant,
+    ): String {
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")
+        val dateOnlyFormatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+        
+        return """
+            CURRENT DATE CONTEXT (Today is ${currentDate.format(formatter)}):
+            - Today: ${currentDate.format(dateOnlyFormatter)}
+            - This week: ${currentDate.with(java.time.DayOfWeek.MONDAY).format(dateOnlyFormatter)} to ${currentDate.with(java.time.DayOfWeek.SUNDAY).format(dateOnlyFormatter)}
+            - This month: ${currentDate.withDayOfMonth(1).format(dateOnlyFormatter)} to ${currentDate.withDayOfMonth(currentDate.lengthOfMonth()).format(dateOnlyFormatter)}
+            - Last 7 days: ${currentDate.minusDays(6).format(dateOnlyFormatter)} to ${currentDate.format(dateOnlyFormatter)}
+            - Last 30 days: ${currentDate.minusDays(29).format(dateOnlyFormatter)} to ${currentDate.format(dateOnlyFormatter)}
+            - Year to date: ${currentDate.withDayOfYear(1).format(dateOnlyFormatter)} to ${currentDate.format(dateOnlyFormatter)}
+            
+            Use this context to make time-based insights more relevant and actionable for business users.
+            When you see dates in the data, relate them to these current time periods for better context.
+        """.trimIndent()
+    }
+
+    /**
      * Get conversation history for a specific conversation ID.
      */
     fun getConversationHistory(conversationId: String): AgentConversation? = activeConversations[conversationId]
+
+    /**
+     * Build enhanced error message with context for better LLM understanding.
+     */
+    private fun buildEnhancedErrorMessage(originalError: String?, failedQuery: String): String {
+        val errorMsg = originalError ?: "Unknown error"
+        
+        return when {
+            errorMsg.contains("can only be one RETURN", ignoreCase = true) -> """
+                CYPHER SYNTAX ERROR: $errorMsg
+                
+                SPECIFIC ISSUE: The query contains multiple RETURN statements, which is invalid Cypher syntax.
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Use only ONE RETURN statement per query. If you need multiple aggregations, use WITH clauses to pipe results between steps.
+                
+                Example fix:
+                WRONG: MATCH (n) RETURN count(n) RETURN count(n) ORDER BY count(n)
+                RIGHT: MATCH (n) RETURN count(n) ORDER BY count(n)
+            """.trimIndent()
+            
+            errorMsg.contains("syntax error", ignoreCase = true) ||
+            errorMsg.contains("invalid syntax", ignoreCase = true) ||
+            errorMsg.contains("unexpected token", ignoreCase = true) -> """
+                CYPHER SYNTAX ERROR: $errorMsg
+                
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Review the Cypher query syntax. Common issues:
+                - Check parentheses and bracket matching
+                - Ensure proper clause ordering (MATCH, WHERE, WITH, RETURN)
+                - Verify all variables are properly defined
+                - Check for typos in keywords and function names
+            """.trimIndent()
+            
+            errorMsg.contains("apoc", ignoreCase = true) ||
+            errorMsg.contains("doesn't exist", ignoreCase = true) ||
+            errorMsg.contains("datetime", ignoreCase = true) -> """
+                FUNCTION ERROR: $errorMsg
+                
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Replace unsupported functions with string-based operations:
+                - Replace apoc.date.* with substring() and string operations
+                - Replace datetime() with string comparisons
+                - Use hardcoded date strings for calculations
+            """.trimIndent()
+            
+            else -> """
+                QUERY ERROR: $errorMsg
+                
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Review the error message and fix the specific issue reported.
+            """.trimIndent()
+        }
+    }
 
     /**
      * Clear old conversations to prevent memory leaks.

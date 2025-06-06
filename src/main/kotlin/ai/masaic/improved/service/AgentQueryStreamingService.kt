@@ -31,8 +31,8 @@ class AgentQueryStreamingService(
     private val modelService: ModelService,
     private val graphService: ConversationGraphService,
     private val memgraphDriver: Driver,
-    private val visualizationService: VisualizationService,
-    private val intelligentVisualizationService: IntelligentVisualizationService,
+    private val queryAnalysisService: QueryAnalysisService,
+    private val visualizationExecutorService: VisualizationExecutorService,
 ) {
     private val logger = KotlinLogging.logger {}
     private val objectMapper = jacksonObjectMapper().registerModule(JavaTimeModule())
@@ -113,7 +113,7 @@ class AgentQueryStreamingService(
                             ),
                         )
                     
-                        // Execute Cypher query
+                        // Execute Cypher query with enhanced error details
                         emit(createEvent(AgentResponseEvent.QueryExecution(cypherResponse.cypherQuery)))
                         emit(createEvent(AgentResponseEvent.Progress("Executing Query", 0.5f, "Running query against graph database")))
                     
@@ -152,64 +152,140 @@ class AgentQueryStreamingService(
                             emit(createEvent(AgentResponseEvent.NaturalLanguageGenerated(naturalResponse)))
                             emit(createEvent(AgentResponseEvent.Progress("Response Ready", 0.75f, "Natural language response generated")))
                         
-                            // Generate visualization if enabled and beneficial
+                            // Execute unified visualization strategy
                             var visualization: VisualizationData? = null
+                            var parallelVisualizations: ParallelVisualizationData? = null
+                            
                             if (request.enableVisualization && results.isNotEmpty()) {
-                                logger.info { "Visualization enabled and results not empty. Starting intelligent visualization generation..." }
-                                emit(createEvent(AgentResponseEvent.VisualizationGeneration("Analyzing data for intelligent visualization...")))
-                                emit(createEvent(AgentResponseEvent.Progress("Creating Visualization", 0.9f, "Determining optimal analysis approach")))
+                                logger.info { "Visualization enabled. Starting unified analysis..." }
+                                emit(createEvent(AgentResponseEvent.VisualizationGeneration("Analyzing data for optimal visualization strategy...")))
+                                emit(createEvent(AgentResponseEvent.Progress("Creating Visualization", 0.9f, "Determining optimal visualization approach")))
                             
                                 try {
-                                    logger.info { "Calling intelligentVisualizationService.generateIntelligentVisualization..." }
-                                    visualization =
-                                        intelligentVisualizationService.generateIntelligentVisualization(
-                                            request.query,
-                                            cypherResponse.cypherQuery,
-                                            results,
-                                            naturalResponse,
-                                            apiKey,
-                                            request.enablePythonAnalysis,
-                                        )
-                                
-                                    logger.info { "Intelligent visualization result: ${if (visualization != null) "SUCCESS" else "NULL"}" }
-                                
-                                    if (visualization != null) {
-                                        // Emit Python analysis events if Python was used
-                                        if (visualization.pythonAnalysis != null) {
-                                            emit(
-                                                createEvent(
-                                                    AgentResponseEvent.PythonAnalysisStarted(
-                                                        code = visualization.pythonAnalysis.code,
-                                                        description = "Performing advanced data analysis with Python",
-                                                    ),
-                                                ),
-                                            )
-                                        
-                                            emit(
-                                                createEvent(
-                                                    AgentResponseEvent.PythonAnalysisCompleted(
-                                                        output = visualization.pythonAnalysis.output,
-                                                        executionTime = visualization.pythonAnalysis.executionTime,
-                                                        success = visualization.pythonAnalysis.success,
-                                                    ),
-                                                ),
-                                            )
-                                        }
+                                    // Step 1: Analyze the query and data comprehensively
+                                    val analysis = queryAnalysisService.analyzeQuery(
+                                        query = request.query,
+                                        conversation = conversation,
+                                        queryResults = results,
+                                        apiKey = apiKey
+                                    )
                                     
-                                        emit(
-                                            createEvent(
-                                                AgentResponseEvent.VisualizationGenerated(
+                                    logger.info { "Query analysis complete: strategy=${analysis.responseStrategy}, multipleVisuals=${analysis.visualizationPotential.multipleVisualsRecommended}" }
+                                    
+                                    // Step 2: Execute visualization based on analysis
+                                    val vizRequest = VisualizationExecutionRequest(
+                                        originalQuery = request.query,
+                                        cypherQuery = cypherResponse.cypherQuery,
+                                        queryResults = results,
+                                        naturalLanguageResponse = naturalResponse,
+                                        strategy = analysis.responseStrategy,
+                                        analysis = analysis
+                                    )
+                                    
+                                    val vizResult = visualizationExecutorService.executeVisualization(vizRequest, apiKey)
+                                    
+                                    if (vizResult.success) {
+                                        when (vizResult.type) {
+                                            VisualizationResultType.SINGLE -> {
+                                                visualization = vizResult.visualizations.first()
+                                                
+                                                // Emit Python analysis events if used
+                                                visualization.pythonAnalysis?.let { pythonResult ->
+                                                    emit(createEvent(AgentResponseEvent.PythonAnalysisStarted(
+                                                        code = pythonResult.code,
+                                                        description = "Performing advanced data analysis with Python"
+                                                    )))
+                                                    
+                                                    emit(createEvent(AgentResponseEvent.PythonAnalysisCompleted(
+                                                        output = pythonResult.output,
+                                                        executionTime = pythonResult.executionTime,
+                                                        success = pythonResult.success
+                                                    )))
+                                                }
+                                                
+                                                emit(createEvent(AgentResponseEvent.VisualizationGenerated(
                                                     chartType = visualization.chartType,
                                                     title = visualization.title,
-                                                    description = visualization.description,
-                                                ),
-                                            ),
-                                        )
+                                                    description = visualization.description
+                                                )))
+                                                
+                                                // Also emit the full visualization data for frontend compatibility
+                                                emit(createEvent(AgentResponseEvent.VisualizationGeneratedWithData(visualization)))
+                                            }
+                                            
+                                            VisualizationResultType.MULTIPLE, VisualizationResultType.COMPREHENSIVE -> {
+                                                val primary = vizResult.visualizations.first()
+                                                val additional = vizResult.visualizations.drop(1)
+                                                
+                                                // Create parallel visualization data structure for backward compatibility
+                                                parallelVisualizations = ParallelVisualizationData(
+                                                    primaryVisualization = primary,
+                                                    additionalVisualizations = additional,
+                                                    totalUnits = vizResult.visualizations.size,
+                                                    executionSummary = vizResult.summary
+                                                )
+                                                
+                                                visualization = primary // Set primary for backward compatibility
+                                                
+                                                // Emit parallel visualization events
+                                                emit(createEvent(AgentResponseEvent.ParallelVisualizationStarted(
+                                                    totalUnits = parallelVisualizations.totalUnits,
+                                                    units = vizResult.visualizations.map { it.unitName ?: it.title }
+                                                )))
+                                                
+                                                // Emit events for each visualization unit
+                                                vizResult.visualizations.forEach { viz ->
+                                                    viz.pythonAnalysis?.let { pythonResult ->
+                                                        emit(createEvent(AgentResponseEvent.PythonAnalysisStarted(
+                                                            code = pythonResult.code,
+                                                            description = "Performing advanced data analysis for ${viz.unitName ?: "visualization unit"}"
+                                                        )))
+                                                        
+                                                        emit(createEvent(AgentResponseEvent.PythonAnalysisCompleted(
+                                                            output = pythonResult.output,
+                                                            executionTime = pythonResult.executionTime,
+                                                            success = pythonResult.success
+                                                        )))
+                                                    }
+                                                    
+                                                    emit(createEvent(AgentResponseEvent.VisualizationUnitCompleted(
+                                                        unitName = viz.unitName ?: viz.title,
+                                                        unitIndex = viz.unitIndex ?: 0,
+                                                        totalUnits = parallelVisualizations.totalUnits,
+                                                        chartType = viz.chartType,
+                                                        executionTime = viz.pythonAnalysis?.executionTime ?: 0L,
+                                                        hasPythonAnalysis = viz.pythonAnalysis != null
+                                                    )))
+                                                    
+                                                    // Also emit the individual visualization data
+                                                    emit(createEvent(AgentResponseEvent.VisualizationUnitCompletedWithData(
+                                                        unitName = viz.unitName ?: viz.title,
+                                                        unitIndex = viz.unitIndex ?: 0,
+                                                        totalUnits = parallelVisualizations.totalUnits,
+                                                        visualization = viz
+                                                    )))
+                                                }
+                                                
+                                                emit(createEvent(AgentResponseEvent.ParallelVisualizationCompleted(
+                                                    totalUnits = parallelVisualizations.totalUnits,
+                                                    successfulUnits = vizResult.visualizations.size,
+                                                    failedUnits = 0,
+                                                    totalExecutionTime = vizResult.pythonAnalyses.sumOf { it.executionTime }
+                                                )))
+                                                
+                                                // Also emit the full parallel visualization data for frontend compatibility
+                                                emit(createEvent(AgentResponseEvent.ParallelVisualizationCompletedWithData(parallelVisualizations)))
+                                            }
+                                            
+                                            VisualizationResultType.NONE -> {
+                                                logger.info { "No visualization generated: ${vizResult.summary}" }
+                                            }
+                                        }
                                     } else {
-                                        logger.info { "No visualization generated (determined not beneficial)" }
+                                        logger.info { "Visualization execution failed: ${vizResult.summary}" }
                                     }
                                 } catch (e: Exception) {
-                                    logger.warn(e) { "Error generating intelligent visualization, continuing without it: ${e.message}" }
+                                    logger.warn(e) { "Error in unified visualization execution: ${e.message}" }
                                 }
                             } else {
                                 logger.info { "Visualization skipped. enableVisualization=${request.enableVisualization}, results.isEmpty()=${results.isEmpty()}" }
@@ -224,6 +300,7 @@ class AgentQueryStreamingService(
                                     queryResults = results,
                                     retryCount = retryCount,
                                     visualization = visualization,
+                                    parallelVisualizations = parallelVisualizations,
                                 )
                         
                             // Add assistant message to conversation
@@ -236,6 +313,7 @@ class AgentQueryStreamingService(
                                             "cypherQuery" to cypherResponse.cypherQuery,
                                             "queryResults" to results,
                                             "visualization" to visualization,
+                                            "parallelVisualizations" to parallelVisualizations,
                                         ) as Map<String, Any>,
                                 ),
                             )
@@ -245,8 +323,8 @@ class AgentQueryStreamingService(
                         
                             return@flow // Success, exit the flow
                         } else {
-                            // Query failed, prepare for retry
-                            lastError = executionResult.error
+                            // Query failed, prepare for retry with enhanced error context
+                            lastError = buildEnhancedErrorMessage(executionResult.error, cypherResponse.cypherQuery)
                             retryCount++
                         
                             emit(
@@ -254,12 +332,13 @@ class AgentQueryStreamingService(
                                     AgentResponseEvent.QueryRetry(
                                         attempt = retryCount,
                                         maxRetries = request.maxRetries + 1,
-                                        error = executionResult.error ?: "Unknown query error",
+                                        error = lastError ?: "Unknown query error",
                                     ),
                                 ),
                             )
                         
                             logger.warn { "Cypher query failed (attempt $retryCount): ${executionResult.error}" }
+                            logger.warn { "Failed query: ${cypherResponse.cypherQuery}" }
                         }
                     } catch (e: Exception) {
                         lastError = "LLM generation error: ${e.message}"
@@ -460,14 +539,12 @@ class AgentQueryStreamingService(
         previousError: String?,
     ): String {
         val prompt = StringBuilder()
-        val currentDate =
-            java.time.LocalDate
-                .now()
-                .toString()
-        val currentDateTime =
-            java.time.Instant
-                .now()
-                .toString()
+        val currentDate = java.time.LocalDate.now()
+        val currentDateTime = java.time.Instant.now()
+        val last30Days = currentDate.minusDays(30)
+        val last7Days = currentDate.minusDays(7)
+        val thisMonth = currentDate.withDayOfMonth(1)
+        val lastMonth = thisMonth.minusMonths(1)
         
         prompt.appendLine(
             """
@@ -504,6 +581,22 @@ class AgentQueryStreamingService(
             - Avoid datetime() function - use string comparisons instead for compatibility
             - Boolean fields (resolved) should be compared directly: c.resolved = true or c.resolved = false
             - NPS scores are integers from 0-10, use standard integer comparisons
+            
+            CRITICAL RESTRICTIONS:
+            - DO NOT use APOC functions (apoc.date.*, apoc.convert.*, etc.) - they are not available
+            - DO NOT use datetime(), date(), time() functions - use string operations instead
+            - For date calculations, use string concatenation and hardcoded date strings
+            - For relative dates like "last 30 days", calculate the target date string manually
+            - Use toInteger(), toString(), substring() for data conversion
+            - Avoid CALL subqueries with APOC functions
+            - For "last 30 days" use: c.createdAt >= '${java.time.LocalDate.now().minusDays(30)}T00:00:00Z'
+            
+            CYPHER SYNTAX REQUIREMENTS:
+            - Use ONLY ONE RETURN statement per query - multiple RETURN statements are invalid
+            - If you need multiple aggregations, use WITH clauses to pipe results between steps
+            - Proper clause ordering: MATCH, WHERE, WITH, RETURN, ORDER BY
+            - Ensure all variables are defined before use
+            - Use proper parentheses and bracket matching
             
             SAMPLE QUERIES (IMPROVED - PURE GRAPH TRAVERSAL):
             1. Count conversations: MATCH (c:Conversation) RETURN count(c) as total
@@ -622,16 +715,32 @@ class AgentQueryStreamingService(
         conversation: AgentConversation,
         apiKey: String,
     ): String {
+        // Enhanced date context for natural language generation
+        val currentDate = java.time.LocalDate.now()
+        val currentDateTime = java.time.Instant.now()
+        val dateTimeFormatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")
+        val enhancedDateContext = buildEnhancedDateContextForNLG(currentDate, currentDateTime)
+        
         val systemPrompt =
             """
             You are a business analyst expert at interpreting data query results and providing clear, actionable insights.
             
+            ENHANCED DATE & TIME AWARENESS:
+            $enhancedDateContext
+            
+            When discussing time-related data, use this current date context to:
+            - Make relative time references more meaningful ("as of today", "in the last week", "this month so far")
+            - Provide context for trends and patterns
+            - Suggest time-aware follow-up questions
+            - Identify seasonality or time-based patterns
+            
             Your task is to analyze the query results and provide a natural language response that:
-            1. Directly answers the user's question
-            2. Highlights key insights and patterns
+            1. Directly answers the user's question with enhanced time awareness
+            2. Highlights key insights and patterns (especially time-based trends)
             3. Provides business context and implications
             4. Suggests follow-up questions or actions when relevant
             5. Uses clear, non-technical language
+            6. Incorporates current date context when relevant to the analysis
             
             FORMAT YOUR RESPONSE USING MARKDOWN:
             - Use **bold** for key metrics and important numbers
@@ -640,8 +749,10 @@ class AgentQueryStreamingService(
             - Use tables when presenting structured data
             - Use `code formatting` for technical terms or specific values
             - Include line breaks between paragraphs for better readability
+            - Use date context to make time-based insights more meaningful
             
             Make your response visually appealing and easy to scan with proper markdown formatting.
+            Include time-aware insights when dealing with temporal data.
             """.trimIndent()
         
         val userPrompt =
@@ -681,6 +792,87 @@ class AgentQueryStreamingService(
      * Get conversation history for a specific conversation ID.
      */
     fun getConversationHistory(conversationId: String): AgentConversation? = activeConversations[conversationId]
+
+    /**
+     * Build enhanced date context specifically for natural language generation.
+     */
+    private fun buildEnhancedDateContextForNLG(
+        currentDate: java.time.LocalDate,
+        currentDateTime: java.time.Instant,
+    ): String {
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy")
+        val dateOnlyFormatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+        
+        return """
+            CURRENT DATE CONTEXT (Today is ${currentDate.format(formatter)}):
+            - Today: ${currentDate.format(dateOnlyFormatter)}
+            - This week: ${currentDate.with(java.time.DayOfWeek.MONDAY).format(dateOnlyFormatter)} to ${currentDate.with(java.time.DayOfWeek.SUNDAY).format(dateOnlyFormatter)}
+            - This month: ${currentDate.withDayOfMonth(1).format(dateOnlyFormatter)} to ${currentDate.withDayOfMonth(currentDate.lengthOfMonth()).format(dateOnlyFormatter)}
+            - Last 7 days: ${currentDate.minusDays(6).format(dateOnlyFormatter)} to ${currentDate.format(dateOnlyFormatter)}
+            - Last 30 days: ${currentDate.minusDays(29).format(dateOnlyFormatter)} to ${currentDate.format(dateOnlyFormatter)}
+            - Year to date: ${currentDate.withDayOfYear(1).format(dateOnlyFormatter)} to ${currentDate.format(dateOnlyFormatter)}
+            
+            Use this context to make time-based insights more relevant and actionable for business users.
+            When you see dates in the data, relate them to these current time periods for better context.
+        """.trimIndent()
+    }
+
+    /**
+     * Build enhanced error message with context for better LLM understanding.
+     */
+    private fun buildEnhancedErrorMessage(originalError: String?, failedQuery: String): String {
+        val errorMsg = originalError ?: "Unknown error"
+        
+        return when {
+            errorMsg.contains("can only be one RETURN", ignoreCase = true) -> """
+                CYPHER SYNTAX ERROR: $errorMsg
+                
+                SPECIFIC ISSUE: The query contains multiple RETURN statements, which is invalid Cypher syntax.
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Use only ONE RETURN statement per query. If you need multiple aggregations, use WITH clauses to pipe results between steps.
+                
+                Example fix:
+                WRONG: MATCH (n) RETURN count(n) RETURN count(n) ORDER BY count(n)
+                RIGHT: MATCH (n) RETURN count(n) ORDER BY count(n)
+            """.trimIndent()
+            
+            errorMsg.contains("syntax error", ignoreCase = true) ||
+            errorMsg.contains("invalid syntax", ignoreCase = true) ||
+            errorMsg.contains("unexpected token", ignoreCase = true) -> """
+                CYPHER SYNTAX ERROR: $errorMsg
+                
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Review the Cypher query syntax. Common issues:
+                - Check parentheses and bracket matching
+                - Ensure proper clause ordering (MATCH, WHERE, WITH, RETURN)
+                - Verify all variables are properly defined
+                - Check for typos in keywords and function names
+            """.trimIndent()
+            
+            errorMsg.contains("apoc", ignoreCase = true) ||
+            errorMsg.contains("doesn't exist", ignoreCase = true) ||
+            errorMsg.contains("datetime", ignoreCase = true) -> """
+                FUNCTION ERROR: $errorMsg
+                
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Replace unsupported functions with string-based operations:
+                - Replace apoc.date.* with substring() and string operations
+                - Replace datetime() with string comparisons
+                - Use hardcoded date strings for calculations
+            """.trimIndent()
+            
+            else -> """
+                QUERY ERROR: $errorMsg
+                
+                FAILED QUERY: $failedQuery
+                
+                FIX REQUIRED: Review the error message and fix the specific issue reported.
+            """.trimIndent()
+        }
+    }
 
     /**
      * Clear old conversations to prevent memory leaks.

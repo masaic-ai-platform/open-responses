@@ -26,6 +26,8 @@ data class AgentQueryResponse(
     val timestamp: Instant = Instant.now(),
     val error: String? = null,
     val visualization: VisualizationData? = null,
+    val parallelVisualizations: ParallelVisualizationData? = null,
+    val metadata: Map<String, Any> = emptyMap(),
 )
 
 /**
@@ -39,6 +41,8 @@ data class VisualizationData(
     val title: String,
     val description: String,
     val pythonAnalysis: PythonAnalysisResult? = null,
+    val unitName: String? = null,
+    val unitIndex: Int? = null,
 )
 
 /**
@@ -130,6 +134,10 @@ sealed class AgentResponseEvent(
         val description: String,
     ) : AgentResponseEvent("visualization_generated")
 
+    data class VisualizationGeneratedWithData(
+        val visualization: VisualizationData,
+    ) : AgentResponseEvent("visualization_generated_with_data")
+
     data class PythonAnalysisStarted(
         val code: String,
         val description: String,
@@ -155,6 +163,69 @@ sealed class AgentResponseEvent(
         val progress: Float,
         val details: String,
     ) : AgentResponseEvent("progress")
+
+    // New events for intelligent pipeline
+    data class IntentAnalyzed(
+        val queryType: String,
+        val complexity: String,
+        val expectedDataSize: String,
+        val analysisRequirements: List<String>,
+        val reasoning: String,
+    ) : AgentResponseEvent("intent_analyzed")
+
+    data class StrategyPlanned(
+        val responseType: String,
+        val requiresVisualization: Boolean,
+        val visualizationType: String,
+        val requiresPythonAnalysis: Boolean,
+        val multiQueryStrategy: String,
+        val reasoning: String,
+    ) : AgentResponseEvent("strategy_planned")
+
+    data class QueriesGenerated(
+        val primaryQuery: CypherGenerationResponse,
+        val supportingQueries: List<CypherGenerationResponse>,
+        val queryCount: Int,
+    ) : AgentResponseEvent("queries_generated")
+
+    data class AnalysisCompleted(
+        val primaryResults: List<Map<String, Any>>,
+        val supportingResults: Map<String, List<Map<String, Any>>>,
+        val insights: List<String>,
+    ) : AgentResponseEvent("analysis_completed")
+
+    // Enhanced events for parallel visualization processing
+    data class ParallelVisualizationStarted(
+        val totalUnits: Int,
+        val units: List<String>,
+    ) : AgentResponseEvent("parallel_visualization_started")
+
+    data class VisualizationUnitCompleted(
+        val unitName: String,
+        val unitIndex: Int,
+        val totalUnits: Int,
+        val chartType: ChartType,
+        val executionTime: Long,
+        val hasPythonAnalysis: Boolean,
+    ) : AgentResponseEvent("visualization_unit_completed")
+
+    data class VisualizationUnitCompletedWithData(
+        val unitName: String,
+        val unitIndex: Int,
+        val totalUnits: Int,
+        val visualization: VisualizationData,
+    ) : AgentResponseEvent("visualization_unit_completed_with_data")
+
+    data class ParallelVisualizationCompleted(
+        val totalUnits: Int,
+        val successfulUnits: Int,
+        val failedUnits: Int,
+        val totalExecutionTime: Long,
+    ) : AgentResponseEvent("parallel_visualization_completed")
+
+    data class ParallelVisualizationCompletedWithData(
+        val parallelVisualizations: ParallelVisualizationData,
+    ) : AgentResponseEvent("parallel_visualization_completed_with_data")
 }
 
 /**
@@ -243,12 +314,52 @@ enum class AnalysisType {
 }
 
 /**
- * Intelligent analysis recommendation
+ * Container for multiple parallel visualization units
+ */
+data class ParallelVisualizationData(
+    val primaryVisualization: VisualizationData,
+    val additionalVisualizations: List<VisualizationData> = emptyList(),
+    val totalUnits: Int,
+    val executionSummary: String,
+)
+
+/**
+ * Specification for a parallel visualization unit
+ */
+data class VisualizationUnit(
+    val name: String,
+    val description: String,
+    val analysisType: AnalysisType,
+    val chartType: ChartType,
+    val requiresPythonAnalysis: Boolean,
+    val pythonRequirements: List<String> = emptyList(),
+    val dataFilters: Map<String, Any> = emptyMap(),
+    val priority: Int = 1,
+)
+
+/**
+ * Request for parallel visualization analysis
+ */
+data class ParallelVisualizationRequest(
+    val originalQuery: String,
+    val cypherQuery: String,
+    val queryResults: List<Map<String, Any>>,
+    val naturalLanguageResponse: String,
+    val visualizationUnits: List<VisualizationUnit>,
+    val enablePythonAnalysis: Boolean = true,
+    val maxParallelUnits: Int = 3,
+)
+
+/**
+ * Enhanced intelligent analysis recommendation for parallel processing
  */
 data class IntelligentAnalysisRecommendation(
     val analysisType: AnalysisType,
     val reasoning: String,
     val chartType: ChartType? = null,
     val pythonRequirements: List<String> = emptyList(),
-    val complexity: String = "low", // low, medium, high
+    val complexity: String = "low",
+    val recommendsParallelUnits: Boolean = false,
+    val suggestedUnits: List<VisualizationUnit> = emptyList(),
+    val currentDateContext: String? = null,
 ) 
