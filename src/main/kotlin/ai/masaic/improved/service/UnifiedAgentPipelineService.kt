@@ -440,26 +440,36 @@ class UnifiedAgentPipelineService(
         conversation: AgentConversation,
         apiKey: String,
     ): String {
+        val currentDate = java.time.LocalDate.now()
         val systemPrompt = """
             You are an expert business analyst providing insights based on data query results.
+            
+            CURRENT DATE CONTEXT:
+            - Today's date: $currentDate (YYYY-MM-DD format)
             
             Query Context:
             - Query Type: ${analysis.queryType}
             - Complexity: ${analysis.complexity}
             - Response Strategy: ${analysis.responseStrategy}
             
-            Your task is to provide a comprehensive response that:
+            IMPORTANT CONSTRAINTS:
+            - Keep your response SHORT and CONCISE
+            - DO NOT create, suggest, or describe any visualization data, charts, graphs, or visual elements
+            - Focus on TEXT-BASED insights only
+            - Avoid lengthy explanations - be direct and to the point
+            
+            Your task is to provide a concise response that:
             1. Directly answers the user's question
-            2. Highlights key insights and patterns
-            3. Provides business context and implications
+            2. Highlights key insights and patterns briefly
+            3. Provides essential business context only
             4. Uses clear, professional markdown formatting
-            5. Suggests follow-up questions when relevant
+            5. Consider temporal context when relevant (e.g., recent vs. older data)
             
             Format your response using markdown with:
             - **bold** for key metrics
-            - ## headers for main sections
-            - Bullet points for insights
-            - Tables for structured data when appropriate
+            - Bullet points for insights (keep them brief)
+            - Short, focused sections
+            - NO tables unless absolutely necessary for clarity
         """.trimIndent()
 
         val userPrompt = """
