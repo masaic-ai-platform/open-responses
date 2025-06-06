@@ -977,7 +977,10 @@ Keep it concise and user-friendly.
 
         val request =
             CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to prompt)),
+                messages = listOf(
+                    mapOf("role" to "system", "content" to "You are a helpful assistant that summarizes classification runs."),
+                    mapOf("role" to "user", "content" to prompt)
+                ),
                 model = "openai@gpt-4o-mini",
                 stream = false,
                 store = false,
@@ -1016,7 +1019,10 @@ Keep it concise and informative.
 
         val request =
             CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to prompt)),
+                messages = listOf(
+                    mapOf("role" to "system", "content" to "You are a helpful assistant that summarizes batch processing results."),
+                    mapOf("role" to "user", "content" to prompt)
+                ),
                 model = "openai@gpt-4o-mini",
                 stream = false,
                 store = false,

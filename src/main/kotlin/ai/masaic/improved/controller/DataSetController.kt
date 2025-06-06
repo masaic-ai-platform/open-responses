@@ -1038,7 +1038,10 @@ class DataSetController(
             )
         val createCompletionRequest =
             CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
+                messages = listOf(
+                    mapOf("role" to "system", "content" to "You are a conversation generator that creates realistic customer service chat transcripts."),
+                    mapOf("role" to "user", "content" to systemPrompt)
+                ),
                 model = "openai@gpt-4o-mini",
                 response_format = responseFormat,
                 stream = false,
@@ -1191,7 +1194,10 @@ For hand‑over codes:
             )
         val createCompletionRequest =
             CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to systemPrompt)),
+                messages = listOf(
+                    mapOf("role" to "system", "content" to "You are HandoverJudgeGPT, an expert in labeling chat transcripts with appropriate handover codes."),
+                    mapOf("role" to "user", "content" to systemPrompt)
+                ),
                 model = "o3-mini",
                 response_format = responseFormat,
                 stream = false,

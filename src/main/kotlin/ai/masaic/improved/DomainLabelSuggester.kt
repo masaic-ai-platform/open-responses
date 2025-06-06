@@ -74,7 +74,10 @@ class DomainLabelSuggester(
                 )
             val createCompletionRequest =
                 CreateCompletionRequest(
-                    messages = listOf(mapOf("role" to "system", "content" to updatedSystemPrompt)),
+                    messages = listOf(
+                        mapOf("role" to "system", "content" to "You are a domain-expert assistant for labeling and categorizing customer conversations."),
+                        mapOf("role" to "user", "content" to updatedSystemPrompt)
+                    ),
                     model = request.model,
                     response_format = responseFormat,
                     stream = false,

@@ -1,11 +1,12 @@
 package ai.masaic.improved.service
 
 import ai.masaic.improved.ModelService
-import ai.masaic.improved.createCompletion
+import ai.masaic.improved.createResponse
 import ai.masaic.improved.model.*
-import ai.masaic.openresponses.api.model.CreateCompletionRequest
+import ai.masaic.openresponses.api.model.CreateResponseRequest
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import com.openai.models.responses.ResponseTextConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import mu.KotlinLogging
@@ -349,6 +350,26 @@ class UnifiedAgentPipelineService(
         }
 
     // Helper methods (consolidated and simplified)
+    
+    /**
+     * Ensures messages list has at least one user message.
+     * Chat completion APIs require at least one user message and won't accept only system messages.
+     */
+    private fun ensureUserMessage(messages: List<Map<String, Any?>>): List<Map<String, Any?>> {
+        val hasUserMessage = messages.any { it["role"] == "user" }
+        return if (!hasUserMessage && messages.isNotEmpty()) {
+            // Convert the last system message to user message, or add a minimal user message
+            val lastMessage = messages.last()
+            if (lastMessage["role"] == "system") {
+                messages.dropLast(1) + mapOf("role" to "user", "content" to lastMessage["content"])
+            } else {
+                messages + mapOf("role" to "user", "content" to "Please analyze and respond.")
+            }
+        } else {
+            messages
+        }
+    }
+    
     private fun getOrCreateConversation(conversationId: String?): AgentConversation =
         if (conversationId != null && activeConversations.containsKey(conversationId)) {
             activeConversations[conversationId]!!.copy(lastUpdated = Instant.now())
@@ -385,13 +406,13 @@ class UnifiedAgentPipelineService(
             add(mapOf("role" to "user", "content" to query))
         }
         
-        val request = CreateCompletionRequest(
-            model = "gpt-4.1",
-            messages = messages,
+        val request = CreateResponseRequest(
+            model = "openai@gpt-4.1",
+            input = messages,
             temperature = 0.1,
-            response_format = mapOf(
-                "type" to "json_schema",
-                "json_schema" to mapOf(
+            text = objectMapper.readValue(objectMapper.writeValueAsString(mapOf(
+                "format" to mapOf(
+                    "type" to "json_schema",
                     "name" to "cypher_response",
                     "schema" to mapOf(
                         "type" to "object",
@@ -400,13 +421,15 @@ class UnifiedAgentPipelineService(
                             "explanation" to mapOf("type" to "string"),
                             "confidence" to mapOf("type" to "string")
                         ),
-                        "required" to listOf("cypherQuery", "explanation")
-                    )
+                        "required" to listOf("cypherQuery", "explanation"),
+                        "additionalProperties" to false
+                    ),
+                    "strict" to true
                 )
-            )
+            )), ResponseTextConfig::class.java)
         )
         
-        return modelService.createCompletion(request, apiKey)
+        return modelService.createResponse(request, apiKey)
     }
 
     private suspend fun generateNaturalLanguageResponse(
@@ -454,14 +477,14 @@ class UnifiedAgentPipelineService(
             mapOf("role" to "user", "content" to userPrompt)
         )
 
-        val request = CreateCompletionRequest(
-            model = "gpt-4.1",
-            messages = messages,
+        val request = CreateResponseRequest(
+            model = "openai@gpt-4.1",
+            input = messages,
             temperature = 0.3
         )
 
         return try {
-            modelService.fetchCompletionPayload(request, apiKey)
+            modelService.fetchResponsePayload(request, apiKey)
         } catch (e: Exception) {
             logger.error(e) { "Error generating natural language response" }
             "I found the data you requested, but I'm having trouble summarizing it clearly. Here are the raw results: ${objectMapper.writeValueAsString(queryResults)}"
@@ -510,9 +533,18 @@ class UnifiedAgentPipelineService(
             - Complexity: ${analysis.complexity}
             - Data Characteristics: ${analysis.dataCharacteristics}
             
-            CRITICAL RESTRICTIONS:
+            CRITICAL MEMGRAPH RESTRICTIONS:
             - NO APOC functions (apoc.date.*, etc.) - use string operations
-            - NO datetime() functions - use string comparisons
+            - NO datetime functions: date(), duration(), time() - use string comparisons
+            - NO EXISTS subqueries - use exists(pattern) with WHERE clause instead
+            - NO COUNT subqueries - use count() aggregation function instead  
+            - NO COLLECT subqueries - use collect() aggregation function instead
+            - NO shortestPath() - use [*BFS] traversal instead
+            - NO NOT label expressions (!ACTED_IN) - use WHERE type(r) != "ACTED_IN"
+            - NO fixed length patterns (--{2}) - use variable length [*2] instead
+            - NO patterns in expressions except exists(pattern)
+            - NO multiple values after WHEN in CASE - use separate WHEN clauses with OR
+            - NO unsupported functions: toBooleanList(), isEmpty(), elementId(), percentileCont(), isNan(), normalize()
             - EXACTLY ONE query per response - no multiple queries separated by semicolons
             - EXACTLY ONE RETURN statement per query
             - For dates: c.createdAt >= '2024-01-01T00:00:00Z' format
@@ -605,6 +637,9 @@ class UnifiedAgentPipelineService(
             errorMsg.contains("apoc", ignoreCase = true) || errorMsg.contains("datetime", ignoreCase = true) -> 
                 "FUNCTION ERROR: APOC/datetime functions not available. Use string operations instead. Failed query: $failedQuery"
             
+            errorMsg.contains("Unknown key 'days'", ignoreCase = true) || errorMsg.contains("duration(", ignoreCase = true) || errorMsg.contains("date()", ignoreCase = true) -> 
+                "FUNCTION ERROR: date() and duration() functions not supported. Use string date comparisons instead (e.g., c.createdAt >= '2024-01-01T00:00:00Z'). Failed query: $failedQuery"
+            
             errorMsg.contains("mismatched input 'AS'", ignoreCase = true) || errorMsg.contains("CALL", ignoreCase = true) -> 
                 "SYNTAX ERROR: Invalid CALL subquery syntax. Use standard MATCH/WITH/RETURN flow instead of CALL subqueries. Avoid 'CALL { ... } AS alias' patterns. Failed query: $failedQuery"
             
@@ -616,6 +651,11 @@ class UnifiedAgentPipelineService(
             
             errorMsg.contains("Variable in subquery already declared", ignoreCase = true) -> 
                 "SYNTAX ERROR: CALL subqueries not supported. Use single MATCH/WITH/RETURN flow instead. Failed query: $failedQuery"
+            
+            errorMsg.contains("An assistant message must be preceded by a user message", ignoreCase = true) || 
+            errorMsg.contains("conversation must include at least one user message", ignoreCase = true) ||
+            errorMsg.contains("messages must contain at least one user message", ignoreCase = true) -> 
+                "API ERROR: Chat completion requires at least one user message. Cannot send only system messages. Failed query: $failedQuery"
             
             else -> "QUERY ERROR: $errorMsg. Failed query: $failedQuery"
         }
