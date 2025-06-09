@@ -449,7 +449,7 @@ class MasaicResponseService(
         request: ResponseCreateParams.Body,
     ): OpenAIClient {
         val authHeader =
-            headers.getFirst("Authorization")
+            headers.getFirst("Authorization") ?: headers.getFirst("authorization")
                 ?: throw IllegalArgumentException("api-key is missing.")
 
         val credential =

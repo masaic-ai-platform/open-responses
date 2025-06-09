@@ -219,11 +219,12 @@ class MasaicCompletionServiceTest {
             runTest {
                 // Given
                 val request = createDefaultRequest()
-                val headers = createDefaultHeaders().also {
-                    it.clear()
-                    it.add("authorization", defaultAuthHeader)
-                    it.add("X-B3-TraceId", defaultTraceId)
-                }
+                val headers =
+                    createDefaultHeaders().also {
+                        it.clear()
+                        it.add("authorization", defaultAuthHeader)
+                        it.add("X-B3-TraceId", defaultTraceId)
+                    }
                 val queryParams = LinkedMultiValueMap<String, String>()
                 val expectedCompletion = mockk<ChatCompletion>(relaxed = true)
 

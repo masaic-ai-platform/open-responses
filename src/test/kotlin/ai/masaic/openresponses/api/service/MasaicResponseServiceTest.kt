@@ -151,6 +151,7 @@ class MasaicResponseServiceTest {
             // Given
             val request =
                 mockk<ResponseCreateParams.Body> {
+                    every { previousResponseId() } returns Optional.empty()
                     every { input() } returns ResponseCreateParams.Input.ofText("Test")
                     every { model() } returns ResponsesModel.ofString("gpt-4")
                     every { instructions() } returns Optional.empty()
