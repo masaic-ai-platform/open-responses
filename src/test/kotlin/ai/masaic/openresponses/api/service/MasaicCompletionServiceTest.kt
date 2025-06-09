@@ -215,6 +215,34 @@ class MasaicCompletionServiceTest {
             }
 
         @Test
+        fun `should accept lowercase authorization header`() =
+            runTest {
+                // Given
+                val request = createDefaultRequest()
+                val headers =
+                    createDefaultHeaders().also {
+                        it.clear()
+                        it.add("authorization", defaultAuthHeader)
+                        it.add("X-B3-TraceId", defaultTraceId)
+                    }
+                val queryParams = LinkedMultiValueMap<String, String>()
+                val expectedCompletion = mockk<ChatCompletion>(relaxed = true)
+
+                coEvery {
+                    openAICompletionService.create(any(), any(), any())
+                } returns expectedCompletion
+
+                // When
+                val result = masaicCompletionService.createCompletion(request, headers, queryParams)
+
+                // Then
+                assertSame(expectedCompletion, result)
+                coVerify(exactly = 1) {
+                    openAICompletionService.create(any(), any(), any())
+                }
+            }
+
+        @Test
         fun `should extract model name correctly when using provider format`() =
             runTest {
                 // Given
