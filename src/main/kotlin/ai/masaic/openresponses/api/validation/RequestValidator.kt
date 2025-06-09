@@ -34,9 +34,16 @@ class RequestValidator(
         if (!modelPattern.matches(request.model)) {
             throw IllegalArgumentException("model must be in provider@model format")
         }
-        if (request.input == null) {
+
+        val input = request.input
+        if (input is String && input.isBlank()) {
             throw IllegalArgumentException("input field is required")
         }
+
+        if (input is List<*> && input.isEmpty()) {
+            throw IllegalArgumentException("input field is required")
+        }
+
         if (request.metadata != null && !request.store) {
             throw IllegalArgumentException("metadata is only allowed when store=true")
         }
@@ -49,11 +56,11 @@ class RequestValidator(
                 is ImageGenerationTool -> {
                     if (imageBaseUrl.isNullOrBlank()) {
                         if (!modelPattern.matches(tool.model)) {
-                            throw IllegalArgumentException("tool model must be in provider@model format")
+                            throw IllegalArgumentException("Image model must be in provider@model format")
                         }
                     }
                     if (imageApiKey.isNullOrBlank() && tool.modelProviderKey.isNullOrBlank()) {
-                        throw IllegalArgumentException("model_provider_key is required when OPEN_RESPONSES_IMAGE_GENERATION_API_KEY is not set")
+                        throw IllegalArgumentException("model_provider_key is required for image generation")
                     }
                 }
                 is FileSearchTool -> {
