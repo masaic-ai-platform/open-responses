@@ -7,6 +7,7 @@ import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.api.validation.RequestValidator
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
@@ -31,11 +32,12 @@ class ResponseControllerTest {
     private val responseService = mockk<MasaicResponseService>()
     private var webTestClient: WebTestClient
     private var payloadFormatter: PayloadFormatter
-    private lateinit var responseStore: ResponseStore
+    private lateinit var requestValidator: RequestValidator
     val objectMapper = jacksonObjectMapper()
 
     init {
         val responseStore = mockk<ResponseStore>()
+        requestValidator = mockk<RequestValidator>()
         payloadFormatter =
             mockk {
                 every { formatResponse(any()) } answers {
@@ -45,7 +47,8 @@ class ResponseControllerTest {
                     objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
                 }
             }
-        val controller = ResponseController(responseService, payloadFormatter, responseStore)
+        coEvery { requestValidator.validateResponseRequest(any()) } returns Unit
+        val controller = ResponseController(responseService, payloadFormatter, responseStore, requestValidator)
         webTestClient = WebTestClient.bindToController(controller).build()
     }
 

@@ -6,6 +6,7 @@ import ai.masaic.openresponses.api.model.ResponseInputItemList
 import ai.masaic.openresponses.api.service.MasaicResponseService
 import ai.masaic.openresponses.api.service.ResponseNotFoundException
 import ai.masaic.openresponses.api.utils.PayloadFormatter
+import ai.masaic.openresponses.api.validation.RequestValidator
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
@@ -33,6 +34,7 @@ class ResponseController(
     private val masaicResponseService: MasaicResponseService,
     private val payloadFormatter: PayloadFormatter,
     private val responseStore: ResponseStore,
+    private val requestValidator: RequestValidator,
 ) {
     private val log = LoggerFactory.getLogger(ResponseController::class.java)
     val mapper = jacksonObjectMapper()
@@ -54,6 +56,7 @@ class ResponseController(
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
     ): ResponseEntity<*> {
+        requestValidator.validateResponseRequest(request)
         payloadFormatter.formatResponseRequest(request)
         request.parseInput(mapper)
         val requestBodyJson = mapper.writeValueAsString(request)
