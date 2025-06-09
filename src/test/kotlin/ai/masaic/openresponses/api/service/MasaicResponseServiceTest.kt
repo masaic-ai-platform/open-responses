@@ -146,6 +146,52 @@ class MasaicResponseServiceTest {
         }
 
     @Test
+    fun `createResponse should accept lowercase authorization header`() =
+        runBlocking {
+            // Given
+            val request =
+                mockk<ResponseCreateParams.Body> {
+                    every { previousResponseId() } returns Optional.empty()
+                    every { input() } returns ResponseCreateParams.Input.ofText("Test")
+                    every { model() } returns ResponsesModel.ofString("gpt-4")
+                    every { instructions() } returns Optional.empty()
+                    every { reasoning() } returns Optional.empty()
+                    every { parallelToolCalls() } returns Optional.of(true)
+                    every { maxOutputTokens() } returns Optional.of(256)
+                    every { include() } returns Optional.empty()
+                    every { metadata() } returns Optional.empty()
+                    every { store() } returns Optional.of(true)
+                    every { temperature() } returns Optional.of(0.7)
+                    every { topP() } returns Optional.of(0.9)
+                    every { truncation() } returns Optional.empty()
+                    every { _additionalProperties() } returns emptyMap()
+
+                    every { text() } returns Optional.of(ResponseTextConfig.builder().build())
+                    every { user() } returns Optional.of("someUser")
+                    every { toolChoice() } returns Optional.of(ResponseCreateParams.ToolChoice.ofOptions(ToolChoiceOptions.AUTO))
+                    every { tools() } returns Optional.of(listOf())
+                }
+            val headers: MultiValueMap<String, String> = LinkedMultiValueMap()
+            headers.add("authorization", "Bearer testKey")
+            val queryParams: MultiValueMap<String, String> = LinkedMultiValueMap()
+
+            val expectedResponse = mockk<Response>()
+            coEvery {
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
+            } returns expectedResponse
+
+            // When
+            val result = masaicResponseService.createResponse(request, headers, queryParams)
+
+            // Then
+            assertSame(expectedResponse, result)
+            coVerify(exactly = 1) {
+                openAIResponseService.create(ofType<OpenAIClient>(), any(), any())
+            }
+            confirmVerified(openAIResponseService)
+        }
+
+    @Test
     fun `createStreamingResponse should return a Flow of ServerSentEvent`() =
         runBlocking {
             // Given

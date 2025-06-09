@@ -400,7 +400,7 @@ class MasaicResponseService(
     private fun createHeadersBuilder(headers: MultiValueMap<String, String>): Headers.Builder {
         val headerBuilder = Headers.builder()
         headers
-            .filter { it.key == "Authorization" }
+            .filter { it.key.equals("Authorization", ignoreCase = true) }
             .forEach { (key, value) -> headerBuilder.put(key, value) }
         return headerBuilder
     }
@@ -449,7 +449,7 @@ class MasaicResponseService(
         request: ResponseCreateParams.Body,
     ): OpenAIClient {
         val authHeader =
-            headers.getFirst("Authorization")
+            headers.getFirst("Authorization") ?: headers.getFirst("authorization")
                 ?: throw IllegalArgumentException("api-key is missing.")
 
         val credential =
