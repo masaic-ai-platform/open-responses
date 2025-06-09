@@ -25,7 +25,7 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     // Set required parameters
     if (body.previousResponseId().isPresent) {
         responseStore.getResponse(body.previousResponseId().get()) ?: throw ResponseNotFoundException("Previous response not found")
-        val previousInputItems =
+        var previousInputItems =
             responseStore
                 .getInputItems(body.previousResponseId().get())
                 .map {
@@ -50,8 +50,50 @@ suspend fun ResponseCreateParams.Builder.fromBody(
 
         previousInputItems.addAll(previousResponseOutputItems.map { objectMapper.convertValue(it, ResponseInputItem::class.java) })
         previousInputItems.addAll(currentInputItems)
+        if (body.instructions().isPresent &&
+            previousInputItems.any {
+                (
+                    it.isMessage() &&
+                        (it.asMessage().role() == ResponseInputItem.Message.Role.SYSTEM || it.asMessage().role() == ResponseInputItem.Message.Role.DEVELOPER)
+                ) ||
+                    (it.isEasyInputMessage() && (it.asEasyInputMessage().role() == EasyInputMessage.Role.DEVELOPER || it.asEasyInputMessage().role() == EasyInputMessage.Role.SYSTEM))
+            }
+        ) {
+            previousInputItems =
+                previousInputItems
+                    .map {
+                        if (it.isMessage() && (it.asMessage().role() == ResponseInputItem.Message.Role.SYSTEM || it.asMessage().role() == ResponseInputItem.Message.Role.DEVELOPER)) {
+                            val item =
+                                ResponseInputItem.ofMessage(
+                                    it
+                                        .asMessage()
+                                        .toBuilder()
+                                        .addInputTextContent(
+                                            body.instructions().get(),
+                                        ).build(),
+                                )
+                            item
+                        } else if (it.isEasyInputMessage() && (it.asEasyInputMessage().role() == EasyInputMessage.Role.DEVELOPER || it.asEasyInputMessage().role() == EasyInputMessage.Role.SYSTEM)) {
+                            val item =
+                                ResponseInputItem.ofEasyInputMessage(
+                                    it
+                                        .asEasyInputMessage()
+                                        .toBuilder()
+                                        .content(body.instructions().get())
+                                        .build(),
+                                )
+                            item
+                        } else {
+                            it
+                        }
+                    }.toMutableList()
+        } else {
+            instructions(body.instructions())
+        }
+
         input(ResponseCreateParams.Input.ofResponse(removeImageBody(previousInputItems)))
     } else {
+        instructions(body.instructions())
         input(body.input())
     }
 
@@ -78,7 +120,6 @@ suspend fun ResponseCreateParams.Builder.fromBody(
     }
 
     // Set optional parameters
-    instructions(body.instructions())
     reasoning(body.reasoning())
     parallelToolCalls(body.parallelToolCalls())
     maxOutputTokens(body.maxOutputTokens())

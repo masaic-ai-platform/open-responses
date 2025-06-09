@@ -10,14 +10,7 @@ import com.fasterxml.jackson.core.type.TypeReference
 import com.fasterxml.jackson.databind.JsonMappingException
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.exc.MismatchedInputException
-import com.openai.errors.BadRequestException
-import com.openai.errors.NotFoundException
 import com.openai.errors.OpenAIException
-import com.openai.errors.PermissionDeniedException
-import com.openai.errors.RateLimitException
-import com.openai.errors.UnauthorizedException
-import com.openai.errors.UnexpectedStatusCodeException
-import com.openai.errors.UnprocessableEntityException
 import mu.KotlinLogging
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
@@ -52,13 +45,17 @@ class GlobalExceptionHandler(
         }
     }
 
-    private fun parseOpenAIError(ex: OpenAIException, status: HttpStatus): ErrorResponse {
-        val bodyString = runCatching {
-            ex.javaClass.methods
-                .firstOrNull { it.name == "body" }
-                ?.invoke(ex)
-                ?.toString()
-        }.getOrNull()
+    private fun parseOpenAIError(
+        ex: OpenAIException,
+        status: HttpStatus,
+    ): ErrorResponse {
+        val bodyString =
+            runCatching {
+                ex.javaClass.methods
+                    .firstOrNull { it.name == "body" }
+                    ?.invoke(ex)
+                    ?.toString()
+            }.getOrNull()
 
         if (bodyString.isNullOrBlank()) {
             return ErrorResponse(
@@ -93,11 +90,12 @@ class GlobalExceptionHandler(
 
     @ExceptionHandler(OpenAIException::class)
     fun handleOpenAIException(ex: OpenAIException): ResponseEntity<ErrorResponse> {
-        val statusCode = runCatching {
-            ex.javaClass.methods
-                .firstOrNull { it.name == "statusCode" }
-                ?.invoke(ex) as? Int
-        }.getOrNull()
+        val statusCode =
+            runCatching {
+                ex.javaClass.methods
+                    .firstOrNull { it.name == "statusCode" }
+                    ?.invoke(ex) as? Int
+            }.getOrNull()
         val status = statusCode?.let { HttpStatus.resolve(it) } ?: HttpStatus.INTERNAL_SERVER_ERROR
         logError(status, ex, "OpenAI API error: ${ex.message}")
         val errorResponse = parseOpenAIError(ex, status)

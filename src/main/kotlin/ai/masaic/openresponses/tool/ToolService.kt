@@ -6,6 +6,7 @@ import ai.masaic.openresponses.tool.mcp.*
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
+import com.openai.errors.OpenAIException
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -368,6 +369,9 @@ class ToolService(
         arguments: String,
         e: Exception,
     ): String {
+        if (e is OpenAIException || e is IllegalArgumentException) {
+            throw e
+        }
         val errorMessage = "Tool $name execution with arguments $arguments failed with error message: ${e.message}"
         log.error(errorMessage, e)
         return errorMessage
