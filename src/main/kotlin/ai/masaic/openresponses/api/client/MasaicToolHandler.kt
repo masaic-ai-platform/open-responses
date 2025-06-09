@@ -178,7 +178,7 @@ class MasaicToolHandler(
                             }
                     } catch (e: Exception) {
                         logger.error(e) { "Error executing terminal tool $toolName for completion: ${e.message}" }
-                        rawToolOutput = "{\"error\": \"Error executing tool $toolName: ${e.message}\"}"
+                        rawToolOutput = "{\"error\": \"Error executing tool $toolName: ${e.message}\"}" // Encapsulate error in JSON-like string
                     }
 
                     var imageData: String? = null

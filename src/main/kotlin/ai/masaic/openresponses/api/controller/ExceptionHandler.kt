@@ -53,11 +53,12 @@ class GlobalExceptionHandler(
     }
 
     private fun parseOpenAIError(ex: OpenAIException, status: HttpStatus): ErrorResponse {
-        val bodyString = try {
-            ex.body()?.toString()
-        } catch (_: Exception) {
-            null
-        }
+        val bodyString = runCatching {
+            ex.javaClass.methods
+                .firstOrNull { it.name == "body" }
+                ?.invoke(ex)
+                ?.toString()
+        }.getOrNull()
 
         if (bodyString.isNullOrBlank()) {
             return ErrorResponse(
@@ -92,7 +93,12 @@ class GlobalExceptionHandler(
 
     @ExceptionHandler(OpenAIException::class)
     fun handleOpenAIException(ex: OpenAIException): ResponseEntity<ErrorResponse> {
-        val status = HttpStatus.resolve(ex.statusCode()) ?: HttpStatus.INTERNAL_SERVER_ERROR
+        val statusCode = runCatching {
+            ex.javaClass.methods
+                .firstOrNull { it.name == "statusCode" }
+                ?.invoke(ex) as? Int
+        }.getOrNull()
+        val status = statusCode?.let { HttpStatus.resolve(it) } ?: HttpStatus.INTERNAL_SERVER_ERROR
         logError(status, ex, "OpenAI API error: ${ex.message}")
         val errorResponse = parseOpenAIError(ex, status)
         return ResponseEntity.status(status).body(errorResponse)
