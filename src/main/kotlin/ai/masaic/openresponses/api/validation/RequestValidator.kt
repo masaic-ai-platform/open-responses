@@ -1,9 +1,9 @@
 package ai.masaic.openresponses.api.validation
 
 import ai.masaic.openresponses.api.client.ResponseStore
+import ai.masaic.openresponses.api.exception.VectorStoreNotFoundException
 import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.service.search.VectorStoreService
-import ai.masaic.openresponses.api.exception.VectorStoreNotFoundException
 import org.springframework.stereotype.Component
 
 /**

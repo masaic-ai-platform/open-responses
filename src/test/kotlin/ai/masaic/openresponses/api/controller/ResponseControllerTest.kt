@@ -47,7 +47,7 @@ class ResponseControllerTest {
                     objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
                 }
             }
-        every { requestValidator.validateResponseRequest(any()) } returns Unit
+        coEvery { requestValidator.validateResponseRequest(any()) } returns Unit
         val controller = ResponseController(responseService, payloadFormatter, responseStore, requestValidator)
         webTestClient = WebTestClient.bindToController(controller).build()
     }
