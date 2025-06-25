@@ -39,6 +39,7 @@ class McpClient {
     fun init(
         serverName: String,
         url: String,
+        headers: Map<String, String> = emptyMap()
     ): McpClient {
         val transport = HttpSseTransport(url)
         customClient =
@@ -46,7 +47,7 @@ class McpClient {
                 .sync(transport)
                 .requestTimeout(Duration.ofSeconds(60 * 1000))
                 .build()
-        customClient?.initialize(url) ?: throw IllegalStateException("mcp client not initialised for $url")
+        customClient?.initialize(url, headers) ?: throw IllegalStateException("mcp client not initialised for $url")
         log.info("MCP HTTP client connected for $serverName server at: $url")
         return this
     }
@@ -103,7 +104,7 @@ class McpClient {
                 )
             log.info("Adding stdio mcp tool: $tool")
             tool
-        } ?: customClient?.listTools()?.map {
+        } ?: customClient?.listTools(mcpServerInfo.headers)?.map {
             val tool =
                 McpToolDefinition(
                     name = mcpServerInfo.qualifiedToolName(it.name()),
@@ -120,8 +121,9 @@ class McpClient {
     fun executeTool(
         tool: ToolDefinition,
         arguments: String,
+        headers: Map<String, String>
     ): String? {
-        return customClient?.callTool(CallToolRequest(tool.name, mapper.readTree(arguments)))
+        return customClient?.callTool(CallToolRequest(tool.name, mapper.readTree(arguments)), headers)
             ?: return defaultMcpClient?.executeTool(
                 ToolExecutionRequest
                     .builder()
@@ -149,7 +151,7 @@ class McpClient {
         }
 
     fun close() {
-        customClient?.closeGracefully() ?: defaultMcpClient?.close()
+        defaultMcpClient?.close()
     }
 }
 
@@ -175,6 +177,7 @@ class HttpSseTransport(
     fun sendWithHeaders(
         payload: Any,
         sessionId: String? = null,
+        headers: Map<String, String>
     ): Pair<Any?, Headers> {
         val json = mapper.writeValueAsString(payload)
         val request =
@@ -184,6 +187,12 @@ class HttpSseTransport(
                 .post(json.toRequestBody(jsonMediaType))
                 .header("Accept", "application/json, text/event-stream")
                 .apply { sessionId?.let { header("Mcp-Session-Id", it) } }
+                .apply { 
+                    // Add headers if not empty
+                    if (headers.isNotEmpty()) {
+                        headers.forEach { (key, value) -> header(key, value) }
+                    }
+                }
                 .build()
 
         client.newCall(request).execute().use { resp ->
@@ -196,6 +205,10 @@ class HttpSseTransport(
                 return Pair(null, headers)
             }
 
+            if (code in 400..503) { // TODO: doing minimal handling now.
+                throw Exception("mcp server request failed with code=$code and response returned is: ${resp.body!!.string()}")
+            }
+
             // Regular JSON body
             val raw = resp.body?.string().orEmpty()
             return Pair(raw, headers)
@@ -205,10 +218,11 @@ class HttpSseTransport(
     /**
      * Sends a JSON-RPC request, optionally streaming SSE events via onEvent.
      */
-    fun send(
+    fun  send(
         payload: Any,
         sessionId: String? = null,
         onEvent: ((Any) -> Unit)? = null,
+        headers: Map<String, String>
     ): String? {
         val json = mapper.writeValueAsString(payload)
         val request =
@@ -218,6 +232,11 @@ class HttpSseTransport(
                 .post(json.toRequestBody(jsonMediaType))
                 .header("Accept", "application/json,text/event-stream")
                 .apply { sessionId?.let { header("Mcp-Session-Id", it) } }
+                .apply {
+                    if (headers.isNotEmpty()) {
+                        headers.forEach { (key, value) -> header(key, value) }
+                    }
+                }
                 .build()
 
         client.newCall(request).execute().use { resp ->
@@ -227,7 +246,7 @@ class HttpSseTransport(
             if (code == 202 && resp.body?.contentLength() == 0L) return null
 
             if (code in 400..503) { // TODO: doing minimal handling now.
-                throw Exception("mcp server request failed and response returned is: ${resp.body!!.string()}")
+                throw Exception("mcp server request failed with code=$code and response returned is: ${resp.body!!.string()}")
             }
 
             if (ct.startsWith("text/event-stream") && onEvent != null) {
@@ -319,7 +338,7 @@ class McpSyncClient private constructor(
      * that value is used. Otherwise, no session ID is stored, and subsequent calls
      * are made without a session header.
      */
-    fun initialize(url: String) {
+    fun initialize(url: String, reqHeaders: Map<String, String>) {
         val initReq =
             mapOf(
                 "jsonrpc" to "2.0",
@@ -336,7 +355,7 @@ class McpSyncClient private constructor(
                             ),
                     ),
             )
-        val (parsedBody, headers) = transport.sendWithHeaders(initReq)
+        val (parsedBody, headers) = transport.sendWithHeaders(payload = initReq, headers =  reqHeaders)
         sessionId = headers["Mcp-Session-Id"] ?: (parsedBody as? Map<String, Any>)
             ?.get("result")
             ?.let { (it as? Map<String, Any>)?.get("sessionId") as? String }
@@ -346,19 +365,20 @@ class McpSyncClient private constructor(
         log.info { "Server will send content as ${headers["Content-Type"]}, setting listenSSE=$listenSSE" }
     }
 
-    fun listTools(): List<ToolSpecification> {
+    fun listTools(headers: Map<String, String>): List<ToolSpecification> {
         if (listenSSE) {
-            return listenListTools()
+            return listenListTools(headers)
         }
         val resp =
             transport.send(
-                mapOf("jsonrpc" to "2.0", "method" to "tools/list", "id" to 2),
-                sessionId,
+                payload = mapOf("jsonrpc" to "2.0", "method" to "tools/list", "id" to 2),
+                sessionId = sessionId,
+                headers = headers
             )
         return Converter.convert(mapper.readTree(resp as String))
     }
 
-    private fun listenListTools(): List<ToolSpecification> {
+    private fun listenListTools(headers: Map<String, String>): List<ToolSpecification> {
         // we’ll wait for exactly one response and then return
         val latch = CountDownLatch(1)
         val collected = mutableListOf<ToolSpecification>()
@@ -374,6 +394,7 @@ class McpSyncClient private constructor(
                 collected += Converter.convert(node)
                 latch.countDown()
             },
+            headers = headers
         )
 
         // wait (with a timeout!) for the callback to fire
@@ -383,16 +404,16 @@ class McpSyncClient private constructor(
         return collected
     }
 
-    fun callTool(request: CallToolRequest): String {
+    fun callTool(request: CallToolRequest, headers: Map<String, String>): String {
         if (listenSSE) {
-            return listenCallTool(request)
+            return listenCallTool(request, headers)
         }
 
-        val resp = transport.send(request.toRpc(3), sessionId)
+        val resp = transport.send(payload = request.toRpc(3), sessionId = sessionId, headers = headers)
         return resp.toString()
     }
 
-    private fun listenCallTool(request: CallToolRequest): String {
+    private fun listenCallTool(request: CallToolRequest, headers: Map<String, String>): String {
         val latch = CountDownLatch(1)
         var toolResponse = "no_response_from_tool"
         transport.send(
@@ -403,6 +424,7 @@ class McpSyncClient private constructor(
                 toolResponse = rawEvent.toString()
                 latch.countDown()
             },
+            headers = headers
         )
         if (!latch.await(30, TimeUnit.SECONDS)) {
             throw ResponseTimeoutException("Timed out waiting for tools/call response")
@@ -410,10 +432,11 @@ class McpSyncClient private constructor(
         return toolResponse
     }
 
-    fun closeGracefully() {
+    fun closeGracefully(headers: Map<String, String>) {
         transport.send(
-            mapOf("jsonrpc" to "2.0", "method" to "shutdown", "id" to 10),
-            sessionId,
+            payload = mapOf("jsonrpc" to "2.0", "method" to "shutdown", "id" to 10),
+            sessionId = sessionId,
+            headers = headers
         )
     }
 }

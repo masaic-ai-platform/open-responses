@@ -221,12 +221,12 @@ class ToolService(
         val allowedTools = mcpTool.allowedTools.map { info.qualifiedToolName(it) }
         val mcpServerInfo = mcpToolRegistry.findServerById(info.serverIdentifier())
         return if (mcpServerInfo == null || mcpServerInfo.tools.isEmpty()) {
-            val mcpClient = McpClient().init(mcpTool.serverLabel, mcpTool.serverUrl)
-            val availableTools = mcpClient.listTools(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl))
+            val mcpClient = McpClient().init(mcpTool.serverLabel, mcpTool.serverUrl, mcpTool.headers)
+            val availableTools = mcpClient.listTools(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, mcpTool.headers))
             availableTools.forEach {
                 mcpToolRegistry.addTool(it)
             }
-            mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, availableTools.map { it.name }))
+            mcpToolRegistry.addMcpServer(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, mcpTool.headers, availableTools.map { it.name }))
             mcpToolExecutor.addMcpClient(info.serverIdentifier(), mcpClient)
 
             if (allowedTools.isEmpty()) {

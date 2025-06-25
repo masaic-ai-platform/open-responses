@@ -400,6 +400,7 @@ data class MCPTool(
     val requireApproval: String = "never",
     @JsonProperty("allowed_tools")
     val allowedTools: List<String> = emptyList(),
+    val headers: Map<String, String> = emptyMap()
 ) : Tool
 
 /**
