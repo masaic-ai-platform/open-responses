@@ -2,9 +2,8 @@ package ai.masaic.openresponses.api.service.embedding
 
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel
+import dev.langchain4j.model.openaiofficial.OpenAiOfficialEmbeddingModel
 import dev.langchain4j.store.embedding.CosineSimilarity
-import org.springframework.beans.factory.annotation.Value
 
 /**
  * Implementation of EmbeddingService using OpenAI's embedding API.
@@ -12,16 +11,13 @@ import org.springframework.beans.factory.annotation.Value
  * This service uses the OpenAI API to generate embeddings through Langchain4j's OpenAiEmbeddingModel.
  */
 class OpenAIEmbeddingService(
-    @Value("\${open-responses.embedding.url}")
     private val baseUrl: String,
-    @Value("\${open-responses.embedding.api.key}")
     private val apiKey: String,
-    @Value("\${open-responses.embedding.model}")
     private val modelName: String,
 ) : EmbeddingService {
     private val embeddingModel =
         lazy {
-            OpenAiEmbeddingModel
+            OpenAiOfficialEmbeddingModel
                 .builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)
