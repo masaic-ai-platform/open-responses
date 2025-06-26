@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.*
 @Tag(name = "Playground", description = "Playground API")
 class PlaygroundController(
     private val toolService: ToolService,
-    private val mcpToolExecutor: MCPToolExecutor
+    private val mcpToolExecutor: MCPToolExecutor,
 ) {
     @GetMapping("/tools", produces = [MediaType.APPLICATION_JSON_VALUE])
     @Operation(
@@ -99,10 +99,15 @@ class PlaygroundController(
             ),
         ],
     )
-    fun executeMCPTool(@RequestBody toolRequest: ExecuteToolRequest): String {
+    fun executeMCPTool(
+        @RequestBody toolRequest: ExecuteToolRequest,
+    ): String {
         val toolDefinition = toolService.findToolByName(toolRequest.name) ?: return "Tool ${toolRequest.name} not found."
         return mcpToolExecutor.executeTool(toolDefinition, jacksonObjectMapper().writeValueAsString(toolRequest.arguments)) ?: "no response from ${toolRequest.name}"
     }
 }
 
-data class ExecuteToolRequest(val name: String, val arguments: Map<String, Any>)
+data class ExecuteToolRequest(
+    val name: String,
+    val arguments: Map<String, Any>,
+)

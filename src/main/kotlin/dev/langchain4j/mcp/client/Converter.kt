@@ -22,7 +22,7 @@ class Converter {
                     }
                     builder.parameters(ToolSpecificationHelper.jsonNodeToJsonSchemaElement(tool["inputSchema"]) as JsonObjectSchema)
                     result.add(builder.build())
-                }catch (ex: Exception) {
+                } catch (ex: Exception) {
                     log.warn { "Error occurred while parsing ${tool["name"].asText()}, error: ${ex.printStackTrace()}" }
                     log.warn { "Skipping this tool." }
                 }
