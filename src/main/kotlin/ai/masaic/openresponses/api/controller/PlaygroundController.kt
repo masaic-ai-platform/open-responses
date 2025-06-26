@@ -99,7 +99,7 @@ class PlaygroundController(
             ),
         ],
     )
-    fun executeMCPTool(
+    suspend fun executeMCPTool(
         @RequestBody toolRequest: ExecuteToolRequest,
     ): String {
         val toolDefinition = toolService.findToolByName(toolRequest.name) ?: return "Tool ${toolRequest.name} not found."

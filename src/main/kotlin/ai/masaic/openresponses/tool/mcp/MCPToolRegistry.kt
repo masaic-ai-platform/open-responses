@@ -46,7 +46,7 @@ class MCPToolExecutor {
      * @param arguments JSON string containing arguments for the tool
      * @return Result of the tool execution as a string, or null if the tool can't be executed
      */
-    fun executeTool(
+    suspend fun executeTool(
         tool: ToolDefinition,
         arguments: String,
     ): String? {
@@ -89,7 +89,7 @@ class MCPToolRegistry {
      * @param serverName Name of the server hosting the tools
      * @param mcpClient Client connected to the server
      */
-    fun registerMCPTools(
+    suspend fun registerMCPTools(
         serverName: String,
         mcpClient: McpClient,
     ) {

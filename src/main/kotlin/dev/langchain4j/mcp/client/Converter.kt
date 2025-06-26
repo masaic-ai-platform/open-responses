@@ -12,8 +12,12 @@ class Converter {
 
         fun convert(tree: JsonNode): List<ToolSpecification> {
             val array = tree.path("result").path("tools") as ArrayNode
+            return convert(array)
+        }
+
+        fun convert(tools: ArrayNode): List<ToolSpecification> {
             val result: MutableList<ToolSpecification> = ArrayList()
-            for (tool in array) {
+            for (tool in tools) {
                 try {
                     val builder = ToolSpecification.builder()
                     builder.name(tool["name"].asText())

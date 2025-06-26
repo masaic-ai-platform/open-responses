@@ -5,6 +5,7 @@ import ai.masaic.openresponses.tool.ToolDefinition
 import ai.masaic.openresponses.tool.ToolHosting
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import dev.langchain4j.agent.tool.ToolExecutionRequest
@@ -13,7 +14,9 @@ import dev.langchain4j.mcp.client.Converter
 import dev.langchain4j.mcp.client.DefaultMcpClient
 import dev.langchain4j.mcp.client.transport.McpTransport
 import dev.langchain4j.mcp.client.transport.stdio.StdioMcpTransport
+import io.modelcontextprotocol.spec.McpSchema
 import kotlinx.coroutines.*
+import kotlinx.coroutines.reactive.awaitSingle
 import mu.KotlinLogging
 import okhttp3.Headers
 import okhttp3.MediaType.Companion.toMediaType
@@ -26,7 +29,6 @@ import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
 import java.time.Duration
 import java.util.concurrent.*
-import kotlin.time.Duration.Companion.seconds
 
 class McpClient {
     private val log = KotlinLogging.logger {}
@@ -38,7 +40,7 @@ class McpClient {
         const val CONNECTION_TIMEOUT_SECONDS = 60L
     }
 
-    fun init(
+    suspend fun init(
         serverName: String,
         url: String,
         headers: Map<String, String> = emptyMap(),
@@ -49,9 +51,9 @@ class McpClient {
                 .sync(transport)
                 .requestTimeout(Duration.ofSeconds(60 * 1000))
                 .build()
-        runBlocking {
+//        runBlocking {
             customClient?.initialize(url, headers) ?: throw IllegalStateException("mcp client not initialised for $url")
-        }
+//        }
         log.info("MCP HTTP client connected for $serverName server at: $url")
         return this
     }
@@ -97,7 +99,7 @@ class McpClient {
         return this
     }
 
-    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
+    suspend fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
         defaultMcpClient?.listTools()?.map {
             val tool =
                 McpToolDefinition(
@@ -122,7 +124,7 @@ class McpClient {
         }
             ?: emptyList()
 
-    fun executeTool(
+    suspend fun executeTool(
         tool: ToolDefinition,
         arguments: String,
         headers: Map<String, String>,
@@ -174,48 +176,48 @@ class HttpSseTransport(
     private val mapper = jacksonObjectMapper()
     private val jsonMediaType = "application/json".toMediaType()
     private val log = KotlinLogging.logger {}
-    private var sseEndpoint: String? = null
-    private var messageEndpoint: String? = null
+//    private var sseEndpoint: String? = null
+//    private var messageEndpoint: String? = null
 
-    init {
-        if (endpoint.endsWith("sse")) {
-            sseEndpoint = endpoint
-        }
-    }
+//    init {
+//        if (endpoint.endsWith("sse")) {
+//            sseEndpoint = endpoint
+//        }
+//    }
 
     /**
      * Sends a JSON-RPC message via HTTP POST and returns the parsed body and response headers.
      */
-    suspend fun init(
+    fun init(
         headers: Map<String, String>,
     ): Pair<Any?, Headers> {
-        if (sseEndpoint != null) {
-            val messageEndpointDeferred = CompletableDeferred<String>()
-            openSse(sseEndpoint = sseEndpoint!!, onMessage = { message ->
-                // rawEvent is already deserialized as Any -> re-serialize to JSON text
-                if (message.startsWith("/message")) {
-                    val endpoint = sseEndpoint!!.replace("/sse", message)
-                    messageEndpoint = endpoint
-                    messageEndpointDeferred.complete(endpoint)
-                }
-            })
-            
-            // Wait for the messageEndpoint to be set before proceeding
-            try {
-                withTimeout(30.seconds) {
-                    messageEndpointDeferred.await()
-                }
-            } catch (e: TimeoutCancellationException) {
-                throw ResponseTimeoutException("Timed out waiting for message endpoint from SSE")
-            }
-        }
+//        if (sseEndpoint != null) {
+//            val messageEndpointDeferred = CompletableDeferred<String>()
+//            openSse(sseEndpoint = sseEndpoint!!, onMessage = { message ->
+//                // rawEvent is already deserialized as Any -> re-serialize to JSON text
+//                if (message.startsWith("/message")) {
+//                    val endpoint = sseEndpoint!!.replace("/sse", message)
+//                    messageEndpoint = endpoint
+//                    messageEndpointDeferred.complete(endpoint)
+//                }
+//            })
+//
+//            // Wait for the messageEndpoint to be set before proceeding
+//            try {
+//                withTimeout(30.seconds) {
+//                    messageEndpointDeferred.await()
+//                }
+//            } catch (e: TimeoutCancellationException) {
+//                throw ResponseTimeoutException("Timed out waiting for message endpoint from SSE")
+//            }
+//        }
 
-        val url = messageEndpoint ?: endpoint
+//        val url = messageEndpoint ?: endpoint
         val json = mapper.writeValueAsString(initPayload())
         val request =
             Request
                 .Builder()
-                .url(url)
+                .url(endpoint)
                 .post(json.toRequestBody(jsonMediaType))
                 .header("Accept", "application/json, text/event-stream")
                 .apply { 
@@ -307,12 +309,12 @@ class HttpSseTransport(
         headers: Map<String, String>,
         retryCount: Int = 0,
     ): String? {
-        val url = messageEndpoint ?: endpoint
+//        val url = messageEndpoint ?: endpoint
         val json = mapper.writeValueAsString(payload)
         val request =
             Request
                 .Builder()
-                .url(url)
+                .url(endpoint)
                 .post(json.toRequestBody(jsonMediaType))
                 .header("Accept", "application/json,text/event-stream")
                 .apply { sessionId?.let { header("Mcp-Session-Id", it) } }
@@ -328,16 +330,16 @@ class HttpSseTransport(
 
             if (code == 202 && resp.body?.contentLength() == 0L) return null
 
-            if (code == 400 && sseEndpoint != null) {
-                if (retryCount < 4) {
-                    log.warn { "MCP server returned 400 with response: ${resp.body!!.string()}, attempting to reconnect. Retry attempt: ${retryCount + 1}/4" }
-                    runBlocking { init(headers) }
-                    return send(payload, sessionId, onEvent, headers, retryCount + 1)
-                } else {
-                    log.error { "Failed to reconnect after 4 attempts. Giving up." }
-                    throw Exception("mcp server request failed with code=$code after 4 retry attempts")
-                }
-            }
+//            if (code == 400 && sseEndpoint != null) {
+//                if (retryCount < 4) {
+//                    log.warn { "MCP server returned 400 with response: ${resp.body!!.string()}, attempting to reconnect. Retry attempt: ${retryCount + 1}/4" }
+//                    runBlocking { init(headers) }
+//                    return send(payload, sessionId, onEvent, headers, retryCount + 1)
+//                } else {
+//                    log.error { "Failed to reconnect after 4 attempts. Giving up." }
+//                    throw Exception("mcp server request failed with code=$code after 4 retry attempts")
+//                }
+//            }
 
             if (code in 400..503) { // TODO: doing minimal handling now.
                 throw Exception("mcp server request failed with code=$code and response returned is: ${resp.body!!.string()}")
@@ -419,6 +421,7 @@ class McpSyncClient private constructor(
 ) {
     private var sessionId: String? = null
     private var listenSSE: Boolean = false
+    private var sdkClient: io.modelcontextprotocol.client.McpAsyncClient ?= null
     private val mapper = jacksonObjectMapper()
     private val log = KotlinLogging.logger {}
 
@@ -453,6 +456,26 @@ class McpSyncClient private constructor(
         url: String,
         reqHeaders: Map<String, String>,
     ) {
+        if(url.endsWith("/sse")) { //TODO: this condition will be revisited later once MCP clients are stable across jvm ecosystem
+            val transport = HeadersEnabledHttpSseClientTransport.Builder(url)
+                .objectMapper(jacksonObjectMapper())
+                .apply {
+                    if (reqHeaders.isNotEmpty()) addHeaders(headers = reqHeaders)
+                }
+                .build()
+            sdkClient = io.modelcontextprotocol.client.McpClient.async(transport)
+            .requestTimeout(Duration.ofSeconds(60))
+                .capabilities(
+                    McpSchema.ClientCapabilities.builder()
+                        .roots(true) // Enable roots capability
+//                        .sampling() // Enable sampling capability
+                        .build()
+                )
+                .build()
+            sdkClient?.initialize()?.awaitSingle()?.capabilities
+            return
+        }
+
         val (parsedBody, headers) = transport.init(headers = reqHeaders)
         sessionId = headers["Mcp-Session-Id"] ?: (parsedBody as? Map<String, Any>)
             ?.get("result")
@@ -463,7 +486,13 @@ class McpSyncClient private constructor(
         log.info { "Server will send content as ${headers["Content-Type"]}, setting listenSSE=$listenSSE" }
     }
 
-    fun listTools(headers: Map<String, String>): List<ToolSpecification> {
+    suspend fun listTools(headers: Map<String, String>): List<ToolSpecification> {
+        if(sdkClient != null) {
+            val tools = sdkClient?.listTools()?.awaitSingle()?.tools
+            val arrayNode: ArrayNode = mapper.valueToTree(tools)
+            return Converter.convert(arrayNode)
+        }
+
         if (listenSSE) {
             return listenListTools(headers)
         }
@@ -502,10 +531,15 @@ class McpSyncClient private constructor(
         return collected
     }
 
-    fun callTool(
+    suspend fun callTool(
         request: CallToolRequest,
         headers: Map<String, String>,
     ): String {
+        if(sdkClient != null) {
+            val toolResponse = sdkClient?.callTool(McpSchema.CallToolRequest(request.name, request.params.toString()))?.awaitSingle()?.content
+            return mapper.writeValueAsString(toolResponse)
+        }
+
         if (listenSSE) {
             return listenCallTool(request, headers)
         }
