@@ -1,9 +1,8 @@
 package ai.masaic.openresponses.api.controller
 
-import ai.masaic.openresponses.tool.AIModelInfo
-import ai.masaic.openresponses.tool.AIModelsMetadata
-import ai.masaic.openresponses.tool.ToolMetadata
-import ai.masaic.openresponses.tool.ToolService
+import ai.masaic.openresponses.tool.*
+import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Content
 import io.swagger.v3.oas.annotations.media.Schema
@@ -19,6 +18,7 @@ import org.springframework.web.bind.annotation.*
 @Tag(name = "Playground", description = "Playground API")
 class PlaygroundController(
     private val toolService: ToolService,
+    private val mcpToolExecutor: MCPToolExecutor
 ) {
     @GetMapping("/tools", produces = [MediaType.APPLICATION_JSON_VALUE])
     @Operation(
@@ -86,4 +86,23 @@ class PlaygroundController(
             )
         return ResponseEntity.ok(AIModelsMetadata(models = modelList))
     }
+
+    @PostMapping("/tools/mcp/execute", produces = [MediaType.APPLICATION_JSON_VALUE])
+    @Operation(
+        summary = "Execute the provided mcp tool",
+        description = "Execute the provided mcp tool",
+        responses = [
+            ApiResponse(
+                responseCode = "200",
+                description = "OK",
+                content = [Content(schema = Schema(implementation = AIModelsMetadata::class))],
+            ),
+        ],
+    )
+    fun executeMCPTool(@RequestBody toolRequest: ExecuteToolRequest): String {
+        val toolDefinition = toolService.findToolByName(toolRequest.name) ?: return "Tool ${toolRequest.name} not found."
+        return mcpToolExecutor.executeTool(toolDefinition, jacksonObjectMapper().writeValueAsString(toolRequest.arguments)) ?: "no response from ${toolRequest.name}"
+    }
 }
+
+data class ExecuteToolRequest(val name: String, val arguments: Map<String, Any>)

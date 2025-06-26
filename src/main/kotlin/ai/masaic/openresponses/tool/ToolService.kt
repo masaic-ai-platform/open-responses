@@ -322,7 +322,7 @@ class ToolService(
     /**
      * Finds a tool by its name.
      */
-    private fun findToolByName(name: String): ToolDefinition? = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name)
+    fun findToolByName(name: String): ToolDefinition? = nativeToolRegistry.findByName(name) ?: mcpToolRegistry.findByName(name)
 
     /**
      * Executes a tool based on its protocol, using unified context/params.
