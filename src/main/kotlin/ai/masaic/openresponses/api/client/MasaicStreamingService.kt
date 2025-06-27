@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.future.await
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
@@ -131,6 +133,7 @@ class MasaicStreamingService(
 
             val subscription =
                 client
+                    .async()
                     .chat()
                     .completions()
                     .createStreaming(createParams)
@@ -141,7 +144,7 @@ class MasaicStreamingService(
             val internalToolItemIds = mutableSetOf<String>()
             val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
-            subscription.stream().forEach { completionResponse ->
+            subscription.subscribe { completionResponse ->
 
                 val completion =
                     if (completionResponse._id().isMissing()) { // special handling for gemini
@@ -404,34 +407,9 @@ class MasaicStreamingService(
                         }
                     }
                 }
-                if (completionResponse.choices().isNotEmpty() &&
-                    completionResponse
-                        .choices()
-                        .first()
-                        .finishReason()
-                        .isPresent &&
-                    (
-                        completionResponse
-                            .choices()
-                            .first()
-                            .finishReason()
-                            .get()
-                            .asString() == "stop" ||
-                            completionResponse
-                                .choices()
-                                .first()
-                                .finishReason()
-                                .get()
-                                .asString() == "length" ||
-                            completionResponse
-                                .choices()
-                                .first()
-                                .finishReason()
-                                .get()
-                                .asString() == "content_filter"
-                    )
-                ) {
-                    logger.debug { "Stream close signal received (${completionResponse.choices().first().finishReason().get().asString()}). Closing.." }
+
+                launch {
+                    subscription.onCompleteFuture().await()
                     close()
                 }
             }
