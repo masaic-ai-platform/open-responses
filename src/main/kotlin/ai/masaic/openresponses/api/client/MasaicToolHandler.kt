@@ -357,6 +357,7 @@ class MasaicToolHandler(
     fun handleMasaicToolCall(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
+        parentObservation: Observation? = null,
         openAIClient: OpenAIClient,
     ): MasaicToolCallResult {
         logger.debug { "Processing tool calls from ChatCompletion: ${chatCompletion.id()}" }
@@ -537,6 +538,7 @@ class MasaicToolHandler(
                                 openAIClient,
                                 {}, // No event emitter for non-streaming context here
                                 context,
+                                parentObservation,
                             ) { toolResult ->
                                 // This callback style is for the streaming version, adapt for non-streaming
                                 var regularToolResult: String? = null
@@ -648,14 +650,14 @@ class MasaicToolHandler(
         arguments: String,
         toolId: String,
         toolMetadata: Map<String, Any>,
-//        parentObservation: Observation? = null,
         params: ResponseCreateParams,
         openAIClient: OpenAIClient,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
         context: ToolRequestContext,
+        parentObservation: Observation? = null,
         resultHandler: (String?) -> Unit,
     ) {
-        telemetryService.withClientObservation("execute_tool") { observation ->
+        telemetryService.withClientObservation("execute_tool", parentObservation) { observation ->
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
             observation.lowCardinalityKeyValue(GenAIObsAttributes.TOOL_NAME, toolName)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_DESCRIPTION, toolDescription)
@@ -802,6 +804,7 @@ class MasaicToolHandler(
                         openAIClient,
                         eventEmitter, // Pass through the eventEmitter
                         context,
+                        parentObservation,
                     ) { toolResult ->
                         // This is the callback
                         val typeReference = object : TypeReference<Map<String, String>>() {}
@@ -922,6 +925,7 @@ class MasaicToolHandler(
                         openAIClient,
                         eventEmitter,
                         context,
+                        parentObservation,
                     ) { toolResult ->
                         if (toolResult != null) {
                             logger.debug { "Tool execution successful for ${function.name()}" }
