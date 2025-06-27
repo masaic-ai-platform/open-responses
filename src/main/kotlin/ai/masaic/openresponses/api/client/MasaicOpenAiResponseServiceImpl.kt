@@ -12,12 +12,16 @@ import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
 import com.openai.services.blocking.ResponseService
 import com.openai.services.blocking.responses.InputItemService
+import io.micrometer.observation.Observation
+import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.reactor.ReactorContext
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
 import java.util.UUID
+import kotlin.coroutines.coroutineContext
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -85,8 +89,12 @@ class MasaicOpenAiResponseServiceImpl(
         params: ResponseCreateParams,
         metadata: InstrumentationMetadataInput = InstrumentationMetadataInput(),
     ): Response {
+        // Extract any existing HTTP server span from Reactor context
+        val parentObs: Observation? = coroutineContext[ReactorContext]?.context?.get(ObservationThreadLocalAccessor.KEY)
+        var chatObservation: Observation? = null
         val responseOrCompletions =
-            telemetryService.withClientObservation("chat", metadata.modelName) { observation ->
+            telemetryService.withClientObservation("chat", metadata.modelName, parentObs) { observation ->
+                chatObservation = observation
                 logger.debug { "Creating completion with model: ${params.model()}" }
                 val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
@@ -117,8 +125,8 @@ class MasaicOpenAiResponseServiceImpl(
         }
         val chatCompletions = responseOrCompletions as ChatCompletion
 
-        // Handle tool calls and decide next step
-        when (val toolCallOutcome = toolHandler.handleMasaicToolCall(chatCompletions, params, client)) {
+        // Handle tool calls and decide next step, passing the chat span for proper trace linkage
+        when (val toolCallOutcome = toolHandler.handleMasaicToolCall(chatCompletions, params, chatObservation, client)) {
             is MasaicToolCallResult.Terminate -> {
                 logger.info { "Terminal tool executed (e.g., image_generation). Returning direct response." }
                 val tempParamsForStorage =

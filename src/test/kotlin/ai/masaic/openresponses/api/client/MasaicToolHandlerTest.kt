@@ -55,6 +55,7 @@ class MasaicToolHandlerTest {
         every {
             telemetryService.withClientObservation<Any>(
                 any(),
+                any(),
                 any(), // This is the parentObservation parameter
                 any(),
             )
@@ -129,7 +130,7 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then: We expect a Continue result with items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -141,7 +142,7 @@ class MasaicToolHandlerTest {
         assert(items[1].isResponseOutputMessage())
 
         // Verify no tool execution observations were created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
     }
 
     @Test
@@ -214,7 +215,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "tool-call-id-123"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then: We expect:
         // 1) The original user input
@@ -231,7 +232,7 @@ class MasaicToolHandlerTest {
         assert(functionCallOutput.isFunctionCallOutput())
 
         // Verify observation was created (without exact string name match)
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
 
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
@@ -297,7 +298,7 @@ class MasaicToolHandlerTest {
 
         // When/Then - exception should be propagated
         assertThrows<RuntimeException> {
-            handler.handleMasaicToolCall(chatCompletion, params, mockk())
+            handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
         }
 
         // Skip the assertion on error message since it's being set differently in the actual code
@@ -366,7 +367,7 @@ class MasaicToolHandlerTest {
         assert(items[1].isResponseOutputMessage())
 
         // Verify no observation was created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
     }
 
     @Test
@@ -465,7 +466,7 @@ class MasaicToolHandlerTest {
         assert(items[2].isFunctionCallOutput())
 
         // Verify observation was created (without exact string match)
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
 
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
@@ -524,7 +525,7 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then: We expect a Continue result with the unsupported tool call parked
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -540,7 +541,7 @@ class MasaicToolHandlerTest {
         assert(functionCallItem.isFunctionCall())
 
         // Verify that no tool execution was observed
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
     }
 
     @Test
@@ -616,7 +617,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then: We expect a Continue result with 6 items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -630,7 +631,7 @@ class MasaicToolHandlerTest {
         assertEquals(6, items.size)
 
         // Verify tool execution was observed twice
-        verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
 
         // Count function calls and function outputs
         val functionCalls = items.count { it.isFunctionCall() }
@@ -696,7 +697,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then: We expect a Continue result with 3 items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -713,7 +714,7 @@ class MasaicToolHandlerTest {
         assert(functionOutputItem.isFunctionCallOutput())
 
         // Verify the observation was still created despite the null result
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), null, any()) }
 
         // Verify correct attribute was set
         assertEquals("nullResultTool", capturedAttributes["gen_ai.tool.name"])
@@ -814,7 +815,7 @@ class MasaicToolHandlerTest {
         assertEquals("newFunction", items[1].asFunctionCall().name())
 
         // Verify the tool execution was observed
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
     }
 
     @Test
@@ -836,7 +837,7 @@ class MasaicToolHandlerTest {
         every { params.tools() } returns Optional.empty()
         every { toolService.buildAliasMap(any()) } returns emptyMap()
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then: We expect a Continue result with only the user input message
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -846,7 +847,7 @@ class MasaicToolHandlerTest {
         assertEquals("User message", items[0].asEasyInputMessage().content().asTextInput())
 
         // Verify no tool execution observations were created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any()) }
+        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
     }
 
     @Test
@@ -915,7 +916,7 @@ class MasaicToolHandlerTest {
         } returns "Mixed result"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk(relaxed = true))
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk(relaxed = true))
 
         // Then: We expect a Continue result with 4 items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -1059,15 +1060,10 @@ class MasaicToolHandlerTest {
         } returns "Parent observation test result"
 
         // Call handler with explicit parent observation
-        val result = handler.handleMasaicToolCall(chatCompletion, params, mockk())
+        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
         // Then verify parent observation was passed to the withClientObservation method
-        verify {
-            telemetryService.withClientObservation<Any>(
-                any(),
-                any(),
-            )
-        }
+        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
 
         // Verify function call and output were added
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -1147,7 +1143,7 @@ class MasaicToolHandlerTest {
 
         // When & Then - verify exception is propagated
         assertThrows<IllegalArgumentException> {
-            handler.handleMasaicToolCall(chatCompletion, params, mockk())
+            handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
         }
     }
 
@@ -1249,6 +1245,6 @@ class MasaicToolHandlerTest {
         assertEquals("preserveFunction", items[1].asFunctionCall().name())
 
         // Verify the tool execution was observed
-        verify { telemetryService.withClientObservation<Any>(any(), any()) }
+        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
     }
 }
