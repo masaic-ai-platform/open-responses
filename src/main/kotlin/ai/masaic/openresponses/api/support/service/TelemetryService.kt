@@ -393,11 +393,16 @@ class TelemetryService(
         }
     }
 
+    /**
+     * Starts an observation for a client operation, optionally as a child of [parentObservation].
+     */
     suspend fun startObservation(
         operationName: String,
         modelName: String,
+        parentObservation: Observation? = null,
     ): Observation {
         val observation = Observation.createNotStarted("$operationName $modelName", observationRegistry)
+        parentObservation?.let { observation.parentObservation(it) }
         observation.highCardinalityKeyValue(GenAIObsAttributes.SPAN_KIND, "client")
         observation.start()
         return observation
@@ -420,13 +425,33 @@ class TelemetryService(
         operationName: String,
         modelName: String,
         block: (Observation) -> T,
-    ): T = withClientObservation("$operationName $modelName", block)
+    ): T = withClientObservation("$operationName $modelName", null, block)
 
     fun <T> withClientObservation(
         obsName: String,
         block: (Observation) -> T,
+    ): T = withClientObservation(obsName, null, block)
+
+    /**
+     * Creates an observation named "$operationName $modelName" as a child of [parentObservation], if provided.
+     */
+    fun <T> withClientObservation(
+        operationName: String,
+        modelName: String,
+        parentObservation: Observation?,
+        block: (Observation) -> T,
+    ): T = withClientObservation("$operationName $modelName", parentObservation, block)
+
+    /**
+     * Creates an observation named [obsName] as a child of [parentObservation], if provided.
+     */
+    fun <T> withClientObservation(
+        obsName: String,
+        parentObservation: Observation?,
+        block: (Observation) -> T,
     ): T {
         val observation = Observation.createNotStarted(obsName, observationRegistry)
+        parentObservation?.let { observation.parentObservation(it) }
         observation.start()
         return try {
             block(observation)

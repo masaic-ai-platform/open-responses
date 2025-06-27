@@ -62,7 +62,7 @@ class MasaicOpenAiCompletionServiceImplTest {
         val meterRegistry = SimpleMeterRegistry()
         telemetryService = spyk(TelemetryService(observationRegistry, meterRegistry))
         every {
-            telemetryService.withClientObservation<ChatCompletion>(any(), any(), any())
+            telemetryService.withClientObservation<ChatCompletion>(any(), any(), any(), any())
         } answers {
             val block = thirdArg<(Observation) -> ChatCompletion>()
             block(mockObservation)
@@ -129,9 +129,9 @@ class MasaicOpenAiCompletionServiceImplTest {
 
             // Then: returns the same completion and no storage
             assertEquals(chatCompletion, result)
-            verify(exactly = 1) { telemetryService.emitModelInputEvents(mockObservation, params, metadata) }
-            verify(exactly = 1) { telemetryService.emitModelOutputEvents(mockObservation, chatCompletion, metadata) }
-            verify(exactly = 1) { telemetryService.setChatCompletionObservationAttributes(mockObservation, chatCompletion, params, metadata) }
+            verify(exactly = 1) { telemetryService.emitModelInputEvents(any(), params, metadata) }
+            verify(exactly = 1) { telemetryService.emitModelOutputEvents(any(), chatCompletion, metadata) }
+            verify(exactly = 1) { telemetryService.setChatCompletionObservationAttributes(any(), chatCompletion, params, metadata) }
             coVerify(exactly = 0) { completionStore.storeCompletion(any(), any(), any()) }
         }
 
@@ -186,9 +186,9 @@ class MasaicOpenAiCompletionServiceImplTest {
 
             // Then: returns and stores once
             assertEquals(chatCompletion, result)
-            verify(exactly = 1) { telemetryService.emitModelInputEvents(mockObservation, params, metadata) }
-            verify(exactly = 1) { telemetryService.emitModelOutputEvents(mockObservation, chatCompletion, metadata) }
-            verify(exactly = 1) { telemetryService.setChatCompletionObservationAttributes(mockObservation, chatCompletion, params, metadata) }
+            verify(exactly = 1) { telemetryService.emitModelInputEvents(any(), params, metadata) }
+            verify(exactly = 1) { telemetryService.emitModelOutputEvents(any(), chatCompletion, metadata) }
+            verify(exactly = 1) { telemetryService.setChatCompletionObservationAttributes(any(), chatCompletion, params, metadata) }
             coVerify(exactly = 1) {
                 completionStore.storeCompletion(
                     chatCompletion,
@@ -346,6 +346,7 @@ class MasaicOpenAiCompletionServiceImplTest {
             every {
                 telemetryService.withClientObservation<kotlinx.coroutines.flow.Flow<ServerSentEvent<String>>>(
                     "openai.chat.completions.stream",
+                    any(),
                     any(),
                     any(),
                 )

@@ -125,7 +125,9 @@ class MasaicStreamingService(
         // We'll collect SSE events from the streaming call:
         val genAiSample = telemetryService.genAiDurationSample()
         callbackFlow {
-            val observation = telemetryService.startObservation("chat", metadata.modelName)
+            // Link the 'chat' span to any existing HTTP span from Reactor context
+            val parentObs: Observation? = coroutineContext[ReactorContext]?.context?.get(ObservationThreadLocalAccessor.KEY)
+            val observation = telemetryService.startObservation("chat", metadata.modelName, parentObs)
             val createParams = parameterConverter.prepareCompletion(params)
             telemetryService.emitModelInputEvents(observation, createParams, metadata)
 
