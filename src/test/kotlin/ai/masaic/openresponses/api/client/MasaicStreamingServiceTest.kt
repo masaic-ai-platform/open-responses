@@ -10,10 +10,10 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.openai.client.OpenAIClient
+import com.openai.client.OpenAIClientAsync
 import com.openai.core.JsonField
 import com.openai.core.JsonValue
 import com.openai.core.http.AsyncStreamResponse
-import com.openai.core.http.StreamResponse
 import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletionChunk
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -21,8 +21,8 @@ import com.openai.models.responses.Response
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.responses.ResponseInputItem
 import com.openai.models.responses.Tool
-import com.openai.services.blocking.ChatService
-import com.openai.services.blocking.chat.ChatCompletionService
+import com.openai.services.async.ChatServiceAsync
+import com.openai.services.async.chat.ChatCompletionServiceAsync
 import io.micrometer.core.instrument.Timer.Sample
 import io.micrometer.observation.Observation
 import io.mockk.*
@@ -37,7 +37,6 @@ import org.junit.jupiter.api.assertThrows
 import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
-import java.util.stream.Stream
 
 class MasaicStreamingServiceTest {
     private lateinit var toolHandler: MasaicToolHandler
@@ -125,18 +124,16 @@ class MasaicStreamingServiceTest {
                     .build()
 
             // Mock the client's streaming call with our chunk
-            val fakeStream =
-                object : StreamResponse<ChatCompletionChunk> {
-                    override fun stream(): Stream<ChatCompletionChunk> = listOf(chunk).stream()
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
-                    override fun close() {}
-                }
-
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
-            every { openAIClient.chat() } returns mockChat
+            // stub openAIClient.chat() to return your mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
-            every { mockCompletions.createStreaming(any()) } returns fakeStream
+            every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
             val resultEvents =
                 streamingService
@@ -217,19 +214,15 @@ class MasaicStreamingServiceTest {
                     .model("gpt-4")
                     .build()
 
-            // Mock the client's streaming call with our chunk
-            val fakeStream =
-                object : StreamResponse<ChatCompletionChunk> {
-                    override fun stream(): Stream<ChatCompletionChunk> = listOf(chunk).stream()
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
-                    override fun close() {}
-                }
-
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
-            every { mockCompletions.createStreaming(any()) } returns fakeStream
+            every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
             // When
             val flow = streamingService.createCompletionStream(openAIClient, params, metadata)
@@ -276,19 +269,15 @@ class MasaicStreamingServiceTest {
                     .model("gpt-4")
                     .build()
 
-            // Mock the client's streaming call with our chunk
-            val fakeStream =
-                object : StreamResponse<ChatCompletionChunk> {
-                    override fun stream(): Stream<ChatCompletionChunk> = listOf(chunk).stream()
+            val mockedSubscription = MockSubscription(listOf(chunk))
+            val mockChat = mockk<ChatServiceAsync>()
+            val mockCompletions = mockk<ChatCompletionServiceAsync>()
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
-                    override fun close() {}
-                }
-
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
-            every { mockCompletions.createStreaming(any()) } returns fakeStream
+            every { mockCompletions.createStreaming(any()) } returns mockedSubscription
 
             every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
             coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
@@ -432,27 +421,17 @@ class MasaicStreamingServiceTest {
                     .id("second_call")
                     .build()
 
-            // Mock the client's streaming call with our chunk
-            val fakeStream =
-                object : StreamResponse<ChatCompletionChunk> {
-                    override fun stream(): Stream<ChatCompletionChunk> = listOf(chunk).stream()
+            // Create proper MockSubscription instances for each call
+            val firstSub = MockSubscription(listOf(chunk))
+            val secondSub = MockSubscription(listOf(chunk2))
 
-                    override fun close() {}
-                }
-
-            val fakeStream2 =
-                object : StreamResponse<ChatCompletionChunk> {
-                    override fun stream(): Stream<ChatCompletionChunk> = listOf(chunk2).stream()
-
-                    override fun close() {}
-                }
-
+            // 5) We track how many times createStreaming(...) is invoked,
+            //    so we know the second iteration actually occurred.
             var subscriptionCount = 0
-            val mockChat = mockk<ChatService>()
-            val mockCompletions = mockk<ChatCompletionService>()
-            every { openAIClient.chat() } returns mockChat
-            every { mockChat.completions() } returns mockCompletions
+            val mockChat = mockk<ChatServiceAsync>(relaxed = false)
+            val mockCompletions = mockk<ChatCompletionServiceAsync>(relaxed = false)
             val mockedPreparedCompletion = mockk<ChatCompletionCreateParams>(relaxed = true)
+            val mockAsyncClient = mockk<OpenAIClientAsync>()
 
             coEvery { responseStore.storeResponse(any(), any(), any()) } just runs
 
@@ -464,13 +443,14 @@ class MasaicStreamingServiceTest {
             every { toolService.buildAliasMap(any()) } returns emptyMap<String, String>()
 
             // Now stub the openAIClient usage
-            every { openAIClient.chat() } returns mockChat
+            every { openAIClient.async() } returns mockAsyncClient
+            every { mockAsyncClient.chat() } returns mockChat
             every { mockChat.completions() } returns mockCompletions
 
             // This is the key part - set up the streaming mock to return our different subscriptions
             every { mockCompletions.createStreaming(any()) } answers {
                 subscriptionCount++
-                if (subscriptionCount == 1) fakeStream else fakeStream2
+                if (subscriptionCount == 1) firstSub else secondSub
             }
 
             // The toolHandler will produce new input items for the second iteration
