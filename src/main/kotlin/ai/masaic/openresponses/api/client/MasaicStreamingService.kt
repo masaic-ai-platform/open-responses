@@ -144,6 +144,11 @@ class MasaicStreamingService(
             val internalToolItemIds = mutableSetOf<String>()
             val functionNameAccumulator = mutableMapOf<Long, Pair<String, String>>()
 
+            subscription.onCompleteFuture().whenComplete { _, error ->
+                if (error != null) {
+                    close(error)
+                }
+            }
             subscription.subscribe { completionResponse ->
 
                 val completion =
