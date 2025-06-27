@@ -92,6 +92,7 @@ data class McpToolDefinition(
 data class MCPServerInfo(
     val id: String,
     val url: String = "not_required",
+    val headers: Map<String, String> = emptyMap(),
     val tools: List<String> = emptyList(),
 ) {
     fun serverIdentifier() = "${id}_$url"

@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.controller
 
 import ai.masaic.openresponses.tool.ToolMetadata
 import ai.masaic.openresponses.tool.ToolService
+import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import io.mockk.verify
@@ -23,6 +24,9 @@ import kotlin.test.assertTrue
 class PlaygroundControllerTest {
     @MockkBean
     lateinit var toolService: ToolService
+
+    @MockkBean
+    lateinit var mcpToolExecutor: MCPToolExecutor
 
     @Autowired
     lateinit var webTestClient: WebTestClient

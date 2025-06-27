@@ -59,7 +59,7 @@ class MCPToolExecutor {
         }
 
         val mcpClient = mcpClients[serverId] ?: return null
-        return mcpClient.executeTool(tool.copy(name = toolName), arguments)
+        return mcpClient.executeTool(tool.copy(name = toolName), arguments, headers = mcpTool.serverInfo.headers)
     }
 
     /**
