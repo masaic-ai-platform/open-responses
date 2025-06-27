@@ -2,7 +2,7 @@ package ai.masaic.openresponses.api.service
 
 import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.data.embedding.Embedding
-import dev.langchain4j.model.openai.OpenAiEmbeddingModel
+import dev.langchain4j.model.openaiofficial.OpenAiOfficialEmbeddingModel
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class OpenAIEmbeddingServiceTest {
-    private lateinit var openAiEmbeddingModel: OpenAiEmbeddingModel
+    private lateinit var openAiEmbeddingModel: OpenAiOfficialEmbeddingModel
     private lateinit var embeddingService: OpenAIEmbeddingService
 
     @BeforeEach
