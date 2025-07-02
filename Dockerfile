@@ -13,7 +13,7 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the built JAR and configuration file into the image
-COPY build/libs/openresponses-0.3.3.jar /app/openresponses-0.3.3.jar
+COPY build/libs/openresponses-0.3.4.jar /app/openresponses-0.3.4.jar
 COPY src/main/resources/mcp-servers-config.json /app/mcp-servers-config.json
 
 # Copy the Docker CLI from the previous stage
@@ -23,4 +23,4 @@ COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 RUN chmod +x /usr/local/bin/docker
 
 # Start the Java application directly
-ENTRYPOINT ["java", "-jar", "/app/openresponses-0.3.3.jar"]
+ENTRYPOINT ["java", "-jar", "/app/openresponses-0.3.4.jar"]
