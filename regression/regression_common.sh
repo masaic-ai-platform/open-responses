@@ -214,7 +214,7 @@ run_basic_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"stream\": false,
             \"input\": [
                 {
@@ -232,7 +232,7 @@ run_basic_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"stream\": true,
             \"input\": [
                 {
@@ -358,7 +358,7 @@ run_mongodb_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"store\": true,
             \"input\": [
                 {
@@ -391,7 +391,7 @@ run_mongodb_tests() {
         --header "Authorization: Bearer $API_KEY" \
         --header "x-model-provider: $MODEL_PROVIDER" \
         --data "{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"store\": true,
             \"id\": \"$test_uuid\",
             \"input\": [
@@ -473,7 +473,7 @@ run_mongodb_tests() {
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --max-time 10 \
         --data '{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"store\": true,
             \"previous_response_id\": \"$response_id\",
             \"input\": [
@@ -598,7 +598,7 @@ run_vector_store_integration_tests() {
                 --header "Authorization: Bearer $API_KEY" \
                 --header "x-model-provider: $MODEL_PROVIDER" \
                 --data "{
-                    \"model\": \"$MODEL_NAME\",
+                    \"model\": \"$FULL_MODEL_NAME\",
                     \"stream\": false,
                     \"input\": [
                         {
@@ -647,7 +647,7 @@ run_vector_store_integration_tests() {
                 --header \"Authorization: Bearer $API_KEY\" \
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
-                    \"model\": \"$MODEL_NAME\",
+                    \"model\": \"$FULL_MODEL_NAME\",
                     \"stream\": false,
                     \"input\": [
                         {
@@ -671,7 +671,7 @@ run_vector_store_integration_tests() {
                 --header "Authorization: Bearer $API_KEY" \
                 --header "x-model-provider: $MODEL_PROVIDER" \
                 --data "{
-                    \"model\": \"$MODEL_NAME\",
+                    \"model\": \"$FULL_MODEL_NAME\",
                     \"stream\": false,
                     \"input\": [
                         {
@@ -722,7 +722,7 @@ run_vector_store_integration_tests() {
                 --header \"Authorization: Bearer $API_KEY\" \
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
-                    \"model\": \"$MODEL_NAME\",
+                    \"model\": \"$FULL_MODEL_NAME\",
                     \"stream\": false,
                     \"input\": [
                         {
@@ -764,7 +764,7 @@ run_vector_store_integration_tests() {
                 --header "Authorization: Bearer $API_KEY" \
                 --header "x-model-provider: $MODEL_PROVIDER" \
                 --data "{
-                    \"model\": \"$MODEL_NAME\",
+                    \"model\": \"$FULL_MODEL_NAME\",
                     \"stream\": true,
                     \"input\": [
                         {
@@ -816,7 +816,7 @@ run_vector_store_integration_tests() {
                 --header \"Authorization: Bearer $API_KEY\" \
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
                 --data '{
-                    \"model\": \"$MODEL_NAME\",
+                    \"model\": \"$FULL_MODEL_NAME\",
                     \"stream\": true,
                     \"input\": [
                         {
@@ -876,8 +876,12 @@ main() {
         exit 1
     fi
     
+    # Combine provider and model into provider@model format
+    FULL_MODEL_NAME="${MODEL_PROVIDER}@${MODEL_NAME}"
+    
     echo -e "${GREEN}Using model provider: $MODEL_PROVIDER${NC}"
     echo -e "${GREEN}Using model name: $MODEL_NAME${NC}"
+    echo -e "${GREEN}Full model format: $FULL_MODEL_NAME${NC}"
     echo -e "${GREEN}API Key: ****${API_KEY: -4}${NC}" # Show only last 4 chars for confirmation
 
     # Stop any running containers at the start

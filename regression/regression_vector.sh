@@ -200,8 +200,12 @@ run_vector_tests() {
         exit 1
     fi
     
+    # Combine provider and model into provider@model format
+    FULL_MODEL_NAME="${MODEL_PROVIDER}@${MODEL_NAME}"
+    
     echo -e "${GREEN}Using model provider: $MODEL_PROVIDER${NC}"
     echo -e "${GREEN}Using model name: $MODEL_NAME${NC}"
+    echo -e "${GREEN}Full model format: $FULL_MODEL_NAME${NC}"
     echo -e "${GREEN}API Key: ****${API_KEY: -4}${NC}" # Show only last 4 chars for confirmation
 
     # Stop any running containers
@@ -223,7 +227,7 @@ run_vector_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"stream\": false,
             \"input\": [
                 {
@@ -1034,7 +1038,7 @@ run_vector_tests() {
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --data '{
-            \"model\": \"$MODEL_NAME\",
+            \"model\": \"$FULL_MODEL_NAME\",
             \"stream\": false,
             \"input\": [
                 {
