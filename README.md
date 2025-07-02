@@ -43,10 +43,10 @@ docker run -p 8080:8080 masaicai/open-responses:latest
 ### Using with OpenAI SDK
 
 ```python
-openai_client = OpenAI(base_url="http://localhost:8080/v1", api_key=os.getenv("OPENAI_API_KEY"), default_headers={'x-model-provider': 'openai'})
+openai_client = OpenAI(base_url="http://localhost:8080/v1", api_key=os.getenv("OPENAI_API_KEY"))
 
 response = openai_client.responses.create(
-    model="gpt-4o-mini",
+    model="openai@gpt-4o-mini",
     input="Write a poem on Masaic"
 )
 ```
@@ -54,11 +54,11 @@ response = openai_client.responses.create(
 ### Using with OpenAI Agent SDK
 
 ```python
-client = AsyncOpenAI(base_url="http://localhost:8080/v1", api_key=os.getenv("OPENAI_API_KEY"), default_headers={'x-model-provider': 'openai'})
+client = AsyncOpenAI(base_url="http://localhost:8080/v1", api_key=os.getenv("OPENAI_API_KEY"))
 agent = Agent(
     name="Assistant",
     instructions="You are a humorous poet who can write funny poems of 4 lines.",
-    model=OpenAIResponsesModel(model="gpt-4o-mini", openai_client=client)
+    model=OpenAIResponsesModel(model="openai@gpt-4o-mini", openai_client=client)
 )
 ```
 
@@ -68,9 +68,8 @@ agent = Agent(
 curl --location 'http://localhost:8080/v1/responses' \
 --header 'Content-Type: application/json' \
 --header 'Authorization: Bearer OPENAI_API_KEY' \
---header 'x-model-provider: openai' \
 --data '{
-    "model": "gpt-4o",
+    "model": "open@igpt-4o",
     "stream": false,
     "input": [
         {
