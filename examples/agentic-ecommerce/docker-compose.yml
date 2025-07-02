@@ -1,0 +1,39 @@
+version: '3'
+
+services:
+  open-responses:
+    image: masaicai/open-responses:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - app-network
+
+  demo-mcp-server:
+    image: masaicai/demo-mcp-server:latest
+    ports:
+      - "8086:8086"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    networks:
+      - app-network
+
+  # Using python-notebook image which has more packages
+  notebook:
+    image: jupyter/scipy-notebook:python-3.11
+    ports:
+      - "8890:8888"
+    volumes:
+      - ./:/home/jovyan/work        # repo root inside the notebook
+    environment:
+      - OPENAI_BASE_URL=http://open-responses:8080/v1
+      - OPENAI_API_KEY=dummy
+    command: >                      
+      bash -c "pip install --no-cache-dir 'openai>=1.12.0' && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
+    depends_on:
+      - open-responses
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
