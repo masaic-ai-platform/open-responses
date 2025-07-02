@@ -1,5 +1,9 @@
 # Agentic E-commerce Demo
 
+[![Agentic E-commerce Demo Video](https://img.youtube.com/vi/5ro_l4RJoHY/maxresdefault.jpg)](https://www.youtube.com/watch?v=5ro_l4RJoHY)
+
+**🎥 [Watch the Demo Video](https://www.youtube.com/watch?v=5ro_l4RJoHY)**
+
 This directory contains a comprehensive demonstration of agentic e-commerce capabilities including product search, scene generation, and payment confirmation using AI agents and the Model Context Protocol (MCP).
 
 ## Features
