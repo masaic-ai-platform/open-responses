@@ -23,7 +23,7 @@ from IPython.display import Audio
 import pygame
 
 # Configuration
-BASE_URL = os.getenv("OPEN_RESPONSES_URL", "http://localhost:8085/v1")
+BASE_URL = os.getenv("OPEN_RESPONSES_URL", "http://localhost:8080/v1")
 API_KEY = os.getenv("OPENAI_API_KEY")
 SARVAM_KEY = os.getenv("SARVAM_API_KEY")
 

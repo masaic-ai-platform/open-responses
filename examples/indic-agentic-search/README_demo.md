@@ -24,12 +24,16 @@ brew install portaudio
 ```bash
 pip install -r requirements_demo.txt
 ```
+3. Start OpenResponses:
+```bash
+docker run -p 8080:8080 masaicai/open-responses:latest
+```
 
-3. Set environment variables:
+4. Set environment variables:
 ```bash
 export OPENAI_API_KEY="your-openai-api-key"
 export SARVAM_API_KEY="your-sarvam-api-key"
-export OPEN_RESPONSES_URL="http://localhost:8085/v1"  # Optional, defaults to localhost:8085
+export OPEN_RESPONSES_URL="http://localhost:8080/v1"  # Optional, defaults to localhost:8080/v1
 ```
 
 ## Usage
