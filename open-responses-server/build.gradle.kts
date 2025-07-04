@@ -19,14 +19,19 @@ dependencyManagement {
     }
 }
 
+// Define build profile flag for ONNX support
+val enableOnnx: Boolean = (project.findProperty("enableOnnx") as String?)?.toBoolean() ?: false
+
 dependencies {
     implementation(project(":open-responses-core"))
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-    
-    // ONNX module available for IDE development (compileOnly = not included in default JAR)
-//    compileOnly(project(":open-responses-onnx"))
+
+    // Include ONNX module only when enableOnnx flag is true
+    if (enableOnnx) {
+        implementation(project(":open-responses-onnx"))
+    }
 }
 
 repositories {
