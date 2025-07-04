@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.service
 
-import ai.masaic.openresponses.api.service.embedding.DefaultEmbeddingService
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.embedding.OnnxEmbeddingService
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.model.embedding.EmbeddingModel
@@ -44,7 +44,7 @@ class EmbeddingServiceTest {
             }
         
         // Create the service with the mock model
-        embeddingService = DefaultEmbeddingService(embeddingModel)
+        embeddingService = OnnxEmbeddingService(embeddingModel)
     }
 
     @Test

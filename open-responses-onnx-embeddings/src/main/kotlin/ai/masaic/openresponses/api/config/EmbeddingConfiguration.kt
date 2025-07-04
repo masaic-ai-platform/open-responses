@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.config
 
-import ai.masaic.openresponses.api.service.embedding.DefaultEmbeddingService
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
+import ai.masaic.openresponses.api.service.embedding.OnnxEmbeddingService
 import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.embedding.onnx.OnnxEmbeddingModel
@@ -75,7 +75,7 @@ class EmbeddingConfiguration {
     @Bean
     @Primary
     @ConditionalOnProperty(name = ["open-responses.embeddings.http-enabled"], havingValue = "false", matchIfMissing = true)
-    fun defaultEmbeddingService(embeddingModel: EmbeddingModel): EmbeddingService = DefaultEmbeddingService(embeddingModel)
+    fun defaultEmbeddingService(embeddingModel: EmbeddingModel): EmbeddingService = OnnxEmbeddingService(embeddingModel)
 
     /**
      * Creates an OpenAI embedding service when openai.embeddings.enabled is true.

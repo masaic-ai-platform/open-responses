@@ -1,6 +1,6 @@
 package ai.masaic.openresponses.api.config
 
-import ai.masaic.openresponses.api.service.embedding.DefaultEmbeddingService
+import ai.masaic.openresponses.api.service.embedding.OnnxEmbeddingService
 import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel
@@ -62,7 +62,7 @@ class EmbeddingConfigurationTest {
         val service = configuration.defaultEmbeddingService(mockModel)
 
         // Then
-        assertTrue(service is DefaultEmbeddingService)
+        assertTrue(service is OnnxEmbeddingService)
     }
 
     @Test

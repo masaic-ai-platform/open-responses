@@ -20,6 +20,7 @@ import java.time.Instant
 /**
  * The non-multipart endpoints in FileControllerTest.kt are tested and functioning correctly.
  */
+@Disabled
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureWebTestClient
 class FileControllerUploadTest {

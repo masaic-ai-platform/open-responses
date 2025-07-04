@@ -10,7 +10,7 @@ import dev.langchain4j.store.embedding.CosineSimilarity
  *
  * This service uses a configurable EmbeddingModel for generating embeddings.
  */
-class DefaultEmbeddingService(
+class OnnxEmbeddingService(
     private val embeddingModel: EmbeddingModel,
 ) : EmbeddingService {
     /**

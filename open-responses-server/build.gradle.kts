@@ -7,9 +7,19 @@ plugins {
     id("org.jmailen.kotlinter")
 }
 
+dependencyManagement {
+    imports {
+        mavenBom("io.opentelemetry.instrumentation:opentelemetry-instrumentation-bom:2.14.0")
+    }
+}
+
 dependencies {
     implementation(project(":open-responses-core"))
-    runtimeOnly(project(":open-responses-onnx-embeddings"))
+    implementation(project(":open-responses-onnx-embeddings"))
+
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
 repositories {
