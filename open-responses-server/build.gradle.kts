@@ -5,12 +5,7 @@ plugins {
     id("io.spring.dependency-management")
     kotlin("plugin.serialization")
     id("org.jmailen.kotlinter")
-}
-
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
+    id("org.graalvm.buildtools.native") version "0.9.25"
 }
 
 dependencyManagement {
@@ -19,19 +14,20 @@ dependencyManagement {
     }
 }
 
-// Define build profile flag for ONNX support
-val enableOnnx: Boolean = (project.findProperty("enableOnnx") as String?)?.toBoolean() ?: false
+// Create separate configurations for the two variants
+val onnxRuntimeClasspath by configurations.creating {
+    extendsFrom(configurations.runtimeClasspath.get())
+}
 
 dependencies {
+    // Core dependencies - always included
     implementation(project(":open-responses-core"))
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
-
-    // Include ONNX module only when enableOnnx flag is true
-    if (enableOnnx) {
-        implementation(project(":open-responses-onnx"))
-    }
+    
+    // ONNX dependency - only in the onnx variant
+    onnxRuntimeClasspath(project(":open-responses-onnx"))
 }
 
 repositories {
@@ -45,37 +41,72 @@ kotlin {
     }
 }
 
-// Configure the default bootJar to be the core-only version
+// Configure the default Spring Boot jar to be the basic version (core only)
 tasks.bootJar {
+    archiveClassifier.set("")
     archiveBaseName.set("openresponses")
-    // Default bootJar will only include open-responses-core dependencies
+    // This will use the standard runtimeClasspath which excludes ONNX
 }
 
-// Create the ONNX variant bootJar
-tasks.register<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJarOnnx") {
+// Create a simple fat jar with ONNX support using the standard Jar task
+tasks.register<Jar>("fatJarOnnx") {
     group = "build"
-    description = "Creates executable jar with ONNX support"
+    description = "Creates a fat jar with ONNX support"
     
-    archiveBaseName.set("openresponses")
     archiveClassifier.set("onnx")
+    archiveBaseName.set("openresponses")
     
-    mainClass.set("ai.masaic.OpenResponsesApplicationKt")
-    targetJavaVersion = JavaVersion.VERSION_21
+    manifest {
+        attributes["Main-Class"] = "ai.masaic.OpenResponsesApplicationKt"
+        attributes["Implementation-Title"] = "OpenResponses ONNX"
+        attributes["Implementation-Version"] = project.version
+    }
     
-    // Include the main source set
     from(sourceSets.main.get().output)
     
-    // Include core dependencies
-    classpath(configurations.runtimeClasspath.get())
+    // Include dependencies from both configurations
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    from(onnxRuntimeClasspath.map { if (it.isDirectory) it else zipTree(it) })
     
-    // Include ONNX module and its dependencies
-    classpath(project(":open-responses-onnx").configurations.runtimeClasspath.get())
-    classpath(project(":open-responses-onnx").tasks.jar.get().outputs)
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
     
+    // Enable zip64 for large archives
+    isZip64 = true
+    
+    dependsOn(configurations.runtimeClasspath)
     dependsOn(project(":open-responses-onnx").tasks.jar)
+
 }
 
-// Make both jars build by default
-tasks.named("build") {
-    dependsOn(tasks.bootJar, tasks.named("bootJarOnnx"))
+// Create a task to build both variants
+tasks.register("buildAll") {
+    group = "build"
+    description = "Builds both basic and ONNX variants"
+    dependsOn(tasks.bootJar, tasks.named("fatJarOnnx"))
 }
+
+// Ensure JavaCompile tasks target the same JVM version for AOT compatibility
+tasks.withType<org.gradle.api.tasks.compile.JavaCompile>().configureEach {
+    options.release.set(21)
+}
+
+// Configure GraalVM native image build with Spring AOT support
+graalvmNative {
+    binaries {
+        named("main") {
+            imageName.set("openresponses-native")
+            buildArgs.addAll(
+                "--no-fallback",
+                "-H:+StaticExecutableWithDynamicLibC",
+                "-H:+AllowIncompleteClasspath"
+            )
+            javaLauncher.set(
+                javaToolchains.launcherFor {
+                    languageVersion.set(org.gradle.jvm.toolchain.JavaLanguageVersion.of(21))
+                    vendor.set(org.gradle.jvm.toolchain.JvmVendorSpec.GRAAL_VM)
+                }
+            )
+        }
+    }
+}
+
