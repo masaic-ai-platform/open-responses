@@ -18,7 +18,7 @@ interface RerankerService {
 }
 
 @Component
-@ConditionalOnMissingBean
+@ConditionalOnMissingBean(RerankerService::class)
 class NoopRerankerService : RerankerService {
     private val logger = KotlinLogging.logger {}
 

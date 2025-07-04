@@ -36,11 +36,29 @@ repositories {
     mavenCentral()
 }
 
-// Disable bootJar for library module
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xjsr305=strict")
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
+    }
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+    jvmArgs("--add-opens", "java.base/java.util=ALL-UNNAMED")
+    testLogging {
+        events("PASSED", "SKIPPED", "FAILED")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
+    }
+}
+
+// Disable bootJar for library module - only the server module should create executable JARs
 tasks.getByName<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
     enabled = false
 }
 
+// Enable regular jar for library usage
 tasks.getByName<Jar>("jar") {
     enabled = true
 }

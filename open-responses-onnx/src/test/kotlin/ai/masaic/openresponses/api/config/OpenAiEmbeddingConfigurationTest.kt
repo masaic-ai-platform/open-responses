@@ -1,7 +1,7 @@
 package ai.masaic.openresponses.api.config
 
+import ai.masaic.openresponses.api.service.embedding.EmbeddingProperties
 import ai.masaic.openresponses.api.service.embedding.OnnxEmbeddingService
-import ai.masaic.openresponses.api.service.embedding.OpenAIEmbeddingService
 import dev.langchain4j.model.embedding.EmbeddingModel
 import dev.langchain4j.model.embedding.onnx.allminilml6v2.AllMiniLmL6V2EmbeddingModel
 import io.mockk.mockk
@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
-class EmbeddingConfigurationTest {
+class OpenAiEmbeddingConfigurationTest {
     private val configuration = EmbeddingConfiguration()
 
     @Test
@@ -63,23 +63,6 @@ class EmbeddingConfigurationTest {
 
         // Then
         assertTrue(service is OnnxEmbeddingService)
-    }
-
-    @Test
-    fun `openAIEmbeddingService should create service with provided properties`() {
-        // Given
-        val properties =
-            EmbeddingProperties(
-                apiKey = "test-api-key",
-                model = "text-embedding-3-small",
-                url = "https://api.openai.com/v1",
-            )
-
-        // When
-        val service = configuration.openAIEmbeddingService(properties)
-
-        // Then
-        assertTrue(service is OpenAIEmbeddingService)
     }
 
     @Test

@@ -9,19 +9,13 @@ import ai.masaic.openresponses.api.support.service.TelemetryService
 import com.knuddels.jtokkit.Encodings
 import com.knuddels.jtokkit.api.Encoding
 import com.knuddels.jtokkit.api.EncodingType
-import io.swagger.v3.oas.annotations.Operation
-import io.swagger.v3.oas.annotations.Parameter
-import io.swagger.v3.oas.annotations.media.Content
-import io.swagger.v3.oas.annotations.media.Schema
-import io.swagger.v3.oas.annotations.responses.ApiResponse
-import io.swagger.v3.oas.annotations.tags.Tag
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.server.ResponseStatusException
 import java.nio.ByteBuffer
-import java.util.Base64
+import java.util.*
 
 /**
  * Controller for the OpenAI-compatible Embeddings API.
@@ -32,7 +26,6 @@ import java.util.Base64
 @RestController
 @RequestMapping("/v1")
 @CrossOrigin("*")
-@Tag(name = "Embeddings", description = "OpenAI-compatible Embeddings API")
 class EmbeddingsController(
     private val embeddingService: OpenAIProxyEmbeddingService,
     private val encoding: Encoding = Encodings.newLazyEncodingRegistry().getEncoding(EncodingType.CL100K_BASE),
@@ -41,29 +34,8 @@ class EmbeddingsController(
     private val log = LoggerFactory.getLogger(EmbeddingsController::class.java)
 
     @PostMapping("/embeddings")
-    @Operation(
-        summary = "Create embeddings",
-        description = "Creates an embedding vector representing the input text.",
-        responses = [
-            ApiResponse(
-                responseCode = "200",
-                description = "The embedding response",
-                content = [Content(schema = Schema(implementation = EmbeddingResponse::class))],
-            ),
-            ApiResponse(
-                responseCode = "400",
-                description = "Bad request, such as invalid input format or missing required parameters",
-            ),
-            ApiResponse(
-                responseCode = "401",
-                description = "Authentication error",
-            ),
-        ],
-    )
     suspend fun createEmbedding(
-        @Parameter(description = "The embedding request", required = true)
         @RequestBody request: CreateEmbeddingRequest,
-        @Parameter(description = "API key for authentication", required = true)
         @RequestHeader("Authorization") authHeader: String,
     ): ResponseEntity<EmbeddingResponse> {
         // Start observation for embeddings operation with OpenTelemetry
