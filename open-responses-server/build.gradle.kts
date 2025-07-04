@@ -15,7 +15,7 @@ dependencyManagement {
 
 dependencies {
     implementation(project(":open-responses-core"))
-    implementation(project(":open-responses-onnx-embeddings"))
+    implementation(project(":open-responses-onnx"))
 
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-validation")
