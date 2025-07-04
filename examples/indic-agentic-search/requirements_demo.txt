@@ -1,0 +1,16 @@
+# Core RAG dependencies
+openai>=1.84.0
+
+# Voice processing dependencies (Sarvam)
+sarvamai>=0.1.5
+sounddevice>=0.5.2
+scipy>=1.15.3
+pygame>=2.5.0
+
+# Utility dependencies
+numpy>=2.0.0
+ipython>=7.0.0
+
+# Note: If you get PyAudio errors on macOS, install with:
+# brew install portaudio
+# pip install pyaudio 
