@@ -8,7 +8,7 @@ services:
   open-responses:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     networks:
       - observability-network
     profiles:
@@ -33,7 +33,7 @@ services:
   open-responses-mcp:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
     environment:
@@ -52,7 +52,7 @@ services:
   open-responses-mcp-windows:
     image: masaicai/open-responses:latest
     ports:
-      - "8080:8080"
+      - "6644:6644"
     volumes:
       # Use the Docker named pipe on Windows
       - "//./pipe/docker_engine://./pipe/docker_engine"
@@ -73,7 +73,7 @@ services:
   open-responses-custom-mcp:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - ${MCP_CONFIG_FILE_PATH:-/app/default_mcp_config.json}:/app/mcp_server_config.json:ro
@@ -94,7 +94,7 @@ services:
   open-responses-custom-mcp-windows:
     image: masaicai/open-responses:latest
     ports:
-      - "8080:8080"
+      - "6644:6644"
     volumes:
       # Use the Docker named pipe on Windows
       - "//./pipe/docker_engine://./pipe/docker_engine"
@@ -118,7 +118,7 @@ services:
   open-responses-with-openai:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     environment:
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
     networks:
@@ -146,7 +146,7 @@ services:
   open-responses-with-mongodb:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     environment:
       - OPEN_RESPONSES_MONGODB_DATABASE=openresponses
       - OPEN_RESPONSES_MONGODB_URI=mongodb://mongodb:27017
@@ -163,7 +163,7 @@ services:
   open-responses-otel:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
     environment:
@@ -202,7 +202,7 @@ services:
   open-responses-with-qdrant:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     environment:
       - OPEN_RESPONSES_STORE_VECTOR_SEARCH_PROVIDER=qdrant
       - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=qdrant
@@ -222,7 +222,7 @@ services:
   open-responses-with-qdrant-mongodb:
     <<: *open_responses
     ports:
-      - "8080:8080"
+      - "6644:6644"
     environment:
       # MongoDB configuration
       - OPEN_RESPONSES_MONGODB_DATABASE=openresponses
@@ -270,7 +270,7 @@ services:
   open-responses-with-ollama:
         <<: *open_responses
         ports:
-        - "8080:8080"
+        - "6644:6644"
         environment:
         - MODEL_BASE_URL=http://ollama:11434/v1
         networks:

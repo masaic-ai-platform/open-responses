@@ -43,13 +43,13 @@ wait_for_service() {
     local attempt=1
     local delay=2
     
-    echo "Checking if service is ready at http://localhost:8080/v1/models..."
+    echo "Checking if service is ready at http://localhost:6644/v1/models..."
     
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt of $max_attempts..."
         
         # Try to connect to the API
-        if curl --silent --fail --max-time 2 http://localhost:8080/v1/models > /dev/null; then
+        if curl --silent --fail --max-time 2 http://localhost:6644/v1/models > /dev/null; then
             echo -e "${GREEN}Service is ready!${NC}"
             return 0
         fi
@@ -161,7 +161,7 @@ cleanup() {
     echo -e "\n${BOLD}Cleaning up...${NC}"
     # Stop and remove containers
     docker-compose down -v 2>/dev/null || true
-    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
+    docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
     
     # Clean up all temporary files
     echo -e "\n${BOLD}Cleaning up temporary files...${NC}"
@@ -212,7 +212,7 @@ run_vector_tests() {
     echo "Stopping any running containers..."
     docker-compose down -v 2>/dev/null || true
     # Kill any existing containers that might be using port 8080
-    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
+    docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill 2>/dev/null || true
     sleep 5
 
     # Start Qdrant container for vector store tests
@@ -222,7 +222,7 @@ run_vector_tests() {
     # Test 9: Qdrant Vector Search
     echo -e "\n${BOLD}Test 1: Qdrant Vector Search${NC}"
     run_test "Qdrant Vector Search" \
-        "curl --location 'http://localhost:8080/v1/responses' \
+        "curl --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -240,7 +240,7 @@ run_vector_tests() {
     # Test 2: Create Vector Store
     echo -e "\n${BOLD}Test 2: Create Vector Store${NC}"
     run_test "Create Vector Store" \
-        "curl --location 'http://localhost:8080/v1/vector_stores' \
+        "curl --location 'http://localhost:6644/v1/vector_stores' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -250,7 +250,7 @@ run_vector_tests() {
         }'"
 
     # Get the vector store ID
-    vector_store_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
+    vector_store_data=$(curl --silent --location 'http://localhost:6644/v1/vector_stores' \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer $API_KEY" \
         --data '{
@@ -274,13 +274,13 @@ run_vector_tests() {
     # Test 3: List Vector Stores
     echo -e "\n${BOLD}Test 3: List Vector Stores${NC}"
     run_test "List Vector Stores" \
-        "curl --location 'http://localhost:8080/v1/vector_stores' \
+        "curl --location 'http://localhost:6644/v1/vector_stores' \
         --header \"Authorization: Bearer $API_KEY\""
 
     # Test 4: Get Vector Store
     echo -e "\n${BOLD}Test 4: Get Vector Store${NC}"
     run_test "Get Vector Store" \
-        "curl --location 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
+        "curl --location 'http://localhost:6644/v1/vector_stores/$vector_store_id' \
         --header \"Authorization: Bearer $API_KEY\""
 
     # Create a file for vector store upload
@@ -288,7 +288,7 @@ run_vector_tests() {
 
     # Upload a file first to get ID
     echo "Uploading a file for the vector store test..."
-    file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+    file_data=$(curl --silent --location 'http://localhost:6644/v1/files' \
         --header "Authorization: Bearer $API_KEY" \
         --form 'file=@"vector_store_file.txt"' \
         --form 'purpose="user_data"')
@@ -314,7 +314,7 @@ run_vector_tests() {
         echo -e "\n${BOLD}Test 5: Create Vector Store with File${NC}"
         echo "Creating vector store with file ID: $file_id"
         
-        vs_with_file_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
+        vs_with_file_data=$(curl --silent --location 'http://localhost:6644/v1/vector_stores' \
             --header 'Content-Type: application/json' \
             --header "Authorization: Bearer $API_KEY" \
             --data "{
@@ -343,7 +343,7 @@ run_vector_tests() {
             while [ $wait_attempt -le $max_wait_attempts ]; do
                 echo "Check attempt $wait_attempt of $max_wait_attempts..."
                 
-                vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vs_with_file_id" \
+                vs_status=$(curl --silent "http://localhost:6644/v1/vector_stores/$vs_with_file_id" \
                     --header "Authorization: Bearer $API_KEY")
                 
                 file_counts=$(echo "$vs_status" | grep -o '"file_counts":{[^}]*}' || echo "")
@@ -372,19 +372,19 @@ run_vector_tests() {
             # Test 6: List Files in Vector Store
             echo -e "\n${BOLD}Test 6: List Files in Vector Store${NC}"
             run_test "List Files in Vector Store" \
-                "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files' \
+                "curl --location 'http://localhost:6644/v1/vector_stores/$vs_with_file_id/files' \
                 --header \"Authorization: Bearer $API_KEY\""
             
             # Test 7: Vector Store Query with file
             echo -e "\n${BOLD}Test 7: Vector Store Query${NC}"
             
             # Get the vector store status before querying
-            vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vs_with_file_id" \
+            vs_status=$(curl --silent "http://localhost:6644/v1/vector_stores/$vs_with_file_id" \
                 --header "Authorization: Bearer $API_KEY")
             echo "Current vector store status before query:"
             echo "$vs_status" | grep -o '"status":"[^"]*"' || echo "Status not found"
             
-            query_endpoint="http://localhost:8080/v1/vector_stores/$vs_with_file_id/search"
+            query_endpoint="http://localhost:6644/v1/vector_stores/$vs_with_file_id/search"
             echo "Search endpoint: $query_endpoint"
             
             run_test "Vector Store Query" \
@@ -841,7 +841,7 @@ run_vector_tests() {
             
             # Upload the file first
             echo "Uploading a file for the chunking strategy test..."
-            chunking_file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+            chunking_file_data=$(curl --silent --location 'http://localhost:6644/v1/files' \
                 --header "Authorization: Bearer $API_KEY" \
                 --form 'file=@"chunking_test.txt"' \
                 --form 'purpose="user_data"')
@@ -864,7 +864,7 @@ run_vector_tests() {
                 # Now create vector store with chunking strategy
                 echo "Creating vector store with chunking strategy..."
                 run_test "Create Vector Store with Static ChunkingStrategy" \
-                    "curl --location 'http://localhost:8080/v1/vector_stores' \
+                    "curl --location 'http://localhost:6644/v1/vector_stores' \
                     --header 'Content-Type: application/json' \
                     --header \"Authorization: Bearer $API_KEY\" \
                     --data '{
@@ -886,7 +886,7 @@ run_vector_tests() {
             
             # Test 7h: Modify Vector Store File Attributes
             echo -e "\n${BOLD}Test 7h: Modify Vector Store File Attributes${NC}"
-            attributes_update_response=$(curl --silent --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id' \
+            attributes_update_response=$(curl --silent --location 'http://localhost:6644/v1/vector_stores/$vs_with_file_id/files/$file_id' \
                 --header 'Content-Type: application/json' \
                 --header "Authorization: Bearer $API_KEY" \
                 --data '{
@@ -946,7 +946,7 @@ run_vector_tests() {
             
             # Also run the regular API call test
             run_test "Modify Vector Store File Attributes" \
-                "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id' \
+                "curl --location 'http://localhost:6644/v1/vector_stores/$vs_with_file_id/files/$file_id' \
                 --header 'Content-Type: application/json' \
                 --header \"Authorization: Bearer $API_KEY\" \
                 --data '{
@@ -1014,14 +1014,14 @@ run_vector_tests() {
             # Test 7j: Get Vector Store File Content
             echo -e "\n${BOLD}Test 7j: Get Vector Store File Content${NC}"
             run_test "Get Vector Store File Content" \
-                "curl --location 'http://localhost:8080/v1/vector_stores/$vs_with_file_id/files/$file_id/content' \
+                "curl --location 'http://localhost:6644/v1/vector_stores/$vs_with_file_id/files/$file_id/content' \
                 --header \"Authorization: Bearer $API_KEY\"" \
                 "200"
             
             # Test 8: Delete Vector Store with file
             echo -e "\n${BOLD}Test 8: Delete Vector Store with File${NC}"
             run_test "Delete Vector Store with File" \
-                "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vs_with_file_id' \
+                "curl --location --request DELETE 'http://localhost:6644/v1/vector_stores/$vs_with_file_id' \
                 --header \"Authorization: Bearer $API_KEY\""
         fi
     fi
@@ -1033,7 +1033,7 @@ run_vector_tests() {
     # Test 9: Test Chat API with Vector Store and correct filters format
     echo -e "\n${BOLD}Test 9: Chat API with Vector Store and Correct Filters Format${NC}"
     run_test "Chat API with Vector Store and Correct Filters Format" \
-        "curl --location 'http://localhost:8080/v1/responses' \
+        "curl --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -1063,7 +1063,7 @@ run_vector_tests() {
     # Test 10: Delete Original Vector Store
     echo -e "\n${BOLD}Test 10: Delete Original Vector Store${NC}"
     run_test "Delete Original Vector Store" \
-        "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
+        "curl --location --request DELETE 'http://localhost:6644/v1/vector_stores/$vector_store_id' \
         --header \"Authorization: Bearer $API_KEY\""
 
     echo -e "\n${BOLD}VECTOR STORE TESTS COMPLETED${NC}"

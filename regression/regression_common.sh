@@ -47,13 +47,13 @@ wait_for_service() {
     local attempt=1
     local delay=2
     
-    echo "Checking if service is ready at http://localhost:8080/v1/models..."
+    echo "Checking if service is ready at http://localhost:6644/v1/models..."
     
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt of $max_attempts..."
         
         # Try to connect to the API
-        if curl --silent --fail --max-time 2 http://localhost:8080/v1/models > /dev/null; then
+        if curl --silent --fail --max-time 2 http://localhost:6644/v1/models > /dev/null; then
             echo -e "${GREEN}Service is ready!${NC}"
             return 0
         fi
@@ -166,7 +166,7 @@ cleanup() {
     if [ "$1" != "INT" ] || [ "$IN_CLEANUP" = "true" ]; then
         echo -e "\n${BOLD}Cleaning up...${NC}"
         docker-compose down -v 2>/dev/null || true
-        docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill
+        docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
     fi
     
     print_results_summary
@@ -209,7 +209,7 @@ run_basic_tests() {
     # Test 1: Basic Setup - Chat Completion
     echo -e "\n${BOLD}Test 1: Basic Setup - Chat Completion${NC}"
     run_test "Basic Setup - Chat Completion" \
-        "curl --location 'http://localhost:8080/v1/responses' \
+        "curl --location 'http://localhost:664/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -227,7 +227,7 @@ run_basic_tests() {
     # Test 2: Streaming Response
     echo -e "\n${BOLD}Test 2: Streaming Response${NC}"
     run_test "Streaming Response" \
-        "curl --location 'http://localhost:8080/v1/responses' \
+        "curl --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -245,7 +245,7 @@ run_basic_tests() {
     # Test 7: Get Available Models
     echo -e "\n${BOLD}Test 7: Get Available Models${NC}"
     run_test "Get Available Models" \
-        "curl --location 'http://localhost:8080/v1/models' \
+        "curl --location 'http://localhost:6644/v1/models' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\""
 }
@@ -259,13 +259,13 @@ run_file_operations_tests() {
     echo "This is a sample text file for testing file uploads." > sample_file.txt
     echo -e "\n${BOLD}Test 10: File Upload${NC}"
     run_test "File Upload" \
-        "curl --location 'http://localhost:8080/v1/files' \
+        "curl --location 'http://localhost:664/v1/files' \
         --header \"Authorization: Bearer $API_KEY\" \
         --form 'file=@\"sample_file.txt\"' \
         --form 'purpose=\"user_data\"'"
 
     # Get the file ID from the response
-    file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+    file_data=$(curl --silent --location 'http://localhost:6644/v1/files' \
         --header "Authorization: Bearer $API_KEY" \
         --form 'file=@"sample_file.txt"' \
         --form 'purpose="user_data"')
@@ -286,25 +286,25 @@ run_file_operations_tests() {
     # Test 11: List Files
     echo -e "\n${BOLD}Test 11: List Files${NC}"
     run_test "List Files" \
-        "curl --location 'http://localhost:8080/v1/files?limit=10&order=desc' \
+        "curl --location 'http://localhost:6644/v1/files?limit=10&order=desc' \
         --header \"Authorization: Bearer $API_KEY\""
 
     # Test 12: Get File
     echo -e "\n${BOLD}Test 12: Get File${NC}"
     run_test "Get File" \
-        "curl --location 'http://localhost:8080/v1/files/$file_id' \
+        "curl --location 'http://localhost:6644/v1/files/$file_id' \
         --header \"Authorization: Bearer $API_KEY\""
 
     # Test 13: Get File Content
     echo -e "\n${BOLD}Test 13: Get File Content${NC}"
     run_test "Get File Content" \
-        "curl --location 'http://localhost:8080/v1/files/$file_id/content' \
+        "curl --location 'http://localhost:6644/v1/files/$file_id/content' \
         --header \"Authorization: Bearer $API_KEY\""
 
     # Test 14: Delete File
     echo -e "\n${BOLD}Test 14: Delete File${NC}"
     run_test "Delete File" \
-        "curl --location --request DELETE 'http://localhost:8080/v1/files/$file_id' \
+        "curl --location --request DELETE 'http://localhost:6644/v1/files/$file_id' \
         --header \"Authorization: Bearer $API_KEY\""
 
     # Clean up the sample file
@@ -317,7 +317,7 @@ run_mongodb_tests() {
     echo "Stopping basic container before switching to MongoDB..."
     docker-compose down -v 2>/dev/null || true
     # Kill any existing containers that might be using port 8080
-    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill
+    docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
     # Wait for containers to fully shut down
     sleep 5
 
@@ -342,7 +342,7 @@ run_mongodb_tests() {
     
     # Check if API is responsive
     echo "Checking if API endpoints are accessible..."
-    models_response=$(curl --silent --max-time 5 --write-out '%{http_code}' --output /dev/null http://localhost:8080/v1/models)
+    models_response=$(curl --silent --max-time 5 --write-out '%{http_code}' --output /dev/null http://localhost:6644/v1/models)
     if [[ "$models_response" == "200" ]]; then
         echo -e "${GREEN}API endpoints appear to be accessible${NC}"
     else
@@ -353,7 +353,7 @@ run_mongodb_tests() {
     echo -e "\n${BOLD}Test 3: MongoDB Persistence${NC}"
     echo "DEBUG: About to run MongoDB Persistence test"
     response_creation_result=$(run_test "MongoDB Persistence" \
-        "curl --location 'http://localhost:8080/v1/responses' \
+        "curl --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -386,7 +386,7 @@ run_mongodb_tests() {
     echo "Creating a response with test UUID..."
     
     # For better debugging, get the full response without using -w for the status code
-    full_response=$(curl --silent --max-time 10 --location 'http://localhost:8080/v1/responses' \
+    full_response=$(curl --silent --max-time 10 --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header "Authorization: Bearer $API_KEY" \
         --header "x-model-provider: $MODEL_PROVIDER" \
@@ -428,7 +428,7 @@ run_mongodb_tests() {
     clean_id=$(echo "$response_id" | tr -d '\n\r\t ' | xargs)
     echo "Clean ID for verification: $clean_id"
     response_check=$(curl --silent --write-out '%{http_code}' --output /dev/null \
-        "http://localhost:8080/v1/responses/$clean_id" \
+        "http://localhost:6644/v1/responses/$clean_id" \
         --header "Authorization: Bearer $API_KEY" \
         --header "x-model-provider: $MODEL_PROVIDER")
     
@@ -445,7 +445,7 @@ run_mongodb_tests() {
     echo "DEBUG: About to run Get Response by ID test"
     echo "Using response ID: $response_id"
     run_test "Get Response by ID" \
-        "curl --location 'http://localhost:8080/v1/responses/$response_id' \
+        "curl --location 'http://localhost:6644/v1/responses/$response_id' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --max-time 10"
@@ -456,7 +456,7 @@ run_mongodb_tests() {
     echo "DEBUG: About to run Get Input Items for Response test"
     echo "Using response ID: $response_id"
     run_test "Get Input Items for Response" \
-        "curl --location 'http://localhost:8080/v1/responses/$response_id/input_items' \
+        "curl --location 'http://localhost:6644/v1/responses/$response_id/input_items' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --max-time 10"
@@ -467,7 +467,7 @@ run_mongodb_tests() {
     echo "DEBUG: About to run Multi-Turn Conversation test"
     echo "Using previous response ID: $response_id"
     run_test "Multi-Turn Conversation" \
-        "curl --location 'http://localhost:8080/v1/responses' \
+        "curl --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -490,7 +490,7 @@ run_mongodb_tests() {
     echo "DEBUG: About to run Delete Response test"
     echo "Using response ID: $response_id"
     run_test "Delete Response" \
-        "curl --location --request DELETE 'http://localhost:8080/v1/responses/$response_id' \
+        "curl --location --request DELETE 'http://localhost:6644/v1/responses/$response_id' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
         --max-time 10"
@@ -505,7 +505,7 @@ run_vector_store_integration_tests() {
     echo "Stopping MongoDB container before switching to vector store integration tests..."
     docker-compose down -v 2>/dev/null || true
     # Kill any existing containers that might be using port 8080
-    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill
+    docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
     # Wait for containers to fully shut down
     sleep 5
 
@@ -522,7 +522,7 @@ run_vector_store_integration_tests() {
     
     # Upload the file
     echo "Uploading the vector search test file..."
-    vector_file_data=$(curl --silent --location 'http://localhost:8080/v1/files' \
+    vector_file_data=$(curl --silent --location 'http://localhost:6644/v1/files' \
         --header "Authorization: Bearer $API_KEY" \
         --form 'file=@"vector_search_test.txt"' \
         --form 'purpose="user_data"')
@@ -541,7 +541,7 @@ run_vector_store_integration_tests() {
         
         # Create a vector store with the file
         echo "Creating a vector store with the test file..."
-        vector_store_data=$(curl --silent --location 'http://localhost:8080/v1/vector_stores' \
+        vector_store_data=$(curl --silent --location 'http://localhost:6644/v1/vector_stores' \
             --header 'Content-Type: application/json' \
             --header "Authorization: Bearer $API_KEY" \
             --data "{
@@ -570,7 +570,7 @@ run_vector_store_integration_tests() {
             while [ $wait_attempt -le $max_wait_attempts ]; do
                 echo "Check attempt $wait_attempt of $max_wait_attempts..."
                 
-                vs_status=$(curl --silent "http://localhost:8080/v1/vector_stores/$vector_store_id" \
+                vs_status=$(curl --silent "http://localhost:6644/v1/vector_stores/$vector_store_id" \
                     --header "Authorization: Bearer $API_KEY")
                 
                 file_counts=$(echo "$vs_status" | grep -o '"file_counts":{[^}]*}' || echo "")
@@ -593,7 +593,7 @@ run_vector_store_integration_tests() {
             
             # Test Vector Store Integration with Chat API
             echo -e "\n${BOLD}Test VS1: Chat with Vector Search Integration${NC}"
-            vs_chat_response=$(curl --silent --location 'http://localhost:8080/v1/responses' \
+            vs_chat_response=$(curl --silent --location 'http://localhost:6644/v1/responses' \
                 --header 'Content-Type: application/json' \
                 --header "Authorization: Bearer $API_KEY" \
                 --header "x-model-provider: $MODEL_PROVIDER" \
@@ -642,7 +642,7 @@ run_vector_store_integration_tests() {
             
             # Also run the regular status check
             run_test "Chat with Vector Search Integration" \
-                "curl --location 'http://localhost:8080/v1/responses' \
+                "curl --location 'http://localhost:6644/v1/responses' \
                 --header 'Content-Type: application/json' \
                 --header \"Authorization: Bearer $API_KEY\" \
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -666,7 +666,7 @@ run_vector_store_integration_tests() {
                 
             # Test Vector Search with Filters in Chat API
             echo -e "\n${BOLD}Test VS2: Chat with Vector Search and Filters${NC}"
-            vs_filters_chat_response=$(curl --silent --location 'http://localhost:8080/v1/responses' \
+            vs_filters_chat_response=$(curl --silent --location 'http://localhost:6644/v1/responses' \
                 --header 'Content-Type: application/json' \
                 --header "Authorization: Bearer $API_KEY" \
                 --header "x-model-provider: $MODEL_PROVIDER" \
@@ -717,7 +717,7 @@ run_vector_store_integration_tests() {
             
             # Also run the regular status check
             run_test "Chat with Vector Search and Filters" \
-                "curl --location 'http://localhost:8080/v1/responses' \
+                "curl --location 'http://localhost:6644/v1/responses' \
                 --header 'Content-Type: application/json' \
                 --header \"Authorization: Bearer $API_KEY\" \
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -759,7 +759,7 @@ run_vector_store_integration_tests() {
             streaming_output_file="vector_stream_output.tmp"
             
             # Execute the streaming request and save output
-            curl --silent --location 'http://localhost:8080/v1/responses' \
+            curl --silent --location 'http://localhost:6644/v1/responses' \
                 --header 'Content-Type: application/json' \
                 --header "Authorization: Bearer $API_KEY" \
                 --header "x-model-provider: $MODEL_PROVIDER" \
@@ -811,7 +811,7 @@ run_vector_store_integration_tests() {
             
             # Also run the regular status check
             run_test "Chat Streaming with Vector Search" \
-                "curl --location 'http://localhost:8080/v1/responses' \
+                "curl --location 'http://localhost:6644/v1/responses' \
                 --header 'Content-Type: application/json' \
                 --header \"Authorization: Bearer $API_KEY\" \
                 --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -836,7 +836,7 @@ run_vector_store_integration_tests() {
             # Delete the vector store when done
             echo -e "\n${BOLD}Test VS4: Delete Vector Store${NC}"
             run_test "Delete Vector Store" \
-                "curl --location --request DELETE 'http://localhost:8080/v1/vector_stores/$vector_store_id' \
+                "curl --location --request DELETE 'http://localhost:6644/v1/vector_stores/$vector_store_id' \
                 --header \"Authorization: Bearer $API_KEY\""
         fi
     fi
@@ -888,7 +888,7 @@ main() {
     echo "Stopping any running containers..."
     docker-compose down -v 2>/dev/null || true
     # Kill any existing containers that might be using port 8080
-    docker ps | grep ":8080" | awk '{print $1}' | xargs -r docker kill
+    docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
     sleep 5
 
     # Run test sections

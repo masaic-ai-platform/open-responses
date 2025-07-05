@@ -53,7 +53,7 @@ The Jupyter notebook (`shopify_mcp_demo.ipynb`) demonstrates how to use the Open
 
 4. The Open Responses service will be running at:
    ```
-   http://localhost:8080
+   http://localhost:6644
    ```
 
 5. The Jupyter notebook interface will be available at:
