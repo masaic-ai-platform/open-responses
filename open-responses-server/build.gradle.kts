@@ -1,7 +1,7 @@
 plugins {
-    kotlin("jvm")
+    kotlin("jvm")                          // no version here – let Spring Boot manage it
     kotlin("plugin.spring")
-    id("org.springframework.boot")
+    id("org.springframework.boot")         // no version – same
     id("io.spring.dependency-management")
     kotlin("plugin.serialization")
     id("org.jmailen.kotlinter")
@@ -9,7 +9,7 @@ plugins {
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion.set(JavaLanguageVersion.of(21))
     }
 }
 
@@ -19,63 +19,41 @@ dependencyManagement {
     }
 }
 
-// Define build profile flag for ONNX support
+repositories {
+    mavenCentral()
+}
+
+// your ONNX flag
 val enableOnnx: Boolean = (project.findProperty("enableOnnx") as String?)?.toBoolean() ?: false
 
 dependencies {
     implementation(project(":open-responses-core"))
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
 
-    // Include ONNX module only when enableOnnx flag is true
+    // ensure Kotlin stdlib is on the runtime classpath
+    implementation(kotlin("stdlib-jdk8"))
+
+    // pull in ONNX _only_ when flag is true
     if (enableOnnx) {
         implementation(project(":open-responses-onnx"))
     }
+
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
 
-repositories {
-    mavenCentral()
-}
-
-kotlin {
-    compilerOptions {
-        freeCompilerArgs.addAll("-Xjsr305=strict")
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21
-    }
-}
-
-// Configure the default bootJar to be the core-only version
-tasks.bootJar {
-    archiveBaseName.set("openresponses")
-    // Default bootJar will only include open-responses-core dependencies
-}
-
-// Create the ONNX variant bootJar
-tasks.register<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJarOnnx") {
-    group = "build"
-    description = "Creates executable jar with ONNX support"
-    
-    archiveBaseName.set("openresponses")
-    archiveClassifier.set("onnx")
-    
+// single bootJar, but add “onnx” classifier when flag is true
+tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
+    // always set your app’s main class
     mainClass.set("ai.masaic.OpenResponsesApplicationKt")
-    targetJavaVersion = JavaVersion.VERSION_21
-    
-    // Include the main source set
-    from(sourceSets.main.get().output)
-    
-    // Include core dependencies
-    classpath(configurations.runtimeClasspath.get())
-    
-    // Include ONNX module and its dependencies
-    classpath(project(":open-responses-onnx").configurations.runtimeClasspath.get())
-    classpath(project(":open-responses-onnx").tasks.jar.get().outputs)
-    
-    dependsOn(project(":open-responses-onnx").tasks.jar)
-}
 
-// Make both jars build by default
-tasks.named("build") {
-    dependsOn(tasks.bootJar, tasks.named("bootJarOnnx"))
+    if (enableOnnx) {
+        // make the “onnx” build produce openresponses-onnx-<version>.jar
+        archiveBaseName.set("openresponses-onnx")
+        archiveClassifier.set("")           // clear classifier so it doesn't end up as -onnx twice
+    } else {
+        // core-only remains openresponses-<version>.jar
+        archiveBaseName.set("openresponses")
+        archiveClassifier.set("")
+    }
 }
