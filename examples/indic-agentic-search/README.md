@@ -33,7 +33,7 @@ docker run -p 6644:6644 masaicai/open-responses:latest
 ```bash
 export OPENAI_API_KEY="your-openai-api-key"
 export SARVAM_API_KEY="your-sarvam-api-key"
-export OPEN_RESPONSES_URL="http://localhost:8080/v1"  # Optional, defaults to localhost:8080/v1
+export OPEN_RESPONSES_URL="http://localhost:6644/v1"  # Optional, defaults to localhost:8080/v1
 ```
 
 ## Usage
