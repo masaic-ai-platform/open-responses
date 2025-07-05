@@ -26,7 +26,7 @@ pip install -r requirements_demo.txt
 ```
 3. Start OpenResponses:
 ```bash
-docker run -p 8080:8080 masaicai/open-responses:latest
+docker run -p 6644:6644 masaicai/open-responses:latest
 ```
 
 4. Set environment variables:
