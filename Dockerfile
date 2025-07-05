@@ -2,7 +2,10 @@
 FROM docker:20.10 as docker-cli
 
 # Stage 2: Build your app image based on amazoncorretto
-FROM eclipse-temurin:21-jdk
+FROM bellsoft/liberica-openjre-alpine-musl:21
+
+RUN addgroup -S app && adduser -S app -G app
+USER app
 
 WORKDIR /app
 
