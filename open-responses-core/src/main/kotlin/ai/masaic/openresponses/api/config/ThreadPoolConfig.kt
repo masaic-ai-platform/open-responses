@@ -36,8 +36,8 @@ private val logger = KotlinLogging.logger {}
 @Configuration
 @EnableScheduling
 class ThreadPoolConfig : WebFluxConfigurer {
-    @Value("\${server.port:8080}")
-    private val serverPort: Int = 8080
+    @Value("\${server.port:6644}")
+    private val serverPort: Int = 6644
 
     @Value("\${open-responses.thread-pool.core-size:10}")
     private val corePoolSize: Int = 10

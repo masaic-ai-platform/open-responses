@@ -9,7 +9,7 @@ plugins {
 
 allprojects {
     group = "ai.masaic"
-    version = "0.3.4"
+    version = "0.4.0"
 
     repositories {
         mavenCentral()
