@@ -40,11 +40,11 @@ class QdrantVectorSearchProvider(
     vectorSearchProperties: VectorSearchConfigProperties,
     private val hybridSearchServiceHelper: HybridSearchServiceHelper,
     client: QdrantClient,
-    private val defaultChunkingConfig: StaticChunkingConfig,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
     private val collectionName = vectorSearchProperties.collectionName
     private val vectorDimension: Long = vectorSearchProperties.vectorDimension.toLong()
+    private val defaultStaticChunkingConfig = StaticChunkingConfig(vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
     private val embeddingStore: QdrantEmbeddingStore
 
     init {
@@ -399,5 +399,5 @@ class QdrantVectorSearchProvider(
         }
     }
 
-    private fun effectiveChunkingStrategy(chunkingStrategy: ChunkingStrategy?): ChunkingStrategy = chunkingStrategy?.let { chunkingStrategy } ?: ChunkingStrategy("static", defaultChunkingConfig)
+    private fun effectiveChunkingStrategy(chunkingStrategy: ChunkingStrategy?): ChunkingStrategy = chunkingStrategy?.let { chunkingStrategy } ?: ChunkingStrategy("static", defaultStaticChunkingConfig)
 }

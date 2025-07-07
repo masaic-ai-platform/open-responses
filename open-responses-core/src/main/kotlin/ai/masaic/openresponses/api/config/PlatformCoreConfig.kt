@@ -1,6 +1,5 @@
 package ai.masaic.openresponses.api.config
 
-import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.platform.api.model.SystemSettings
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
@@ -21,9 +20,6 @@ class PlatformCoreConfig {
 
     @Value("\${platform.deployment.model:openai@gpt-4.1-mini}")
     private val model = "openai@gpt-4.1-mini"
-
-    @Bean
-    fun staticChunkingConfig() = StaticChunkingConfig(maxChunkSizeTokens, chunkOverlapTokens)
 
     @Bean
     fun systemSettings() = SystemSettings(modelApiKey = modelApiKey, model = model)
