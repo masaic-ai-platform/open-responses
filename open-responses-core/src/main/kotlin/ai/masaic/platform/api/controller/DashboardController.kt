@@ -9,21 +9,23 @@ import ai.masaic.platform.api.model.*
 import ai.masaic.platform.api.service.ModelService
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.springframework.context.annotation.Profile
 import org.springframework.core.io.ClassPathResource
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+@Profile("platform")
 @RestController
 @RequestMapping("/v1/dashboard")
 @CrossOrigin("*")
 class DashboardController(
     private val toolService: ToolService,
     private val mcpToolExecutor: MCPToolExecutor,
-    private val modelService: ModelService
+    private val modelService: ModelService,
+    private val systemSettings: SystemSettings,
 ) {
     private val mapper = jacksonObjectMapper()
-    private val systemSettings = SystemSettings()
     private lateinit var modelProviders: Set<ModelProvider>
 
     init {
@@ -34,13 +36,14 @@ class DashboardController(
     }
 
     @GetMapping("/models", produces = [MediaType.APPLICATION_JSON_VALUE])
-    suspend fun getModelProviders(): ResponseEntity<Set<ModelProvider>> {
-        return ResponseEntity.ok(modelProviders)
-    }
+    suspend fun getModelProviders(): ResponseEntity<Set<ModelProvider>> = ResponseEntity.ok(modelProviders)
 
     @PostMapping("/generate/schema", produces = [MediaType.APPLICATION_JSON_VALUE])
-    suspend fun generateSchema(@RequestBody request: SchemaGenerationRequest): ResponseEntity<SchemaGenerationResponse> {
-        val generateSchemaPrompt = """
+    suspend fun generateSchema(
+        @RequestBody request: SchemaGenerationRequest,
+    ): ResponseEntity<SchemaGenerationResponse> {
+        val generateSchemaPrompt =
+            """
 You are an expert JSON Schema generator.
 
 TASK  
@@ -75,23 +78,26 @@ CONSTRAINTS
 
 SCHEMA DESCRIPTION
 ${request.description}
-        """.trimIndent()
+            """.trimIndent()
 
         val createCompletionRequest =
             CreateCompletionRequest(
                 messages = listOf(mapOf("role" to "system", "content" to generateSchemaPrompt)),
-                model = systemSettings.openAiModel,
+                model = systemSettings.model,
                 stream = false,
                 store = false,
             )
 
-        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.openAiApiKey)
+        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
         return ResponseEntity.ok(SchemaGenerationResponse(response))
     }
 
     @PostMapping("/generate/function", produces = [MediaType.APPLICATION_JSON_VALUE])
-    suspend fun generateFunction(@RequestBody request: FunctionGenerationRequest): ResponseEntity<FunctionGenerationResponse> {
-        val generateFunctionPrompt = """
+    suspend fun generateFunction(
+        @RequestBody request: FunctionGenerationRequest,
+    ): ResponseEntity<FunctionGenerationResponse> {
+        val generateFunctionPrompt =
+            """
 You are an expert OpenAI function-definition generator.
 
 TASK  
@@ -136,34 +142,38 @@ CONSTRAINTS
 
 FUNCTION DESCRIPTION
 ${request.description}
-        """.trimIndent()
+            """.trimIndent()
         val createCompletionRequest =
             CreateCompletionRequest(
                 messages = listOf(mapOf("role" to "system", "content" to generateFunctionPrompt)),
-                model = systemSettings.openAiModel,
+                model = systemSettings.model,
                 stream = false,
                 store = false,
             )
 
-        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.openAiApiKey)
+        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
         return ResponseEntity.ok(FunctionGenerationResponse(response))
-
     }
 
     @PostMapping("/mcp/list_actions")
-    suspend fun listMcpActions(@RequestBody mcpListToolsRequest: McpListToolsRequest): ResponseEntity<List<FunctionTool>> {
-        val tools = toolService.getRemoteMcpTools(
-            mcpTool = MCPTool(
-                type = "mcp",
-                serverLabel = mcpListToolsRequest.serverLabel,
-                serverUrl = mcpListToolsRequest.serverUrl,
-                headers = mcpListToolsRequest.headers
+    suspend fun listMcpActions(
+        @RequestBody mcpListToolsRequest: McpListToolsRequest,
+    ): ResponseEntity<List<FunctionTool>> {
+        val tools =
+            toolService.getRemoteMcpTools(
+                mcpTool =
+                    MCPTool(
+                        type = "mcp",
+                        serverLabel = mcpListToolsRequest.serverLabel,
+                        serverUrl = mcpListToolsRequest.serverUrl,
+                        headers = mcpListToolsRequest.headers,
+                    ),
             )
-        )
 
-        val updatedTools = tools.map {
-            it.copy(name = it.name?.replace("${mcpListToolsRequest.serverLabel}_",""))
-        }
+        val updatedTools =
+            tools.map {
+                it.copy(name = it.name?.replace("${mcpListToolsRequest.serverLabel}_", ""))
+            }
         return ResponseEntity.ok(updatedTools)
     }
 

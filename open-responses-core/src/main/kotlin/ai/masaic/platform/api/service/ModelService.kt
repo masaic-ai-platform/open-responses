@@ -6,18 +6,13 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.openai.models.chat.completions.ChatCompletion
-import kotlinx.coroutines.flow.Flow
-import okhttp3.internal.connection.Exchange
 import org.springframework.http.ResponseEntity
-import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 import org.springframework.stereotype.Service
 import org.springframework.util.MultiValueMap
-import org.springframework.web.server.ServerWebExchange
 
 @Service
 class ModelService(
-    private val completionController: CompletionController
+    private val completionController: CompletionController,
 ) {
     /**
      * Gets the raw completion payload (just the JSON text).
@@ -30,7 +25,7 @@ class ModelService(
             completionController.createCompletion(
                 request,
                 MultiValueMap.fromMultiValue(mapOf("Authorization" to listOf("Bearer $apiKey"))),
-                MultiValueMap.fromMultiValue(mapOf("ddd" to listOf("")))
+                MultiValueMap.fromMultiValue(mapOf("ddd" to listOf(""))),
             )
         val chat = response.body as ChatCompletion
         return chat

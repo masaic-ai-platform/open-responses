@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
+import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.HybridSearchService.ChunkForIndexing
@@ -39,6 +40,7 @@ class QdrantVectorSearchProvider(
     vectorSearchProperties: VectorSearchConfigProperties,
     private val hybridSearchServiceHelper: HybridSearchServiceHelper,
     client: QdrantClient,
+    private val defaultChunkingConfig: StaticChunkingConfig,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
     private val collectionName = vectorSearchProperties.collectionName
@@ -126,7 +128,7 @@ class QdrantVectorSearchProvider(
 
             // Use the TextChunkingUtil to chunk the text
             log.debug("Chunking text for file: {}", filename)
-            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
+            val textChunks = TextChunkingUtil.chunkText(text, effectiveChunkingStrategy(chunkingStrategy))
             
             if (textChunks.isEmpty()) {
                 log.warn("No chunks created for file: {}", filename)
@@ -396,4 +398,6 @@ class QdrantVectorSearchProvider(
             return null
         }
     }
+
+    private fun effectiveChunkingStrategy(chunkingStrategy: ChunkingStrategy?): ChunkingStrategy = chunkingStrategy?.let { chunkingStrategy } ?: ChunkingStrategy("static", defaultChunkingConfig)
 }

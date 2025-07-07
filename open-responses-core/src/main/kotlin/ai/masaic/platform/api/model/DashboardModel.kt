@@ -6,24 +6,35 @@ import kotlinx.serialization.Serializable
 data class ModelProvider(
     val name: String,
     val description: String,
-    val supportedModels: Set<ProvidedModel>
+    val supportedModels: Set<ProvidedModel>,
 )
 
 @Serializable
 data class ProvidedModel(
     val name: String,
-    val modelSyntax: String
+    val modelSyntax: String,
 )
 
-data class SchemaGenerationRequest(val description: String)
+data class SchemaGenerationRequest(
+    val description: String,
+)
 
-data class SchemaGenerationResponse(val generatedSchema: String)
+data class SchemaGenerationResponse(
+    val generatedSchema: String,
+)
 
-data class FunctionGenerationRequest(val description: String)
+data class FunctionGenerationRequest(
+    val description: String,
+)
 
-data class FunctionGenerationResponse(val generatedFunction: String)
+data class FunctionGenerationResponse(
+    val generatedFunction: String,
+)
 
-data class SystemSettings(val openAiApiKey: String = System.getenv("OPENAI_API_KEY"), val openAiModel: String = "openai@gpt-4.1")
+data class SystemSettings(
+    val modelApiKey: String,
+    val model: String,
+)
 
 data class McpListToolsRequest(
     val serverLabel: String,

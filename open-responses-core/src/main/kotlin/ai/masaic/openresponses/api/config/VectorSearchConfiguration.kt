@@ -1,7 +1,9 @@
 package ai.masaic.openresponses.api.config
 
+import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import io.qdrant.client.QdrantClient
 import io.qdrant.client.QdrantGrpcClient
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
@@ -22,4 +24,8 @@ class VectorSearchConfiguration {
                     qdrantProperties.useTls,
                 ).build(),
         )
+
+    @Bean
+    @ConditionalOnMissingBean(StaticChunkingConfig::class)
+    fun staticChunkingConfig() = StaticChunkingConfig(1000, 200)
 } 
