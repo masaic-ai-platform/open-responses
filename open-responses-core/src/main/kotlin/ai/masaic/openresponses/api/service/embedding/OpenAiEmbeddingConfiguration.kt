@@ -22,11 +22,11 @@ data class EmbeddingProperties(
     // The OpenAI API key (if using OpenAI embeddings)
     val apiKey: String = "",
     // The OpenAI model name (if using OpenAI embeddings)
-    val httpEnabled: Boolean = false,
+    val httpEnabled: Boolean = true,
     // The OpenAI model name (if using OpenAI embeddings)
-    val model: String = "",
+    val model: String = "text-embedding-3-small",
     // The OpenAI API base URL (if using OpenAI embeddings)
-    val url: String = "",
+    val url: String = "https://api.openai.com/v1",
 )
 
 /**
