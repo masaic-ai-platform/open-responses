@@ -3,6 +3,7 @@ package ai.masaic.openresponses.api.controller
 import ai.masaic.openresponses.tool.ToolMetadata
 import ai.masaic.openresponses.tool.ToolService
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
+import ai.masaic.platform.api.controller.DashboardController
 import com.ninjasquad.springmockk.MockkBean
 import io.mockk.every
 import io.mockk.verify
@@ -19,9 +20,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @ExtendWith(SpringExtension::class)
-@WebFluxTest(PlaygroundController::class)
+@WebFluxTest(DashboardController::class)
 @Import(TestConfiguration::class)
-class PlaygroundControllerTest {
+class DashboardControllerTest {
     @MockkBean
     lateinit var toolService: ToolService
 
