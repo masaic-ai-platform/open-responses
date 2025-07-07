@@ -104,7 +104,7 @@ data class VectorSearchConfigProperties(
     /**
      * Default vector dimension for embeddings.
      */
-    val vectorDimension: Int = 384,
+    val vectorDimension: Int = 1536,
     /**
      * Path for file-based vector store.
      */
