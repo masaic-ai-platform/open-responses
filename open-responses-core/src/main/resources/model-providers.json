@@ -14,12 +14,12 @@
     "description": "claude models",
     "supportedModels": [
       {
-        "name": "claude-3-7-sonnet",
-        "modelSyntax": "claude@claude-3-7-sonnet"
+        "name": "claude-3-7-sonnet-20250219",
+        "modelSyntax": "claude@claude-3-7-sonnet-20250219"
       },
       {
-        "name": "claude-sonnet-4",
-        "modelSyntax": "claude@claude-sonnet-4"
+        "name": "claude-sonnet-4-20250514",
+        "modelSyntax": "claude@claude-sonnet-4-20250514"
       }
     ]
   },

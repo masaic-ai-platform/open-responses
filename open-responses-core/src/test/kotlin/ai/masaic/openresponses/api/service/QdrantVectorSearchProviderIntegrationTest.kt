@@ -109,7 +109,6 @@ class QdrantVectorSearchProviderIntegrationTest {
                 vectorSearchProperties = vectorSearchProperties,
                 client = qdrantClient,
                 hybridSearchServiceHelper = hybridSearchServiceHelper,
-                defaultChunkingConfig = StaticChunkingConfig(1000, 200),
             )
     }
 

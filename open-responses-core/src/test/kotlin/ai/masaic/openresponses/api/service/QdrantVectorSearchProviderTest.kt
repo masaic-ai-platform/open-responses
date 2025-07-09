@@ -43,7 +43,6 @@ class QdrantVectorSearchProviderTest {
     private lateinit var embeddingStore: QdrantEmbeddingStore
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
     private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
-    private val staticChunkingConfig = StaticChunkingConfig(1000, 200)
 
     @BeforeEach
     fun setup() {
@@ -135,7 +134,6 @@ class QdrantVectorSearchProviderTest {
                 vectorSearchProperties,
                 hybridSearchServiceHelper,
                 qdrantClient,
-                staticChunkingConfig,
             )
         
         // Replace the embedding store with our mock
