@@ -61,12 +61,16 @@ cd open-responses
 
 #### B. Set Required Environment Variables
 ```bash
-export OPENAI_API_KEY=your-openai-key
-export SPRING_PROFILES_ACTIVE=platform
-export OPEN_RESPONSES_MONGODB_URI=mongodb://localhost:27017
-export OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=localhost
-export OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_PORT=6333
-```
+OPENAI_API_KEY=your-openai-key
+SPRING_PROFILES_ACTIVE=platform
+OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=qdrant_host
+OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST_APIKEY=qdrant_apikey
+OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST_USETLS=true (if secure)
+OPEN_RESPONSES_MONGODB_URI=mongodb://localhost:27017
+OTEL_SDK_DISABLED=false
+OTEL_EXPORTER_OTLP_ENDPOINT=exporter_endpoint
+OTEL_EXPORTER_OTLP_HEADERS=exporter_key
+````
 
 #### C. Run the Backend
 ```bash
@@ -99,7 +103,7 @@ npm run dev
 
 ---
 
-## 5. 📊 SigNoz (Observability Platform)
+## 5. 📊 SigNoz (Observability Platform, if signoz to be used) 
 
 ### Option A: Docker (Quick Start)
 

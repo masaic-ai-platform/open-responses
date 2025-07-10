@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.io.InputStream
+import java.time.Duration
 
 /**
  * Qdrant implementation of VectorSearchProvider.
@@ -62,6 +63,33 @@ class QdrantVectorSearchProvider(
                             .build(),
                     ).get()
                 log.info("Created Qdrant collection: {}", collectionName)
+
+                listOf(
+                    "file_id" to Collections.PayloadSchemaType.Keyword,
+                    "text_segment" to Collections.PayloadSchemaType.Keyword,
+                    "vector_store_id" to Collections.PayloadSchemaType.Keyword,
+                    "chunk_index" to Collections.PayloadSchemaType.Integer,
+                    "total_chunks" to Collections.PayloadSchemaType.Integer,
+                    "chunk_id" to Collections.PayloadSchemaType.Keyword,
+                    "category" to Collections.PayloadSchemaType.Keyword,
+                    "filename" to Collections.PayloadSchemaType.Keyword,
+                    "language" to Collections.PayloadSchemaType.Keyword,
+                ).forEach { (field, type) ->
+                    client
+                        .createPayloadIndexAsync(
+                            collectionName,
+                            field,
+                            type,
+                            // indexParams=
+                            null,
+                            // waitForSync=
+                            true,
+                            // ordering=
+                            null,
+                            // timeout=
+                            Duration.ofSeconds(10),
+                        ).get() // wait for the async call to complete
+                }
             }
         } catch (e: Exception) {
             log.error("Failed to initialize Qdrant collection: {}", e.message, e)
@@ -76,6 +104,7 @@ class QdrantVectorSearchProvider(
                 .port(qdrantProperties.port)
                 .useTls(qdrantProperties.useTls)
                 .collectionName(collectionName)
+                .apply { qdrantProperties.apiKey?.let { apiKey(it) } }
                 .build()
 
         log.info("Initialized Qdrant vector search provider with collection: {}", collectionName)

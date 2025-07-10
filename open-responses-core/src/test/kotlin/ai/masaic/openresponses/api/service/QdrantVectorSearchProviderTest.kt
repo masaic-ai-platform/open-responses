@@ -21,10 +21,12 @@ import io.mockk.*
 import io.qdrant.client.QdrantClient
 import io.qdrant.client.grpc.Collections
 import io.qdrant.client.grpc.Collections.CollectionOperationResponse
+import io.qdrant.client.grpc.Points
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.io.ByteArrayInputStream
+import java.time.Duration
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -79,6 +81,11 @@ class QdrantVectorSearchProviderTest {
         every { 
             qdrantClient.createCollectionAsync(any(), any<Collections.VectorParams>()) 
         } returns createFuture
+
+        val createIndexFuture = MoreExecutors.newDirectExecutorService().submit<Points.UpdateResult> { mockk<Points.UpdateResult>() }
+        every {
+            qdrantClient.createPayloadIndexAsync(any(), any(), any(), null, true, null, Duration.ofSeconds(10))
+        } returns createIndexFuture
         
         // Mock embedding store 
         embeddingStore = mockk<QdrantEmbeddingStore>()
