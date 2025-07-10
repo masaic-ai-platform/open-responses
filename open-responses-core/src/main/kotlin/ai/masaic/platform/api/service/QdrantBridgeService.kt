@@ -7,6 +7,8 @@ import io.qdrant.client.QdrantClient
 import io.qdrant.client.grpc.Collections
 import mu.KotlinLogging
 import org.springframework.stereotype.Service
+import reactor.core.publisher.Mono
+import reactor.util.context.Context
 import java.time.Duration
 
 @Service
@@ -24,7 +26,27 @@ class QdrantBridgeService(
         logger.info("Initialized Qdrant vector search provider with collection: {}", vectorSearchProperties.collectionName)
     }
 
-    fun getQdrantEmbeddingStore(): QdrantEmbeddingStore = defaultEmbeddingStore
+    fun getQdrantEmbeddingStore(): QdrantEmbeddingStore {
+        // Attempt to read user ID from reactive context
+        try {
+            // This will work when called from within a reactive context
+            var u = "not_found"
+            Mono.deferContextual<String> { ctx ->
+                val user = ctx.getOrDefault("USER_ID", "unknown")
+                logger.info("QdrantBridgeService.getQdrantEmbeddingStore: User ID from context: {}", user)
+                Mono.just(user ?: "=======")
+            }.subscribe { userId ->
+                // User ID is logged above
+                u = userId
+                logger.info { "Found userId $userId" }
+            }
+            logger.info { "Found userId $u" }
+        } catch (e: Exception) {
+            logger.debug("Context not available: {}", e.message)
+        }
+        
+        return defaultEmbeddingStore
+    }
 
     private final fun createOpenResponsesCollection(collectionName: String) {
         try {
