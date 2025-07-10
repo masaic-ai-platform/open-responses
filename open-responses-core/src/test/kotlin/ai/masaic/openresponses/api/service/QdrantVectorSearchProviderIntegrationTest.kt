@@ -7,9 +7,9 @@ import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
+import ai.masaic.platform.api.service.QdrantBridgeService
 import io.mockk.every
 import io.mockk.mockk
-import io.qdrant.client.QdrantClient
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
@@ -57,8 +57,10 @@ class QdrantVectorSearchProviderIntegrationTest {
     private lateinit var qdrantProperties: QdrantVectorProperties
     private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
-    private lateinit var qdrantClient: QdrantClient
+
+//    private lateinit var qdrantClient: QdrantClient
     private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
+    private val mockBridgeService = mockk<QdrantBridgeService>()
 
     @BeforeEach
     fun setup() {
@@ -89,26 +91,14 @@ class QdrantVectorSearchProviderIntegrationTest {
                 collectionName = "test-collection-${UUID.randomUUID()}",
                 vectorDimension = 384,
             )
-        
-        // Create Qdrant client
-        qdrantClient =
-            QdrantClient(
-                io.qdrant.client.QdrantGrpcClient
-                    .newBuilder(
-                        qdrantProperties.host,
-                        qdrantProperties.port,
-                        qdrantProperties.useTls,
-                    ).build(),
-            )
-        
         // Create the vector search provider
         vectorSearchProvider =
             QdrantVectorSearchProvider(
                 embeddingService = embeddingService,
                 qdrantProperties = qdrantProperties,
                 vectorSearchProperties = vectorSearchProperties,
-                client = qdrantClient,
                 hybridSearchServiceHelper = hybridSearchServiceHelper,
+                bridgeService = mockBridgeService,
             )
     }
 
@@ -116,7 +106,7 @@ class QdrantVectorSearchProviderIntegrationTest {
     fun cleanup() {
         // Clean up the collection after test
         try {
-            qdrantClient.deleteCollectionAsync(vectorSearchProperties.collectionName).get()
+//            qdrantClient.deleteCollectionAsync(vectorSearchProperties.collectionName).get()
         } catch (e: Exception) {
             // Ignore errors during cleanup
         }

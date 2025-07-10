@@ -7,25 +7,21 @@ import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
 import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
-import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.HybridSearchService.ChunkForIndexing
 import ai.masaic.openresponses.api.utils.DocumentTextExtractor
 import ai.masaic.openresponses.api.utils.FilterUtils
 import ai.masaic.openresponses.api.utils.IdGenerator
 import ai.masaic.openresponses.api.utils.TextChunkingUtil
+import ai.masaic.platform.api.service.QdrantBridgeService
 import dev.langchain4j.data.document.Metadata
 import dev.langchain4j.data.embedding.Embedding
 import dev.langchain4j.data.segment.TextSegment
 import dev.langchain4j.store.embedding.EmbeddingSearchRequest
 import dev.langchain4j.store.embedding.filter.comparison.IsEqualTo
-import dev.langchain4j.store.embedding.qdrant.QdrantEmbeddingStore
-import io.qdrant.client.QdrantClient
-import io.qdrant.client.grpc.Collections
 import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.io.InputStream
-import java.time.Duration
 
 /**
  * Qdrant implementation of VectorSearchProvider.
@@ -40,74 +36,68 @@ class QdrantVectorSearchProvider(
     private val qdrantProperties: QdrantVectorProperties,
     vectorSearchProperties: VectorSearchConfigProperties,
     private val hybridSearchServiceHelper: HybridSearchServiceHelper,
-    client: QdrantClient,
+    private val bridgeService: QdrantBridgeService,
 ) : VectorSearchProvider {
     private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
     private val collectionName = vectorSearchProperties.collectionName
     private val vectorDimension: Long = vectorSearchProperties.vectorDimension.toLong()
     private val defaultStaticChunkingConfig = StaticChunkingConfig(vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
-    private val embeddingStore: QdrantEmbeddingStore
+//    private val embeddingStore: QdrantEmbeddingStore
 
     init {
+//        qdrantBridgeService.createOpenResponsesCollection(collectionName)
         // Create collection if it doesn't exist
-        try {
-            val collections = client.listCollectionsAsync().get()
-            if (collections.none { it == collectionName }) {
-                client
-                    .createCollectionAsync(
-                        collectionName,
-                        Collections.VectorParams
-                            .newBuilder()
-                            .setDistance(Collections.Distance.Cosine)
-                            .setSize(vectorDimension)
-                            .build(),
-                    ).get()
-                log.info("Created Qdrant collection: {}", collectionName)
-
-                listOf(
-                    "file_id" to Collections.PayloadSchemaType.Keyword,
-                    "text_segment" to Collections.PayloadSchemaType.Keyword,
-                    "vector_store_id" to Collections.PayloadSchemaType.Keyword,
-                    "chunk_index" to Collections.PayloadSchemaType.Integer,
-                    "total_chunks" to Collections.PayloadSchemaType.Integer,
-                    "chunk_id" to Collections.PayloadSchemaType.Keyword,
-                    "category" to Collections.PayloadSchemaType.Keyword,
-                    "filename" to Collections.PayloadSchemaType.Keyword,
-                    "language" to Collections.PayloadSchemaType.Keyword,
-                ).forEach { (field, type) ->
-                    client
-                        .createPayloadIndexAsync(
-                            collectionName,
-                            field,
-                            type,
-                            // indexParams=
-                            null,
-                            // waitForSync=
-                            true,
-                            // ordering=
-                            null,
-                            // timeout=
-                            Duration.ofSeconds(10),
-                        ).get() // wait for the async call to complete
-                }
-            }
-        } catch (e: Exception) {
-            log.error("Failed to initialize Qdrant collection: {}", e.message, e)
-            throw RuntimeException("Failed to initialize Qdrant collection: ${e.message}", e)
-        }
+//        try {
+//            val client = qdrantBridgeService.getQdrantClient()
+//            val collections = client.listCollectionsAsync().get()
+//            if (collections.none { it == collectionName }) {
+//                client
+//                    .createCollectionAsync(
+//                        collectionName,
+//                        Collections.VectorParams
+//                            .newBuilder()
+//                            .setDistance(Collections.Distance.Cosine)
+//                            .setSize(vectorDimension)
+//                            .build(),
+//                    ).get()
+//                log.info("Created Qdrant collection: {}", collectionName)
+//
+//                listOf(
+//                    "file_id" to Collections.PayloadSchemaType.Keyword,
+//                    "text_segment" to Collections.PayloadSchemaType.Keyword,
+//                    "vector_store_id" to Collections.PayloadSchemaType.Keyword,
+//                    "chunk_index" to Collections.PayloadSchemaType.Integer,
+//                    "total_chunks" to Collections.PayloadSchemaType.Integer,
+//                    "chunk_id" to Collections.PayloadSchemaType.Keyword,
+//                    "category" to Collections.PayloadSchemaType.Keyword,
+//                    "filename" to Collections.PayloadSchemaType.Keyword,
+//                    "language" to Collections.PayloadSchemaType.Keyword,
+//                ).forEach { (field, type) ->
+//                    client
+//                        .createPayloadIndexAsync(
+//                            collectionName,
+//                            field,
+//                            type,
+//                            // indexParams=
+//                            null,
+//                            // waitForSync=
+//                            true,
+//                            // ordering=
+//                            null,
+//                            // timeout=
+//                            Duration.ofSeconds(10),
+//                        ).get() // wait for the async call to complete
+//                }
+//            }
+//        } catch (e: Exception) {
+//            log.error("Failed to initialize Qdrant collection: {}", e.message, e)
+//            throw RuntimeException("Failed to initialize Qdrant collection: ${e.message}", e)
+//        }
 
         // Initialize the embedding store
-        embeddingStore =
-            QdrantEmbeddingStore
-                .builder()
-                .host(qdrantProperties.host)
-                .port(qdrantProperties.port)
-                .useTls(qdrantProperties.useTls)
-                .collectionName(collectionName)
-                .apply { qdrantProperties.apiKey?.let { apiKey(it) } }
-                .build()
+//        embeddingStore = qdrantBridgeService.getQdrantEmbeddingStore(collectionName)
 
-        log.info("Initialized Qdrant vector search provider with collection: {}", collectionName)
+//        log.info("Initialized Qdrant vector search provider with collection: {}", collectionName)
     }
 
     /**
@@ -220,7 +210,7 @@ class QdrantVectorSearchProvider(
                 val embeddingList = embeddings.map { Embedding.from(it.toFloatArray()) }
                 
                 // Store all embeddings with metadata in a single batch operation
-                embeddingStore.addAll(embeddingList, textSegments)
+                bridgeService.getQdrantEmbeddingStore().addAll(embeddingList, textSegments)
                 log.info("Successfully stored {} embeddings in batch", embeddings.size)
             } catch (e: Exception) {
                 log.error("Error generating or storing batch embeddings: {}", e.message, e)
@@ -320,7 +310,7 @@ class QdrantVectorSearchProvider(
             }
 
             // Execute search
-            val matches = embeddingStore.search(searchBuilder.build()).matches()
+            val matches = bridgeService.getQdrantEmbeddingStore().search(searchBuilder.build()).matches()
 
             // Convert to search results
             val results =
@@ -370,7 +360,7 @@ class QdrantVectorSearchProvider(
             val vectorStoreId = fileMetadata?.get("vector_store_id") as? String
             
             // Delete points with matching fileId
-            embeddingStore.removeAll(IsEqualTo("file_id", fileId))
+            bridgeService.getQdrantEmbeddingStore().removeAll(IsEqualTo("file_id", fileId))
             log.info("Deleted embeddings for file: {}", fileId)
             
             // Delete from text search indexes via hybrid service
@@ -413,7 +403,7 @@ class QdrantVectorSearchProvider(
                     .build()
 
             // Search for any segment with this fileId
-            val matches = embeddingStore.search(searchRequest).matches()
+            val matches = bridgeService.getQdrantEmbeddingStore().search(searchRequest).matches()
             if (matches.isEmpty()) return null
 
             // Return metadata from the first segment

@@ -8,6 +8,7 @@ import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
 import ai.masaic.openresponses.api.service.search.QdrantVectorSearchProvider
+import ai.masaic.platform.api.service.QdrantBridgeService
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import dev.langchain4j.data.document.Metadata
@@ -42,12 +43,14 @@ class QdrantVectorSearchProviderTest {
     private lateinit var qdrantProperties: QdrantVectorProperties
     private lateinit var vectorSearchProperties: VectorSearchConfigProperties
     private lateinit var qdrantClient: QdrantClient
-    private lateinit var embeddingStore: QdrantEmbeddingStore
     private lateinit var vectorSearchProvider: QdrantVectorSearchProvider
     private lateinit var hybridSearchServiceHelper: HybridSearchServiceHelper
+    private val mockBridgeService = mockk<QdrantBridgeService>()
+    private val embeddingStore = mockk<QdrantEmbeddingStore>()
 
     @BeforeEach
     fun setup() {
+        every { mockBridgeService.getQdrantEmbeddingStore() } returns embeddingStore
         // Mock embedding service
         embeddingService = mockk()
         every { embeddingService.embedText(any()) } returns listOf(0.1f, 0.2f, 0.3f)
@@ -86,10 +89,7 @@ class QdrantVectorSearchProviderTest {
         every {
             qdrantClient.createPayloadIndexAsync(any(), any(), any(), null, true, null, Duration.ofSeconds(10))
         } returns createIndexFuture
-        
-        // Mock embedding store 
-        embeddingStore = mockk<QdrantEmbeddingStore>()
-        
+
         // Mock QdrantEmbeddingStore.builder() static method
         mockkStatic(QdrantEmbeddingStore::class)
         
@@ -140,13 +140,8 @@ class QdrantVectorSearchProviderTest {
                 qdrantProperties,
                 vectorSearchProperties,
                 hybridSearchServiceHelper,
-                qdrantClient,
+                mockBridgeService,
             )
-        
-        // Replace the embedding store with our mock
-        val field = QdrantVectorSearchProvider::class.java.getDeclaredField("embeddingStore")
-        field.isAccessible = true
-        field.set(vectorSearchProvider, embeddingStore)
     }
 
     @Test
