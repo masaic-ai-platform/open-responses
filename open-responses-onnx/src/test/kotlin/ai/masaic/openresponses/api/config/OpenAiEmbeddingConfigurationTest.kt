@@ -76,9 +76,9 @@ class OpenAiEmbeddingConfigurationTest {
         assertEquals(null, properties.tokenizerPath)
         assertEquals("mean", properties.poolingMode)
         assertEquals("", properties.apiKey)
-        assertEquals(false, properties.httpEnabled)
-        assertEquals("", properties.model)
-        assertEquals("", properties.url)
+        assertEquals(true, properties.httpEnabled)
+        assertEquals("text-embedding-3-small", properties.model)
+        assertEquals("https://api.openai.com/v1", properties.url)
     }
 
     @Test
