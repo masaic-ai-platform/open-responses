@@ -10,6 +10,16 @@
     ]
   },
   {
+    "name": "xai",
+    "description": "xai models",
+    "supportedModels": [
+      {
+        "name": "grok-4-0709",
+        "modelSyntax": "xai@grok-4-0709"
+      }
+    ]
+  },
+  {
     "name": "claude",
     "description": "claude models",
     "supportedModels": [
