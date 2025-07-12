@@ -3,6 +3,10 @@ version: '3.9'
 x-open-responses: &open_responses
   image: masaicai/open-responses:latest
 
+x-open_responses-onnx: &open_responses_onnx
+  image: masaicai/open-responses-onnx:latest
+
+
 services:
   # Default service
   open-responses:
@@ -113,19 +117,6 @@ services:
     profiles:
       - mcp
 
-
-  # Flavor 4: Run with openai-agent SDK settings.
-  open-responses-with-openai:
-    <<: *open_responses
-    ports:
-      - "6644:6644"
-    environment:
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL}
-    networks:
-      - observability-network
-    profiles:
-      - openai
-
   # MongoDB service for persistent storage
   mongodb:
     image: mongo:latest
@@ -200,7 +191,7 @@ services:
 
   # Flavor 7: Open Responses with Qdrant vector search (OpenAI embeddings)
   open-responses-with-qdrant:
-    <<: *open_responses
+    <<: *open_responses_onnx
     ports:
       - "6644:6644"
     environment:
@@ -210,6 +201,7 @@ services:
       - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=false
       - OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME=open-responses-documents
       - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_MIN_SCORE=0.7
+      - OPEN_RESPONSES_EMBEDDINGS_HTTP_ENABLED=false
     networks:
       - observability-network
     depends_on:

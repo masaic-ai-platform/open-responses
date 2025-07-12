@@ -8,15 +8,6 @@ services:
     networks:
       - app-network
 
-  app:
-    image: masaicai/shopping-assistant:latest
-    ports:
-      - "8888:8888"
-    depends_on:
-      - open-responses
-    networks:
-      - app-network
-
   # Using python-notebook image which has more packages
   notebook:
     image: jupyter/scipy-notebook:python-3.11

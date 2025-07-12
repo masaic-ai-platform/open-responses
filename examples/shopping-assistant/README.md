@@ -7,14 +7,12 @@ This example demonstrates how to run the Shopping Assistant with Open Responses.
 </a>
 
 ## Components
-
-- **Shopping Assistant**: A demo application showcasing AI-assisted shopping experiences
 - **Open Responses**: 
 - **Jupyter Notebook**: An interactive notebook demonstrating OpenResponses Agent orchestration
 
 ## Source Code
 
-The Shopping Assistant UI codebase is available at:
+For inspiration, the Shopping Assistant UI codebase is available at:
 - https://github.com/masaic-ai-platform/shopper-cart-flow-ui
 
 ## Features
