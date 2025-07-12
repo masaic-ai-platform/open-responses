@@ -7,14 +7,12 @@ This example demonstrates how to run the Shopping Assistant with Open Responses.
 </a>
 
 ## Components
-
-- **Shopping Assistant**: A demo application showcasing AI-assisted shopping experiences
 - **Open Responses**: 
 - **Jupyter Notebook**: An interactive notebook demonstrating OpenResponses Agent orchestration
 
 ## Source Code
 
-The Shopping Assistant UI codebase is available at:
+For inspiration, the Shopping Assistant UI codebase is available at:
 - https://github.com/masaic-ai-platform/shopper-cart-flow-ui
 
 ## Features
@@ -53,7 +51,7 @@ The Jupyter notebook (`shopify_mcp_demo.ipynb`) demonstrates how to use the Open
 
 4. The Open Responses service will be running at:
    ```
-   http://localhost:8080
+   http://localhost:6644
    ```
 
 5. The Jupyter notebook interface will be available at:

@@ -26,14 +26,14 @@ pip install -r requirements_demo.txt
 ```
 3. Start OpenResponses:
 ```bash
-docker run -p 8080:8080 masaicai/open-responses:latest
+docker run -p 6644:6644 -e OPEN_RESPONSES_EMBEDDINGS_HTTP_ENABLED=false masaicai/open-responses-onnx:latest
 ```
 
 4. Set environment variables:
 ```bash
 export OPENAI_API_KEY="your-openai-api-key"
 export SARVAM_API_KEY="your-sarvam-api-key"
-export OPEN_RESPONSES_URL="http://localhost:8080/v1"  # Optional, defaults to localhost:8080/v1
+export OPEN_RESPONSES_URL="http://localhost:6644/v1"  # Optional, defaults to localhost:8080/v1
 ```
 
 ## Usage

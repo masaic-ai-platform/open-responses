@@ -4,16 +4,7 @@ services:
   open-responses:
     image: masaicai/open-responses:latest
     ports:
-      - "8080:8080"
-    networks:
-      - app-network
-
-  app:
-    image: masaicai/shopping-assistant:latest
-    ports:
-      - "8888:8888"
-    depends_on:
-      - open-responses
+      - "6644:6644"
     networks:
       - app-network
 
@@ -25,7 +16,7 @@ services:
     volumes:
       - ./:/home/jovyan/work        # repo root inside the notebook
     environment:
-      - OPENAI_BASE_URL=http://open-responses:8080/v1
+      - OPENAI_BASE_URL=http://open-responses:6644/v1
       - OPENAI_API_KEY=dummy
     command: >                      
       bash -c "pip install --no-cache-dir 'openai>=1.12.0' && start-notebook.sh --NotebookApp.token='' --NotebookApp.password=''"
