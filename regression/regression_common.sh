@@ -167,6 +167,12 @@ cleanup() {
         echo -e "\n${BOLD}Cleaning up...${NC}"
         docker-compose down -v 2>/dev/null || true
         docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
+        # Kill any existing containers that might be using MongoDB default port 27017
+        docker ps | grep ":27017" | awk '{print $1}' | xargs -r docker kill
+        # Kill any existing containers that might be using Qdrant port 6334
+        docker ps | grep ":6334" | awk '{print $1}' | xargs -r docker kill
+        # Kill any existing containers that might be using Qdrant REST port 6333
+        docker ps | grep ":6333" | awk '{print $1}' | xargs -r docker kill
     fi
     
     print_results_summary
@@ -209,7 +215,7 @@ run_basic_tests() {
     # Test 1: Basic Setup - Chat Completion
     echo -e "\n${BOLD}Test 1: Basic Setup - Chat Completion${NC}"
     run_test "Basic Setup - Chat Completion" \
-        "curl --location 'http://localhost:664/v1/responses' \
+        "curl --location 'http://localhost:6644/v1/responses' \
         --header 'Content-Type: application/json' \
         --header \"Authorization: Bearer $API_KEY\" \
         --header \"x-model-provider: $MODEL_PROVIDER\" \
@@ -259,7 +265,7 @@ run_file_operations_tests() {
     echo "This is a sample text file for testing file uploads." > sample_file.txt
     echo -e "\n${BOLD}Test 10: File Upload${NC}"
     run_test "File Upload" \
-        "curl --location 'http://localhost:664/v1/files' \
+        "curl --location 'http://localhost:6644/v1/files' \
         --header \"Authorization: Bearer $API_KEY\" \
         --form 'file=@\"sample_file.txt\"' \
         --form 'purpose=\"user_data\"'"
@@ -318,6 +324,8 @@ run_mongodb_tests() {
     docker-compose down -v 2>/dev/null || true
     # Kill any existing containers that might be using port 8080
     docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
+    # Kill any existing containers that might be using MongoDB default port 27017
+    docker ps | grep ":27017" | awk '{print $1}' | xargs -r docker kill
     # Wait for containers to fully shut down
     sleep 5
 
@@ -506,6 +514,10 @@ run_vector_store_integration_tests() {
     docker-compose down -v 2>/dev/null || true
     # Kill any existing containers that might be using port 8080
     docker ps | grep ":6644" | awk '{print $1}' | xargs -r docker kill
+    # Kill any existing containers that might be using Qdrant port 6334
+    docker ps | grep ":6334" | awk '{print $1}' | xargs -r docker kill
+    # Kill any existing containers that might be using Qdrant REST port 6333
+    docker ps | grep ":6333" | awk '{print $1}' | xargs -r docker kill
     # Wait for containers to fully shut down
     sleep 5
 
