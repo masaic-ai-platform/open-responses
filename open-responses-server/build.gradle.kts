@@ -57,3 +57,9 @@ tasks.named<org.springframework.boot.gradle.tasks.bundling.BootJar>("bootJar") {
         archiveClassifier.set("")
     }
 }
+
+tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootJar> {
+    manifest {
+        attributes["Implementation-Version"] = project.version
+    }
+}
