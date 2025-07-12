@@ -34,30 +34,6 @@ class ModelService(
             .content()
             .get()
     }
-
-//    suspend fun fetchCompletionStream(
-//        request: CreateCompletionRequest,
-//        apiKey: String,
-//    ): Flow<ServerSentEvent<String>> {
-//        // build the headers exactly as you did before
-//        val authHeaders =
-//            MultiValueMap.fromMultiValue(
-//                mapOf("Authorization" to listOf(apiKey)),
-//            )
-//        // any other query params (empty here)
-//        val otherParams = MultiValueMap.fromMultiValue(emptyMap<String, List<String>>())
-//
-//        // delegate directly to your controller
-//        val response =
-//            completionController.createCompletion(
-//                request,
-//                authHeaders,
-//                otherParams,
-//                exchange
-//            ) as ResponseEntity<Flow<ServerSentEvent<String>>>
-//
-//        return response.body as Flow<ServerSentEvent<String>>
-//    }
 }
 
 /**
