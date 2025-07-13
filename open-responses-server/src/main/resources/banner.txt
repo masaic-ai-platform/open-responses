@@ -1,3 +1,4 @@
+ >>>>>>>>>>>>>>>>>>>>>>>>>> MASAIC DEV PLATFORM <<<<<<<<<<<<<<<<<<<<<<<<<
   ____                   _____
  / __ \                 |  __ \
 | |  | |_ __   ___ _ __ | |__) |___  ___ _ __   ___  _ __  ___  ___  ___
@@ -7,4 +8,5 @@
        | |                              | |
        |_|                              |_|
 
-  Version: ${application.formatted-version}
+ :: Version ::                            ${application.formatted-version}
+
