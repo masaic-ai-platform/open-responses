@@ -211,14 +211,15 @@ class NativeToolRegistry(
                     .builder<String>()
                     .event("response.agentic_search.query_phase.started")
                     .data(
-                        objectMapper.writeValueAsString(
-                            mapOf<String, Any>(
-                                "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
-                                "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
-                                "type" to "response.agentic_search.query_phase.started",
-                                "query" to paramsObj.query,
+                        " " +
+                            objectMapper.writeValueAsString(
+                                mapOf<String, Any>(
+                                    "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
+                                    "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
+                                    "type" to "response.agentic_search.query_phase.started",
+                                    "query" to paramsObj.query,
+                                ),
                             ),
-                        ),
                     ).build(),
             )
 
@@ -267,14 +268,15 @@ class NativeToolRegistry(
                     .builder<String>()
                     .event("response.agentic_search.query_phase.completed")
                     .data(
-                        objectMapper.writeValueAsString(
-                            mapOf<String, Any>(
-                                "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
-                                "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
-                                "type" to "response.agentic_search.query_phase.completed",
-                                "conclusion" to (response.knowledge_acquired ?: ""),
+                        " " +
+                            objectMapper.writeValueAsString(
+                                mapOf<String, Any>(
+                                    "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
+                                    "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
+                                    "type" to "response.agentic_search.query_phase.completed",
+                                    "conclusion" to (response.knowledge_acquired ?: ""),
+                                ),
                             ),
-                        ),
                     ).build(),
             )
             return objectMapper.writeValueAsString(response)

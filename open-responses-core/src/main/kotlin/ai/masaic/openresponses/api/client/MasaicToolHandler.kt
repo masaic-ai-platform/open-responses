@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.extensions.toChatCompletionMessageParam
 import ai.masaic.openresponses.api.support.service.GenAIObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.CompletionToolRequestContext
+import ai.masaic.openresponses.tool.ToolProtocol
 import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.core.type.TypeReference
@@ -743,21 +744,21 @@ class MasaicToolHandler(
 
             if (toolService.getFunctionTool(function.name(), context) != null) {
                 logger.info { "Executing tool: ${function.name()} with ID: ${function.id()}" }
-
-                val eventPrefix = "response.${function.name().lowercase().replace("^\\W".toRegex(), "_")}"
-
+                val toolDefinition = toolService.getAvailableTool(function.name())
+                val eventPrefix = if (toolDefinition?.protocol == ToolProtocol.MCP) "response.mcp_call.${function.name().lowercase().replace("^\\W".toRegex(), "_")}" else "response.${function.name().lowercase().replace("^\\W".toRegex(), "_")}"
                 eventEmitter.invoke(
                     ServerSentEvent
                         .builder<String>()
                         .event("$eventPrefix.in_progress")
                         .data(
-                            objectMapper.writeValueAsString(
-                                mapOf<String, String>(
-                                    "item_id" to (function.id().getOrNull() ?: function.callId()),
-                                    "output_index" to index.toString(),
-                                    "type" to "$eventPrefix.in_progress",
+                            " " +
+                                objectMapper.writeValueAsString(
+                                    mapOf(
+                                        "item_id" to (function.id().getOrNull() ?: function.callId()),
+                                        "output_index" to index.toString(),
+                                        "type" to "$eventPrefix.in_progress",
+                                    ),
                                 ),
-                            ),
                         ).build(),
                 )
 
@@ -766,15 +767,18 @@ class MasaicToolHandler(
                         .builder<String>()
                         .event("$eventPrefix.executing")
                         .data(
-                            objectMapper.writeValueAsString(
-                                mapOf<String, String>(
-                                    "item_id" to (function.id().getOrNull() ?: function.callId()),
-                                    "output_index" to index.toString(),
-                                    "type" to "$eventPrefix.executing",
+                            " " +
+                                objectMapper.writeValueAsString(
+                                    mapOf<String, String>(
+                                        "item_id" to (function.id().getOrNull() ?: function.callId()),
+                                        "output_index" to index.toString(),
+                                        "type" to "$eventPrefix.executing",
+                                    ),
                                 ),
-                            ),
                         ).build(),
                 )
+
+//                runBlocking { delay(10*1000) }
 
                 if (function.name() == IMAGE_GENERATION_TOOL_NAME) {
                     eventEmitter.invoke(
@@ -782,13 +786,14 @@ class MasaicToolHandler(
                             .builder<String>()
                             .event("$eventPrefix.generating")
                             .data(
-                                objectMapper.writeValueAsString(
-                                    mapOf<String, String>(
-                                        "item_id" to (function.id().getOrNull() ?: function.callId()),
-                                        "output_index" to index.toString(),
-                                        "type" to "$eventPrefix.generating",
+                                " " +
+                                    objectMapper.writeValueAsString(
+                                        mapOf<String, String>(
+                                            "item_id" to (function.id().getOrNull() ?: function.callId()),
+                                            "output_index" to index.toString(),
+                                            "type" to "$eventPrefix.generating",
+                                        ),
                                     ),
-                                ),
                             ).build(),
                     )
 
@@ -796,7 +801,7 @@ class MasaicToolHandler(
                     var imageToolOutputString: Map<String, String>? = null
                     executeToolWithObservation(
                         function.name(),
-                        toolService.getAvailableTool(function.name())?.description ?: "not_available",
+                        toolDefinition?.description ?: "not_available",
                         function.arguments(),
                         function.id().toString(),
                         mapOf("toolId" to function.id(), "eventIndex" to index),
@@ -861,14 +866,15 @@ class MasaicToolHandler(
                                 .builder<String>()
                                 .event("$eventPrefix.completed") // This was for the generic tool
                                 .data(
-                                    objectMapper.writeValueAsString(
-                                        mapOf(
-                                            "item_id" to function.id(),
-                                            "output_index" to index.toString(),
-                                            "type" to "$eventPrefix.completed",
-                                            "final_output_generated" to "true",
+                                    " " +
+                                        objectMapper.writeValueAsString(
+                                            mapOf(
+                                                "item_id" to function.id(),
+                                                "output_index" to index.toString(),
+                                                "type" to "$eventPrefix.completed",
+                                                "final_output_generated" to "true",
+                                            ),
                                         ),
-                                    ),
                                 ).build(),
                         )
                         break // Exit loop, image_generation is terminal for this batch of tools
@@ -903,14 +909,15 @@ class MasaicToolHandler(
                                 .builder<String>()
                                 .event("$eventPrefix.completed")
                                 .data(
-                                    objectMapper.writeValueAsString(
-                                        mapOf(
-                                            "item_id" to function.id(),
-                                            "output_index" to index.toString(),
-                                            "type" to "$eventPrefix.completed",
-                                            "error" to "Tool returned null",
+                                    " " +
+                                        objectMapper.writeValueAsString(
+                                            mapOf(
+                                                "item_id" to function.id(),
+                                                "output_index" to index.toString(),
+                                                "type" to "$eventPrefix.completed",
+                                                "error" to "Tool returned null",
+                                            ),
                                         ),
-                                    ),
                                 ).build(),
                         )
                     }
@@ -958,13 +965,14 @@ class MasaicToolHandler(
                                     .builder<String>()
                                     .event("$eventPrefix.completed")
                                     .data(
-                                        objectMapper.writeValueAsString(
-                                            mapOf<String, String>(
-                                                "item_id" to function.id().toString(),
-                                                "output_index" to index.toString(),
-                                                "type" to "$eventPrefix.completed",
+                                        " " +
+                                            objectMapper.writeValueAsString(
+                                                mapOf<String, String>(
+                                                    "item_id" to function.id().toString(),
+                                                    "output_index" to index.toString(),
+                                                    "type" to "$eventPrefix.completed",
+                                                ),
                                             ),
-                                        ),
                                     ).build(),
                             )
                         } else {
@@ -998,14 +1006,15 @@ class MasaicToolHandler(
                                     .builder<String>()
                                     .event("$eventPrefix.completed")
                                     .data(
-                                        objectMapper.writeValueAsString(
-                                            mapOf<String, String>(
-                                                "item_id" to function.id().toString(),
-                                                "output_index" to index.toString(),
-                                                "type" to "$eventPrefix.completed",
-                                                "error" to "Tool returned error or null",
+                                        " " +
+                                            objectMapper.writeValueAsString(
+                                                mapOf<String, String>(
+                                                    "item_id" to function.id().toString(),
+                                                    "output_index" to index.toString(),
+                                                    "type" to "$eventPrefix.completed",
+                                                    "error" to "Tool returned error or null",
+                                                ),
                                             ),
-                                        ),
                                     ).build(),
                             )
                         }

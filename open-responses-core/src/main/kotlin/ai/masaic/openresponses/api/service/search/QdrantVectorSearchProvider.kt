@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.config.VectorSearchConfigProperties
 import ai.masaic.openresponses.api.model.ChunkingStrategy
 import ai.masaic.openresponses.api.model.Filter
 import ai.masaic.openresponses.api.model.RankingOptions
+import ai.masaic.openresponses.api.model.StaticChunkingConfig
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.HybridSearchService.ChunkForIndexing
@@ -24,6 +25,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.stereotype.Service
 import java.io.InputStream
+import java.time.Duration
 
 /**
  * Qdrant implementation of VectorSearchProvider.
@@ -43,6 +45,7 @@ class QdrantVectorSearchProvider(
     private val log = LoggerFactory.getLogger(QdrantVectorSearchProvider::class.java)
     private val collectionName = vectorSearchProperties.collectionName
     private val vectorDimension: Long = vectorSearchProperties.vectorDimension.toLong()
+    private val defaultStaticChunkingConfig = StaticChunkingConfig(vectorSearchProperties.chunkSize, vectorSearchProperties.chunkOverlap)
     private val embeddingStore: QdrantEmbeddingStore
 
     init {
@@ -60,6 +63,33 @@ class QdrantVectorSearchProvider(
                             .build(),
                     ).get()
                 log.info("Created Qdrant collection: {}", collectionName)
+
+                listOf(
+                    "file_id" to Collections.PayloadSchemaType.Keyword,
+                    "text_segment" to Collections.PayloadSchemaType.Keyword,
+                    "vector_store_id" to Collections.PayloadSchemaType.Keyword,
+                    "chunk_index" to Collections.PayloadSchemaType.Integer,
+                    "total_chunks" to Collections.PayloadSchemaType.Integer,
+                    "chunk_id" to Collections.PayloadSchemaType.Keyword,
+                    "category" to Collections.PayloadSchemaType.Keyword,
+                    "filename" to Collections.PayloadSchemaType.Keyword,
+                    "language" to Collections.PayloadSchemaType.Keyword,
+                ).forEach { (field, type) ->
+                    client
+                        .createPayloadIndexAsync(
+                            collectionName,
+                            field,
+                            type,
+                            // indexParams=
+                            null,
+                            // waitForSync=
+                            true,
+                            // ordering=
+                            null,
+                            // timeout=
+                            Duration.ofSeconds(10),
+                        ).get() // wait for the async call to complete
+                }
             }
         } catch (e: Exception) {
             log.error("Failed to initialize Qdrant collection: {}", e.message, e)
@@ -74,6 +104,7 @@ class QdrantVectorSearchProvider(
                 .port(qdrantProperties.port)
                 .useTls(qdrantProperties.useTls)
                 .collectionName(collectionName)
+                .apply { qdrantProperties.apiKey?.let { apiKey(it) } }
                 .build()
 
         log.info("Initialized Qdrant vector search provider with collection: {}", collectionName)
@@ -126,7 +157,7 @@ class QdrantVectorSearchProvider(
 
             // Use the TextChunkingUtil to chunk the text
             log.debug("Chunking text for file: {}", filename)
-            val textChunks = TextChunkingUtil.chunkText(text, chunkingStrategy)
+            val textChunks = TextChunkingUtil.chunkText(text, effectiveChunkingStrategy(chunkingStrategy))
             
             if (textChunks.isEmpty()) {
                 log.warn("No chunks created for file: {}", filename)
@@ -396,4 +427,6 @@ class QdrantVectorSearchProvider(
             return null
         }
     }
+
+    private fun effectiveChunkingStrategy(chunkingStrategy: ChunkingStrategy?): ChunkingStrategy = chunkingStrategy?.let { chunkingStrategy } ?: ChunkingStrategy("static", defaultStaticChunkingConfig)
 }

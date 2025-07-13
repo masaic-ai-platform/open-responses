@@ -35,7 +35,6 @@ class CompletionController(
         @RequestBody request: CreateCompletionRequest,
         @RequestHeader headers: MultiValueMap<String, String>,
         @RequestParam queryParams: MultiValueMap<String, String>,
-        exchange: ServerWebExchange,
     ): ResponseEntity<*> {
         requestValidator.validateCompletionRequest(request)
         payloadFormatter.formatCompletionRequest(request)

@@ -196,27 +196,28 @@ class AgenticSearchService(
                         .builder<String>()
                         .event("response.agentic_search.query_phase.iteration")
                         .data(
-                            mapper.writeValueAsString(
-                                mapOf<String, Any>(
-                                    "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
-                                    "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
-                                    "type" to "response.agentic_search.query_phase.iteration",
-                                    "query" to currentQuery,
-                                    "iteration" to iterationCount + 1,
-                                    "remaining_iterations" to (maxIterations - iterationCount + 1),
-                                    "reasoning" to
-                                        if (iterations.isNotEmpty() && iterations.last().query.contains("##MEMORY##")) {
-                                            iterations
-                                                .last()
-                                                .query
-                                                .substringAfter("##MEMORY##")
-                                                .trim()
-                                        } else {
-                                            ""
-                                        },
-                                    "citations" to (searchBuffer.groupBy { it.filename }).map { it.key },
+                            " " +
+                                mapper.writeValueAsString(
+                                    mapOf<String, Any>(
+                                        "item_id" to (toolMetadata["toolId"] as? String ?: UUID.randomUUID().toString()),
+                                        "output_index" to (toolMetadata["eventIndex"]?.toString()?.toInt() ?: 0),
+                                        "type" to "response.agentic_search.query_phase.iteration",
+                                        "query" to currentQuery,
+                                        "iteration" to iterationCount + 1,
+                                        "remaining_iterations" to (maxIterations - iterationCount + 1),
+                                        "reasoning" to
+                                            if (iterations.isNotEmpty() && iterations.last().query.contains("##MEMORY##")) {
+                                                iterations
+                                                    .last()
+                                                    .query
+                                                    .substringAfter("##MEMORY##")
+                                                    .trim()
+                                            } else {
+                                                ""
+                                            },
+                                        "citations" to (searchBuffer.groupBy { it.filename }).map { it.key },
+                                    ),
                                 ),
-                            ),
                         ).build(),
                 )
 

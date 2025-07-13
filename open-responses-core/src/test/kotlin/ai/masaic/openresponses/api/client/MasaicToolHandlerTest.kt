@@ -2,6 +2,7 @@ package ai.masaic.openresponses.api.client
 
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.tool.ToolMetadata
+import ai.masaic.openresponses.tool.ToolProtocol
 import ai.masaic.openresponses.tool.ToolRequestContext
 import ai.masaic.openresponses.tool.ToolService
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -195,6 +196,7 @@ class MasaicToolHandlerTest {
 
         val functionToolMock = mockk<ToolMetadata>(relaxed = true)
         every { toolService.getAvailableTool("myToolFunction") } returns functionToolMock
+        every { functionToolMock.protocol } returns ToolProtocol.NATIVE
         // Let's pretend the toolService recognizes and executes "myToolFunction"
         every { toolService.getFunctionTool("myToolFunction", ofType<ToolRequestContext>()) } returns mockk()
         coEvery {
@@ -1207,6 +1209,7 @@ class MasaicToolHandlerTest {
         val mockToolMetadata = mockk<ToolMetadata>()
         every { toolService.getAvailableTool("preserveFunction") } returns mockToolMetadata
         every { mockToolMetadata.description } returns "preserveFunction"
+        every { mockToolMetadata.protocol } returns ToolProtocol.NATIVE
         every { toolService.getFunctionTool("preserveFunction", ofType<ToolRequestContext>()) } returns mockk()
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 

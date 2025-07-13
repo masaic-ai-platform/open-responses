@@ -182,7 +182,14 @@ The API implements the following OpenAI-compatible endpoints:
 | `GET /v1/evals/{evalId}/runs` | List evaluation runs for a specific evaluation |
 | `DELETE /v1/evals/{evalId}/runs/{runId}` | Delete an evaluation run |
 
-
+### Platform Configuration For Local Development
+```bash
+OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY=
+OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=
+OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=true/false
+OPENAI_API_KEY=
+SPRING_PROFILES_ACTIVE=platform
+```
 
 ## 📄 License
 

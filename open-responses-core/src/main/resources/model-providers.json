@@ -1,0 +1,86 @@
+[
+  {
+    "name": "togetherai",
+    "description": "togetherai models",
+    "supportedModels": [
+      {
+        "name": "meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8",
+        "modelSyntax": "togetherai@meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8"
+      }
+    ]
+  },
+  {
+    "name": "xai",
+    "description": "xai models",
+    "supportedModels": [
+      {
+        "name": "grok-4-0709",
+        "modelSyntax": "xai@grok-4-0709"
+      }
+    ]
+  },
+  {
+    "name": "claude",
+    "description": "claude models",
+    "supportedModels": [
+      {
+        "name": "claude-3-7-sonnet-20250219",
+        "modelSyntax": "claude@claude-3-7-sonnet-20250219"
+      },
+      {
+        "name": "claude-sonnet-4-20250514",
+        "modelSyntax": "claude@claude-sonnet-4-20250514"
+      }
+    ]
+  },
+  {
+    "name": "openai",
+    "description": "openai models",
+    "supportedModels": [
+      {
+        "name": "gpt-4.1-mini",
+        "modelSyntax": "openai@gpt-4.1-mini"
+      },
+      {
+        "name": "gpt-4o",
+        "modelSyntax": "openai@gpt-4o"
+      },
+      {
+        "name": "o4-mini",
+        "modelSyntax": "openai@o4-mini"
+      },
+      {
+        "name": "o4-mini-high",
+        "modelSyntax": "openai@o4-mini-high"
+      },
+      {
+        "name": "gpt-4.1",
+        "modelSyntax": "openai@gpt-4.1"
+      }
+    ]
+  },
+  {
+    "name": "google",
+    "description": "google models",
+    "supportedModels": [
+      {
+        "name": "gemini-2.5-pro",
+        "modelSyntax": "google@gemini-2.5-pro"
+      },
+      {
+        "name": "gemini-2.5-flash",
+        "modelSyntax": "google@gemini-2.5-flash"
+      }
+    ]
+  },
+  {
+    "name": "groq",
+    "description": "groq models",
+    "supportedModels": [
+      {
+        "name": "qwen-qwq-32b",
+        "modelSyntax": "groq@qwen-qwq-32b"
+      }
+    ]
+  }
+]

@@ -20,6 +20,7 @@ class VectorSearchConfiguration {
                     qdrantProperties.host,
                     qdrantProperties.port,
                     qdrantProperties.useTls,
-                ).build(),
+                ).apply { qdrantProperties.apiKey?.let { withApiKey(it) } }
+                .build(),
         )
-} 
+}
