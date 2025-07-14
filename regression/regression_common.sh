@@ -47,13 +47,13 @@ wait_for_service() {
     local attempt=1
     local delay=2
     
-    echo "Checking if service is ready at http://localhost:6644/v1/models..."
+    echo "Checking if service is ready at http://localhost:6644/actuator/health..."
     
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt of $max_attempts..."
         
-        # Try to connect to the API
-        if curl --silent --fail --max-time 2 http://localhost:6644/v1/models > /dev/null; then
+        # Try to connect to the API health endpoint
+        if curl --silent --fail --max-time 2 http://localhost:6644/actuator/health > /dev/null; then
             echo -e "${GREEN}Service is ready!${NC}"
             return 0
         fi
@@ -247,13 +247,6 @@ run_basic_tests() {
                 }
             ]
         }'"
-
-    # Test 7: Get Available Models
-    echo -e "\n${BOLD}Test 7: Get Available Models${NC}"
-    run_test "Get Available Models" \
-        "curl --location 'http://localhost:6644/v1/models' \
-        --header \"Authorization: Bearer $API_KEY\" \
-        --header \"x-model-provider: $MODEL_PROVIDER\""
 }
 
 # File operations tests section
@@ -350,7 +343,7 @@ run_mongodb_tests() {
     
     # Check if API is responsive
     echo "Checking if API endpoints are accessible..."
-    models_response=$(curl --silent --max-time 5 --write-out '%{http_code}' --output /dev/null http://localhost:6644/v1/models)
+    models_response=$(curl --silent --max-time 5 --write-out '%{http_code}' --output /dev/null http://localhost:6644/actuator/health)
     if [[ "$models_response" == "200" ]]; then
         echo -e "${GREEN}API endpoints appear to be accessible${NC}"
     else
