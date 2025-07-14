@@ -43,13 +43,13 @@ wait_for_service() {
     local attempt=1
     local delay=2
     
-    echo "Checking if service is ready at http://localhost:6644/v1/models..."
+    echo "Checking if service is ready at http://localhost:6644/actuator/health..."
     
     while [ $attempt -le $max_attempts ]; do
         echo "Attempt $attempt of $max_attempts..."
         
         # Try to connect to the API
-        if curl --silent --fail --max-time 2 http://localhost:6644/v1/models > /dev/null; then
+        if curl --silent --fail --max-time 2 http://localhost:6644/actuator/health > /dev/null; then
             echo -e "${GREEN}Service is ready!${NC}"
             return 0
         fi
