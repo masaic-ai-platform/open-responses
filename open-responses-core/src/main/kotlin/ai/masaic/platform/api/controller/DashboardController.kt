@@ -155,6 +155,57 @@ ${request.description}
         return ResponseEntity.ok(FunctionGenerationResponse(response))
     }
 
+    @PostMapping("/generate/prompt", produces = [MediaType.APPLICATION_JSON_VALUE])
+    suspend fun generatePrompt(
+        @RequestBody request: PromptGenerationRequest,
+    ): ResponseEntity<PromptGenerationResponse> {
+        val generatePromptMetaPrompt = """
+You are an elite prompt engineer.
+
+OVERVIEW  
+You will receive up to three labelled blocks:
+
+  • TASK DESCRIPTION – plain-language explanation of what the model should do or mentions explicit edits the user wants.
+  • EXISTING PROMPT   – (optional) the current prompt to be refined.   
+
+YOUR JOB  
+► If an EXISTING PROMPT is present, update it so that all TASK DESCRIPTION are satisfied **while preserving the original structure and intent wherever not contradicted**.  
+► If no EXISTING PROMPT is supplied, craft a brand-new prompt that fulfils the TASK DESCRIPTION.  
+► Always return **exactly one** finished execution prompt, ready for a language model to follow.
+
+RECOMMENDED PROMPT STRUCTURE  
+1. **Title line** – one concise sentence summarising the task.  
+2. **Steps** – 3-7 bullet points, each starting with an imperative verb (Accept…, Validate…, Compute…).  
+3. **Output format** – short block describing the required output.  
+4. **Examples** – at least two `Input:` / `Output:` pairs.  
+5. **Reminder** – a bold sentence beginning “Reminder:” that restates any critical rule(s).
+
+STYLE & RULES  
+• Use clear, unambiguous English and markdown bullets/headings.  
+• Incorporate every constraint from TASK DESCRIPTION.    
+• Do **not** output anything except the finished execution prompt—no commentary, fences, or JSON.
+
+INPUT BLOCKS  
+────────────────────────────────────────
+TASK DESCRIPTION  
+${request.description}
+
+EXISTING PROMPT   (optional)
+${request.existingPrompt}
+────────────────────────────────────────
+        """.trimIndent()
+        val createCompletionRequest =
+            CreateCompletionRequest(
+                messages = listOf(mapOf("role" to "system", "content" to generatePromptMetaPrompt)),
+                model = systemSettings.model,
+                stream = false,
+                store = false,
+            )
+
+        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
+        return ResponseEntity.ok(PromptGenerationResponse(response))
+    }
+
     @PostMapping("/mcp/list_actions")
     suspend fun listMcpActions(
         @RequestBody mcpListToolsRequest: McpListToolsRequest,

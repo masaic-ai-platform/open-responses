@@ -31,6 +31,15 @@ data class FunctionGenerationResponse(
     val generatedFunction: String,
 )
 
+data class PromptGenerationRequest(
+    val description: String,
+    val existingPrompt: String= ""
+)
+
+data class PromptGenerationResponse(
+    val generatedPrompt: String,
+)
+
 data class SystemSettings(
     val modelApiKey: String,
     val model: String,
