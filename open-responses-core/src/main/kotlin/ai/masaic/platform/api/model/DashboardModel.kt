@@ -33,7 +33,7 @@ data class FunctionGenerationResponse(
 
 data class PromptGenerationRequest(
     val description: String,
-    val existingPrompt: String= ""
+    val existingPrompt: String = "",
 )
 
 data class PromptGenerationResponse(

@@ -19,6 +19,7 @@ import com.openai.models.images.ImageGenerateParams
 import com.openai.models.responses.ResponseOutputItem
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
@@ -26,12 +27,13 @@ import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 
 @Component
+@ConditionalOnMissingBean(NativeToolRegistry::class)
 class NativeToolRegistry(
     private val objectMapper: ObjectMapper,
     private val responseStore: ResponseStore,
 ) {
     private val log = LoggerFactory.getLogger(NativeToolRegistry::class.java)
-    private val toolRepository = mutableMapOf<String, ToolDefinition>()
+    protected final val toolRepository = mutableMapOf<String, ToolDefinition>()
 
     @Autowired
     private lateinit var vectorStoreService: VectorStoreService
