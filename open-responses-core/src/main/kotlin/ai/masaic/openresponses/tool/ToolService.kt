@@ -18,6 +18,7 @@ import jakarta.annotation.PreDestroy
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.core.io.ResourceLoader
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -39,6 +40,7 @@ class ToolService(
     private val resourceLoader: ResourceLoader,
     private val nativeToolRegistry: NativeToolRegistry,
     private val objectMapper: ObjectMapper,
+    private val mcpClientFactory: McpClientFactory
 ) {
     @Value("\${open-responses.tools.mcp.enabled:false}")
     private val toolsMCPEnabled: Boolean = false
@@ -221,7 +223,7 @@ class ToolService(
         val allowedTools = mcpTool.allowedTools.map { info.qualifiedToolName(it) }
         val mcpServerInfo = mcpToolRegistry.findServerById(info.serverIdentifier())
         return if (mcpServerInfo == null || mcpServerInfo.tools.isEmpty()) {
-            val mcpClient = McpClient().init(mcpTool.serverLabel, mcpTool.serverUrl, mcpTool.headers)
+            val mcpClient = mcpClientFactory.init(mcpTool.serverLabel, mcpTool.serverUrl, mcpTool.headers)
             val availableTools = mcpClient.listTools(MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl, mcpTool.headers))
             availableTools.forEach {
                 mcpToolRegistry.addTool(it)
