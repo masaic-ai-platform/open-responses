@@ -13,12 +13,8 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import mu.KotlinLogging
 import org.springframework.context.annotation.Lazy
-import org.springframework.context.annotation.Profile
 import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 
-@Profile("platform")
-@Component
 class FunDefGenerationTool(
     @Lazy private val modelService: ModelService,
     private val systemSettings: SystemSettings,

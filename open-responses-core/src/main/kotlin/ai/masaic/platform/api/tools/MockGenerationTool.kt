@@ -12,9 +12,7 @@ import com.openai.client.OpenAIClient
 import mu.KotlinLogging
 import org.springframework.context.annotation.Lazy
 import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 
-@Component
 class MockGenerationTool(
     @Lazy private val modelService: ModelService,
     private val systemSettings: SystemSettings,

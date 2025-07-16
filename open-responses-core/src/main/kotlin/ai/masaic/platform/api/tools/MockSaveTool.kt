@@ -7,10 +7,8 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 import java.util.UUID
 
-@Component
 class MockSaveTool {
     private val mapper = jacksonObjectMapper()
     private val logger = KotlinLogging.logger { }

@@ -7,12 +7,8 @@ import ai.masaic.openresponses.tool.UnifiedToolContext
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import mu.KotlinLogging
-import org.springframework.context.annotation.Profile
 import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 
-@Profile("platform")
-@Component
 class PlatformNativeToolRegistry(
     objectMapper: ObjectMapper,
     responseStore: ResponseStore,

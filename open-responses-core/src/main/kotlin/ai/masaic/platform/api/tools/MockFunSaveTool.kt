@@ -3,21 +3,15 @@ package ai.masaic.platform.api.tools
 import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
-import ai.masaic.platform.api.model.SystemSettings
-import ai.masaic.platform.api.service.ModelService
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
 import mu.KotlinLogging
-import org.springframework.context.annotation.Lazy
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
 import java.util.UUID
 
 @Component
-class MockFunSaveTool(
-    @Lazy private val modelService: ModelService,
-    private val systemSettings: SystemSettings,
-) {
+class MockFunSaveTool {
     private val mapper = jacksonObjectMapper()
     private val logger = KotlinLogging.logger { }
 
