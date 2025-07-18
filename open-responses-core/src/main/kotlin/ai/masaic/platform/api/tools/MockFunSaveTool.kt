@@ -12,11 +12,9 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import mu.KotlinLogging
 import org.springframework.data.annotation.Id
 import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 import java.time.Instant
 import java.util.UUID
 
-@Component
 class MockFunSaveTool(
     private val mockFunctionRepository: MockFunctionRepository,
 ) : PlatformNativeTool(PlatformToolsNames.MOCK_FUN_SAVE_TOOL) {

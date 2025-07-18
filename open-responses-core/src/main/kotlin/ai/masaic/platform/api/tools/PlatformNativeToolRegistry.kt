@@ -13,21 +13,10 @@ class PlatformNativeToolRegistry(
     objectMapper: ObjectMapper,
     responseStore: ResponseStore,
     private val platformNativeTools: List<PlatformNativeTool>,
-//    private val funReqGatheringTool: FunReqGatheringTool,
-//    private val funDefGenerationTool: FunDefGenerationTool,
-//    private val mockFunSaveTool: MockFunSaveTool,
-//    private val mockGenerationTool: MockGenerationTool,
-//    private val mockSaveTool: MockSaveTool,
 ) : NativeToolRegistry(objectMapper, responseStore) {
     private val log = KotlinLogging.logger {}
 
     init {
-//        toolRepository[FunReqGatheringTool.TOOL_NAME] = funReqGatheringTool.loadTool()
-//        toolRepository[FunDefGenerationTool.TOOL_NAME] = funDefGenerationTool.loadTool()
-//        toolRepository[MockFunSaveTool.TOOL_NAME] = mockFunSaveTool.loadTool()
-//        toolRepository[MockGenerationTool.TOOL_NAME] = mockGenerationTool.loadTool()
-//        toolRepository[MockSaveTool.TOOL_NAME] = mockSaveTool.loadTool()
-
         platformNativeTools.forEach {
             toolRepository[it.toolName()] = it.provideToolDef()
         }
@@ -47,7 +36,6 @@ class PlatformNativeToolRegistry(
         log.debug("Executing native tool '$originalName' (resolved to '$resolvedName') with arguments: $arguments")
 
         val platformNativeTool = platformNativeTools.find { it.toolName() == resolvedName }
-
         val toolResponse =
             platformNativeTool?.executeTool(
                 resolvedName,
@@ -58,68 +46,6 @@ class PlatformNativeToolRegistry(
                 toolMetadata,
                 context,
             ) ?: super.executeTool(resolvedName, arguments, paramsAccessor, client, eventEmitter, toolMetadata, context)
-//        }
-
-//        val toolResponse =
-//            when (resolvedName) {
-//                FunReqGatheringTool.TOOL_NAME ->
-//                    funReqGatheringTool.executeTool(
-//                        resolvedName,
-//                        arguments,
-//                        paramsAccessor,
-//                        client,
-//                        eventEmitter,
-//                        toolMetadata,
-//                        context,
-//                    )
-//
-//                FunDefGenerationTool.TOOL_NAME ->
-//                    funDefGenerationTool.executeTool(
-//                        resolvedName,
-//                        arguments,
-//                        paramsAccessor,
-//                        client,
-//                        eventEmitter,
-//                        toolMetadata,
-//                        context,
-//                    )
-//
-//                MockFunSaveTool.TOOL_NAME ->
-//                    mockFunSaveTool.executeTool(
-//                        resolvedName,
-//                        arguments,
-//                        paramsAccessor,
-//                        client,
-//                        eventEmitter,
-//                        toolMetadata,
-//                        context,
-//                    )
-//
-//                MockGenerationTool.TOOL_NAME ->
-//                    mockGenerationTool.executeTool(
-//                        resolvedName,
-//                        arguments,
-//                        paramsAccessor,
-//                        client,
-//                        eventEmitter,
-//                        toolMetadata,
-//                        context,
-//                    )
-//
-//                MockSaveTool.TOOL_NAME ->
-//                    mockSaveTool.executeTool(
-//                        resolvedName,
-//                        arguments,
-//                        paramsAccessor,
-//                        client,
-//                        eventEmitter,
-//                        toolMetadata,
-//                        context,
-//                    )
-//                else -> {
-//                    super.executeTool(resolvedName, arguments, paramsAccessor, client, eventEmitter, toolMetadata, context)
-//                }
-//            }
 
         log.debug { "toolResponse: $toolResponse" }
         return toolResponse
