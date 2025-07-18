@@ -2,6 +2,7 @@ package ai.masaic.platform.api.config
 
 import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.platform.api.model.SystemSettings
+import ai.masaic.platform.api.repository.*
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.tools.*
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -10,6 +11,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Lazy
 import org.springframework.context.annotation.Profile
+import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 
 @Profile("platform")
 @Configuration
@@ -42,7 +44,7 @@ class PlatformCoreConfig {
     ) = FunReqGatheringTool(modelService, systemSettings)
 
     @Bean
-    fun mockFunSaveTool() = MockFunSaveTool()
+    fun mockFunSaveTool(mockFunctionRepository: MockFunctionRepository) = MockFunSaveTool(mockFunctionRepository)
 
     @Bean
     fun mockGenerationTool(
@@ -51,24 +53,41 @@ class PlatformCoreConfig {
     ) = MockGenerationTool(modelService, systemSettings)
 
     @Bean
-    fun mockSaveTool() = MockSaveTool()
+    fun mockSaveTool(mocksRepository: MocksRepository) = MockSaveTool(mocksRepository)
 
     @Bean
     fun platformNativeToolRegistry(
         objectMapper: ObjectMapper,
         responseStore: ResponseStore,
-        funReqGatheringTool: FunReqGatheringTool,
-        funDefGenerationTool: FunDefGenerationTool,
-        mockFunSaveTool: MockFunSaveTool,
-        mockGenerationTool: MockGenerationTool,
-        mockSaveTool: MockSaveTool,
+        platformNativeTools: List<PlatformNativeTool>,
     ) = PlatformNativeToolRegistry(
         objectMapper,
         responseStore,
-        funReqGatheringTool,
-        funDefGenerationTool,
-        mockFunSaveTool,
-        mockGenerationTool,
-        mockSaveTool,
+        platformNativeTools,
     )
+
+    @Bean
+    fun mcpMockServerRepository(mongoTemplate: ReactiveMongoTemplate) = MongoMcpMockServerRepository(mongoTemplate)
+
+    @Bean
+    fun mockFunctionRepository(mongoTemplate: ReactiveMongoTemplate) = MongoMockFunctionRepository(mongoTemplate)
+
+    @Bean
+    fun mocksRepository(mongoTemplate: ReactiveMongoTemplate) = MongoMocksRepository(mongoTemplate)
+
+    @Bean
+    fun mcpClientFactory(
+        mcpMockServerRepository: McpMockServerRepository,
+        mockFunctionRepository: MockFunctionRepository,
+        mocksRepository: MocksRepository,
+        systemSettings: SystemSettings,
+        @Lazy modelService: ModelService,
+    ) = PlatformMcpClientFactory(mcpMockServerRepository, mockFunctionRepository, mocksRepository, systemSettings, modelService)
+
+    @Bean
+    fun platformMcpService(
+        mcpMockServerRepository: McpMockServerRepository,
+        mockFunctionRepository: MockFunctionRepository,
+        mocksRepository: MocksRepository,
+    ) = PlatformMcpService(mcpMockServerRepository, mockFunctionRepository, mocksRepository)
 }

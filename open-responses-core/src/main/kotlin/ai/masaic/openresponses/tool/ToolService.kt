@@ -18,7 +18,6 @@ import jakarta.annotation.PreDestroy
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.core.io.ResourceLoader
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -40,7 +39,7 @@ class ToolService(
     private val resourceLoader: ResourceLoader,
     private val nativeToolRegistry: NativeToolRegistry,
     private val objectMapper: ObjectMapper,
-    private val mcpClientFactory: McpClientFactory
+    private val mcpClientFactory: McpClientFactory,
 ) {
     @Value("\${open-responses.tools.mcp.enabled:false}")
     private val toolsMCPEnabled: Boolean = false

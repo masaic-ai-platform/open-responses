@@ -1,12 +1,12 @@
 package ai.masaic.platform.api.tools
 
-import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
+import ai.masaic.openresponses.tool.mcp.nativeToolDefinition
 import ai.masaic.platform.api.model.SystemSettings
 import ai.masaic.platform.api.service.ModelService
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import ai.masaic.platform.api.service.messages
 import com.fasterxml.jackson.module.kotlin.readValue
 import com.openai.client.OpenAIClient
 import mu.KotlinLogging
@@ -16,48 +16,46 @@ import org.springframework.http.codec.ServerSentEvent
 class MockGenerationTool(
     @Lazy private val modelService: ModelService,
     private val systemSettings: SystemSettings,
-) {
-    private val mapper = jacksonObjectMapper()
+) : ModelDepPlatformNativeTool(PlatformToolsNames.MOCK_GEN_TOOL, modelService, systemSettings) {
     private val logger = KotlinLogging.logger { }
 
-    companion object {
-        const val TOOL_NAME = "mock_generation_tool"
-    }
-
-    fun loadTool(): NativeToolDefinition {
-        val parameters =
-            mutableMapOf(
-                "type" to "object",
-                "properties" to
-                    mapOf(
-                        "userMessage" to
-                            mapOf(
-                                "type" to "string",
-                                "description" to "String parameter to feed in the user requirement message for the mocks needed for a function.",
-                            ),
-                        "functionDefinition" to
-                            mapOf(
-                                "type" to "string",
-                                "description" to "json string of the function definition for which mocks requests and responses are needed.",
-                            ),
-                        "context" to
-                            mapOf(
-                                "type" to "string",
-                                "description" to "crisp and clear summary of the progress made so far in mock request and response generation.",
-                            ),
-                    ),
-                "required" to listOf("userMessage", "functionDefinition", "context"),
-                "additionalProperties" to false,
+    override fun provideToolDef(): NativeToolDefinition =
+        nativeToolDefinition {
+            name(toolName)
+            description(
+                "Generate the mock requests and responses of the function based upon the " +
+                    "mock requests and responses requirements and function definition provided.",
             )
+            parameters {
+                property(
+                    name = "userMessage",
+                    type = "string",
+                    description = "String parameter to feed in the user requirement message for the mocks needed for a function.",
+                    required = true,
+                )
+                property(
+                    name = "functionBody",
+                    type = "string",
+                    description = "JSON string of the function body for which mock requests and responses are needed.",
+                    required = true,
+                )
+                property(
+                    name = "outputSchema",
+                    type = "string",
+                    description = "JSON string of the output schema object this function returns.",
+                    required = true,
+                )
+                property(
+                    name = "context",
+                    type = "string",
+                    description = "Chain of user and assistant messages happened so far for mock request and response generation.",
+                    required = true,
+                )
+                additionalProperties = false
+            }
+        }
 
-        return NativeToolDefinition(
-            name = TOOL_NAME,
-            description = "Generate the mock requests and responses of the function based upon the mock requests and responses requirements and function definition provided.",
-            parameters = parameters,
-        )
-    }
-
-    suspend fun executeTool(
+    override suspend fun executeTool(
         resolvedName: String,
         arguments: String,
         paramsAccessor: ToolParamsAccessor,
@@ -65,34 +63,22 @@ class MockGenerationTool(
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
         context: UnifiedToolContext,
-    ): String? {
-        val createCompletionRequest =
-            CreateCompletionRequest(
-                messages = addMessages(arguments),
-                model = systemSettings.model,
-                stream = false,
-                store = false,
-            )
-
-        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
-        return response
-    }
+    ): String = callModel(addMessages(arguments))
 
     private fun addMessages(arguments: String): List<Map<String, String>> {
         logger.debug { "argument received: $arguments" }
         val requirements: MockReqGatheringRequest = mapper.readValue(arguments)
-
         val requirementGatheringPrompt =
             """
 ROLE  
 You are a mock-design intake assistant.  
-Your job is to collect everything needed to produce realistic request/response mocks
-for an existing OpenAI function definition.
+Your job is to collect everything needed to produce request/response mocks
+for an OpenAI function definition provided to you.
 
 INPUTS YOU RECEIVE  
 • **User requirements** for the mocks (e.g. “return 404 on bad id”).  
 • A **function-definition JSON object** (name, description, parameters).  
-• Any **historical context** from earlier turns (prior mock examples, constraints, etc.).
+• Any **historical conversation context** from earlier turns (prior mock examples, constraints, etc.).
 
 GOALS  
 A. Propose at least **two** complete mock pairs (request + response).  
@@ -107,16 +93,20 @@ C. If **any information is missing or ambiguous**, ask focused questions
 WORKFLOW  
 
 1. **Extract function details**  
-   • Parse the provided function-definition JSON to understand the
+   • Parse the provided functionBody JSON to understand the
      expected input fields and their types.  
    • Note any constraints (required fields, allowed values, etc.).
 
-2. **Infer mocks**  
+2. **Extract output schema**  
+   • Parse the provided outputSchema JSON to understand the
+     expected output fields.  
+
+3. **Infer mocks**  
    • Use the user’s requirements plus the function schema to sketch two
-     distinct request objects that cover typical and edge cases.  
+     distinct request objects that cover typical cases.  
      Example pattern: “happy path”.
    • Create mock for one “error path” when explicitly requested.    
-   • Derive sensible response bodies/status codes for each request.
+   • Based upon user inputs, derive sensible response for each request.
 
 3. **Selection rules**  
    • For every mock pair, write a one-sentence rule that describes the
@@ -125,7 +115,7 @@ WORKFLOW
 
 4. **Clarifications**  
    • List any missing details (e.g. data ranges, error formats).  
-   • Ask all outstanding questions in **one** concise message.  
+   • Ask all outstanding questions in bullet points.  
    • Never repeat a question once it’s answered.  
    • **Implicit acceptance rule:** if the user does not object to a
      proposed assumption in their next reply, treat it as accepted.
@@ -133,14 +123,6 @@ WORKFLOW
 5. **Completion**  
    • When all uncertainties are resolved, output the final proposal in
      the format described below and stop asking questions.
-
-— ────────────────────────────────────────────────────────────────── —
-FUNCTION DEFINITION
-${requirements.functionDefinition}
-
-CONTEXT SUMMARY OF PROGRESS SO FAR
-${requirements.context}
-— ────────────────────────────────────────────────────────────────── —
 
 OUTPUT FORMATS  
 
@@ -171,6 +153,16 @@ containing:
 • All responses should be realistic and self-consistent.
 
 — ────────────────────────────────────────────────────────────────── —
+FUNCTION DEFINITION
+${requirements.functionBody}
+
+OUTPUT SCHEMA
+${requirements.outputSchema}
+
+CONTEXT SUMMARY OF PROGRESS SO FAR
+${requirements.context}
+
+— ────────────────────────────────────────────────────────────────── —
 
 EXAMPLE FLOW (condensed)
 
@@ -197,14 +189,16 @@ Assistant outputs final JSON:
 }
             """.trimIndent()
 
-        val systemMessage = mapOf("role" to "system", "content" to requirementGatheringPrompt)
-        val userMessage = mapOf("role" to "user", "content" to requirements.userMessage)
-        return listOf(systemMessage, userMessage)
+        return messages {
+            systemMessage(requirementGatheringPrompt)
+            userMessage(requirements.userMessage)
+        }
     }
 }
 
 data class MockReqGatheringRequest(
     val userMessage: String,
-    val functionDefinition: String,
+    val functionBody: String,
+    val outputSchema: String,
     val context: String,
 )

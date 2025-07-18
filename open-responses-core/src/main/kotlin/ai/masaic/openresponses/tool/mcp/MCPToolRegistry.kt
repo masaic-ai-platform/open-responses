@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component
  * to execute tools on these servers.
  */
 @Component
-class MCPToolExecutor(private val mcpClientFactory: McpClientFactory) {
+class MCPToolExecutor(
+    private val mcpClientFactory: McpClientFactory,
+) {
     private val log = LoggerFactory.getLogger(MCPToolExecutor::class.java)
     private val mcpClients = mutableMapOf<String, McpClient>()
 

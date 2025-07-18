@@ -24,8 +24,6 @@ import okhttp3.Response
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-import org.springframework.stereotype.Component
 import java.time.Duration
 import java.util.concurrent.*
 import kotlin.time.Duration.Companion.seconds
@@ -43,15 +41,17 @@ interface McpClientFactory {
     ): McpClient
 }
 
-class SimpleMcpClientFactory: McpClientFactory {
-    override fun init(serverName: String, url: String, headers: Map<String, String>): McpClient {
-        return SimpleMcpClient().init(serverName, url, headers)
-    }
+open class SimpleMcpClientFactory : McpClientFactory {
+    override fun init(
+        serverName: String,
+        url: String,
+        headers: Map<String, String>,
+    ): McpClient = SimpleMcpClient().init(serverName, url, headers)
 
-    override fun init(serverName: String, mcpServer: MCPServer): McpClient {
-        return SimpleMcpClient().init(serverName, mcpServer)
-    }
-
+    override fun init(
+        serverName: String,
+        mcpServer: MCPServer,
+    ): McpClient = SimpleMcpClient().init(serverName, mcpServer)
 }
 
 interface McpClient {

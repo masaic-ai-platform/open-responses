@@ -1,57 +1,45 @@
 package ai.masaic.platform.api.tools
 
-import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
+import ai.masaic.openresponses.tool.mcp.nativeToolDefinition
 import ai.masaic.platform.api.model.SystemSettings
 import ai.masaic.platform.api.service.ModelService
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import ai.masaic.platform.api.service.messages
 import com.openai.client.OpenAIClient
-import mu.KotlinLogging
 import org.springframework.context.annotation.Lazy
 import org.springframework.http.codec.ServerSentEvent
 
 class FunReqGatheringTool(
     @Lazy private val modelService: ModelService,
     private val systemSettings: SystemSettings,
-) {
-    private val mapper = jacksonObjectMapper()
-    private val logger = KotlinLogging.logger { }
-
-    companion object {
-        const val TOOL_NAME = "fun_req_gathering_tool"
-    }
-
-    fun loadTool(): NativeToolDefinition {
-        val parameters =
-            mutableMapOf(
-                "type" to "object",
-                "properties" to
-                    mapOf(
-                        "userMessage" to
-                            mapOf(
-                                "type" to "string",
-                                "description" to "String parameter to feed in the user requirement message for the function.",
-                            ),
-                        "context" to
-                            mapOf(
-                                "type" to "string",
-                                "description" to "chain of user and assistant messages happened so far on requirements gathering.",
-                            ),
-                    ),
-                "required" to listOf("userMessage", "context"),
-                "additionalProperties" to false,
+) : ModelDepPlatformNativeTool(PlatformToolsNames.FUN_REQ_GATH_TOOL, modelService, systemSettings) {
+    override fun provideToolDef(): NativeToolDefinition =
+        nativeToolDefinition {
+            name(toolName)
+            description(
+                "Gathers user requirements for a function to be generated and produces a string output.",
             )
+            parameters {
+                property(
+                    name = "userMessage",
+                    type = "string",
+                    description = "String parameter to feed in the user requirement message for the function.",
+                    required = true,
+                )
+                property(
+                    name = "context",
+                    type = "string",
+                    description = "Chain of user and assistant messages happened so far on requirements gathering. Format: user: <user message text>, assistant: <assistant message text>, user: <user message text>,......",
+                    required = true,
+                )
+                // optional: leave out; default is false
+                additionalProperties = false
+            }
+        }
 
-        return NativeToolDefinition(
-            name = TOOL_NAME,
-            description = "Gathers user requirements for a function to be generated and produces a string output.",
-            parameters = parameters,
-        )
-    }
-
-    suspend fun executeTool(
+    override suspend fun executeTool(
         resolvedName: String,
         arguments: String,
         paramsAccessor: ToolParamsAccessor,
@@ -59,18 +47,7 @@ class FunReqGatheringTool(
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
         context: UnifiedToolContext,
-    ): String? {
-        val createCompletionRequest =
-            CreateCompletionRequest(
-                messages = addMessages(arguments),
-                model = systemSettings.model,
-                stream = false,
-                store = false,
-            )
-
-        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
-        return response
-    }
+    ): String = callModel(addMessages(arguments))
 
     private fun addMessages(arguments: String): List<Map<String, String>> {
         val jsonTree = mapper.readTree(arguments)
@@ -79,18 +56,21 @@ class FunReqGatheringTool(
             """
 ROLE
 You are an API-design intake assistant.
-Your mission is to gather the three elements needed to build an OpenAI function definition, inferring whatever you reasonably can from the user’s words:
+Your mission is to gather the four elements needed to build an OpenAI function definition, inferring most of the information reasonably from the user’s words:
 
 1. name          – concise snake_case (≤ 64 chars)  
 2. description   – one clear sentence of the function’s purpose  
 3. input schema  – either
    • a sample JSON object that shows every expected field, or  
    • a plain-text list of each field with its type and meaning
+4. output schema  – either
+   • a sample JSON object that shows every expected fields, or  
+   • a plain-text list of each field with its type and meaning
 
 — ───────────────────────────────────────────────────────────—
 
 WORKFLOW
-1. Parse the user’s latest message and **immediately populate** as many of the three elements as you can.
+1. Parse the user’s latest message and **immediately populate** as many of the following elements as you can.
 
 2. **Inference rules for userMessage**
    • If a field name implies a type, assume the most common one  
@@ -105,7 +85,7 @@ WORKFLOW
 3. **Clarification questions**
    • Ask *only* about items that are still missing or whose type/meaning
      you had to assume.  
-   • Combine all outstanding questions in **one** concise message.  
+   • Combine all outstanding questions in concise bullet points.  
    • Never ask the same question twice. Keep a record of what you’ve
      already asked.
 
@@ -169,8 +149,9 @@ Assistant ➜ all items confirmed → outputs:
 }
             """.trimIndent()
 
-        val systemMessage = mapOf("role" to "system", "content" to reqGatheringPrompt)
-        val userMessage = mapOf("role" to "user", "content" to jsonTree["userMessage"].asText())
-        return listOf(systemMessage, userMessage)
+        return messages {
+            systemMessage(reqGatheringPrompt)
+            userMessage(jsonTree["userMessage"].asText())
+        }
     }
 }
