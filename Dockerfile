@@ -10,5 +10,6 @@ WORKDIR /app
 COPY open-responses-server/build/libs/openresponses-0.4.2.jar /app/openresponses-0.4.2.jar
 COPY open-responses-server/src/main/resources/mcp-servers-config.json /app/mcp-servers-config.json
 
+EXPOSE 6644
 # Start the Java application directly
 ENTRYPOINT ["java", "-jar", "/app/openresponses-0.4.2.jar"]
