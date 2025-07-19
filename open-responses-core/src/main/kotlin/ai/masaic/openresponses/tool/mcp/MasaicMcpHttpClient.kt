@@ -28,7 +28,45 @@ import java.time.Duration
 import java.util.concurrent.*
 import kotlin.time.Duration.Companion.seconds
 
-class McpClient {
+interface McpClientFactory {
+    fun init(
+        serverName: String,
+        url: String,
+        headers: Map<String, String> = emptyMap(),
+    ): McpClient
+
+    fun init(
+        serverName: String,
+        mcpServer: MCPServer,
+    ): McpClient
+}
+
+open class SimpleMcpClientFactory : McpClientFactory {
+    override fun init(
+        serverName: String,
+        url: String,
+        headers: Map<String, String>,
+    ): McpClient = SimpleMcpClient().init(serverName, url, headers)
+
+    override fun init(
+        serverName: String,
+        mcpServer: MCPServer,
+    ): McpClient = SimpleMcpClient().init(serverName, mcpServer)
+}
+
+interface McpClient {
+    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition>
+
+    fun executeTool(
+        tool: ToolDefinition,
+        arguments: String,
+        headers: Map<String, String>,
+    ): String?
+
+    fun close()
+}
+
+class SimpleMcpClient : McpClient {
     private val log = KotlinLogging.logger {}
     private var customClient: McpSyncClient? = null
     private var defaultMcpClient: DefaultMcpClient? = null
@@ -97,7 +135,7 @@ class McpClient {
         return this
     }
 
-    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
+    override fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
         defaultMcpClient?.listTools()?.map {
             val tool =
                 McpToolDefinition(
@@ -122,7 +160,7 @@ class McpClient {
         }
             ?: emptyList()
 
-    fun executeTool(
+    override fun executeTool(
         tool: ToolDefinition,
         arguments: String,
         headers: Map<String, String>,
@@ -154,7 +192,7 @@ class McpClient {
             add("2>&1")
         }
 
-    fun close() {
+    override fun close() {
         defaultMcpClient?.close()
     }
 }

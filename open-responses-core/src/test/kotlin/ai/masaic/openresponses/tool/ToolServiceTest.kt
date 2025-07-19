@@ -1,9 +1,6 @@
 package ai.masaic.openresponses.tool
 
-import ai.masaic.openresponses.tool.mcp.MCPServerInfo
-import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
-import ai.masaic.openresponses.tool.mcp.MCPToolRegistry
-import ai.masaic.openresponses.tool.mcp.McpToolDefinition
+import ai.masaic.openresponses.tool.mcp.*
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.responses.ResponseCreateParams
@@ -39,10 +36,11 @@ class ToolServiceTest {
     private val mcpToolExecutor = mockk<MCPToolExecutor>()
     private val resourceLoader = mockk<ResourceLoader>()
     private val nativeToolRegistry = mockk<NativeToolRegistry>()
+    private val mcpClientFactory = mockk<SimpleMcpClientFactory>()
 
     @BeforeEach
     fun setUp() {
-        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry, ObjectMapper())
+        toolService = ToolService(mcpToolRegistry, mcpToolExecutor, resourceLoader, nativeToolRegistry, ObjectMapper(), mcpClientFactory)
     }
 
     /**

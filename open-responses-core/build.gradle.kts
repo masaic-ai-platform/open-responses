@@ -45,7 +45,11 @@ dependencies {
     implementation("dev.langchain4j:langchain4j-mcp:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j:1.0.0-beta2")
     implementation("dev.langchain4j:langchain4j-open-ai-official:1.0.0-beta2")
-    implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2")
+    implementation("dev.langchain4j:langchain4j-qdrant:1.0.0-beta2") {
+        exclude(group="io.grpc", module="grpc-netty-shaded")
+    }
+
+    implementation("io.grpc:grpc-netty:1.65.1")
     implementation("dev.langchain4j:langchain4j-open-ai:1.0.0-beta2")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
     implementation("com.knuddels:jtokkit:1.1.0")

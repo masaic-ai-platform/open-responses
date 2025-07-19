@@ -55,3 +55,49 @@ suspend inline fun <reified T> ModelService.createCompletion(
 
     return mapper.readValue(payloadJson)
 }
+
+// 1) Top‐level entry point
+fun messages(block: MessageListBuilder.() -> Unit): List<Map<String, String>> = MessageListBuilder().apply(block).build()
+
+// 2) Builder that collects individual maps
+class MessageListBuilder {
+    private val items = mutableListOf<Map<String, String>>()
+
+    /**
+     * Adds a system message with the role pre-set.
+     */
+    fun systemMessage(content: String) {
+        items +=
+            mapOf(
+                "role" to "system",
+                "content" to content,
+            )
+    }
+
+    /**
+     * Adds a user message with the role pre-set.
+     */
+    fun userMessage(content: String) {
+        items +=
+            mapOf(
+                "role" to "user",
+                "content" to content,
+            )
+    }
+
+    /**
+     * If you ever need a different role…
+     */
+    fun customMessage(
+        role: String,
+        content: String,
+    ) {
+        items +=
+            mapOf(
+                "role" to role,
+                "content" to content,
+            )
+    }
+
+    fun build(): List<Map<String, String>> = items
+}

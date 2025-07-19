@@ -12,7 +12,9 @@ import org.springframework.stereotype.Component
  * to execute tools on these servers.
  */
 @Component
-class MCPToolExecutor {
+class MCPToolExecutor(
+    private val mcpClientFactory: McpClientFactory,
+) {
     private val log = LoggerFactory.getLogger(MCPToolExecutor::class.java)
     private val mcpClients = mutableMapOf<String, McpClient>()
 
@@ -27,7 +29,7 @@ class MCPToolExecutor {
         serverName: String,
         mcpServer: MCPServer,
     ): McpClient {
-        val mcpClient = McpClient().init(serverName, mcpServer)
+        val mcpClient = mcpClientFactory.init(serverName, mcpServer)
         mcpClients[serverName] = mcpClient
         return mcpClient
     }
@@ -133,28 +135,4 @@ class MCPToolRegistry {
     fun cleanUp() {
         toolRepository.clear()
     }
-
-//    /**
-//     * Registers MCP tool definitions from the given client.
-//     *
-//     * @param serverId ID of the server hosting the tools
-//     * @param mcpClient Client connected to the server
-//     */
-//    private fun registerMCPToolDefinitions(
-//        serverId: String,
-//        mcpClient: McpClient,
-//    ) {
-//        val toolSpecs = mcpClient.listTools()
-//        toolSpecs.forEach { toolSpec ->
-//            val tool =
-//                McpToolDefinition(
-//                    name = toolSpec.name(),
-//                    description = toolSpec.description() ?: toolSpec.name(),
-//                    parameters = toolSpec.parameters(),
-//                    mcpServerInfo = MCPServerInfo(serverId),
-//                )
-//            log.info("Adding tool: $tool")
-//            addTool(tool)
-//        }
-//    }
 }

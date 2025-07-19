@@ -20,18 +20,16 @@ import com.openai.models.responses.ResponseOutputItem
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.http.codec.ServerSentEvent
-import org.springframework.stereotype.Component
 import java.util.UUID
 import kotlin.jvm.optionals.getOrElse
 import kotlin.jvm.optionals.getOrNull
 
-@Component
-class NativeToolRegistry(
+open class NativeToolRegistry(
     private val objectMapper: ObjectMapper,
     private val responseStore: ResponseStore,
 ) {
     private val log = LoggerFactory.getLogger(NativeToolRegistry::class.java)
-    private val toolRepository = mutableMapOf<String, ToolDefinition>()
+    protected final val toolRepository = mutableMapOf<String, ToolDefinition>()
 
     @Autowired
     private lateinit var vectorStoreService: VectorStoreService
@@ -73,7 +71,7 @@ class NativeToolRegistry(
      * @param context UnifiedToolContext
      * @return Result string or null if tool not found/fails
      */
-    suspend fun executeTool(
+    open suspend fun executeTool(
         resolvedName: String,
         arguments: String,
         paramsAccessor: ToolParamsAccessor,
