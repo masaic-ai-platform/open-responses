@@ -1,7 +1,6 @@
 package ai.masaic.platform.api.config
 
 import ai.masaic.openresponses.api.client.ResponseStore
-import ai.masaic.platform.api.model.SystemSettings
 import ai.masaic.platform.api.repository.*
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.tools.*
@@ -91,3 +90,8 @@ class PlatformCoreConfig {
         mocksRepository: MocksRepository,
     ) = PlatformMcpService(mcpMockServerRepository, mockFunctionRepository, mocksRepository)
 }
+
+data class SystemSettings(
+    val modelApiKey: String,
+    val model: String,
+)

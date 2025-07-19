@@ -4,9 +4,9 @@ import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
 import ai.masaic.openresponses.tool.mcp.nativeToolDefinition
+import ai.masaic.platform.api.config.SystemSettings
 import ai.masaic.platform.api.model.FunctionGenerationRequest
 import ai.masaic.platform.api.model.FunctionGenerationResponse
-import ai.masaic.platform.api.model.SystemSettings
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.service.messages
 import com.openai.client.OpenAIClient

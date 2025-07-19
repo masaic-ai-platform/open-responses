@@ -40,11 +40,6 @@ data class PromptGenerationResponse(
     val generatedPrompt: String,
 )
 
-data class SystemSettings(
-    val modelApiKey: String,
-    val model: String,
-)
-
 data class McpListToolsRequest(
     val serverLabel: String,
     val serverUrl: String,

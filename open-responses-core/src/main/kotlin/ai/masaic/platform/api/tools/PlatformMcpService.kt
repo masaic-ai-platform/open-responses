@@ -3,9 +3,9 @@ package ai.masaic.platform.api.tools
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.tool.ToolDefinition
 import ai.masaic.openresponses.tool.mcp.*
+import ai.masaic.platform.api.config.SystemSettings
 import ai.masaic.platform.api.controller.FunctionBodyResponse
 import ai.masaic.platform.api.controller.GetFunctionResponse
-import ai.masaic.platform.api.model.SystemSettings
 import ai.masaic.platform.api.repository.McpMockServerRepository
 import ai.masaic.platform.api.repository.MockFunctionRepository
 import ai.masaic.platform.api.repository.MocksRepository

@@ -5,6 +5,7 @@ import ai.masaic.openresponses.api.model.FunctionTool
 import ai.masaic.openresponses.api.model.MCPTool
 import ai.masaic.openresponses.tool.*
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
+import ai.masaic.platform.api.config.SystemSettings
 import ai.masaic.platform.api.model.*
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.tools.FunDefGenerationTool

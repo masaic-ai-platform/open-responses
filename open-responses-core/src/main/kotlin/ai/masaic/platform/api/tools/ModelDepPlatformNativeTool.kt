@@ -1,7 +1,7 @@
 package ai.masaic.platform.api.tools
 
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
-import ai.masaic.platform.api.model.SystemSettings
+import ai.masaic.platform.api.config.SystemSettings
 import ai.masaic.platform.api.service.ModelService
 import org.springframework.context.annotation.Lazy
 
