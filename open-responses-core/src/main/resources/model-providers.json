@@ -56,6 +56,21 @@
       {
         "name": "gpt-4.1",
         "modelSyntax": "openai@gpt-4.1"
+      },
+      {
+        "name": "text-embedding-3-small",
+        "modelSyntax": "openai@text-embedding-3-small",
+        "isEmbeddingModel": true
+      },
+      {
+        "name": "text-embedding-3-large",
+        "modelSyntax": "openai@text-embedding-3-large",
+        "isEmbeddingModel": true
+      },
+      {
+        "name": "text-embedding-ada-002",
+        "modelSyntax": "openai@text-embedding-ada-002",
+        "isEmbeddingModel": true
       }
     ]
   },

@@ -1,6 +1,6 @@
 package ai.masaic.platform.api.controller
 
-import ai.masaic.platform.api.repository.MongoMockFunctionRepository
+import ai.masaic.platform.api.repository.MockFunctionRepository
 import ai.masaic.platform.api.tools.*
 import org.springframework.context.annotation.Profile
 import org.springframework.http.MediaType
@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*
 @CrossOrigin("*")
 class McpMocksController(
     private val platformMcpService: PlatformMcpService,
-    private val mockFunctionRepository: MongoMockFunctionRepository,
+    private val mockFunctionRepository: MockFunctionRepository,
 ) {
     @PostMapping("/mcp/mock/servers", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun createMockServer(

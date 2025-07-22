@@ -133,9 +133,11 @@ class VectorStoreController(
     suspend fun createVectorStoreFile(
         @PathVariable("vector_store_id") vectorStoreId: String,
         @RequestBody request: CreateVectorStoreFileRequest,
+        @RequestHeader("Authorization") authHeader: String? = null,
     ): ResponseEntity<VectorStoreFile> {
         try {
-            val vectorStoreFile = vectorStoreService.createVectorStoreFile(vectorStoreId, request)
+            val updatedRequest = request.copy(modelInfo = ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
+            val vectorStoreFile = vectorStoreService.createVectorStoreFile(vectorStoreId, updatedRequest)
             return ResponseEntity.ok(vectorStoreFile)
         } catch (e: VectorStoreNotFoundException) {
             log.error("Error creating vector store file: ${e.message}")

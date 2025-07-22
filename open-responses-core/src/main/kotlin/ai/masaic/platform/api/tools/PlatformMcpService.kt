@@ -3,7 +3,7 @@ package ai.masaic.platform.api.tools
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.tool.ToolDefinition
 import ai.masaic.openresponses.tool.mcp.*
-import ai.masaic.platform.api.config.SystemSettings
+import ai.masaic.platform.api.config.ModelSettings
 import ai.masaic.platform.api.controller.FunctionBodyResponse
 import ai.masaic.platform.api.controller.GetFunctionResponse
 import ai.masaic.platform.api.repository.McpMockServerRepository
@@ -60,7 +60,7 @@ class PlatformMcpClientFactory(
     private val mockServerRepository: McpMockServerRepository,
     private val mockFunRepository: MockFunctionRepository,
     private val mocksRepository: MocksRepository,
-    private val systemSettings: SystemSettings,
+    private val modelSettings: ModelSettings,
     private val modelService: ModelService,
 ) : SimpleMcpClientFactory() {
     override fun init(
@@ -70,7 +70,7 @@ class PlatformMcpClientFactory(
     ): McpClient {
         val uri = URI(url)
         if (uri.host.endsWith("mock.masaic.ai")) {
-            return MockMcpClient(mockServerRepository, mockFunRepository, mocksRepository, systemSettings, modelService)
+            return MockMcpClient(mockServerRepository, mockFunRepository, mocksRepository, modelSettings, modelService)
         }
         return SimpleMcpClient().init(serverName, url, headers)
     }
@@ -80,7 +80,7 @@ class MockMcpClient(
     private val mockServerRepository: McpMockServerRepository,
     private val mockFunRepository: MockFunctionRepository,
     private val mocksRepository: MocksRepository,
-    private val systemSettings: SystemSettings,
+    private val modelSettings: ModelSettings,
     private val modelService: ModelService,
 ) : McpClient {
     private val log = KotlinLogging.logger { }
@@ -147,12 +147,12 @@ $arguments
         val createCompletionRequest =
             CreateCompletionRequest(
                 messages = listOf(mapOf("role" to "system", "content" to mockSelectionPrompt)),
-                model = systemSettings.model,
+                model = modelSettings.model,
                 stream = false,
                 store = false,
             )
 
-        val toolResponse: String = runBlocking { modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey) }
+        val toolResponse: String = runBlocking { modelService.fetchCompletionPayload(createCompletionRequest, modelSettings.apiKey) }
         log.debug { "toolResponse: $toolResponse" }
         return toolResponse
     }

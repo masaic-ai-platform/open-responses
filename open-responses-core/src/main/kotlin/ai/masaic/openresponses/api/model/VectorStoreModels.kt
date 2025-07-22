@@ -216,6 +216,7 @@ data class CreateVectorStoreRequest(
      */
     @JsonProperty("expires_after")
     val expiresAfter: ExpirationPolicy? = null,
+    val modelInfo: ModelInfo? = null,
 )
 
 /**
@@ -291,6 +292,7 @@ data class CreateVectorStoreFileRequest(
      * Set of key-value pairs that can be attached to the file.
      */
     val attributes: Map<String, Any>? = null,
+    val modelInfo: ModelInfo? = null,
 )
 
 /**

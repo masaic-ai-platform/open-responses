@@ -1,5 +1,6 @@
 package ai.masaic.openresponses.api.model
 
+import ai.masaic.platform.api.config.ModelSettings
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonInclude
@@ -461,3 +462,21 @@ data class ImageGenerationTool(
     @JsonProperty("model_provider_key")
     val modelProviderKey: String? = null,
 ) : Tool
+
+data class ModelInfo(
+    val bearerToken: String?,
+    val model: String?,
+) {
+    companion object {
+        fun modelSettings(modelInfo: ModelInfo?): ModelSettings? {
+            return if (modelInfo == null || modelInfo.bearerToken.isNullOrEmpty() || modelInfo.model.isNullOrEmpty()) return null else ModelSettings(modelInfo.bearerToken, modelInfo.model)
+        }
+
+        fun fromApiKey(
+            apiKey: String?,
+            model: String?,
+        ): ModelInfo? {
+            return if (apiKey.isNullOrEmpty() || model.isNullOrEmpty()) return null else ModelInfo(apiKey, model)
+        }
+    }
+}

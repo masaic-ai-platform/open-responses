@@ -4,7 +4,7 @@ import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
 import ai.masaic.openresponses.tool.mcp.nativeToolDefinition
-import ai.masaic.platform.api.config.SystemSettings
+import ai.masaic.platform.api.config.ModelSettings
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.service.messages
 import com.openai.client.OpenAIClient
@@ -13,8 +13,8 @@ import org.springframework.http.codec.ServerSentEvent
 
 class FunReqGatheringTool(
     @Lazy private val modelService: ModelService,
-    private val systemSettings: SystemSettings,
-) : ModelDepPlatformNativeTool(PlatformToolsNames.FUN_REQ_GATH_TOOL, modelService, systemSettings) {
+    private val modelSettings: ModelSettings,
+) : ModelDepPlatformNativeTool(PlatformToolsNames.FUN_REQ_GATH_TOOL, modelService, modelSettings) {
     override fun provideToolDef(): NativeToolDefinition =
         nativeToolDefinition {
             name(toolName)
@@ -47,7 +47,7 @@ class FunReqGatheringTool(
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
         context: UnifiedToolContext,
-    ): String = callModel(addMessages(arguments))
+    ): String = callModel(paramsAccessor, client, addMessages(arguments))
 
     private fun addMessages(arguments: String): List<Map<String, String>> {
         val jsonTree = mapper.readTree(arguments)

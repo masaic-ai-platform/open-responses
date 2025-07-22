@@ -1,16 +1,15 @@
 package ai.masaic.platform.api.controller
 
-import ai.masaic.openresponses.api.model.CreateCompletionRequest
-import ai.masaic.openresponses.api.model.FunctionTool
-import ai.masaic.openresponses.api.model.MCPTool
+import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.tool.*
 import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
-import ai.masaic.platform.api.config.SystemSettings
+import ai.masaic.platform.api.config.ModelSettings
 import ai.masaic.platform.api.model.*
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.tools.FunDefGenerationTool
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Profile
 import org.springframework.core.io.ClassPathResource
 import org.springframework.http.MediaType
@@ -25,9 +24,15 @@ class DashboardController(
     private val toolService: ToolService,
     private val mcpToolExecutor: MCPToolExecutor,
     private val modelService: ModelService,
-    private val systemSettings: SystemSettings,
+    private val modelSettings: ModelSettings,
     private val funDefGenerationTool: FunDefGenerationTool,
 ) {
+    @Value("\${application.formatted-version:UNKNOWN}")
+    private val version = ""
+
+    @Value("\${open-responses.store.vector.search.provider:file}")
+    private val vectorSearchProviderType = ""
+
     private val mapper = jacksonObjectMapper()
     private lateinit var modelProviders: Set<ModelProvider>
 
@@ -44,6 +49,7 @@ class DashboardController(
     @PostMapping("/generate/schema", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun generateSchema(
         @RequestBody request: SchemaGenerationRequest,
+        @RequestHeader("Authorization") authHeader: String? = null,
     ): ResponseEntity<SchemaGenerationResponse> {
         val generateSchemaPrompt =
             """
@@ -83,29 +89,33 @@ SCHEMA DESCRIPTION
 ${request.description}
             """.trimIndent()
 
+        val applicableSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
         val createCompletionRequest =
             CreateCompletionRequest(
                 messages = listOf(mapOf("role" to "system", "content" to generateSchemaPrompt)),
-                model = systemSettings.model,
+                model = applicableSettings.qualifiedModelName,
                 stream = false,
                 store = false,
             )
 
-        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
+        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, applicableSettings.apiKey)
         return ResponseEntity.ok(SchemaGenerationResponse(response))
     }
 
     @PostMapping("/generate/function", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun generateFunction(
         @RequestBody request: FunctionGenerationRequest,
+        @RequestHeader("Authorization") authHeader: String? = null,
     ): ResponseEntity<FunctionGenerationResponse> {
-        val response = funDefGenerationTool.executeTool(request)
+        val finalSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
+        val response = funDefGenerationTool.executeTool(request, finalSettings)
         return ResponseEntity.ok(response)
     }
 
     @PostMapping("/generate/prompt", produces = [MediaType.APPLICATION_JSON_VALUE])
     suspend fun generatePrompt(
         @RequestBody request: PromptGenerationRequest,
+        @RequestHeader("Authorization") authHeader: String? = null,
     ): ResponseEntity<PromptGenerationResponse> {
         val generatePromptMetaPrompt =
             """
@@ -143,15 +153,16 @@ EXISTING PROMPT   (optional)
 ${request.existingPrompt}
 ────────────────────────────────────────
             """.trimIndent()
+        val finalSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
         val createCompletionRequest =
             CreateCompletionRequest(
                 messages = listOf(mapOf("role" to "system", "content" to generatePromptMetaPrompt)),
-                model = systemSettings.model,
+                model = finalSettings.qualifiedModelName,
                 stream = false,
                 store = false,
             )
 
-        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, systemSettings.modelApiKey)
+        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, finalSettings.apiKey)
         return ResponseEntity.ok(PromptGenerationResponse(response))
     }
 
@@ -190,9 +201,25 @@ ${request.existingPrompt}
         val toolDefinition = toolService.findToolByName(toolRequest.name) ?: return "Tool ${toolRequest.name} not found."
         return mcpToolExecutor.executeTool(toolDefinition, jacksonObjectMapper().writeValueAsString(toolRequest.arguments)) ?: "no response from ${toolRequest.name}"
     }
+
+    @GetMapping("/platform/info")
+    fun getPlatformInfo(): PlatformInfo {
+        val vectorStoreInfo = if (vectorSearchProviderType == "qdrant") VectorStoreInfo(true) else VectorStoreInfo(false)
+        return PlatformInfo(version, ModelSettings(modelSettings.settingsType, "", ""), vectorStoreInfo)
+    }
 }
 
 data class ExecuteToolRequest(
     val name: String,
     val arguments: Map<String, Any>,
+)
+
+data class PlatformInfo(
+    val version: String,
+    val modelSettings: ModelSettings,
+    val vectorStoreInfo: VectorStoreInfo,
+)
+
+data class VectorStoreInfo(
+    val isEnabled: Boolean,
 )

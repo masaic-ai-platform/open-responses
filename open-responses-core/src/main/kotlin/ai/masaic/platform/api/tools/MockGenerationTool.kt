@@ -4,7 +4,7 @@ import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
 import ai.masaic.openresponses.tool.mcp.nativeToolDefinition
-import ai.masaic.platform.api.config.SystemSettings
+import ai.masaic.platform.api.config.ModelSettings
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.service.messages
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -15,8 +15,8 @@ import org.springframework.http.codec.ServerSentEvent
 
 class MockGenerationTool(
     @Lazy private val modelService: ModelService,
-    private val systemSettings: SystemSettings,
-) : ModelDepPlatformNativeTool(PlatformToolsNames.MOCK_GEN_TOOL, modelService, systemSettings) {
+    private val modelSettings: ModelSettings,
+) : ModelDepPlatformNativeTool(PlatformToolsNames.MOCK_GEN_TOOL, modelService, modelSettings) {
     private val logger = KotlinLogging.logger { }
 
     override fun provideToolDef(): NativeToolDefinition =
@@ -63,7 +63,7 @@ class MockGenerationTool(
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
         context: UnifiedToolContext,
-    ): String = callModel(addMessages(arguments))
+    ): String = callModel(paramsAccessor, client, addMessages(arguments))
 
     private fun addMessages(arguments: String): List<Map<String, String>> {
         logger.debug { "argument received: $arguments" }
