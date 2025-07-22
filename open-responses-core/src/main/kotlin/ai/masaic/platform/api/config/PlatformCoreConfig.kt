@@ -91,6 +91,7 @@ class PlatformCoreConfig {
     ) = PlatformMcpService(mcpMockServerRepository, mockFunctionRepository, mocksRepository)
 
     @Configuration
+    @Profile("platform")
     @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "mongodb")
     class MongoRepositoryConfiguration {
         @Bean
@@ -104,6 +105,7 @@ class PlatformCoreConfig {
     }
 
     @Configuration
+    @Profile("platform")
     @ConditionalOnProperty(name = ["open-responses.store.type"], havingValue = "in-memory", matchIfMissing = true)
     class InMemoryRepositoryConfiguration {
         @Bean
@@ -117,6 +119,7 @@ class PlatformCoreConfig {
     }
 
     @Configuration
+    @Profile("platform")
     @ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "qdrant")
     class PlatformQdrantSetupConfiguration {
         @Bean
@@ -146,6 +149,7 @@ class PlatformCoreConfig {
     }
 
     @Configuration
+    @Profile("platform")
     @ConditionalOnProperty(name = ["open-responses.store.vector.search.provider"], havingValue = "file", matchIfMissing = true)
     class PlatformWithoutQdrantConfiguration {
         @Bean
