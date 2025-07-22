@@ -1,5 +1,6 @@
 package ai.masaic.platform.api.model
 
+import ai.masaic.openresponses.api.model.ModelInfo
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -13,10 +14,12 @@ data class ModelProvider(
 data class ProvidedModel(
     val name: String,
     val modelSyntax: String,
+    val isEmbeddingModel: Boolean = false,
 )
 
 data class SchemaGenerationRequest(
     val description: String,
+    val modelInfo: ModelInfo?,
 )
 
 data class SchemaGenerationResponse(
@@ -25,6 +28,7 @@ data class SchemaGenerationResponse(
 
 data class FunctionGenerationRequest(
     val description: String,
+    val modelInfo: ModelInfo? = null,
 )
 
 data class FunctionGenerationResponse(
@@ -34,6 +38,7 @@ data class FunctionGenerationResponse(
 data class PromptGenerationRequest(
     val description: String,
     val existingPrompt: String = "",
+    val modelInfo: ModelInfo?,
 )
 
 data class PromptGenerationResponse(

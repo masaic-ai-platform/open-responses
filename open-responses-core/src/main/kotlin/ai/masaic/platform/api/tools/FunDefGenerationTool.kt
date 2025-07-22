@@ -4,7 +4,7 @@ import ai.masaic.openresponses.tool.NativeToolDefinition
 import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.UnifiedToolContext
 import ai.masaic.openresponses.tool.mcp.nativeToolDefinition
-import ai.masaic.platform.api.config.SystemSettings
+import ai.masaic.platform.api.config.ModelSettings
 import ai.masaic.platform.api.model.FunctionGenerationRequest
 import ai.masaic.platform.api.model.FunctionGenerationResponse
 import ai.masaic.platform.api.service.ModelService
@@ -15,8 +15,8 @@ import org.springframework.http.codec.ServerSentEvent
 
 class FunDefGenerationTool(
     @Lazy private val modelService: ModelService,
-    private val systemSettings: SystemSettings,
-) : ModelDepPlatformNativeTool(PlatformToolsNames.FUN_DEF_GEN_TOOL, modelService, systemSettings) {
+    private val modelSettings: ModelSettings,
+) : ModelDepPlatformNativeTool(PlatformToolsNames.FUN_DEF_GEN_TOOL, modelService, modelSettings) {
     override fun provideToolDef(): NativeToolDefinition =
         nativeToolDefinition {
             name(toolName)
@@ -50,19 +50,24 @@ class FunDefGenerationTool(
         val jsonTree = mapper.readTree(arguments)
         val contextDetails: String = jsonTree["context"]?.asText() ?: ""
         val functionDetails: String = jsonTree["functionDetails"]?.asText() ?: throw IllegalStateException("function details for definition generation are necessary.")
-        return executeTool(functionDetails, contextDetails)
+        val messages = addMessages(functionDetails, contextDetails)
+        return callModel(paramsAccessor, client, messages)
     }
 
-    suspend fun executeTool(request: FunctionGenerationRequest): FunctionGenerationResponse {
-        val response = executeTool(request.description, "")
+    suspend fun executeTool(
+        request: FunctionGenerationRequest,
+        settings: ModelSettings,
+    ): FunctionGenerationResponse {
+        val messages = addMessages(request.description, "")
+        val response = callModel(settings, messages)
         val functionBody: String = mapper.readTree(response)["functionBody"].asText()
         return FunctionGenerationResponse(functionBody)
     }
 
-    private suspend fun executeTool(
+    private suspend fun addMessages(
         functionDetails: String,
         contextDetails: String,
-    ): String {
+    ): List<Map<String, String>> {
         val generateFunctionPrompt =
             """
 You are an expert OpenAI function-definition generator.
@@ -129,7 +134,6 @@ $functionDetails
 CONTEXT SUMMARY OF PROGRESS SO FAR
 $contextDetails
             """.trimIndent()
-
-        return callModel(messages { systemMessage(generateFunctionPrompt) })
+        return messages { systemMessage(generateFunctionPrompt) }
     }
 }

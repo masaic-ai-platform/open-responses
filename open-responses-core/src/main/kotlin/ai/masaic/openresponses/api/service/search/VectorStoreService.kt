@@ -10,6 +10,7 @@ import ai.masaic.openresponses.api.service.VectorStoreFileManager
 import ai.masaic.openresponses.api.support.service.OpenResponsesObsAttributes
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.IdGenerator
+import ai.masaic.platform.api.config.ModelSettings
 import io.micrometer.core.instrument.Timer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +19,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Service
+import java.io.InputStream
 import java.time.Instant
 
 /**
@@ -28,6 +31,7 @@ import java.time.Instant
  * updating, and deleting vector stores and their files.
  */
 @Service
+@Profile("!platform")
 class VectorStoreService(
     @Autowired private val vectorStoreFileManager: VectorStoreFileManager,
     @Autowired private val vectorStoreRepository: VectorStoreRepository,
@@ -206,7 +210,7 @@ class VectorStoreService(
                     val savedFile = vectorStoreRepository.saveVectorStoreFile(vectorStoreFile)
                     
                     // Process the file asynchronously
-                    processFile(savedFile.vectorStoreId, savedFile)
+                    processFile(savedFile.vectorStoreId, savedFile, modelSettings = ModelInfo.modelSettings(request.modelInfo))
                 } catch (e: Exception) {
                     log.error("Error processing file $fileId", e)
                     // In case of immediate error, update counts directly
@@ -411,7 +415,7 @@ class VectorStoreService(
                 updateVectorStoreFileCounts(vectorStoreId)
                 
                 // Process the file asynchronously
-                processFile(savedFile.vectorStoreId, savedFile)
+                processFile(savedFile.vectorStoreId, savedFile, ModelInfo.modelSettings(request.modelInfo))
                 
                 // Return the saved file
                 savedFile
@@ -918,9 +922,10 @@ class VectorStoreService(
      * Processes a file in the background.
      * This method indexes the file in the vector search provider.
      */
-    private suspend fun processFile(
+    suspend fun processFile(
         vectorStoreId: String,
         file: VectorStoreFile,
+        modelSettings: ModelSettings?,
     ) {
         backgroundScope.launch {
             try {
@@ -954,13 +959,14 @@ class VectorStoreService(
                     
                     // Process with a single indexing operation that includes attributes
                     val success =
-                        vectorSearchProvider.indexFile(
+                        indexFile(
                             fileId = file.id, 
                             content = resource.inputStream, 
                             filename = filename, 
                             chunkingStrategy = effectiveChunkingStrategy,
                             attributes = file.attributes,
                             vectorStoreId = vectorStoreId,
+                            modelSettings = modelSettings,
                         )
 
                     if (success) {
@@ -988,6 +994,24 @@ class VectorStoreService(
             }
         }
     }
+
+    protected fun indexFile(
+        fileId: String,
+        content: InputStream,
+        filename: String,
+        chunkingStrategy: ChunkingStrategy? = null,
+        attributes: Map<String, Any>? = null,
+        vectorStoreId: String,
+        modelSettings: ModelSettings?,
+    ): Boolean =
+        vectorSearchProvider.indexFile(
+            fileId = fileId,
+            content = content,
+            filename = filename,
+            chunkingStrategy = chunkingStrategy,
+            attributes = attributes,
+            vectorStoreId = vectorStoreId,
+        )
 
     /**
      * Helper method to map search results to vector store search result objects.
