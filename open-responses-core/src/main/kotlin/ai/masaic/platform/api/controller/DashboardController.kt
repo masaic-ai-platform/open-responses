@@ -10,11 +10,13 @@ import ai.masaic.platform.api.tools.FunDefGenerationTool
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.boot.info.BuildProperties
 import org.springframework.context.annotation.Profile
 import org.springframework.core.io.ClassPathResource
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
+import java.time.Instant
 
 @Profile("platform")
 @RestController
@@ -26,9 +28,8 @@ class DashboardController(
     private val modelService: ModelService,
     private val modelSettings: ModelSettings,
     private val funDefGenerationTool: FunDefGenerationTool,
+    private val buildProperties: BuildProperties
 ) {
-    @Value("\${application.formatted-version:UNKNOWN}")
-    private val version = ""
 
     @Value("\${open-responses.store.vector.search.provider:file}")
     private val vectorSearchProviderType = ""
@@ -205,7 +206,7 @@ ${request.existingPrompt}
     @GetMapping("/platform/info")
     fun getPlatformInfo(): PlatformInfo {
         val vectorStoreInfo = if (vectorSearchProviderType == "qdrant") VectorStoreInfo(true) else VectorStoreInfo(false)
-        return PlatformInfo(version, ModelSettings(modelSettings.settingsType, "", ""), vectorStoreInfo)
+        return PlatformInfo(buildProperties.version, buildProperties.time, ModelSettings(modelSettings.settingsType, "", ""), vectorStoreInfo)
     }
 }
 
@@ -216,6 +217,7 @@ data class ExecuteToolRequest(
 
 data class PlatformInfo(
     val version: String,
+    val buildTime: Instant,
     val modelSettings: ModelSettings,
     val vectorStoreInfo: VectorStoreInfo,
 )

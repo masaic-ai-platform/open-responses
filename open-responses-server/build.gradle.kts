@@ -63,3 +63,7 @@ tasks.withType<org.springframework.boot.gradle.tasks.bundling.BootJar> {
         attributes["Implementation-Version"] = project.version
     }
 }
+
+springBoot {
+    buildInfo()
+}
