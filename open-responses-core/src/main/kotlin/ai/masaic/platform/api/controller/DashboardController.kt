@@ -28,9 +28,8 @@ class DashboardController(
     private val modelService: ModelService,
     private val modelSettings: ModelSettings,
     private val funDefGenerationTool: FunDefGenerationTool,
-    private val buildProperties: BuildProperties
+    private val buildProperties: BuildProperties,
 ) {
-
     @Value("\${open-responses.store.vector.search.provider:file}")
     private val vectorSearchProviderType = ""
 
