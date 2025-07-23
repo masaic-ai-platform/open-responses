@@ -46,6 +46,7 @@ data class FileSearchTool(
     @JsonProperty("vector_store_ids")
     val vectorStoreIds: List<String>? = null,
     val alias: String? = type,
+    val modelInfo: ModelInfo?,
 ) : Tool
 
 /**
@@ -80,6 +81,7 @@ data class AgenticSeachTool(
     val enableTemperatureTuning: Boolean? = null,
     @JsonProperty("enable_top_p_tuning")
     val enableTopPTuning: Boolean? = null,
+    val modelInfo: ModelInfo?,
 ) : Tool
 
 /**

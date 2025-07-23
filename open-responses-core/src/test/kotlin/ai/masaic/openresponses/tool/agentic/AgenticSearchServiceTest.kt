@@ -4,6 +4,7 @@ import ai.masaic.openresponses.api.service.search.HybridSearchService
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.AgenticSearchParams
 import ai.masaic.openresponses.tool.ResponseParamsAdapter
+import ai.masaic.platform.api.config.ModelSettings
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
@@ -22,6 +23,7 @@ class AgenticSearchServiceTest {
     private val mapper = ObjectMapper()
     private val agenticSearchService = AgenticSearchService(vectorStoreService, mapper, hybridSearchService)
     private val openAIClient = mockk<OpenAIClient>()
+    private val modelSettings = ModelSettings("1234", "abd")
     private val responseParams =
         mockk<ResponseCreateParams> {
             every { temperature() } returns Optional.of(0.9)
@@ -45,6 +47,7 @@ class AgenticSearchServiceTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             }
         }
@@ -67,6 +70,7 @@ class AgenticSearchServiceTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             }
         }
@@ -89,6 +93,7 @@ class AgenticSearchServiceTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             }
         }
@@ -98,7 +103,7 @@ class AgenticSearchServiceTest {
     fun `run returns early empty response when initial buffer is empty`() =
         runBlocking {
             // stub hybridSearchService to return no results
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns emptyList()
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns emptyList()
 
             val params = AgenticSearchParams("test query")
             val vectorStores = listOf("store1")
@@ -115,6 +120,7 @@ class AgenticSearchServiceTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
 
             assertTrue(response.data.isEmpty(), "Expected no data in response when initial buffer is empty")

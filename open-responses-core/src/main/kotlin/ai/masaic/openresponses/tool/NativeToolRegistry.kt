@@ -2,12 +2,7 @@ package ai.masaic.openresponses.tool
 
 import ai.masaic.openresponses.api.client.ResponseStore
 import ai.masaic.openresponses.api.extensions.isImageContent
-import ai.masaic.openresponses.api.model.AgenticSeachTool
-import ai.masaic.openresponses.api.model.FileSearchTool
-import ai.masaic.openresponses.api.model.Filter
-import ai.masaic.openresponses.api.model.ImageGenerationTool
-import ai.masaic.openresponses.api.model.VectorStoreSearchRequest
-import ai.masaic.openresponses.api.model.VectorStoreSearchResult
+import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.service.search.VectorStoreService
 import ai.masaic.openresponses.tool.agentic.AgenticSearchService
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -139,6 +134,7 @@ open class NativeToolRegistry(
                         query = params.query,
                         maxNumResults = maxResults,
                         filters = filters,
+                        modelInfo = fileSearchToolConfig.modelInfo,
                     )
                 val results = vectorStoreService.searchVectorStore(vectorStoreId, searchRequest)
                 allResults.addAll(results.data)
@@ -258,6 +254,7 @@ open class NativeToolRegistry(
                     initialSeedMultiplier = initialSeedMultiplier,
                     eventEmitter = eventEmitter,
                     toolMetadata = toolMetadata,
+                    modelSettings = ModelInfo.modelSettings(agenticToolConfig.modelInfo),
                 )
 
             log.info("AgenticSearch completed with ${response.data.size} results and ${response.search_iterations.size} iterations")

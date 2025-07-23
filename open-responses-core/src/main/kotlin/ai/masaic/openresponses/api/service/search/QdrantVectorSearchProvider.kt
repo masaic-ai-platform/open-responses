@@ -269,6 +269,11 @@ class QdrantVectorSearchProvider(
         modelSettings: ModelSettings?,
     ): List<List<Float>> = embeddingService.embedTexts(chunkTexts)
 
+    protected fun embedding(
+        query: String,
+        modelSettings: ModelSettings?,
+    ): List<Float> = embeddingService.embedText(query)
+
     /**
      * Indexes a file with attributes.
      */
@@ -307,6 +312,22 @@ class QdrantVectorSearchProvider(
         maxResults: Int,
         rankingOptions: RankingOptions?,
         filter: Filter?,
+    ): List<VectorSearchProvider.SearchResult> = searchSimilarWithModelInfo(query, maxResults, rankingOptions, filter, null)
+
+    fun searchSimilar(
+        query: String,
+        maxResults: Int,
+        rankingOptions: RankingOptions?,
+        filter: Filter?,
+        modelSettings: ModelSettings?,
+    ): List<VectorSearchProvider.SearchResult> = searchSimilarWithModelInfo(query, maxResults, rankingOptions, filter, modelSettings)
+
+    fun searchSimilarWithModelInfo(
+        query: String,
+        maxResults: Int,
+        rankingOptions: RankingOptions?,
+        filter: Filter?,
+        modelSettings: ModelSettings?,
     ): List<VectorSearchProvider.SearchResult> {
         try {
             // Return empty results for empty query
@@ -316,7 +337,7 @@ class QdrantVectorSearchProvider(
             }
 
             // Generate embedding for the query
-            val queryEmbedding = Embedding.from(embeddingService.embedText(query))
+            val queryEmbedding = Embedding.from(embedding(query, modelSettings))
 
             // Find relevant documents
             val minScore = rankingOptions?.scoreThreshold ?: qdrantProperties.minScore ?: 0.07

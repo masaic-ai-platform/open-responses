@@ -1,15 +1,9 @@
 package ai.masaic.openresponses.tool
 
-import ai.masaic.openresponses.api.model.AgenticSeachTool
-import ai.masaic.openresponses.api.model.FileSearchTool
-import ai.masaic.openresponses.api.model.Filter
-import ai.masaic.openresponses.api.model.FunctionTool
-import ai.masaic.openresponses.api.model.ImageGenerationTool
-import ai.masaic.openresponses.api.model.InputImageMask
-import ai.masaic.openresponses.api.model.Tool
-import ai.masaic.openresponses.api.model.UserLocation
-import ai.masaic.openresponses.api.model.WebSearchTool
+import ai.masaic.openresponses.api.model.*
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.module.kotlin.readValue
+import com.openai.core.JsonString
 import com.openai.core.JsonValue
 import com.openai.models.FunctionDefinition
 import com.openai.models.FunctionParameters
@@ -173,6 +167,7 @@ class ResponseParamsAdapter(
         params.tools().getOrElse { emptyList<com.openai.models.responses.Tool>() }.mapNotNull { it ->
             // Use mapNotNull to handle potential nulls from conversion
             if (it.isFileSearch()) {
+                val props = it.asFileSearch()._additionalProperties()
                 FileSearchTool(
                     type = "file_search",
                     vectorStoreIds = it.asFileSearch().vectorStoreIds(),
@@ -189,7 +184,8 @@ class ResponseParamsAdapter(
                             .maxNumResults()
                             .orElse(20)
                             .toInt(),
-                    alias = it.asFileSearch()._additionalProperties()["alias"]?.toString(),
+                    alias = props["alias"]?.toString(),
+                    modelInfo = extractModelInfo(props),
                 )
             } else if (it.isWebSearch()) {
                 if (it.asWebSearch().type().toString() == "agentic_search") {
@@ -218,6 +214,7 @@ class ResponseParamsAdapter(
                                 ?.toString()
                                 ?.toBooleanStrictOrNull(),
                         enableTopPTuning = props["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
+                        modelInfo = extractModelInfo(props),
                     )
                 } else {
                     throw IllegalArgumentException("Unsupported type of tool: ${it.asWebSearch().type()}")
@@ -297,6 +294,17 @@ class ResponseParamsAdapter(
         toolName: String,
         toolClass: Class<T>,
     ): T? = getTools().find { it.type == toolName && toolClass.isInstance(it) } as? T
+
+    private fun extractModelInfo(props: Map<String, JsonValue>): ModelInfo? {
+        val modelInfoObject = props["modelInfo"]?.asObject()?.getOrNull()
+        return if (modelInfoObject == null) {
+            null
+        } else {
+            val bearerToken = (modelInfoObject.getValue("bearerToken") as? JsonString)?.value
+            val model = (modelInfoObject.getValue("model") as? JsonString)?.value
+            return ModelInfo.fromApiKey(bearerToken, model)
+        }
+    }
 }
 
 /**
@@ -329,6 +337,7 @@ class ChatCompletionParamsAdapter(
                         filters = additionalProps["filters"],
                         maxNumResults = additionalProps["max_num_results"]?.toString()?.toIntOrNull() ?: 20,
                         alias = additionalProps["alias"]?.toString(),
+                        modelInfo = extractModelInfo(additionalProps),
                     )
                 }
                 "agentic_search" -> {
@@ -358,6 +367,7 @@ class ChatCompletionParamsAdapter(
                                 ?.toString()
                                 ?.toBooleanStrictOrNull(),
                         enableTopPTuning = additionalProps["enable_top_p_tuning"]?.toString()?.toBooleanStrictOrNull(),
+                        modelInfo = extractModelInfo(additionalProps),
                     )
                 }
                 "web_search_preview" -> {
@@ -435,6 +445,16 @@ class ChatCompletionParamsAdapter(
         toolName: String,
         toolClass: Class<T>,
     ): T? = getTools().find { it.type == toolName && toolClass.isInstance(it) } as? T
+
+    private fun extractModelInfo(props: Map<String, JsonValue>): ModelInfo? {
+        val modelInfoObject = props["modelInfo"]?.asObject()?.getOrNull()
+        return if (modelInfoObject == null) {
+            null
+        } else {
+            val mInfo: ModelInfo = objectMapper.readValue(modelInfoObject.toString())
+            ModelInfo.fromApiKey(mInfo.bearerToken, mInfo.model)
+        }
+    }
 }
 
 /**

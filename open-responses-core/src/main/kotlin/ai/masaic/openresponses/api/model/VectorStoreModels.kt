@@ -356,6 +356,7 @@ data class VectorStoreSearchRequest(
      */
     @JsonProperty("ranking_options")
     val rankingOptions: RankingOptions? = null,
+    val modelInfo: ModelInfo? = null,
 )
 
 /**

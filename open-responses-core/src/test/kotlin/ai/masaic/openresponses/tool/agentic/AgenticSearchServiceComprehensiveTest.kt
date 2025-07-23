@@ -8,6 +8,7 @@ import ai.masaic.openresponses.tool.AgenticSearchIteration
 import ai.masaic.openresponses.tool.AgenticSearchParams
 import ai.masaic.openresponses.tool.ResponseParamsAdapter
 import ai.masaic.openresponses.tool.ToolParamsAccessor
+import ai.masaic.platform.api.config.ModelSettings
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.openai.client.OpenAIClient
@@ -24,6 +25,7 @@ class AgenticSearchServiceComprehensiveTest {
     private val mapper = ObjectMapper()
     private val openAIClient = mockk<OpenAIClient>(relaxed = true)
     private val responseParams = mockk<ResponseCreateParams>(relaxed = true)
+    private val modelSettings = ModelSettings("12345", "abc")
 
     private fun dummyResult(
         id: String,
@@ -64,7 +66,7 @@ class AgenticSearchServiceComprehensiveTest {
     @Test
     fun `initial empty buffer returns early`() =
         runBlocking {
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns emptyList()
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns emptyList()
             val service = TestableService(vectorStoreService, mapper, hybridSearchService, decisions = mutableListOf("TERMINATE: no data"))
             val response =
                 service.run(
@@ -78,6 +80,7 @@ class AgenticSearchServiceComprehensiveTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             assertTrue(response.data.isEmpty(), "Expected no data when initial buffer empty")
             assertEquals(1, response.search_iterations.size)
@@ -89,7 +92,7 @@ class AgenticSearchServiceComprehensiveTest {
         runBlocking {
             val low = dummyResult("f1", 0.2)
             val high = dummyResult("f1", 0.8)
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns listOf(low, high)
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns listOf(low, high)
             val service = TestableService(vectorStoreService, mapper, hybridSearchService, decisions = mutableListOf("TERMINATE"))
             val response =
                 service.run(
@@ -103,6 +106,7 @@ class AgenticSearchServiceComprehensiveTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             assertEquals(1, response.data.size)
             assertEquals(0.8, response.data.first().score)
@@ -111,7 +115,7 @@ class AgenticSearchServiceComprehensiveTest {
     @Test
     fun `retries invalid LLM decisions then terminates`() =
         runBlocking {
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns listOf(dummyResult("f2", 1.0))
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns listOf(dummyResult("f2", 1.0))
             val decisions = mutableListOf("BAD", "WORSE", "TERMINATE: ok")
             val service = TestableService(vectorStoreService, mapper, hybridSearchService, decisions)
             val response =
@@ -126,6 +130,7 @@ class AgenticSearchServiceComprehensiveTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             // After two invalid, third TERMINATE
             assertTrue(response.knowledge_acquired?.contains("ok") == true)
@@ -135,7 +140,7 @@ class AgenticSearchServiceComprehensiveTest {
     @Test
     fun `terminates after repeated identical queries`() =
         runBlocking {
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns listOf(dummyResult("f3", 0.5))
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns listOf(dummyResult("f3", 0.5))
             // Always instruct same next query
             val decisions = mutableListOf("NEXT_QUERY: q {}", "NEXT_QUERY: q {}", "NEXT_QUERY: q {}", "TERMINATE: done")
             val service = TestableService(vectorStoreService, mapper, hybridSearchService, decisions)
@@ -151,6 +156,7 @@ class AgenticSearchServiceComprehensiveTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             // Should terminate due to repeat threshold
             assertTrue(response.search_iterations.find { it.termination_reason?.contains("repeated queries") == true } != null)
@@ -159,7 +165,7 @@ class AgenticSearchServiceComprehensiveTest {
     @Test
     fun `force termination at max iterations if never terminating`() =
         runBlocking {
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns listOf(dummyResult("f4", 0.7))
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns listOf(dummyResult("f4", 0.7))
             // Provide unique next queries but never TERMINATE
             val decs = mutableListOf("NEXT_QUERY: a {}", "NEXT_QUERY: b {}", "NEXT_QUERY: c {}")
             val service = TestableService(vectorStoreService, mapper, hybridSearchService, decs)
@@ -175,6 +181,7 @@ class AgenticSearchServiceComprehensiveTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             // Last iteration should be forced termination
             val last = response.search_iterations.last()
@@ -185,7 +192,7 @@ class AgenticSearchServiceComprehensiveTest {
     @Test
     fun `memory summary is built from ##MEMORY## markers`() =
         runBlocking {
-            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any()) } returns listOf(dummyResult("f5", 0.9))
+            coEvery { hybridSearchService.hybridSearch(any(), any(), any(), any(), modelSettings = modelSettings) } returns listOf(dummyResult("f5", 0.9))
             val decs =
                 mutableListOf(
                     // initial pass: provide memory marker
@@ -206,6 +213,7 @@ class AgenticSearchServiceComprehensiveTest {
                     paramsAccessor = ResponseParamsAdapter(responseParams, jacksonObjectMapper()),
                     eventEmitter = {},
                     toolMetadata = mapOf(),
+                    modelSettings = modelSettings,
                 )
             // Summary should include iteration with memory content
             assertTrue(response.knowledge_acquired?.contains("Iteration 1:") == true)
