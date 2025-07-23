@@ -134,6 +134,9 @@ $functionDetails
 CONTEXT SUMMARY OF PROGRESS SO FAR
 $contextDetails
             """.trimIndent()
-        return messages { systemMessage(generateFunctionPrompt) }
+        return messages {
+            systemMessage(generateFunctionPrompt)
+            userMessage("Generate function.")
+        }
     }
 }
