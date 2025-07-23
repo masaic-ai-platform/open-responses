@@ -113,9 +113,11 @@ class VectorStoreController(
     suspend fun searchVectorStore(
         @PathVariable("vector_store_id") vectorStoreId: String,
         @RequestBody request: VectorStoreSearchRequest,
+        @RequestHeader("Authorization") authHeader: String?,
     ): ResponseEntity<VectorStoreSearchResults> {
         try {
-            val results = vectorStoreService.searchVectorStore(vectorStoreId, request)
+            val updatedRequest = request.copy(modelInfo = ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
+            val results = vectorStoreService.searchVectorStore(vectorStoreId, updatedRequest)
             return ResponseEntity.ok(results)
         } catch (e: VectorStoreNotFoundException) {
             log.error("Error searching vector store: ${e.message}")

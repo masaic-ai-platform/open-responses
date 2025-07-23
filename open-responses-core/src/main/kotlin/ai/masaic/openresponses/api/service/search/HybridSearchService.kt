@@ -7,6 +7,7 @@ import ai.masaic.openresponses.api.model.VectorStoreSearchResult
 import ai.masaic.openresponses.api.model.VectorStoreSearchResultContent
 import ai.masaic.openresponses.api.service.rerank.RerankerService
 import ai.masaic.openresponses.api.utils.FilterUtils
+import ai.masaic.platform.api.config.ModelSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -15,6 +16,7 @@ import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.context.annotation.Profile
 import org.springframework.data.annotation.Id
 import org.springframework.data.mongodb.core.ReactiveMongoTemplate
 import org.springframework.data.mongodb.core.index.ReactiveIndexOperations
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Service
  * Hybrid search service combining vector similarity with Lucene and Mongo full-text search.
  */
 @Service
+@Profile("!platform")
 class HybridSearchService
     @Autowired
     constructor(
@@ -72,6 +75,7 @@ class HybridSearchService
             userFilter: Filter?,
             vectorStoreIds: List<String>,
             alpha: Double = 0.5,
+            modelSettings: ModelSettings?,
         ): List<VectorStoreSearchResult> =
             coroutineScope {
                 if (query.isBlank()) {
@@ -107,21 +111,20 @@ class HybridSearchService
                 val vectorDeferred =
                     async {
                         // Convert VectorSearchProvider.SearchResult to VectorStoreSearchResult
-                        vectorSearchProvider
-                            .searchSimilar(
-                                query = query,
-                                maxResults = maxResults,
-                                rankingOptions = null,
-                                filter = CompoundFilter(type = "and", filters = listOfNotNull(userFilter, vectorStoreFilter)),
-                            ).map { result ->
-                                VectorStoreSearchResult(
-                                    fileId = result.fileId,
-                                    filename = result.metadata["filename"] as? String ?: "",
-                                    score = result.score,
-                                    content = listOf(VectorStoreSearchResultContent("text", result.content)),
-                                    attributes = result.metadata,
-                                )
-                            }
+                        searchSimilar(
+                            query = query,
+                            maxResults = maxResults,
+                            CompoundFilter(type = "and", filters = listOfNotNull(userFilter, vectorStoreFilter)),
+                            modelSettings = modelSettings,
+                        ).map { result ->
+                            VectorStoreSearchResult(
+                                fileId = result.fileId,
+                                filename = result.metadata["filename"] as? String ?: "",
+                                score = result.score,
+                                content = listOf(VectorStoreSearchResultContent("text", result.content)),
+                                attributes = result.metadata,
+                            )
+                        }
                     }
                 // Only run Lucene search if using file repository and luceneIndexService is available
                 val luceneResults =
@@ -266,6 +269,19 @@ class HybridSearchService
                         ?.rerank(query, prelimRanked)
                 }?.take(maxResults) ?: prelimRanked.take(maxResults)
             }
+
+        protected fun searchSimilar(
+            query: String,
+            maxResults: Int,
+            filter: CompoundFilter,
+            modelSettings: ModelSettings?,
+        ) = vectorSearchProvider
+            .searchSimilar(
+                query = query,
+                maxResults = maxResults,
+                rankingOptions = null,
+                filter,
+            )
 
         /**
          * Get a unique key to identify a result across different sources

@@ -730,13 +730,7 @@ class VectorStoreService(
                         }
                     
                     // Execute search with structured filters (new approach)
-                    val searchResults =
-                        vectorSearchProvider.searchSimilar(
-                            query = request.query,
-                            maxResults = request.maxNumResults ?: 10,
-                            rankingOptions = request.rankingOptions,
-                            filter = filterObject,
-                        )
+                    val searchResults = searchSimilar(vectorStoreId, filterObject, request)
                     
                     // Update the vector store's last active timestamp
                     val updatedVectorStore = vectorStore.copy(lastActiveAt = Instant.now().epochSecond)
@@ -768,6 +762,17 @@ class VectorStoreService(
                 sample.stop(timer)
             }
         }
+
+    protected fun searchSimilar(
+        vectorStoreId: String,
+        filter: CompoundFilter,
+        request: VectorStoreSearchRequest,
+    ) = vectorSearchProvider.searchSimilar(
+        query = request.query,
+        maxResults = request.maxNumResults ?: 10,
+        rankingOptions = request.rankingOptions,
+        filter = filter,
+    )
 
     /**
      * Gets the content of a vector store file.

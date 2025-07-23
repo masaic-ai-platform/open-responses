@@ -8,12 +8,12 @@ import ai.masaic.openresponses.api.repository.VectorStoreRepository
 import ai.masaic.openresponses.api.service.VectorStoreFileManager
 import ai.masaic.openresponses.api.service.embedding.EmbeddingService
 import ai.masaic.openresponses.api.service.embedding.OpenAIProxyEmbeddingService
-import ai.masaic.openresponses.api.service.search.HybridSearchServiceHelper
-import ai.masaic.openresponses.api.service.search.VectorSearchProvider
-import ai.masaic.openresponses.api.service.search.VectorStoreService
+import ai.masaic.openresponses.api.service.rerank.RerankerService
+import ai.masaic.openresponses.api.service.search.*
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.platform.api.repository.*
 import ai.masaic.platform.api.service.ModelService
+import ai.masaic.platform.api.service.PlatformHybridSearchService
 import ai.masaic.platform.api.service.PlatformQdrantVectorSearchProvider
 import ai.masaic.platform.api.service.PlatformVectorStoreService
 import ai.masaic.platform.api.tools.*
@@ -138,6 +138,22 @@ class PlatformCoreConfig {
         )
 
         @Bean
+        fun platformHybridSearchService(
+            vectorSearchProvider: PlatformQdrantVectorSearchProvider,
+            @Value("\${open-responses.store.vector.repository.type}")
+            repositoryType: String,
+            luceneIndexService: LuceneIndexService? = null,
+            mongoTemplate: ReactiveMongoTemplate? = null,
+            rerankerService: RerankerService? = null,
+        ) = PlatformHybridSearchService(
+            vectorSearchProvider,
+            repositoryType,
+            luceneIndexService,
+            mongoTemplate,
+            rerankerService,
+        )
+
+        @Bean
         fun platformQdrantVectorSearchProvider(
             embeddingService: EmbeddingService,
             qdrantProperties: QdrantVectorProperties,
@@ -165,6 +181,22 @@ class PlatformCoreConfig {
             vectorSearchProvider,
             telemetryService,
             hybridSearchServiceHelper,
+        )
+
+        @Bean
+        fun platformHybridSearchService(
+            vectorSearchProvider: VectorSearchProvider,
+            @Value("\${open-responses.store.vector.repository.type}")
+            repositoryType: String,
+            luceneIndexService: LuceneIndexService? = null,
+            mongoTemplate: ReactiveMongoTemplate? = null,
+            rerankerService: RerankerService? = null,
+        ) = HybridSearchService(
+            vectorSearchProvider,
+            repositoryType,
+            luceneIndexService,
+            mongoTemplate,
+            rerankerService,
         )
     }
 }

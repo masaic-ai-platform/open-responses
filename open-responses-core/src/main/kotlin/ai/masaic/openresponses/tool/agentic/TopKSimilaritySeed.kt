@@ -2,6 +2,7 @@ package ai.masaic.openresponses.tool.agentic
 
 import ai.masaic.openresponses.api.model.*
 import ai.masaic.openresponses.api.service.search.VectorStoreService
+import ai.masaic.platform.api.config.ModelSettings
 import kotlinx.coroutines.*
 
 class TopKSimilaritySeed(
@@ -13,6 +14,7 @@ class TopKSimilaritySeed(
         userFilter: Filter?,
         vectorStoreIds: List<String>,
         additionalParams: Map<String, Any>,
+        modelSettings: ModelSettings?,
     ) = coroutineScope {
         vectorStoreIds
             .map { id ->

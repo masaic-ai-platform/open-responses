@@ -12,6 +12,7 @@ import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.agentic.llm.DecisionParser
 import ai.masaic.openresponses.tool.agentic.llm.LlmDecision
 import ai.masaic.openresponses.tool.agentic.llm.PromptBuilder
+import ai.masaic.platform.api.config.ModelSettings
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.openai.client.OpenAIClient
 import com.openai.models.chat.completions.ChatCompletionCreateParams
@@ -53,6 +54,7 @@ class AgenticSearchService(
         alpha: Double = 0.5,
         eventEmitter: (ServerSentEvent<String>) -> Unit,
         toolMetadata: Map<String, Any>,
+        modelSettings: ModelSettings?,
     ): AgenticSearchResponse {
         require(params.query.isNotBlank()) { "Question must not be blank" }
         require(maxResults > 0) { "maxResults must be positive" }
@@ -80,7 +82,7 @@ class AgenticSearchService(
 
             val seedSize = min(maxResults * initialSeedMultiplier, 100)
             // Perform initial seed search without recording it as an iteration
-            val searchBuffer = strategy.seed(currentQuery, seedSize, initialSearchFilter, vectorStoreIds, additionalParams).take(maxResults).toMutableList()
+            val searchBuffer = strategy.seed(currentQuery, seedSize, initialSearchFilter, vectorStoreIds, additionalParams, modelSettings).take(maxResults).toMutableList()
             
             // Track initial results in the allRelevantChunks set
             allRelevantChunks.addAll(searchBuffer)
@@ -283,7 +285,7 @@ class AgenticSearchService(
                     }
             
                 // Perform vector search with current query and filters
-                val newResults = strategy.seed(currentQuery, maxResults, searchFilter, vectorStoreIds, additionalParams)
+                val newResults = strategy.seed(currentQuery, maxResults, searchFilter, vectorStoreIds, additionalParams, modelSettings)
             
                 // Add results to current iteration record if available
                 currentIterationRecord?.results?.addAll(newResults)
