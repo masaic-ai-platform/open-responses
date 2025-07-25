@@ -351,7 +351,7 @@ class ToolService(
         val toolResult =
             when (tool.protocol) {
                 ToolProtocol.NATIVE -> nativeToolRegistry.executeTool(resolvedName, arguments, paramsAccessor, openAIClient, eventEmitter, toolMetadata, context)
-                ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments)
+                ToolProtocol.MCP -> mcpToolExecutor.executeTool(tool, arguments, paramsAccessor, openAIClient)
             }
         log.debug("tool ${toolMetadata["originalName"]} (resolved: $resolvedName) executed with arguments: $arguments gave result: $toolResult")
         return toolResult

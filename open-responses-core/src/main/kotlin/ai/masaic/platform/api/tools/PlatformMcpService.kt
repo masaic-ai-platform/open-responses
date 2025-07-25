@@ -2,14 +2,22 @@ package ai.masaic.platform.api.tools
 
 import ai.masaic.openresponses.api.model.CreateCompletionRequest
 import ai.masaic.openresponses.tool.ToolDefinition
+import ai.masaic.openresponses.tool.ToolParamsAccessor
 import ai.masaic.openresponses.tool.mcp.*
 import ai.masaic.platform.api.config.ModelSettings
+import ai.masaic.platform.api.config.SystemSettingsType
 import ai.masaic.platform.api.controller.FunctionBodyResponse
 import ai.masaic.platform.api.controller.GetFunctionResponse
 import ai.masaic.platform.api.repository.McpMockServerRepository
 import ai.masaic.platform.api.repository.MockFunctionRepository
 import ai.masaic.platform.api.repository.MocksRepository
 import ai.masaic.platform.api.service.ModelService
+import ai.masaic.platform.api.service.messages
+import com.openai.client.OpenAIClient
+import com.openai.models.chat.completions.ChatCompletionCreateParams
+import com.openai.models.chat.completions.ChatCompletionMessageParam
+import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
+import com.openai.models.chat.completions.ChatCompletionUserMessageParam
 import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.data.annotation.Id
@@ -101,6 +109,8 @@ class MockMcpClient(
     override fun executeTool(
         tool: ToolDefinition,
         arguments: String,
+        paramsAccessor: ToolParamsAccessor?,
+        openAIClient: OpenAIClient?,
         headers: Map<String, String>,
     ): String {
         log.debug("Executing native tool ${tool.name} with arguments: $arguments")
@@ -144,21 +154,82 @@ INCOMING REQUEST
 $arguments
             """.trimIndent()
 
-        val createCompletionRequest =
-            CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to mockSelectionPrompt)),
-                model = modelSettings.model,
-                stream = false,
-                store = false,
-            )
+        val messages =
+            messages {
+                systemMessage(mockSelectionPrompt)
+                userMessage("Select mock responses.")
+            }
 
-        val toolResponse: String = runBlocking { modelService.fetchCompletionPayload(createCompletionRequest, modelSettings.apiKey) }
+        val toolResponse =
+            if (modelSettings.settingsType == SystemSettingsType.RUNTIME) {
+                if (paramsAccessor == null || openAIClient == null) throw IllegalArgumentException("can't execute tool without model configured at deployment time")
+                return call(paramsAccessor, openAIClient, messages)
+            } else {
+                callModel(modelSettings, messages)
+            }
         log.debug { "toolResponse: $toolResponse" }
         return toolResponse
     }
 
     override fun close() {
         // Nothing to do here....
+    }
+
+    private fun callModel(
+        modelSettings: ModelSettings,
+        messages: List<Map<String, String>>,
+    ): String {
+        val createCompletionRequest =
+            CreateCompletionRequest(
+                messages = messages,
+                model = modelSettings.qualifiedModelName,
+                stream = false,
+                store = false,
+            )
+
+        val response: String = runBlocking { modelService.fetchCompletionPayload(createCompletionRequest, modelSettings.apiKey) }
+        return response
+    }
+
+    private fun call(
+        paramsAccessor: ToolParamsAccessor,
+        openAIClient: OpenAIClient,
+        messages: List<Map<String, String>>,
+    ): String {
+        val completionMessages =
+            messages.map {
+                val role = it["role"]
+                val content = it["content"] ?: throw IllegalStateException("content cannot be empty")
+                when (role) {
+                    "system" -> {
+                        ChatCompletionMessageParam.ofSystem(
+                            ChatCompletionSystemMessageParam.builder().content(content).build(),
+                        )
+                    }
+
+                    "user" -> {
+                        ChatCompletionMessageParam.ofUser(
+                            ChatCompletionUserMessageParam.builder().content(content).build(),
+                        )
+                    }
+                    else -> throw IllegalStateException("role for message can be only system or user cannot be empty")
+                }
+            }
+
+        val chatCompletionRequestBuilder =
+            ChatCompletionCreateParams
+                .builder()
+                .messages(completionMessages)
+                .model(paramsAccessor.getModel())
+                .temperature(paramsAccessor.getDefaultTemperature())
+
+        val response = openAIClient.chat().completions().create(chatCompletionRequestBuilder.build())
+        return response
+            .choices()
+            .firstOrNull()
+            ?.message()
+            ?.content()
+            ?.get() ?: "TERMINATE"
     }
 }
 
