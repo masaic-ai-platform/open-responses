@@ -7,9 +7,9 @@ USER app
 WORKDIR /app
 
 # Copy the built JAR and configuration file into the image
-COPY open-responses-server/build/libs/openresponses-0.4.4.jar /app/openresponses-0.4.4.jar
+COPY open-responses-server/build/libs/openresponses-0.4.5.jar /app/openresponses-0.4.5.jar
 COPY open-responses-server/src/main/resources/mcp-servers-config.json /app/mcp-servers-config.json
 
 EXPOSE 6644
 # Start the Java application directly
-ENTRYPOINT ["java", "-jar", "/app/openresponses-0.4.4.jar"]
+ENTRYPOINT ["java", "-jar", "/app/openresponses-0.4.5.jar"]
