@@ -108,6 +108,6 @@ data class PlatformAgentMeta(
     val description: String,
     val greetingMessage: String,
     val systemPrompt: String,
-    val userMessage: String ?=null,
+    val userMessage: String? = null,
     val tools: List<Tool>,
 )

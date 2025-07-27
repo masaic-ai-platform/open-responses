@@ -8,8 +8,7 @@ import com.openai.client.OpenAIClient
 import kotlinx.coroutines.delay
 import org.springframework.http.codec.ServerSentEvent
 
-class ModelTestTool: PlatformNativeTool(PlatformToolsNames.MODEL_TEST_TOOL) {
-
+class ModelTestTool : PlatformNativeTool(PlatformToolsNames.MODEL_TEST_TOOL) {
     override fun provideToolDef(): NativeToolDefinition =
         nativeToolDefinition {
             name(toolName)
@@ -36,28 +35,30 @@ class ModelTestTool: PlatformNativeTool(PlatformToolsNames.MODEL_TEST_TOOL) {
     ): String {
         val jsonTree = mapper.readTree(arguments)
         val cityNameNode = jsonTree["city_name"]
-        if(cityNameNode.isNull) return "Parameter city_name is not received. It is mandatory"
+        if (cityNameNode.isNull) return "Parameter city_name is not received. It is mandatory"
         val cityName = cityNameNode.asText()
-        delay(3*1000)
-        return when(cityName.lowercase()) {
+        delay(3 * 1000)
+        return when (cityName.lowercase()) {
             "new delhi" -> newDelhiMockResponse
             else -> newYorkMockResponse
         }
     }
 
-    private val newDelhiMockResponse = """
+    private val newDelhiMockResponse =
+        """
 {
   "temperature": "32",
   "unit": "Celsius",
   "feelsLike": "hot and humid"
 }
-    """.trimIndent()
+        """.trimIndent()
 
-    private val newYorkMockResponse = """
+    private val newYorkMockResponse =
+        """
 {
   "temperature": "24",
   "unit": "Celsius",
   "feelsLike": "pleasant with light breeze"
 }
-    """.trimIndent()
+        """.trimIndent()
 }

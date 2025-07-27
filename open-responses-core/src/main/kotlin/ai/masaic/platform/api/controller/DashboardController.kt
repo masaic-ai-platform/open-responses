@@ -93,9 +93,11 @@ ${request.description}
         val applicableSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
         val createCompletionRequest =
             CreateCompletionRequest(
-                messages = messages {
-                    systemMessage(generateSchemaPrompt)
-                    userMessage("Generate Json Schema")},
+                messages =
+                    messages {
+                        systemMessage(generateSchemaPrompt)
+                        userMessage("Generate Json Schema")
+                    },
                 model = applicableSettings.qualifiedModelName,
                 stream = false,
                 store = false,
@@ -159,9 +161,11 @@ ${request.existingPrompt}
         val finalSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
         val createCompletionRequest =
             CreateCompletionRequest(
-                messages = messages {
-                    systemMessage(generatePromptMetaPrompt)
-                    userMessage("Generate system prompt")},
+                messages =
+                    messages {
+                        systemMessage(generatePromptMetaPrompt)
+                        userMessage("Generate system prompt")
+                    },
                 model = finalSettings.qualifiedModelName,
                 stream = false,
                 store = false,
