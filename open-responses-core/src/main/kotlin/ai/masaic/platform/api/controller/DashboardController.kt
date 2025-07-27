@@ -199,13 +199,13 @@ ${request.existingPrompt}
         @RequestBody toolRequest: ExecuteToolRequest,
     ): String {
         val toolDefinition = toolService.findToolByName(toolRequest.name) ?: return "Tool ${toolRequest.name} not found."
-        return mcpToolExecutor.executeTool(toolDefinition, jacksonObjectMapper().writeValueAsString(toolRequest.arguments)) ?: "no response from ${toolRequest.name}"
+        return mcpToolExecutor.executeTool(toolDefinition, jacksonObjectMapper().writeValueAsString(toolRequest.arguments), null, null) ?: "no response from ${toolRequest.name}"
     }
 
     @GetMapping("/platform/info")
     fun getPlatformInfo(): PlatformInfo {
         val vectorStoreInfo = if (vectorSearchProviderType == "qdrant") VectorStoreInfo(true) else VectorStoreInfo(false)
-        return PlatformInfo(buildProperties.version, buildProperties.time, ModelSettings(modelSettings.settingsType, "", ""), vectorStoreInfo)
+        return PlatformInfo("v${buildProperties.version}", buildProperties.time, ModelSettings(modelSettings.settingsType, "", ""), vectorStoreInfo)
     }
 }
 

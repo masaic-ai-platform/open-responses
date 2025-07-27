@@ -3,10 +3,12 @@ package ai.masaic.openresponses.tool.mcp
 import ai.masaic.openresponses.api.service.ResponseTimeoutException
 import ai.masaic.openresponses.tool.ToolDefinition
 import ai.masaic.openresponses.tool.ToolHosting
+import ai.masaic.openresponses.tool.ToolParamsAccessor
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
+import com.openai.client.OpenAIClient
 import dev.langchain4j.agent.tool.ToolExecutionRequest
 import dev.langchain4j.agent.tool.ToolSpecification
 import dev.langchain4j.mcp.client.Converter
@@ -60,6 +62,8 @@ interface McpClient {
     fun executeTool(
         tool: ToolDefinition,
         arguments: String,
+        paramsAccessor: ToolParamsAccessor?,
+        openAIClient: OpenAIClient?,
         headers: Map<String, String>,
     ): String?
 
@@ -163,6 +167,8 @@ class SimpleMcpClient : McpClient {
     override fun executeTool(
         tool: ToolDefinition,
         arguments: String,
+        paramsAccessor: ToolParamsAccessor?,
+        openAIClient: OpenAIClient?,
         headers: Map<String, String>,
     ): String? {
         return customClient?.callTool(CallToolRequest(tool.name, mapper.readTree(arguments)), headers)
