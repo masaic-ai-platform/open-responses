@@ -6,6 +6,7 @@ import ai.masaic.openresponses.tool.mcp.MCPToolExecutor
 import ai.masaic.platform.api.config.ModelSettings
 import ai.masaic.platform.api.model.*
 import ai.masaic.platform.api.service.ModelService
+import ai.masaic.platform.api.service.messages
 import ai.masaic.platform.api.tools.FunDefGenerationTool
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -92,7 +93,9 @@ ${request.description}
         val applicableSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
         val createCompletionRequest =
             CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to generateSchemaPrompt)),
+                messages = messages {
+                    systemMessage(generateSchemaPrompt)
+                    userMessage("Generate Json Schema")},
                 model = applicableSettings.qualifiedModelName,
                 stream = false,
                 store = false,
@@ -156,7 +159,9 @@ ${request.existingPrompt}
         val finalSettings = modelSettings.resolveSystemSettings(ModelInfo.fromApiKey(authHeader, request.modelInfo?.model))
         val createCompletionRequest =
             CreateCompletionRequest(
-                messages = listOf(mapOf("role" to "system", "content" to generatePromptMetaPrompt)),
+                messages = messages {
+                    systemMessage(generatePromptMetaPrompt)
+                    userMessage("Generate system prompt")},
                 model = finalSettings.qualifiedModelName,
                 stream = false,
                 store = false,

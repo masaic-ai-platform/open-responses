@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.*
 @CrossOrigin("*")
 class AgentsController {
     @GetMapping("/agents/{agentName}", produces = [MediaType.APPLICATION_JSON_VALUE])
-    suspend fun getMockServers(
+    suspend fun getAgent(
         @PathVariable agentName: String,
     ): ResponseEntity<PlatformAgentMeta> {
         val agentMeta =
@@ -29,6 +29,16 @@ class AgentsController {
                     )
                 }
 
+                "ModelTestAgent" -> {
+                    PlatformAgentMeta(
+                        name = "ModelTestAgent",
+                        description = "This agent tests compatibility of model with platform",
+                        greetingMessage = "Hi, let me test Model with query: \"Tell me the weather of new delhi\"",
+                        systemPrompt = modelTestPrompt,
+                        userMessage = "Tell me the weather of new delhi",
+                        tools = modelTestTools,
+                    )
+                }
                 else -> throw UnsupportedOperationException("Agent: $agentName is not supported.")
             }
         return ResponseEntity.ok(agentMeta)
@@ -70,6 +80,27 @@ Output format:
             MasaicManagedTool(PlatformToolsNames.MOCK_GEN_TOOL),
             MasaicManagedTool(PlatformToolsNames.MOCK_SAVE_TOOL),
         )
+
+    val modelTestPrompt = """
+    # Weather Information Provider
+
+* Accept a city name from the user.
+* Call get_weather_by_city with the provided city name.
+* Return the weather information for the requested location.
+
+Output format:
+Provide only the weather data with no additional commentary.
+
+Examples:
+Input: What's the weather in Tokyo?
+Output: [Weather data for Tokyo]
+
+Input: Weather for New York
+Output: [Weather data for New York]
+
+**Reminder: Keep responses concise and focused only on the weather data.**
+    """
+    private val modelTestTools = listOf(MasaicManagedTool(PlatformToolsNames.MODEL_TEST_TOOL))
 }
 
 data class PlatformAgentMeta(
@@ -77,5 +108,6 @@ data class PlatformAgentMeta(
     val description: String,
     val greetingMessage: String,
     val systemPrompt: String,
+    val userMessage: String ?=null,
     val tools: List<Tool>,
 )

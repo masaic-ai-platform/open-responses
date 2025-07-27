@@ -64,6 +64,9 @@ class PlatformCoreConfig {
     fun mockSaveTool(mocksRepository: MocksRepository) = MockSaveTool(mocksRepository)
 
     @Bean
+    fun modelTestTool() = ModelTestTool()
+
+    @Bean
     fun platformNativeToolRegistry(
         objectMapper: ObjectMapper,
         responseStore: ResponseStore,
