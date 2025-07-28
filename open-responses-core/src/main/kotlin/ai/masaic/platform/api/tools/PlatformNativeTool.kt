@@ -33,4 +33,5 @@ object PlatformToolsNames {
     const val MOCK_FUN_SAVE_TOOL = "mock_fun_save_tool"
     const val MOCK_GEN_TOOL = "mock_generation_tool"
     const val MOCK_SAVE_TOOL = "mock_save_tool"
+    const val MODEL_TEST_TOOL = "get_weather_by_city"
 }
