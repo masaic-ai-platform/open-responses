@@ -25,7 +25,11 @@ repositories {
 
 dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
-    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-webflux") {
+        exclude(group = "io.netty", module = "netty-resolver-dns-native-macos")
+    }
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("com.google.api-client:google-api-client:2.7.0")
 //    implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("com.fasterxml.jackson.module:jackson-module-jsonSchema")

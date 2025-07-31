@@ -1,6 +1,7 @@
 package ai.masaic.openresponses.api.support.service
 
 import ai.masaic.openresponses.api.model.InstrumentationMetadataInput
+import ai.masaic.openresponses.api.user.CurrentUserProvider
 import com.openai.core.jsonMapper
 import com.openai.models.chat.completions.ChatCompletion
 import com.openai.models.chat.completions.ChatCompletionChunk
@@ -13,6 +14,7 @@ import io.micrometer.core.instrument.Timer
 import io.micrometer.core.instrument.Timer.Sample
 import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
+import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Service
@@ -23,6 +25,7 @@ import kotlin.jvm.optionals.getOrDefault
 class TelemetryService(
     private val observationRegistry: ObservationRegistry,
     val meterRegistry: MeterRegistry,
+    private val currentUserProvider: CurrentUserProvider
 ) {
     private val logger = KotlinLogging.logger {}
 
@@ -470,6 +473,9 @@ class TelemetryService(
         params: ResponseCreateParams,
         tokenType: String,
     ) {
+        val user = runBlocking { currentUserProvider.googleUser() }
+        logger.info { "current user is: $user" }
+
         val tokenCount =
             if (tokenType == "input" && response.usage().isPresent) {
                 response.usage().get().inputTokens()

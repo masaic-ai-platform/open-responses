@@ -8,6 +8,8 @@ import ai.masaic.platform.api.model.*
 import ai.masaic.platform.api.service.ModelService
 import ai.masaic.platform.api.service.messages
 import ai.masaic.platform.api.tools.FunDefGenerationTool
+import ai.masaic.platform.api.user.AuthConfig
+import ai.masaic.platform.api.user.AuthConfigProperties
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import org.springframework.beans.factory.annotation.Value
@@ -30,6 +32,7 @@ class DashboardController(
     private val modelSettings: ModelSettings,
     private val funDefGenerationTool: FunDefGenerationTool,
     private val buildProperties: BuildProperties,
+    private val configProperties: AuthConfigProperties
 ) {
     @Value("\${open-responses.store.vector.search.provider:file}")
     private val vectorSearchProviderType = ""
@@ -214,7 +217,13 @@ ${request.existingPrompt}
     @GetMapping("/platform/info")
     fun getPlatformInfo(): PlatformInfo {
         val vectorStoreInfo = if (vectorSearchProviderType == "qdrant") VectorStoreInfo(true) else VectorStoreInfo(false)
-        return PlatformInfo("v${buildProperties.version}", buildProperties.time, ModelSettings(modelSettings.settingsType, "", ""), vectorStoreInfo)
+        return PlatformInfo(
+            version = "v${buildProperties.version}", 
+            buildTime = buildProperties.time, 
+            modelSettings = ModelSettings(modelSettings.settingsType, "", ""), 
+            vectorStoreInfo = vectorStoreInfo,
+            authConfig = AuthConfig(configProperties.enabled)
+        )
     }
 }
 
@@ -228,6 +237,7 @@ data class PlatformInfo(
     val buildTime: Instant,
     val modelSettings: ModelSettings,
     val vectorStoreInfo: VectorStoreInfo,
+    val authConfig: AuthConfig,
 )
 
 data class VectorStoreInfo(
