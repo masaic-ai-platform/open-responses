@@ -473,8 +473,8 @@ class TelemetryService(
         params: ResponseCreateParams,
         tokenType: String,
     ) {
-        val user = runBlocking { currentUserProvider.googleUser() }
-        logger.info { "current user is: $user" }
+//        val user = currentUserProvider.getUser()
+//        logger.info { "current user is: $user" }
 
         val tokenCount =
             if (tokenType == "input" && response.usage().isPresent) {

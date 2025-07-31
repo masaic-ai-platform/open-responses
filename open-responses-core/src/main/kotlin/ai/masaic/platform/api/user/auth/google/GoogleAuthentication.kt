@@ -1,6 +1,6 @@
 package ai.masaic.platform.api.user.auth.google
 
-import ai.masaic.openresponses.api.user.LoggedInUserInfo
+import ai.masaic.openresponses.api.user.UserInfo
 import org.springframework.security.authentication.AbstractAuthenticationToken
 
 /**
@@ -14,7 +14,7 @@ class GooglePreAuthToken(val credentials: String) : AbstractAuthenticationToken(
 /**
  * Authenticated Google user token
  */
-class GoogleAuthentication(private val userInfo: LoggedInUserInfo) : AbstractAuthenticationToken(emptyList()) {
+class GoogleAuthentication(private val userInfo: UserInfo) : AbstractAuthenticationToken(emptyList()) {
     override fun getCredentials(): Any? = null
     override fun getPrincipal(): Any = userInfo
     
