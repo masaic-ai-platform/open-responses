@@ -71,7 +71,7 @@ docker-compose --profile full down
 
 ## 1. Add Model: Add your own model with built-in test
 
-![Add Model Demo](docker/demos/Add-Model-Fast.gif)
+![Add Model Demo](demos/Add-Model-Fast.gif)
 **Steps**
 1. Add model base url, example: if /chat/completions is available at http://example.com/v1/chat/completions then add http://example.com/v1
 2. Built-in model connectivity test runs.
@@ -79,7 +79,7 @@ docker-compose --profile full down
 
 ## 2. Ecommerce: Product Search and Add to Cart in One Shot (Grok4)
 
-![Ecommerce Demo](docker/demos/Shopping-DemoWith-Grok.gif)
+![Ecommerce Demo](demos/Shopping-DemoWith-Grok.gif)
 
 **System Prompt:**
 ```bash
@@ -102,7 +102,7 @@ Add men's black runner jet black, black sole of size 9 in the cart.
 
 ## 3. File Search Tool, In-Built RAG
 
-![File Search Demo](docker/demos/File-Search-Demo.gif)
+![File Search Demo](demos/File-Search-Demo.gif)
 
 **System Prompt:**
 ```bash
@@ -124,7 +124,7 @@ Ask relevant query which will invoke file search tool.
 
 ## 4. Generating Mock Tools Using Masaic Mocky
 
-![Mocky Demo](docker/demos/Mocky.gif)
+![Mocky Demo](demos/Mocky.gif)
 
 Once a mock is generated, create an MCP server and then use the MCP server to create a simulation.
 

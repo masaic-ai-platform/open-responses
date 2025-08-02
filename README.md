@@ -28,7 +28,11 @@ All of this is delivered in a fully deployable platform with a single goal:
 
 ---
 
-## 🏗️ Project Architecture
+![Agentic Orchestration Demo](deploy/demos/AgC-Demo.gif)
+
+---
+
+## 🏗️ Project Structure
 
 ### Core Components
 
