@@ -1,0 +1,159 @@
+version: '3.8'
+
+services:
+  # MongoDB service (only when using internal MongoDB)
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    profiles:
+      - mongo
+      - full
+    networks:
+      - platform
+
+  # Qdrant service (only when using internal Qdrant)
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT_ALLOW_CREATION_ON_FILE_NOT_FOUND=true
+    restart: unless-stopped
+    profiles:
+      - qdrant
+      - full
+    networks:
+      - platform
+
+  # Open Responses service (default mode - no external databases)
+  open-responses:
+    image: masaicai/open-responses:latest
+    ports:
+      - "6644:6644"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-platform}
+    restart: unless-stopped
+    profiles:
+      - default
+      - ""
+    networks:
+      - platform
+
+  # Open Responses service (with vector search enabled)
+  open-responses-vector:
+    image: masaicai/open-responses:latest
+    ports:
+      - "6644:6644"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-platform}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_PROVIDER=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY:-}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS:-false}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME:-open_responses}
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+    profiles:
+      - qdrant
+    networks:
+      - platform
+
+  # Open Responses service (with MongoDB enabled)
+  open-responses-mongo:
+    image: masaicai/open-responses:latest
+    ports:
+      - "6644:6644"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-platform}
+      - OPEN_RESPONSES_STORE_TYPE=mongodb
+      - OPEN_RESPONSES_MONGODB_URI=mongodb://mongo:27017
+      - OPEN_RESPONSES_MONGODB_DATABASE=${OPEN_RESPONSES_MONGODB_DATABASE:-open_responses}
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    profiles:
+      - mongo
+    networks:
+      - platform
+
+  # Open Responses service (with both vector search and MongoDB)
+  open-responses-full:
+    image: masaicai/open-responses:latest
+    ports:
+      - "6644:6644"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-platform}
+      - OPEN_RESPONSES_STORE_VECTOR_REPOSITORY_TYPE=mongodb
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_PROVIDER=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY:-}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS:-false}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME:-open_responses}
+      - OPEN_RESPONSES_STORE_VECTOR_REPOSITORY_TYPE=mongodb
+      - OPEN_RESPONSES_STORE_TYPE=mongodb
+      - OPEN_RESPONSES_MONGODB_URI=mongodb://mongo:27017
+      - OPEN_RESPONSES_MONGODB_DATABASE=${OPEN_RESPONSES_MONGODB_DATABASE:-open_responses}
+    depends_on:
+      - mongo
+      - qdrant
+    restart: unless-stopped
+    profiles:
+      - full
+    networks:
+      - platform
+
+  # Open Responses service (external databases - no dependencies)
+  open-responses-external:
+    image: masaicai/open-responses:latest
+    ports:
+      - "6644:6644"
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-platform}
+      - OPEN_RESPONSES_STORE_VECTOR_REPOSITORY_TYPE=mongodb
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_PROVIDER=qdrant
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_HOST:-qdrant}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_API_KEY:-}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS:-false}
+      - OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME=${OPEN_RESPONSES_STORE_VECTOR_SEARCH_COLLECTION_NAME:-open_responses}
+      - OPEN_RESPONSES_STORE_VECTOR_REPOSITORY_TYPE=mongodb
+      - OPEN_RESPONSES_STORE_TYPE=mongodb
+      - OPEN_RESPONSES_MONGODB_URI=${OPEN_RESPONSES_MONGODB_URI:-mongodb://mongo:27017}
+      - OPEN_RESPONSES_MONGODB_DATABASE=${OPEN_RESPONSES_MONGODB_DATABASE:-open_responses}
+    restart: unless-stopped
+    profiles:
+      - external
+    networks:
+      - platform
+
+  # Platform UI service (for all modes)
+  platform-ui:
+    image: masaicai/platform-ui:latest
+    ports:
+      - "6645:80"
+    environment:
+      - VITE_DASHBOARD_API_URL=http://localhost:6644
+    restart: unless-stopped
+    profiles:
+      - default
+      - qdrant
+      - mongo
+      - full
+      - external
+      - ""
+    networks:
+      - platform
+
+volumes:
+  mongo_data:
+  qdrant_data:
+
+networks:
+  platform: 
