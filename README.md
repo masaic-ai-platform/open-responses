@@ -13,6 +13,8 @@ AgC treats agents as first-class compute units. Think of it as what EC2 did for 
 
 ## 🚀 What is Open Agentic Compute?
 
+![Agentic Orchestration Demo](deploy/demos/AgC-Demo.gif)
+
 **Open Agentic Compute** is an open infrastructure layer designed for the age of intelligent, autonomous systems. It provides:
 
 - ⚙️ A pluggable **Agent Runtime**
@@ -25,10 +27,6 @@ AgC treats agents as first-class compute units. Think of it as what EC2 did for 
 
 All of this is delivered in a fully deployable platform with a single goal:
 > **Empower developers and organizations to run agents like cloud-native workloads — at scale, and without lock-in.**
-
----
-
-![Agentic Orchestration Demo](deploy/demos/AgC-Demo.gif)
 
 ---
 
