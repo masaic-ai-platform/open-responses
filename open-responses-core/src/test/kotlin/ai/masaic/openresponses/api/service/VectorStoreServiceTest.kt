@@ -9,6 +9,7 @@ import ai.masaic.openresponses.api.service.storage.FileService
 import ai.masaic.openresponses.api.support.service.TelemetryService
 import io.mockk.*
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -302,7 +303,7 @@ class VectorStoreServiceTest {
             } coAnswers { call ->
                 // Execute the block to make all necessary calls happen
                 val block = call.invocation.args[2] as (suspend () -> VectorStoreFile)
-                block() // This makes the internal function run
+                runBlocking { block() } // This makes the internal function run
                 mockVectorStoreFile // Return our mock object
             }
             

@@ -43,7 +43,7 @@ class ResponseControllerTest {
                 every { formatResponse(any()) } answers {
                     objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
                 }
-                every { formatResponseRequest(any()) } answers {
+                every { runBlocking { formatResponseRequest(any()) } } answers {
                     objectMapper.valueToTree<JsonNode>(firstArg()) as ObjectNode
                 }
             }

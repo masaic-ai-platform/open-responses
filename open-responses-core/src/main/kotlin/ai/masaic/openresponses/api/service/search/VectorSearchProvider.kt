@@ -24,7 +24,7 @@ interface VectorSearchProvider {
      * @param vectorStoreId The ID of the vector store this file belongs to
      * @return True if indexing was successful, false otherwise
      */
-    fun indexFile(
+    suspend fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,
@@ -46,7 +46,7 @@ interface VectorSearchProvider {
      * @param vectorStoreId The ID of the vector store this file belongs to
      * @return True if indexing was successful, false otherwise
      */
-    fun indexFile(
+    suspend fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,
@@ -66,7 +66,7 @@ interface VectorSearchProvider {
      * @param vectorStoreId The ID of the vector store this file belongs to
      * @return True if indexing was successful, false otherwise
      */
-    fun indexFile(
+    suspend fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,
@@ -113,7 +113,7 @@ interface VectorSearchProvider {
      * @param fileId The ID of the file to delete
      * @return True if deletion was successful, false otherwise
      */
-    fun deleteFile(fileId: String): Boolean
+    suspend fun deleteFile(fileId: String): Boolean
 
     /**
      * Gets metadata for a file from the vector store.

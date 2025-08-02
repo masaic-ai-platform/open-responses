@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.stream.consumeAsFlow
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
@@ -77,12 +76,12 @@ class MasaicOpenAiCompletionServiceImpl(
         if (hasToolCalls(initialChatCompletion)) {
             logger.info { "Tool calls detected in completion ${initialChatCompletion.id()}, initiating tool handling flow." }
             // Call handleToolCalls which will recursively call create if needed, or return a terminal completion
-            return runBlocking { handleToolCalls(initialChatCompletion, params, client, metadata) }
+            return handleToolCalls(initialChatCompletion, params, client, metadata)
         }
         
         // No tool calls, store and return the original completion
         if (params.store().getOrDefault(false)) {
-            runBlocking { storeCompletion(initialChatCompletion, params) }
+            storeCompletion(initialChatCompletion, params)
         }
 
         logger.debug { "Final chat completion ID: ${initialChatCompletion.id()}" }

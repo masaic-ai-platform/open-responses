@@ -27,7 +27,7 @@ class MCPToolExecutor(
      * @param mcpServer Server configuration
      * @return McpClient instance connected to the server
      */
-    fun connectServer(
+    suspend fun connectServer(
         serverName: String,
         mcpServer: MCPServer,
     ): McpClient {
@@ -50,7 +50,7 @@ class MCPToolExecutor(
      * @param arguments JSON string containing arguments for the tool
      * @return Result of the tool execution as a string, or null if the tool can't be executed
      */
-    fun executeTool(
+    suspend fun executeTool(
         tool: ToolDefinition,
         arguments: String,
         paramsAccessor: ToolParamsAccessor?,
@@ -71,7 +71,7 @@ class MCPToolExecutor(
     /**
      * Shuts down all MCP clients, releasing resources.
      */
-    fun shutdown() {
+    suspend fun shutdown() {
         mcpClients.forEach { (_, mcpClient) ->
             mcpClient.close()
         }
@@ -95,7 +95,7 @@ class MCPToolRegistry {
      * @param serverName Name of the server hosting the tools
      * @param mcpClient Client connected to the server
      */
-    fun registerMCPTools(
+    suspend fun registerMCPTools(
         serverName: String,
         mcpClient: McpClient,
     ) {

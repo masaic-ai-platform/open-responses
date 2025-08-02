@@ -23,6 +23,7 @@ import com.openai.models.responses.ResponseStreamEvent
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.*
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
@@ -48,7 +49,7 @@ class PayloadFormatterTest {
         fun `formatResponseRequest - with no tools does nothing`() {
             val request = CreateResponseRequest(tools = null, input = mockk(), model = "gpt-4o")
 
-            payloadFormatter.formatResponseRequest(request)
+            runBlocking { payloadFormatter.formatResponseRequest(request) }
 
             // Tools remain null, no changes
             assertTrue { request.tools?.isEmpty() ?: false }
@@ -59,7 +60,7 @@ class PayloadFormatterTest {
             val someTool: Tool = mockk()
             val request = CreateResponseRequest(tools = listOf(someTool), input = mockk(), model = "gpt-4o")
 
-            payloadFormatter.formatResponseRequest(request)
+            runBlocking { payloadFormatter.formatResponseRequest(request) }
 
             // The original tool stays the same
             Assertions.assertAll(
@@ -79,7 +80,7 @@ class PayloadFormatterTest {
 
             val request = CreateResponseRequest(tools = listOf(masaicTool), input = mockk(), model = "gpt-4o")
 
-            payloadFormatter.formatResponseRequest(request)
+            runBlocking { payloadFormatter.formatResponseRequest(request) }
 
             // The MasaicManagedTool should be replaced with the result from toolService
             Assertions.assertAll(
@@ -100,7 +101,7 @@ class PayloadFormatterTest {
             val request = CreateResponseRequest(tools = listOf(masaicTool), input = mockk(), model = "gpt-4o")
 
             assertFailsWith<ResponseStatusException> {
-                payloadFormatter.formatResponseRequest(request)
+                runBlocking { payloadFormatter.formatResponseRequest(request) }
             }
         }
     }

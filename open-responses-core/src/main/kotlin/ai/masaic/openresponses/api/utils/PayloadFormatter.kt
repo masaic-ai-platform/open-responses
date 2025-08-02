@@ -22,11 +22,11 @@ class PayloadFormatter(
     private val toolService: ToolService,
     private val mapper: ObjectMapper,
 ) {
-    internal fun formatResponseRequest(request: CreateResponseRequest) {
+    internal suspend fun formatResponseRequest(request: CreateResponseRequest) {
         request.tools = updateToolsInRequest(request.tools)
     }
 
-    internal fun formatCompletionRequest(request: CreateCompletionRequest) {
+    internal suspend fun formatCompletionRequest(request: CreateCompletionRequest) {
         request.tools = updateToolsInCompletionRequest(request.tools)
     }
 
@@ -36,7 +36,7 @@ class PayloadFormatter(
      * @param tools The original list of tools in the request
      * @return The updated list of tools
      */
-    private fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? {
+    private suspend fun updateToolsInRequest(tools: List<Tool>?): MutableList<Tool>? {
         val updatedTools = mutableListOf<Tool>()
         tools?.forEach {
             when (it) {
@@ -69,7 +69,7 @@ class PayloadFormatter(
      * @param tools The original list of tools in the request
      * @return The updated list of tools
      */
-    private fun updateToolsInCompletionRequest(
+    private suspend fun updateToolsInCompletionRequest(
         tools: List<Map<String, Any>>?,
     ): List<Map<String, Any>>? {
         if (tools == null) return null

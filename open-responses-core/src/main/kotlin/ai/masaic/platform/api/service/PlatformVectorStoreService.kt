@@ -33,7 +33,7 @@ class PlatformVectorStoreService(
         telemetryService,
         hybridSearchServiceHelper,
     ) {
-    override fun indexFile(
+    override suspend fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,

@@ -15,6 +15,7 @@ import io.mockk.coVerify
 import io.mockk.justRun
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -85,7 +86,7 @@ class CompletionControllerTest {
                 ).build()
 
         // Mock the payload formatter by default
-        justRun { payloadFormatter.formatCompletionRequest(any()) }
+        justRun { runBlocking { payloadFormatter.formatCompletionRequest(any()) } }
         justRun { requestValidator.validateCompletionRequest(any()) }
     }
 

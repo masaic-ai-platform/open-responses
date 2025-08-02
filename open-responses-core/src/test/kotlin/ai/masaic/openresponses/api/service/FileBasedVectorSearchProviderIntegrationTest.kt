@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -86,7 +87,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         val filename = "persistence.txt"
         
         // First "application instance" indexes a file
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename, null, "test")
+        runBlocking { vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename, null, "test") }
         
         // Verify the file was properly indexed
         val results1 = vectorSearchProvider.searchSimilar("test document", rankingOptions = null)
@@ -116,8 +117,8 @@ class FileBasedVectorSearchProviderIntegrationTest {
         // Given - create and index with first provider
         val fileId1 = "file1"
         val content1 = "First test document with specific content."
-        
-        vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt", null, "test")
+
+        runBlocking { vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt", null, "test") }
         
         // When - create a second provider instance (simulating a different service/component)
         val secondProvider =
@@ -139,7 +140,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         // When - second provider adds a document
         val fileId2 = "file2"
         val content2 = "Second test document with different content."
-        secondProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt", null, "test")
+        runBlocking { secondProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt", null, "test") }
         
         // Then - first provider should see the second provider's data
         val resultsFromFirst =
@@ -161,8 +162,8 @@ class FileBasedVectorSearchProviderIntegrationTest {
         // Given - create and index with first provider
         val fileId = "delete-test"
         val content = "This is a document that will be deleted."
-        
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "delete.txt", null, "test")
+
+        runBlocking { vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "delete.txt", null, "test") }
         
         // Create a second provider instance
         val secondProvider =
@@ -184,7 +185,7 @@ class FileBasedVectorSearchProviderIntegrationTest {
         )
         
         // When - delete using the first provider
-        vectorSearchProvider.deleteFile(fileId)
+        runBlocking { vectorSearchProvider.deleteFile(fileId) }
         
         // Then - document should be gone from first provider immediately
         assertTrue(

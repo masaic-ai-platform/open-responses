@@ -18,6 +18,7 @@ import io.micrometer.observation.Observation
 import io.micrometer.observation.ObservationRegistry
 import io.mockk.*
 import io.mockk.every
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -54,12 +55,14 @@ class MasaicToolHandlerTest {
 
         // Setup telemetryService mock to track attributes
         every {
-            telemetryService.withClientObservation<Any>(
-                any(),
-                any(),
-                any(), // This is the parentObservation parameter
-                any(),
-            )
+            runBlocking {
+                telemetryService.withClientObservation<Any>(
+                    any(),
+                    any(),
+                    any(), // This is the parentObservation parameter
+                    any(),
+                )
+            }
         } answers {
             val operationName = firstArg<String>()
             val parentObservation = secondArg<Observation?>() // Get the parentObservation
@@ -131,7 +134,7 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
 
         // Then: We expect a Continue result with items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -143,7 +146,7 @@ class MasaicToolHandlerTest {
         assert(items[1].isResponseOutputMessage())
 
         // Verify no tool execution observations were created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
+        verify(exactly = 0) { runBlocking { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) } }
     }
 
     @Test
@@ -217,7 +220,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "tool-call-id-123"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
 
         // Then: We expect:
         // 1) The original user input
@@ -234,7 +237,7 @@ class MasaicToolHandlerTest {
         assert(functionCallOutput.isFunctionCallOutput())
 
         // Verify observation was created (without exact string name match)
-        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
+        verify { runBlocking { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) } }
 
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
@@ -300,7 +303,7 @@ class MasaicToolHandlerTest {
 
         // When/Then - exception should be propagated
         assertThrows<RuntimeException> {
-            handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+            runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
         }
 
         // Skip the assertion on error message since it's being set differently in the actual code
@@ -357,7 +360,7 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val result = handler.handleMasaicToolCall(params, response, mockk(), mockk(), mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(params, response, mockk(), mockk(), mockk()) }
 
         // Then
         val items = result.toolResponseItems
@@ -369,7 +372,7 @@ class MasaicToolHandlerTest {
         assert(items[1].isResponseOutputMessage())
 
         // Verify no observation was created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
+        verify(exactly = 0) { runBlocking { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) } }
     }
 
     @Test
@@ -455,7 +458,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.call.id"] = "function-call-id"
 
         // When
-        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk()) }
 
         // Then
         val items = result.toolResponseItems
@@ -468,7 +471,7 @@ class MasaicToolHandlerTest {
         assert(items[2].isFunctionCallOutput())
 
         // Verify observation was created (without exact string match)
-        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
+        verify { runBlocking { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) } }
 
         // Verify attribute values
         assertEquals("execute_tool", capturedAttributes["gen_ai.operation.name"])
@@ -477,74 +480,75 @@ class MasaicToolHandlerTest {
     }
 
     @Test
-    fun `handleMasaicToolCall(chatCompletion, params) - with unsupported tool should park it for client handling`() {
-        // Given: A ChatCompletion with an unsupported tool call
-        val toolCall =
-            ChatCompletionMessageToolCall
-                .builder()
-                .id("unsupported-tool-id")
-                .function(
-                    ChatCompletionMessageToolCall.Function
-                        .builder()
-                        .name("unsupportedTool")
-                        .arguments("{\"key\":\"value\"}")
-                        .build(),
-                ).build()
+    fun `handleMasaicToolCall(chatCompletion, params) - with unsupported tool should park it for client handling`() =
+        runBlocking {
+            // Given: A ChatCompletion with an unsupported tool call
+            val toolCall =
+                ChatCompletionMessageToolCall
+                    .builder()
+                    .id("unsupported-tool-id")
+                    .function(
+                        ChatCompletionMessageToolCall.Function
+                            .builder()
+                            .name("unsupportedTool")
+                            .arguments("{\"key\":\"value\"}")
+                            .build(),
+                    ).build()
 
-        val chatMessage =
-            ChatCompletionMessage
-                .builder()
-                .toolCalls(listOf(toolCall))
-                .content(null)
-                .refusal(null)
-                .build()
+            val chatMessage =
+                ChatCompletionMessage
+                    .builder()
+                    .toolCalls(listOf(toolCall))
+                    .content(null)
+                    .refusal(null)
+                    .build()
 
-        val choice =
-            ChatCompletion.Choice
-                .builder()
-                .message(chatMessage)
-                .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
-                .index(0)
-                .logprobs(null)
-                .build()
+            val choice =
+                ChatCompletion.Choice
+                    .builder()
+                    .message(chatMessage)
+                    .finishReason(ChatCompletion.Choice.FinishReason.TOOL_CALLS)
+                    .index(0)
+                    .logprobs(null)
+                    .build()
 
-        val chatCompletion =
-            ChatCompletion
-                .builder()
-                .choices(listOf(choice))
-                .id("completion-id")
-                .created(1234567890)
-                .model("gpt-3.5-turbo")
-                .build()
+            val chatCompletion =
+                ChatCompletion
+                    .builder()
+                    .choices(listOf(choice))
+                    .id("completion-id")
+                    .created(1234567890)
+                    .model("gpt-3.5-turbo")
+                    .build()
 
-        // Mocking
-        val params = mockk<ResponseCreateParams>()
-        every { params.input().isResponse() } returns false
-        every { params.tools() } returns Optional.empty()
-        every { params.input().asText() } returns "User message"
-        // Return null to indicate unsupported tool
-        every { toolService.getFunctionTool("unsupportedTool", ofType<ToolRequestContext>()) } returns null
-        every { toolService.buildAliasMap(any()) } returns emptyMap()
+            // Mocking
+            val params = mockk<ResponseCreateParams>()
+            every { params.input().isResponse() } returns false
+            every { params.tools() } returns Optional.empty()
+            every { params.input().asText() } returns "User message"
+            // Return null to indicate unsupported tool
+            every { toolService.getFunctionTool("unsupportedTool", ofType<ToolRequestContext>()) } returns null
+            every { toolService.buildAliasMap(any()) } returns emptyMap()
 
-        // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+            // When
+            val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
 
-        // Then: We expect a Continue result with the unsupported tool call parked
-        assertTrue(result is MasaicToolCallResult.Continue)
-        val items = (result as MasaicToolCallResult.Continue).items
-        // 1) The original user input as a ResponseInputItem
-        // 2) The parked function call
-        assertEquals(2, items.size)
+            // Then: We expect a Continue result with the unsupported tool call parked
+            assertTrue(result is MasaicToolCallResult.Continue)
+            val items = (result as MasaicToolCallResult.Continue).items
+            // 1) The original user input as a ResponseInputItem
+            // 2) The parked function call
+            assertEquals(2, items.size)
 
-        val userMessage = items[0]
-        assert(userMessage.isEasyInputMessage())
+            val userMessage = items[0]
+            assert(userMessage.isEasyInputMessage())
 
-        val functionCallItem = items[1]
-        assert(functionCallItem.isFunctionCall())
+            val functionCallItem = items[1]
+            assert(functionCallItem.isFunctionCall())
 
-        // Verify that no tool execution was observed
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
-    }
+            // Verify that no tool execution was observed
+            verify(exactly = 0) { runBlocking { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) } }
+        }
 
     @Test
     fun `handleMasaicToolCall(chatCompletion, params) - with multiple tool calls should process all`() {
@@ -619,7 +623,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.operation.name"] = "execute_tool"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
 
         // Then: We expect a Continue result with 6 items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -633,7 +637,7 @@ class MasaicToolHandlerTest {
         assertEquals(6, items.size)
 
         // Verify tool execution was observed twice
-        verify(exactly = 2) { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
+        verify(exactly = 2) { runBlocking { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) } }
 
         // Count function calls and function outputs
         val functionCalls = items.count { it.isFunctionCall() }
@@ -699,7 +703,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "nullResultTool"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
 
         // Then: We expect a Continue result with 3 items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -716,7 +720,7 @@ class MasaicToolHandlerTest {
         assert(functionOutputItem.isFunctionCallOutput())
 
         // Verify the observation was still created despite the null result
-        verify { telemetryService.withClientObservation<Any>(any(), null, any()) }
+        verify { runBlocking { telemetryService.withClientObservation<Any>(any(), null, any()) } }
 
         // Verify correct attribute was set
         assertEquals("nullResultTool", capturedAttributes["gen_ai.tool.name"])
@@ -801,7 +805,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "newFunction"
 
         // When
-        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk()) }
 
         // Then
         val items = result.toolResponseItems
@@ -817,7 +821,7 @@ class MasaicToolHandlerTest {
         assertEquals("newFunction", items[1].asFunctionCall().name())
 
         // Verify the tool execution was observed
-        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
+        verify { runBlocking { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) } }
     }
 
     @Test
@@ -839,7 +843,7 @@ class MasaicToolHandlerTest {
         every { params.tools() } returns Optional.empty()
         every { toolService.buildAliasMap(any()) } returns emptyMap()
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
 
         // Then: We expect a Continue result with only the user input message
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -849,7 +853,7 @@ class MasaicToolHandlerTest {
         assertEquals("User message", items[0].asEasyInputMessage().content().asTextInput())
 
         // Verify no tool execution observations were created
-        verify(exactly = 0) { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) }
+        verify(exactly = 0) { runBlocking { telemetryService.withClientObservation<Any>(any(), any(), any(), any()) } }
     }
 
     @Test
@@ -918,7 +922,7 @@ class MasaicToolHandlerTest {
         } returns "Mixed result"
 
         // When
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk(relaxed = true))
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk(relaxed = true)) }
 
         // Then: We expect a Continue result with 4 items
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -979,7 +983,7 @@ class MasaicToolHandlerTest {
         every { toolService.buildAliasMap(any()) } returns emptyMap()
 
         // When
-        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk()) }
 
         // Then: We expect only the user input message since the empty message content should be filtered out
         val items = result.toolResponseItems
@@ -1062,10 +1066,10 @@ class MasaicToolHandlerTest {
         } returns "Parent observation test result"
 
         // Call handler with explicit parent observation
-        val result = handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
 
         // Then verify parent observation was passed to the withClientObservation method
-        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
+        verify { runBlocking { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) } }
 
         // Verify function call and output were added
         assertTrue(result is MasaicToolCallResult.Continue)
@@ -1145,7 +1149,7 @@ class MasaicToolHandlerTest {
 
         // When & Then - verify exception is propagated
         assertThrows<IllegalArgumentException> {
-            handler.handleMasaicToolCall(chatCompletion, params, null, mockk())
+            runBlocking { handler.handleMasaicToolCall(chatCompletion, params, null, mockk()) }
         }
     }
 
@@ -1232,7 +1236,7 @@ class MasaicToolHandlerTest {
         capturedAttributes["gen_ai.tool.name"] = "newFunction"
 
         // When
-        val result = handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk())
+        val result = runBlocking { handler.handleMasaicToolCall(params, response, eventEmitter, mockk(), mockk()) }
 
         // Then
         val items = result.toolResponseItems
@@ -1248,6 +1252,6 @@ class MasaicToolHandlerTest {
         assertEquals("preserveFunction", items[1].asFunctionCall().name())
 
         // Verify the tool execution was observed
-        verify { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) }
+        verify { runBlocking { telemetryService.withClientObservation<Any>(any(), any<Observation>(), any()) } }
     }
 }

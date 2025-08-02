@@ -18,7 +18,6 @@ import com.openai.models.chat.completions.ChatCompletionCreateParams
 import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionSystemMessageParam
 import com.openai.models.chat.completions.ChatCompletionUserMessageParam
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.data.annotation.Id
 import java.net.URI
@@ -29,7 +28,7 @@ class PlatformMcpService(
     private val mockFunRepository: MockFunctionRepository,
     private val mocksRepository: MocksRepository,
 ) {
-    fun createMockServer(request: CreateMockMcpServerRequest): MockMcpServerResponse {
+    suspend fun createMockServer(request: CreateMockMcpServerRequest): MockMcpServerResponse {
         // 1. create random Id of 9 chars long.
         val id =
             java.util.UUID
@@ -48,7 +47,7 @@ class PlatformMcpService(
         return MockMcpServerResponse(id = mockServer.id, url = url, serverLabel = mockServer.serverLabel)
     }
 
-    fun getAllMockServers(): List<MockMcpServerResponse> {
+    suspend fun getAllMockServers(): List<MockMcpServerResponse> {
         val servers = mcpMockServerRepository.findAll()
         val mockServers =
             servers.map { mockServer ->
@@ -57,7 +56,7 @@ class PlatformMcpService(
         return mockServers
     }
 
-    fun getFunction(functionId: String): GetFunctionResponse {
+    suspend fun getFunction(functionId: String): GetFunctionResponse {
         val functionDefinition = mockFunRepository.findById(functionId) ?: throw IllegalStateException("Function $functionId not found")
         val mocks = mocksRepository.findById(functionId) ?: throw IllegalStateException("Mocks for function $functionId not found")
         return GetFunctionResponse(FunctionBodyResponse.from(functionDefinition), mocks)
@@ -71,7 +70,7 @@ class PlatformMcpClientFactory(
     private val modelSettings: ModelSettings,
     private val modelService: ModelService,
 ) : SimpleMcpClientFactory() {
-    override fun init(
+    override suspend fun init(
         serverName: String,
         url: String,
         headers: Map<String, String>,
@@ -93,7 +92,7 @@ class MockMcpClient(
 ) : McpClient {
     private val log = KotlinLogging.logger { }
 
-    override fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> {
+    override suspend fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> {
         val mockServerId = URI(mcpServerInfo.url).host.split(".")[0]
         // find server in DB. If not found then throw IllegalStateException that server not found.
         val server = mockServerRepository.findById(mockServerId) ?: throw IllegalStateException("Mock MCP server with id $mockServerId not found")
@@ -106,7 +105,7 @@ class MockMcpClient(
         return tools
     }
 
-    override fun executeTool(
+    override suspend fun executeTool(
         tool: ToolDefinition,
         arguments: String,
         paramsAccessor: ToolParamsAccessor?,
@@ -171,11 +170,11 @@ $arguments
         return toolResponse
     }
 
-    override fun close() {
+    override suspend fun close() {
         // Nothing to do here....
     }
 
-    private fun callModel(
+    private suspend fun callModel(
         modelSettings: ModelSettings,
         messages: List<Map<String, String>>,
     ): String {
@@ -187,7 +186,7 @@ $arguments
                 store = false,
             )
 
-        val response: String = runBlocking { modelService.fetchCompletionPayload(createCompletionRequest, modelSettings.apiKey) }
+        val response: String = modelService.fetchCompletionPayload(createCompletionRequest, modelSettings.apiKey)
         return response
     }
 

@@ -12,14 +12,14 @@ class InMemoryMocksRepository : MocksRepository {
     private val cache: Cache<String, Mocks> =
         Caffeine.newBuilder().maximumSize(100).build()
 
-    override fun upsert(mocks: Mocks): Mocks {
+    override suspend fun upsert(mocks: Mocks): Mocks {
         cache.put(mocks.refFunctionId, mocks)
         return mocks
     }
 
-    override fun findById(refFunctionId: String): Mocks? = cache.getIfPresent(refFunctionId)
+    override suspend fun findById(refFunctionId: String): Mocks? = cache.getIfPresent(refFunctionId)
 
-    override fun deleteById(refFunctionId: String): Boolean {
+    override suspend fun deleteById(refFunctionId: String): Boolean {
         val existed = cache.getIfPresent(refFunctionId) != null
         cache.invalidate(refFunctionId)
         return existed

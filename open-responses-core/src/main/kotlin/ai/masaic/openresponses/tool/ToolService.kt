@@ -15,6 +15,7 @@ import com.openai.models.responses.ResponseCreateParams
 import dev.langchain4j.model.chat.request.json.*
 import jakarta.annotation.PostConstruct
 import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -201,21 +202,21 @@ class ToolService(
         }
     }
 
-    fun getRemoteMcpTools(
+    suspend fun getRemoteMcpTools(
         mcpTool: MCPTool,
     ): List<FunctionTool> {
         val remoteTools = getRemoteMcpToolDefinitions(mcpTool)
         return remoteTools.map { it.toFunctionTool() }
     }
 
-    fun getRemoteMcpToolsForChatCompletion(
+    suspend fun getRemoteMcpToolsForChatCompletion(
         mcpTool: MCPTool,
     ): List<ChatCompletionTool> {
         val remoteTools = getRemoteMcpToolDefinitions(mcpTool)
         return remoteTools.map { it.toChatCompletionTool(objectMapper) }
     }
 
-    private fun getRemoteMcpToolDefinitions(
+    private suspend fun getRemoteMcpToolDefinitions(
         mcpTool: MCPTool,
     ): List<McpToolDefinition> {
         val info = MCPServerInfo(mcpTool.serverLabel, mcpTool.serverUrl)
@@ -399,7 +400,7 @@ class ToolService(
             return
         }
 
-        loadToolRegistry(mcpServerConfigJson)
+        runBlocking { loadToolRegistry(mcpServerConfigJson) }
     }
 
     /**
@@ -435,8 +436,10 @@ class ToolService(
      */
     @PreDestroy
     fun cleanup() {
-        mcpToolRegistry.cleanUp()
-        mcpToolExecutor.shutdown()
+        runBlocking {
+            mcpToolRegistry.cleanUp()
+            mcpToolExecutor.shutdown()
+        }
     }
 
     /**
@@ -444,7 +447,7 @@ class ToolService(
      *
      * @param mcpServerConfigJson JSON configuration string for MCP servers
      */
-    private fun loadToolRegistry(mcpServerConfigJson: String) {
+    private suspend fun loadToolRegistry(mcpServerConfigJson: String) {
         val servers = json.decodeFromString<MCPServers>(mcpServerConfigJson)
         servers.mcpServers.forEach { (serverName, serverConfig) ->
             connectAndRegisterServer(serverName, serverConfig)
@@ -457,7 +460,7 @@ class ToolService(
      * @param serverName The name of the server
      * @param serverConfig The server configuration
      */
-    private fun connectAndRegisterServer(
+    private suspend fun connectAndRegisterServer(
         serverName: String,
         serverConfig: MCPServer,
     ) {
@@ -477,7 +480,7 @@ class ToolService(
      * @param serverConfig The server configuration
      * @return The MCP client
      */
-    private fun connectToMcpServer(
+    private suspend fun connectToMcpServer(
         serverName: String,
         serverConfig: MCPServer,
     ): McpClient = mcpToolExecutor.connectServer(serverName, serverConfig)
@@ -488,7 +491,7 @@ class ToolService(
      * @param serverName The name of the server
      * @param mcpClient The MCP client
      */
-    private fun registerMcpServerTools(
+    private suspend fun registerMcpServerTools(
         serverName: String,
         mcpClient: McpClient,
     ) {

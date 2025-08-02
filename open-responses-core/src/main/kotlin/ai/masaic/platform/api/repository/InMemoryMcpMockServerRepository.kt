@@ -12,20 +12,20 @@ class InMemoryMcpMockServerRepository : McpMockServerRepository {
     private val cache: Cache<String, McpMockServer> =
         Caffeine.newBuilder().maximumSize(100).build()
 
-    override fun upsert(server: McpMockServer): McpMockServer {
+    override suspend fun upsert(server: McpMockServer): McpMockServer {
         cache.put(server.id, server)
         return server
     }
 
-    override fun findById(id: String): McpMockServer? = cache.getIfPresent(id)
+    override suspend fun findById(id: String): McpMockServer? = cache.getIfPresent(id)
 
-    override fun deleteById(id: String): Boolean {
+    override suspend fun deleteById(id: String): Boolean {
         val existed = cache.getIfPresent(id) != null
         cache.invalidate(id)
         return existed
     }
 
-    override fun findAll(): List<McpMockServer> = cache.asMap().values.sortedByDescending { it.createdAt }
+    override suspend fun findAll(): List<McpMockServer> = cache.asMap().values.sortedByDescending { it.createdAt }
 
     fun clear() {
         cache.invalidateAll()

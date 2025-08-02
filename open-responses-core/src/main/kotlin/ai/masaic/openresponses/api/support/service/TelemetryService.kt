@@ -29,7 +29,7 @@ class TelemetryService(
     @Value("\${otel.instrumentation.genai.capture.message.content:true}")
     private val captureMessageContent: Boolean = true
 
-    fun emitModelInputEvents(
+    suspend fun emitModelInputEvents(
         observation: Observation,
         inputParams: ChatCompletionCreateParams,
         metadata: InstrumentationMetadataInput,
@@ -421,34 +421,34 @@ class TelemetryService(
         observation.stop()
     }
 
-    fun <T> withClientObservation(
+    suspend fun <T> withClientObservation(
         operationName: String,
         modelName: String,
-        block: (Observation) -> T,
+        block: suspend (Observation) -> T,
     ): T = withClientObservation("$operationName $modelName", null, block)
 
-    fun <T> withClientObservation(
+    suspend fun <T> withClientObservation(
         obsName: String,
-        block: (Observation) -> T,
+        block: suspend (Observation) -> T,
     ): T = withClientObservation(obsName, null, block)
 
     /**
      * Creates an observation named "$operationName $modelName" as a child of [parentObservation], if provided.
      */
-    fun <T> withClientObservation(
+    suspend fun <T> withClientObservation(
         operationName: String,
         modelName: String,
         parentObservation: Observation?,
-        block: (Observation) -> T,
+        block: suspend (Observation) -> T,
     ): T = withClientObservation("$operationName $modelName", parentObservation, block)
 
     /**
      * Creates an observation named [obsName] as a child of [parentObservation], if provided.
      */
-    fun <T> withClientObservation(
+    suspend fun <T> withClientObservation(
         obsName: String,
         parentObservation: Observation?,
-        block: (Observation) -> T,
+        block: suspend (Observation) -> T,
     ): T {
         val observation = Observation.createNotStarted(obsName, observationRegistry)
         parentObservation?.let { observation.parentObservation(it) }

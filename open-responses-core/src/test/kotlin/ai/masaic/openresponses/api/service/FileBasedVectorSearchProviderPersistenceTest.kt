@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.MethodOrderer
@@ -104,11 +105,11 @@ class FileBasedVectorSearchProviderPersistenceTest {
         
         // Add first document
         val content1 = "This is the first test document that should persist across application restarts."
-        provider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt", null, "test")
+        runBlocking { provider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "file1.txt", null, "test") }
         
         // Add second document
         val content2 = "This is the second test document with different content."
-        provider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt", null, "test")
+        runBlocking { provider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "file2.txt", null, "test") }
         
         // Verify indexing worked in this session - using a general query should find both
         val results = provider.searchSimilar("test document", rankingOptions = null)
@@ -177,7 +178,7 @@ class FileBasedVectorSearchProviderPersistenceTest {
             )
         
         // Delete the first document
-        val deleted = provider.deleteFile(fileId1)
+        val deleted = runBlocking { provider.deleteFile(fileId1) }
         assertTrue(deleted, "Should successfully delete the file")
         
         // Verify document is gone from this instance

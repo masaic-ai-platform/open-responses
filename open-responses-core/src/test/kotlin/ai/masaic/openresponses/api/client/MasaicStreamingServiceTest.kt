@@ -27,6 +27,7 @@ import io.micrometer.core.instrument.Timer.Sample
 import io.micrometer.observation.Observation
 import io.mockk.*
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -87,7 +88,7 @@ class MasaicStreamingServiceTest {
         every { telemetryService.stopObservation(any(), any(), any(), any()) } just runs
         every { telemetryService.stopGenAiDurationSample(any(), any(), any()) } just runs
         every { telemetryService.emitModelOutputEvents(any(), mockResponse, any()) } just runs
-        every { telemetryService.emitModelInputEvents(any(), any(), any()) } just runs
+        every { runBlocking { telemetryService.emitModelInputEvents(any(), any(), any()) } } just runs
     }
 
     /**
@@ -462,7 +463,7 @@ class MasaicStreamingServiceTest {
                         every { isFunctionCallOutput() } returns false
                     },
                 )
-            every { toolHandler.handleMasaicToolCall(any(), any(), any(), any(), any()) } returns MasaicToolCallStreamingResult(toolHandlerItems)
+            every { runBlocking { toolHandler.handleMasaicToolCall(any(), any(), any(), any(), any()) } } returns MasaicToolCallStreamingResult(toolHandlerItems)
 
             // 6) Now run the flow. This should trigger TWO iterations:
             val events =

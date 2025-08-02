@@ -12,6 +12,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -88,7 +89,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test") }
         
         // Then
         assertTrue(result, "File should be successfully indexed")
@@ -107,7 +108,7 @@ class FileBasedVectorSearchProviderTest {
         val filename = "test.txt"
         val content = "This is a test document for vector indexing."
         val inputStream = ByteArrayInputStream(content.toByteArray())
-        vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test")
+        runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test") }
         
         // Configure similarity score for the search query
         val query = "test document"
@@ -129,9 +130,9 @@ class FileBasedVectorSearchProviderTest {
         val fileId2 = "file-2"
         val content1 = "This is document one."
         val content2 = "This is document two."
-        
-        vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "doc1.txt", null, "test")
-        vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt", null, "test")
+
+        runBlocking { vectorSearchProvider.indexFile(fileId1, ByteArrayInputStream(content1.toByteArray()), "doc1.txt", null, "test") }
+        runBlocking { vectorSearchProvider.indexFile(fileId2, ByteArrayInputStream(content2.toByteArray()), "doc2.txt", null, "test") }
         
         // When - search with a filter for fileId1
         val filter = ComparisonFilter(key = "file_id", type = "eq", value = fileId1)
@@ -152,14 +153,14 @@ class FileBasedVectorSearchProviderTest {
         // Given
         val fileId = "test-file-id"
         val content = "Test content"
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "test.txt", null, "test")
+        runBlocking { vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "test.txt", null, "test") }
         
         // Verify file exists before deletion
         val embeddingsFile = tempDir.resolve("embeddings").resolve("embeddings-$fileId.json")
         assertTrue(Files.exists(embeddingsFile), "Embeddings file should exist before deletion")
         
         // When
-        val result = vectorSearchProvider.deleteFile(fileId)
+        val result = runBlocking { vectorSearchProvider.deleteFile(fileId) }
         
         // Then
         assertTrue(result, "File should be successfully deleted")
@@ -184,7 +185,7 @@ class FileBasedVectorSearchProviderTest {
         val filename = "persistence.txt"
         
         // First instance creates and indexes a file
-        vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename, null, "test")
+        runBlocking { vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), filename, null, "test") }
         
         // When - create a new instance
         val secondProvider =
@@ -216,13 +217,15 @@ class FileBasedVectorSearchProviderTest {
         
         // Index all files
         fileIds.forEachIndexed { index, fileId ->
-            vectorSearchProvider.indexFile(
-                fileId,
-                ByteArrayInputStream(contents[index].toByteArray()),
-                filenames[index],
-                null,
-                "test",
-            )
+            runBlocking {
+                vectorSearchProvider.indexFile(
+                    fileId,
+                    ByteArrayInputStream(contents[index].toByteArray()),
+                    filenames[index],
+                    null,
+                    "test",
+                )
+            }
         }
         
         // When - search with a query relevant to all documents
@@ -249,7 +252,7 @@ class FileBasedVectorSearchProviderTest {
         every { embeddingService.embedTexts(any()) } throws RuntimeException("Embedding service error")
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "error-test.txt", null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "error-test.txt", null, "test") }
         
         // Then
         assertFalse(result, "Indexing should fail when embedding service throws an error")
@@ -263,7 +266,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt", null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt", null, "test") }
         
         // Then
         assertFalse(result, "Indexing should fail for empty content")
@@ -286,7 +289,7 @@ class FileBasedVectorSearchProviderTest {
         every { chunkingStrategy.static } returns staticChunkingStrategy
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "chunking-test.txt", chunkingStrategy, null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "chunking-test.txt", chunkingStrategy, null, "test") }
         
         // Then
         assertTrue(result, "File should be successfully indexed with custom chunking strategy")
@@ -301,7 +304,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // Index the file
-        vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test")
+        runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, filename, null, "test") }
         
         // When
         val metadata = vectorSearchProvider.getFileMetadata(fileId)
@@ -331,7 +334,7 @@ class FileBasedVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // Index a file
-        vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test")
+        runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test") }
         
         // When
         val results = vectorSearchProvider.searchSimilar("", rankingOptions = null)
@@ -358,7 +361,7 @@ class FileBasedVectorSearchProviderTest {
         
         // Index all documents
         documentsAndIds.forEach { (fileId, content) ->
-            vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "$fileId.txt", null, "test")
+            runBlocking { vectorSearchProvider.indexFile(fileId, ByteArrayInputStream(content.toByteArray()), "$fileId.txt", null, "test") }
         }
         
         // When - perform a search

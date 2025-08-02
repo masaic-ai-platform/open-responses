@@ -7,16 +7,12 @@ import ai.masaic.openresponses.tool.ToolService
 import com.openai.client.OpenAIClient
 import com.openai.core.JsonValue
 import com.openai.core.RequestOptions
-import com.openai.core.http.StreamResponse
 import com.openai.models.chat.completions.*
 import com.openai.models.responses.*
-import com.openai.services.blocking.ResponseService
-import com.openai.services.blocking.responses.InputItemService
 import io.micrometer.observation.Observation
 import io.micrometer.observation.contextpropagation.ObservationThreadLocalAccessor
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.reactor.ReactorContext
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Service
@@ -41,40 +37,8 @@ class MasaicOpenAiResponseServiceImpl(
     private val responseStore: ResponseStore,
     private val telemetryService: TelemetryService,
     private val toolService: ToolService,
-) : ResponseService {
+) {
     private val logger = KotlinLogging.logger {}
-
-    /**
-     * Not implemented: Returns a version of this service that includes raw HTTP response data.
-     */
-    override fun withRawResponse(): ResponseService.WithRawResponse {
-        logger.warn { "withRawResponse() method not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
-    }
-
-    /**
-     * Not implemented: Returns the input items service for this response service.
-     */
-    override fun inputItems(): InputItemService {
-        logger.warn { "inputItems() method not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
-    }
-
-    override fun cancel(
-        params: ResponseCancelParams,
-        requestOptions: RequestOptions,
-    ) {
-        logger.warn { "cancel() method not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
-    }
-
-    override fun create(
-        params: ResponseCreateParams,
-        requestOptions: RequestOptions,
-    ): Response {
-        logger.warn { "create() method with RequestOptions not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
-    }
 
     /**
      * Creates a new completion response based on provided parameters.
@@ -96,7 +60,7 @@ class MasaicOpenAiResponseServiceImpl(
             telemetryService.withClientObservation("chat", metadata.modelName, parentObs) { observation ->
                 chatObservation = observation
                 logger.debug { "Creating completion with model: ${params.model()}" }
-                val completionCreateParams = runBlocking { parameterConverter.prepareCompletion(params) }
+                val completionCreateParams = parameterConverter.prepareCompletion(params)
                 telemetryService.emitModelInputEvents(observation, completionCreateParams, metadata)
                 var chatCompletions = telemetryService.withTimer(params, metadata) { client.chat().completions().create(completionCreateParams) }
                 if (chatCompletions._id().isMissing()) {
@@ -113,7 +77,7 @@ class MasaicOpenAiResponseServiceImpl(
                     // Convert ChatCompletion to Response before returning
                     val directResponse = chatCompletions.toResponse(params)
                     // Store this direct response as well
-                    runBlocking { storeResponseWithInputItems(directResponse, params) }
+                    storeResponseWithInputItems(directResponse, params)
                     return@withClientObservation directResponse
                 }
 
@@ -135,7 +99,7 @@ class MasaicOpenAiResponseServiceImpl(
                         .input(ResponseCreateParams.Input.ofResponse(toolCallOutcome.finalResponseInputItems))
                         .build()
 
-                runBlocking { storeResponseWithInputItems(toolCallOutcome.directResponse, tempParamsForStorage) }
+                storeResponseWithInputItems(toolCallOutcome.directResponse, tempParamsForStorage)
                 return toolCallOutcome.directResponse
             }
             is MasaicToolCallResult.Continue -> {
@@ -149,7 +113,7 @@ class MasaicOpenAiResponseServiceImpl(
                 if (hasUnresolvedFunctionCalls(updatedParams)) {
                     logger.info { "Some function calls without outputs, returning current response based on assistant's request for tools" }
                     val currentResponseWithToolRequests = chatCompletions.toResponse(updatedParams) // pass updatedParams
-                    runBlocking { storeResponseWithInputItems(currentResponseWithToolRequests, updatedParams) }
+                    storeResponseWithInputItems(currentResponseWithToolRequests, updatedParams)
                     return currentResponseWithToolRequests
                 }
 
@@ -237,29 +201,6 @@ class MasaicOpenAiResponseServiceImpl(
     ): Flow<ServerSentEvent<String>> {
         logger.debug { "Creating streaming completion with model: ${initialParams.model()}" }
         return streamingService.createCompletionStream(client, initialParams, metadata)
-    }
-
-    /**
-     * Not implemented: Creates a streaming response.
-     */
-    override fun createStreaming(
-        params: ResponseCreateParams,
-        requestOptions: RequestOptions,
-    ): StreamResponse<ResponseStreamEvent> {
-        logger.warn { "createStreaming() method with RequestOptions not implemented" }
-        throw UnsupportedOperationException("Not yet implemented")
-    }
-
-    override fun retrieve(
-        params: ResponseRetrieveParams,
-        requestOptions: RequestOptions,
-    ): Response = runBlocking { retrieveAsync(params, requestOptions) }
-
-    override fun delete(
-        params: ResponseDeleteParams,
-        requestOptions: RequestOptions,
-    ) {
-        runBlocking { deleteAsync(params, requestOptions) }
     }
 
     /**

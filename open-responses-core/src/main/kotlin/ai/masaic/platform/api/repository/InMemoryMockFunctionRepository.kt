@@ -17,15 +17,15 @@ class InMemoryMockFunctionRepository : MockFunctionRepository {
         return definition
     }
 
-    override fun findById(id: String): MockFunctionDefinition? = cache.getIfPresent(id)
+    override suspend fun findById(id: String): MockFunctionDefinition? = cache.getIfPresent(id)
 
-    override fun deleteById(id: String): Boolean {
+    override suspend fun deleteById(id: String): Boolean {
         val existed = cache.getIfPresent(id) != null
         cache.invalidate(id)
         return existed
     }
 
-    override fun findAll(): List<MockFunctionDefinition> = cache.asMap().values.sortedByDescending { it.createdAt }
+    override suspend fun findAll(): List<MockFunctionDefinition> = cache.asMap().values.sortedByDescending { it.createdAt }
 
     fun clear() {
         cache.invalidateAll()

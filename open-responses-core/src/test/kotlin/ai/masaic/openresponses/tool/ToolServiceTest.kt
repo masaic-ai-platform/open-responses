@@ -8,6 +8,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
@@ -50,7 +51,7 @@ class ToolServiceTest {
      */
     @BeforeAll
     fun loadMCPTools() {
-        toolService.loadTools()
+        runBlocking { toolService.loadTools() }
     }
 
     /**
@@ -60,7 +61,7 @@ class ToolServiceTest {
      */
     @AfterAll
     fun shutdown() {
-        toolService.cleanup()
+        runBlocking { toolService.cleanup() }
     }
 
     @Test

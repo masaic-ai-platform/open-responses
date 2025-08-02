@@ -8,6 +8,7 @@ import ai.masaic.openresponses.api.support.service.TelemetryService
 import ai.masaic.openresponses.api.utils.toFilePart
 import io.mockk.*
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -83,7 +84,7 @@ class FileServiceTest {
             } coAnswers { call ->
                 // Extract the lambda block and call it
                 val block = call.invocation.args[4] as (suspend () -> ai.masaic.openresponses.api.model.File)
-                block() // This will call our mocked fileStorageService.store
+                runBlocking { block() } // This will call our mocked fileStorageService.store
                 expectedFile
             }
         
@@ -252,7 +253,7 @@ class FileServiceTest {
             coVerify { 
                 fileStorageService.exists(fileId)
                 fileStorageService.delete(fileId)
-                vectorSearchProvider.deleteFile(fileId)
+                runBlocking { vectorSearchProvider.deleteFile(fileId) }
             }
         }
 
@@ -301,7 +302,7 @@ class FileServiceTest {
         
             coEvery { fileStorageService.exists(fileId) } returns true
             coEvery { fileStorageService.delete(fileId) } returns true
-            every { vectorSearchProvider.deleteFile(fileId) } throws RuntimeException("Vector search error")
+            every { runBlocking { vectorSearchProvider.deleteFile(fileId) } } throws RuntimeException("Vector search error")
         
             // When
             val result = fileService.deleteFile(fileId)
@@ -312,7 +313,7 @@ class FileServiceTest {
             
             // Verify that both storage and vector search deletion were attempted
             coVerify { fileStorageService.delete(fileId) }
-            verify { vectorSearchProvider.deleteFile(fileId) }
+            verify { runBlocking { vectorSearchProvider.deleteFile(fileId) } }
         }
 
     @Test
@@ -469,7 +470,7 @@ class FileServiceTest {
                 )
             } coAnswers {
                 val block = call.invocation.args[4] as (suspend () -> ai.masaic.openresponses.api.model.File)
-                block()
+                runBlocking { block() }
                 expectedFile
             }
             
@@ -516,7 +517,7 @@ class FileServiceTest {
             
             coEvery { fileStorageService.exists(fileId) } returns true
             coEvery { fileStorageService.delete(fileId) } returns true
-            every { vectorSearchProvider.deleteFile(fileId) } returns false // File not found in vector store
+            every { runBlocking { vectorSearchProvider.deleteFile(fileId) } } returns false // File not found in vector store
             
             // When
             val result = fileService.deleteFile(fileId)

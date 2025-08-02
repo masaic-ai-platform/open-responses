@@ -131,7 +131,7 @@ class FileBasedVectorSearchProvider(
      * @return True if indexing was successful, false otherwise
      */
     @OptIn(DelicateCoroutinesApi::class, DelicateCoroutinesApi::class)
-    override fun indexFile(
+    override suspend fun indexFile(
         fileId: String,
         inputStream: InputStream,
         filename: String,
@@ -253,7 +253,7 @@ class FileBasedVectorSearchProvider(
     /**
      * Indexes a file with attributes.
      */
-    override fun indexFile(
+    override suspend fun indexFile(
         fileId: String,
         inputStream: InputStream,
         filename: String,
@@ -265,7 +265,7 @@ class FileBasedVectorSearchProvider(
     /**
      * Indexes a file without attributes.
      */
-    override fun indexFile(
+    override suspend fun indexFile(
         fileId: String,
         inputStream: InputStream,
         filename: String,
@@ -399,7 +399,7 @@ class FileBasedVectorSearchProvider(
      * @param fileId The ID of the file to delete
      * @return True if deletion was successful, false otherwise
      */
-    override fun deleteFile(fileId: String): Boolean {
+    override suspend fun deleteFile(fileId: String): Boolean {
         try {
             // Get vector store ID from file before deleting
             val fileEmbeddings = loadEmbeddingsForFile(fileId)
@@ -420,13 +420,11 @@ class FileBasedVectorSearchProvider(
             // Delete from text search indexes via hybrid service
             if (vectorStoreId != null) {
                 hybridSearchServiceHelper.let {
-                    kotlinx.coroutines.runBlocking {
-                        try {
-                            it.deleteFileChunks(fileId, vectorStoreId)
-                            log.info("Deleted chunks for file $fileId from hybrid search indexes")
-                        } catch (e: Exception) {
-                            log.error("Error deleting file $fileId chunks from hybrid search indexes: ${e.message}", e)
-                        }
+                    try {
+                        it.deleteFileChunks(fileId, vectorStoreId)
+                        log.info("Deleted chunks for file $fileId from hybrid search indexes")
+                    } catch (e: Exception) {
+                        log.error("Error deleting file $fileId chunks from hybrid search indexes: ${e.message}", e)
                     }
                 }
             }

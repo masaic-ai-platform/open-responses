@@ -18,7 +18,6 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam
 import com.openai.models.chat.completions.ChatCompletionToolMessageParam
 import com.openai.models.responses.*
 import io.micrometer.observation.Observation
-import kotlinx.coroutines.runBlocking
 import mu.KotlinLogging
 import org.springframework.http.codec.ServerSentEvent
 import org.springframework.stereotype.Component
@@ -124,7 +123,7 @@ class MasaicToolHandler(
      * @param openAIClient The OpenAI client instance.
      * @return List of ChatCompletionMessageParam including original messages, assistant message with tool calls, and tool output messages.
      */
-    fun handleCompletionToolCall(
+    suspend fun handleCompletionToolCall(
         chatCompletion: ChatCompletion,
         params: ChatCompletionCreateParams,
         openAIClient: OpenAIClient,
@@ -166,17 +165,15 @@ class MasaicToolHandler(
                     var rawToolOutput: String? = null
                     try {
                         rawToolOutput =
-                            runBlocking {
-                                toolService.executeTool(
-                                    toolName,
-                                    arguments = function.arguments(),
-                                    params = params, // ChatCompletionCreateParams
-                                    openAIClient = openAIClient,
-                                    eventEmitter = {}, // No SSE for non-streaming completion context tool call
-                                    toolMetadata = mapOf("toolCallId" to toolCallId),
-                                    context = context, // CompletionToolRequestContext
-                                )
-                            }
+                            toolService.executeTool(
+                                toolName,
+                                arguments = function.arguments(),
+                                params = params, // ChatCompletionCreateParams
+                                openAIClient = openAIClient,
+                                eventEmitter = {}, // No SSE for non-streaming completion context tool call
+                                toolMetadata = mapOf("toolCallId" to toolCallId),
+                                context = context, // CompletionToolRequestContext
+                            )
                     } catch (e: Exception) {
                         logger.error(e) { "Error executing terminal tool $toolName for completion: ${e.message}" }
                         rawToolOutput = "{\"error\": \"Error executing tool $toolName: ${e.message}\"}" // Encapsulate error in JSON-like string
@@ -320,7 +317,7 @@ class MasaicToolHandler(
      * @param context The context for tool execution, containing alias maps and original params.
      * @return The string result of the tool execution, or null if execution fails or returns null.
      */
-    private fun executeToolWithObservationForCompletion(
+    private suspend fun executeToolWithObservationForCompletion(
         toolName: String,
         toolDescription: String,
         arguments: String,
@@ -336,10 +333,7 @@ class MasaicToolHandler(
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_DESCRIPTION, toolDescription)
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
-                // Use runBlocking to call the suspending function from a synchronous context
-                runBlocking {
-                    toolService.executeTool(toolName, arguments, params, openAIClient, {}, toolMetadata, context)
-                }
+                toolService.executeTool(toolName, arguments, params, openAIClient, {}, toolMetadata, context)
             } catch (e: Exception) {
                 observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
                 logger.error(e) { "Error executing tool $toolName for completion: ${e.message}" }
@@ -355,7 +349,7 @@ class MasaicToolHandler(
      * @param params The original request parameters
      * @return List of ResponseInputItems with both tool calls and their outputs
      */
-    fun handleMasaicToolCall(
+    suspend fun handleMasaicToolCall(
         chatCompletion: ChatCompletion,
         params: ResponseCreateParams,
         parentObservation: Observation? = null,
@@ -436,20 +430,18 @@ class MasaicToolHandler(
                             // Simplified execution for clarity; actual execution uses `toolService.executeTool`
                             try {
                                 toolOutputString =
-                                    runBlocking {
-                                        objectMapper.readValue(
-                                            toolService.executeTool(
-                                                function.name(),
-                                                function.arguments(),
-                                                params,
-                                                openAIClient,
-                                                {},
-                                                mapOf("toolId" to tool.id()),
-                                                context,
-                                            ),
-                                            object : TypeReference<Map<String, String>>() {},
-                                        )
-                                    }
+                                    objectMapper.readValue(
+                                        toolService.executeTool(
+                                            function.name(),
+                                            function.arguments(),
+                                            params,
+                                            openAIClient,
+                                            {},
+                                            mapOf("toolId" to tool.id()),
+                                            context,
+                                        ),
+                                        object : TypeReference<Map<String, String>>() {},
+                                    )
                             } catch (e: Exception) {
                                 logger.error(e) { "Error executing terminal tool ${function.name()}: ${e.message}" }
                                 toolOutputString = mapOf("error" to "Error executing terminal tool: ${e.message}")
@@ -545,17 +537,15 @@ class MasaicToolHandler(
                                 var regularToolResult: String? = null
                                 try {
                                     regularToolResult =
-                                        runBlocking {
-                                            toolService.executeTool(
-                                                function.name(),
-                                                function.arguments(),
-                                                params,
-                                                openAIClient,
-                                                {},
-                                                mapOf("toolId" to tool.id()),
-                                                context,
-                                            )
-                                        }
+                                        toolService.executeTool(
+                                            function.name(),
+                                            function.arguments(),
+                                            params,
+                                            openAIClient,
+                                            {},
+                                            mapOf("toolId" to tool.id()),
+                                            context,
+                                        )
                                 } catch (e: Exception) {
                                     logger.error(e) { "Error executing tool ${function.name()}: ${e.message}" }
                                     regularToolResult = "Error executing tool ${function.name()}: ${e.message}"
@@ -645,7 +635,7 @@ class MasaicToolHandler(
      * @param toolId The ID of the tool call
      * @param resultHandler A function that processes the tool execution result
      */
-    private fun executeToolWithObservation(
+    private suspend fun executeToolWithObservation(
         toolName: String,
         toolDescription: String,
         arguments: String,
@@ -656,7 +646,7 @@ class MasaicToolHandler(
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
         context: ToolRequestContext,
         parentObservation: Observation? = null,
-        resultHandler: (String?) -> Unit,
+        resultHandler: suspend (String?) -> Unit,
     ) {
         telemetryService.withClientObservation("execute_tool", parentObservation) { observation ->
             observation.lowCardinalityKeyValue(GenAIObsAttributes.OPERATION_NAME, "execute_tool")
@@ -665,9 +655,7 @@ class MasaicToolHandler(
             observation.highCardinalityKeyValue(GenAIObsAttributes.TOOL_CALL_ID, toolId)
             try {
                 val toolResult =
-                    runBlocking { 
-                        toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata, context) 
-                    }
+                    toolService.executeTool(toolName, arguments, params, openAIClient, eventEmitter, toolMetadata, context)
                 resultHandler(toolResult)
             } catch (e: Exception) {
                 observation.lowCardinalityKeyValue(GenAIObsAttributes.ERROR_TYPE, "${e.javaClass}")
@@ -685,7 +673,7 @@ class MasaicToolHandler(
      * @param eventEmitter Optional callback function to emit tool execution events
      * @return List of ResponseInputItems with both tool calls and their outputs
      */
-    fun handleMasaicToolCall(
+    suspend fun handleMasaicToolCall(
         params: ResponseCreateParams,
         response: Response,
         eventEmitter: ((ServerSentEvent<String>) -> Unit),
@@ -777,9 +765,6 @@ class MasaicToolHandler(
                                 ),
                         ).build(),
                 )
-
-//                runBlocking { delay(10*1000) }
-
                 if (function.name() == IMAGE_GENERATION_TOOL_NAME) {
                     eventEmitter.invoke(
                         ServerSentEvent
@@ -854,7 +839,7 @@ class MasaicToolHandler(
                                     .builder()
                                     .id(function.id().get())
                                     .status(ResponseOutputItem.ImageGenerationCall.Status.COMPLETED)
-                                    .result(imageToolOutputString["data"].toString())
+                                    .result(imageToolOutputString!!["data"].toString())
                                     .type(JsonValue.from("image_generation_call"))
                                     .build(),
                             )

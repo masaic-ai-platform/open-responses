@@ -27,7 +27,7 @@ class MockVectorSearchProvider : VectorSearchProvider {
         val metadata: Map<String, Any> = emptyMap(),
     )
 
-    override fun indexFile(
+    override suspend fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,
@@ -90,7 +90,7 @@ class MockVectorSearchProvider : VectorSearchProvider {
         return results
     }
 
-    override fun deleteFile(fileId: String): Boolean = indexedFiles.remove(fileId) != null
+    override suspend fun deleteFile(fileId: String): Boolean = indexedFiles.remove(fileId) != null
 
     override fun getFileMetadata(fileId: String): Map<String, Any>? {
         val file = indexedFiles[fileId] ?: return null

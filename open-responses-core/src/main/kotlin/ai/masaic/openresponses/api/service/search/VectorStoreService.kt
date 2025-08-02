@@ -1000,7 +1000,7 @@ class VectorStoreService(
         }
     }
 
-    protected fun indexFile(
+    protected suspend fun indexFile(
         fileId: String,
         content: InputStream,
         filename: String,

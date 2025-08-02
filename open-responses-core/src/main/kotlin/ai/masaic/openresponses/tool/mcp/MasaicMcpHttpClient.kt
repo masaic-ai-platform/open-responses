@@ -31,35 +31,35 @@ import java.util.concurrent.*
 import kotlin.time.Duration.Companion.seconds
 
 interface McpClientFactory {
-    fun init(
+    suspend fun init(
         serverName: String,
         url: String,
         headers: Map<String, String> = emptyMap(),
     ): McpClient
 
-    fun init(
+    suspend fun init(
         serverName: String,
         mcpServer: MCPServer,
     ): McpClient
 }
 
 open class SimpleMcpClientFactory : McpClientFactory {
-    override fun init(
+    override suspend fun init(
         serverName: String,
         url: String,
         headers: Map<String, String>,
     ): McpClient = SimpleMcpClient().init(serverName, url, headers)
 
-    override fun init(
+    override suspend fun init(
         serverName: String,
         mcpServer: MCPServer,
     ): McpClient = SimpleMcpClient().init(serverName, mcpServer)
 }
 
 interface McpClient {
-    fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition>
+    suspend fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition>
 
-    fun executeTool(
+    suspend fun executeTool(
         tool: ToolDefinition,
         arguments: String,
         paramsAccessor: ToolParamsAccessor?,
@@ -67,7 +67,7 @@ interface McpClient {
         headers: Map<String, String>,
     ): String?
 
-    fun close()
+    suspend fun close()
 }
 
 class SimpleMcpClient : McpClient {
@@ -80,7 +80,7 @@ class SimpleMcpClient : McpClient {
         const val CONNECTION_TIMEOUT_SECONDS = 60L
     }
 
-    fun init(
+    suspend fun init(
         serverName: String,
         url: String,
         headers: Map<String, String> = emptyMap(),
@@ -91,9 +91,7 @@ class SimpleMcpClient : McpClient {
                 .sync(transport)
                 .requestTimeout(Duration.ofSeconds(60 * 1000))
                 .build()
-        runBlocking {
-            customClient?.initialize(url, headers) ?: throw IllegalStateException("mcp client not initialised for $url")
-        }
+        customClient?.initialize(url, headers) ?: throw IllegalStateException("mcp client not initialised for $url")
         log.info("MCP HTTP client connected for $serverName server at: $url")
         return this
     }
@@ -139,7 +137,7 @@ class SimpleMcpClient : McpClient {
         return this
     }
 
-    override fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
+    override suspend fun listTools(mcpServerInfo: MCPServerInfo): List<McpToolDefinition> =
         defaultMcpClient?.listTools()?.map {
             val tool =
                 McpToolDefinition(
@@ -164,7 +162,7 @@ class SimpleMcpClient : McpClient {
         }
             ?: emptyList()
 
-    override fun executeTool(
+    override suspend fun executeTool(
         tool: ToolDefinition,
         arguments: String,
         paramsAccessor: ToolParamsAccessor?,
@@ -198,7 +196,7 @@ class SimpleMcpClient : McpClient {
             add("2>&1")
         }
 
-    override fun close() {
+    override suspend fun close() {
         defaultMcpClient?.close()
     }
 }
@@ -344,7 +342,7 @@ class HttpSseTransport(
     /**
      * Sends a JSON-RPC request, optionally streaming SSE events via onEvent.
      */
-    fun send(
+    suspend fun send(
         payload: Any,
         sessionId: String? = null,
         onEvent: ((Any) -> Unit)? = null,
@@ -375,7 +373,7 @@ class HttpSseTransport(
             if (code == 400 && sseEndpoint != null) {
                 if (retryCount < 4) {
                     log.warn { "MCP server returned 400 with response: ${resp.body!!.string()}, attempting to reconnect. Retry attempt: ${retryCount + 1}/4" }
-                    runBlocking { init(headers) }
+                    init(headers)
                     return send(payload, sessionId, onEvent, headers, retryCount + 1)
                 } else {
                     log.error { "Failed to reconnect after 4 attempts. Giving up." }
@@ -507,7 +505,7 @@ class McpSyncClient private constructor(
         log.info { "Server will send content as ${headers["Content-Type"]}, setting listenSSE=$listenSSE" }
     }
 
-    fun listTools(headers: Map<String, String>): List<ToolSpecification> {
+    suspend fun listTools(headers: Map<String, String>): List<ToolSpecification> {
         if (listenSSE) {
             return listenListTools(headers)
         }
@@ -520,7 +518,7 @@ class McpSyncClient private constructor(
         return Converter.convert(mapper.readTree(resp as String))
     }
 
-    private fun listenListTools(headers: Map<String, String>): List<ToolSpecification> {
+    private suspend fun listenListTools(headers: Map<String, String>): List<ToolSpecification> {
         // we’ll wait for exactly one response and then return
         val latch = CountDownLatch(1)
         val collected = mutableListOf<ToolSpecification>()
@@ -546,7 +544,7 @@ class McpSyncClient private constructor(
         return collected
     }
 
-    fun callTool(
+    suspend fun callTool(
         request: CallToolRequest,
         headers: Map<String, String>,
     ): String {
@@ -558,7 +556,7 @@ class McpSyncClient private constructor(
         return resp.toString()
     }
 
-    private fun listenCallTool(
+    private suspend fun listenCallTool(
         request: CallToolRequest,
         headers: Map<String, String>,
     ): String {
@@ -580,7 +578,7 @@ class McpSyncClient private constructor(
         return toolResponse
     }
 
-    fun closeGracefully(headers: Map<String, String>) {
+    suspend fun closeGracefully(headers: Map<String, String>) {
         transport.send(
             payload = mapOf("jsonrpc" to "2.0", "method" to "shutdown", "id" to 10),
             sessionId = sessionId,

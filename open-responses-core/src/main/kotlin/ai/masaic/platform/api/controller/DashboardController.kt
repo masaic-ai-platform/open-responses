@@ -204,7 +204,7 @@ ${request.existingPrompt}
         }
 
     @PostMapping("/tools/mcp/execute", produces = [MediaType.APPLICATION_JSON_VALUE])
-    fun executeMCPTool(
+    suspend fun executeMCPTool(
         @RequestBody toolRequest: ExecuteToolRequest,
     ): String {
         val toolDefinition = toolService.findToolByName(toolRequest.name) ?: return "Tool ${toolRequest.name} not found."

@@ -62,7 +62,7 @@ class MasaicOpenAiCompletionServiceImplTest {
         val meterRegistry = SimpleMeterRegistry()
         telemetryService = spyk(TelemetryService(observationRegistry, meterRegistry))
         every {
-            telemetryService.withClientObservation<ChatCompletion>(any(), any(), any(), any())
+            runBlocking { telemetryService.withClientObservation<ChatCompletion>(any(), any(), any(), any()) }
         } answers {
             val block = thirdArg<(Observation) -> ChatCompletion>()
             block(mockObservation)
@@ -129,7 +129,7 @@ class MasaicOpenAiCompletionServiceImplTest {
 
             // Then: returns the same completion and no storage
             assertEquals(chatCompletion, result)
-            verify(exactly = 1) { telemetryService.emitModelInputEvents(any(), params, metadata) }
+            verify(exactly = 1) { runBlocking { telemetryService.emitModelInputEvents(any(), params, metadata) } }
             verify(exactly = 1) { telemetryService.emitModelOutputEvents(any(), chatCompletion, metadata) }
             verify(exactly = 1) { telemetryService.setChatCompletionObservationAttributes(any(), chatCompletion, params, metadata) }
             coVerify(exactly = 0) { completionStore.storeCompletion(any(), any(), any()) }
@@ -186,7 +186,7 @@ class MasaicOpenAiCompletionServiceImplTest {
 
             // Then: returns and stores once
             assertEquals(chatCompletion, result)
-            verify(exactly = 1) { telemetryService.emitModelInputEvents(any(), params, metadata) }
+            verify(exactly = 1) { runBlocking { telemetryService.emitModelInputEvents(any(), params, metadata) } }
             verify(exactly = 1) { telemetryService.emitModelOutputEvents(any(), chatCompletion, metadata) }
             verify(exactly = 1) { telemetryService.setChatCompletionObservationAttributes(any(), chatCompletion, params, metadata) }
             coVerify(exactly = 1) {
@@ -242,11 +242,13 @@ class MasaicOpenAiCompletionServiceImplTest {
             every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
             // Stub handler to indicate unresolved client tools
             every {
-                toolHandler.handleCompletionToolCall(
-                    chatCompletion,
-                    any(),
-                    client,
-                )
+                runBlocking {
+                    toolHandler.handleCompletionToolCall(
+                        chatCompletion,
+                        any(),
+                        client,
+                    )
+                }
             } returns
                 CompletionToolCallOutcome.Continue(
                     updatedMessages = emptyList(),
@@ -310,7 +312,7 @@ class MasaicOpenAiCompletionServiceImplTest {
                     .build()
             every { telemetryService.withChatCompletionTimer(any(), any(), any<() -> ChatCompletion>()) } returns chatCompletion
             every {
-                toolHandler.handleCompletionToolCall(chatCompletion, any(), client)
+                runBlocking { toolHandler.handleCompletionToolCall(chatCompletion, any(), client) }
             } returns
                 CompletionToolCallOutcome.Continue(
                     updatedMessages = emptyList(),
@@ -344,12 +346,14 @@ class MasaicOpenAiCompletionServiceImplTest {
         runBlocking {
             // Stub streaming observation
             every {
-                telemetryService.withClientObservation<kotlinx.coroutines.flow.Flow<ServerSentEvent<String>>>(
-                    "openai.chat.completions.stream",
-                    any(),
-                    any(),
-                    any(),
-                )
+                runBlocking {
+                    telemetryService.withClientObservation<kotlinx.coroutines.flow.Flow<ServerSentEvent<String>>>(
+                        "openai.chat.completions.stream",
+                        any(),
+                        any(),
+                        any(),
+                    )
+                }
             } answers {
                 val block = thirdArg<(Observation) -> kotlinx.coroutines.flow.Flow<ServerSentEvent<String>>>()
                 block(mockObservation)

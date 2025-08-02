@@ -22,6 +22,7 @@ import io.qdrant.client.QdrantClient
 import io.qdrant.client.grpc.Collections
 import io.qdrant.client.grpc.Collections.CollectionOperationResponse
 import io.qdrant.client.grpc.Points
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -159,7 +160,7 @@ class QdrantVectorSearchProviderTest {
         every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
 
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test") }
         
         // Then
         assertTrue(result, "File should be successfully indexed")
@@ -214,7 +215,7 @@ class QdrantVectorSearchProviderTest {
         every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
         
         // When
-        val result = vectorSearchProvider.deleteFile(fileId)
+        val result = runBlocking { vectorSearchProvider.deleteFile(fileId) }
         
         // Then
         assertTrue(result, "File should be successfully deleted")
@@ -232,7 +233,7 @@ class QdrantVectorSearchProviderTest {
         every { embeddingService.embedTexts(any()) } throws RuntimeException("Embedding service error")
         every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "test.txt", null, "test") }
         
         // Then
         assertFalse(result, "Indexing should fail when embedding service throws an error")
@@ -247,7 +248,7 @@ class QdrantVectorSearchProviderTest {
         val inputStream = ByteArrayInputStream(content.toByteArray())
         
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt", null, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, "empty.txt", null, "test") }
         
         // Then
         assertFalse(result, "Indexing should fail for empty content")
@@ -272,7 +273,7 @@ class QdrantVectorSearchProviderTest {
         every { embeddingStore.removeAll(ofType<IsEqualTo>()) } just runs
 
         // When
-        val result = vectorSearchProvider.indexFile(fileId, inputStream, filename, chunkingStrategy, "test")
+        val result = runBlocking { vectorSearchProvider.indexFile(fileId, inputStream, filename, chunkingStrategy, "test") }
         
         // Then
         assertTrue(result, "File should be successfully indexed with custom chunking strategy")
@@ -356,7 +357,7 @@ class QdrantVectorSearchProviderTest {
         every { embeddingStore.removeAll(ofType<IsEqualTo>()) } throws RuntimeException("Delete error")
         
         // When
-        val result = vectorSearchProvider.deleteFile(fileId)
+        val result = runBlocking { vectorSearchProvider.deleteFile(fileId) }
         
         // Then
         assertFalse(result, "Should return false when delete operation fails")
