@@ -1207,6 +1207,14 @@ const AiPlayground: React.FC = () => {
       ));
     } finally {
       setIsLoading(false);
+      
+      // Focus the textarea after streaming completes
+      setTimeout(() => {
+        const textarea = document.querySelector('.chat-input-textarea') as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.focus();
+        }
+      }, 100);
     }
   };
 
