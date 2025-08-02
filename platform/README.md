@@ -1,26 +1,23 @@
-# OpenResponses: The Drop-in Agentic API Layer
-
-[![Discord](https://img.shields.io/static/v1?label=Discord&message=Join%20Us&color=5865F2&logo=discord&logoColor=white)](https://discord.com/channels/1335132819260702723/1354795442004820068)
-[![Discussions](https://img.shields.io/static/v1?label=Discussions&message=Community&color=3FB950&logo=github&logoColor=white)](https://github.com/orgs/masaic-ai-platform/discussions)
-[![Docker Hub Version](https://img.shields.io/docker/v/masaicai/open-responses?label=version&sort=semver)](https://hub.docker.com/r/masaicai/open-responses/tags)
+# Platform Server: The Agentic Orchestration API Layer
 
 ## Overview
 
 **Open Source • Community-Driven • Apache 2.0 Licensed**
 
-> **Built-in RAG. Built-in Tool Calling. Built-in Remote MCP Support. Any Model.**  
+> **Built-in Agentic Tools. Built-in Orchestration. Built-in MCP Support. Any Model.**  
 > No glue code. Use **any framework** that speaks Completions or Responses API<sup>1</sup>.
 
 <sup>1</sup> OpenAI Agents SDK, Autogen, LangGraph, CrewAI, Agno Agents, LMOS ARC, and more.
 
-**OpenResponses** is a drop-in replacement for `/responses`, `/chat/completions`, and `/embeddings` — now with:
+**Platform Server** is an agentic orchestration API layer that provides drop-in replacement for `/responses`, `/chat/completions`, and `/embeddings` — now with:
 
-- 🔧 **Built-in tool/function calling**
+- 🔧 **Built-in agentic tool/function calling**
 - ✅ **Built-in Remote MCP server Integrations**
 - 🔍 **Built-in Search + RAG**
 - 🧠 **Built-in Agentic state + memory**
+- 🎯 **Built-in agent orchestration capabilities**
 
-Works even if your model lacks native support — like [OpenAI’s Responses API](https://platform.openai.com/docs/api-reference/responses).
+Works even if your model lacks native support — like [OpenAI's Responses API](https://platform.openai.com/docs/api-reference/responses).
 
 ## 🔧 Key Engineering Wins
 
@@ -30,10 +27,12 @@ RAG, file/web search, memory, and remote MCP server integrations — all built-i
 ⚡ **Fast, Flexible, and Fully Open**  
 Supports any model, stateful responses, and tool/function calling — lightweight, high-performance, and easy to self-host.
 
+🎯 **Agentic Orchestration**  
+Multi-agent workflows, collaboration, and agent-to-agent messaging capabilities built-in.
 
 ## 🚀 Getting Started
 
-Get up and running in **2 steps** — an OpenAI-compatible API with tool calling, RAG, memory, and remote MCP, powered by **your models**.
+Get up and running in **2 steps** — an agentic orchestration API with tool calling, RAG, memory, and remote MCP, powered by **your models**.
 
 ### 🐳 Run with Docker
 
@@ -80,34 +79,17 @@ curl --location 'http://localhost:6644/v1/responses' \
     ]
 }'
 ```
-For detailed implementation instructions, see our [Quick Start Guide](https://openresponses.masaic.ai/quickstart).
-
-
-
-## 💬 What Engineers Are Saying
-
-> “Masaic OpenResponses is one of the few platforms that supports the `/responses` API even when the backend (like Ollama) **doesn’t — but might in the future**. It handles server-side tools like search and supports stateful agent processing — two huge wins. Bonus: it even integrates with OpenTelemetry out of the box. The team is responsive and fast-moving.”  
-> — **[Adrian Cole](https://www.linkedin.com/posts/adrianfcole_openai-opentelemetry-activity-7328071653249228805-F0q-)**, Principal Engineer, Elastic
-
 
 ## Core Capabilities
 
 | Feature | Description | Benefit |
 |---------|-------------|---------|
+| **Agentic Orchestration** | Multi-agent workflows and collaboration | Build complex agent systems with minimal code |
 | **Automated Tracing** | Comprehensive request and response monitoring | Track performance and usage without additional code |
 | **Integrated RAG** | Contextual information retrieval | Enhance responses with relevant external data automatically |
 | **Pre-built Tool Integrations** | Web search, GitHub access, and more | Deploy advanced capabilities instantly |
 | **Self-Hosted Architecture** | Full control of deployment infrastructure | Maintain complete data sovereignty |
 | **OpenAI-Compatible Interface** | Drop-in replacement for existing OpenAI implementations | Minimal code changes for migration |
-
-## 📚 Documentation
-
-Explore our comprehensive [documentation](https://openresponses.masaic.ai/) to learn more about OpenResponses features and setup.
-
-## 🙌 Help Us Grow
-
-If you find OpenResponses useful, please consider giving it a star ⭐ — it helps others discover it and supports the community!
-
 
 ## 🤝 Contributing
 
@@ -119,7 +101,6 @@ Before submitting a Pull Request, please ensure all regression tests pass by run
 ./regression/regression_common.sh
 ./regression/regression_vector.sh
 ```
-
 
 ## API Reference
 
@@ -191,11 +172,6 @@ OPEN_RESPONSES_STORE_VECTOR_SEARCH_QDRANT_USE_TLS=true/false
 OPENAI_API_KEY=
 SPRING_PROFILES_ACTIVE=platform
 ```
-
-## 📄 License
-
-This project is licensed under the Apache License 2.0 - see the LICENSE file for details.
-
 ---
 
 <p align="center">

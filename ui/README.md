@@ -1,7 +1,4 @@
-# Masaic Dev Platform UI
-[![Discord](https://img.shields.io/static/v1?label=Discord&message=Join%20Us&color=5865F2&logo=discord&logoColor=white)](https://discord.com/channels/1335132819260702723/1354795442004820068)
-[![Discussions](https://img.shields.io/static/v1?label=Discussions&message=Community&color=3FB950&logo=github&logoColor=white)](https://github.com/orgs/masaic-ai-platform/discussions)
-[![Docker Hub Version](https://img.shields.io/docker/v/masaicai/platform-ui?label=version&sort=semver)](https://hub.docker.com/r/masaicai/platform-ui/tags)
+# Agc Platform UI
 
 This is user interface to access Masaic's Agent development platform.
 
