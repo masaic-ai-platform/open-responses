@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Sans:wght@400;500;600&family=Geist+Mono:wght@400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Vercel-like Color System - Light Mode */
+    --background: 0 0% 100%;                    /* #ffffff - pure white */
+    --foreground: 0 0% 9%;                      /* #171717 - very dark gray */
+
+    --card: 0 0% 100%;                          /* #ffffff */
+    --card-foreground: 0 0% 9%;                 /* #171717 */
+
+    --popover: 0 0% 100%;                       /* #ffffff */
+    --popover-foreground: 0 0% 9%;              /* #171717 */
+
+    /* Subtle primary - very muted */
+    --primary: 0 0% 9%;                         /* #171717 - almost black */
+    --primary-foreground: 0 0% 100%;            /* #ffffff */
+
+    /* Very subtle secondary */
+    --secondary: 0 0% 96%;                      /* #f5f5f5 - very light gray */
+    --secondary-foreground: 0 0% 9%;            /* #171717 */
+
+    /* Muted backgrounds */
+    --muted: 0 0% 96%;                          /* #f5f5f5 */
+    --muted-foreground: 0 0% 45%;               /* #737373 */
+
+    /* Accent - subtle gray */
+    --accent: 0 0% 96%;                         /* #f5f5f5 */
+    --accent-foreground: 0 0% 9%;               /* #171717 */
+
+    /* Minimal destructive - muted red */
+    --destructive: 0 84% 60%;                   /* #ef4444 */
+    --destructive-foreground: 0 0% 100%;        /* #ffffff */
+
+    /* Very subtle borders */
+    --border: 0 0% 90%;                         /* #e5e5e5 - light gray border */
+    --input: 0 0% 90%;                          /* #e5e5e5 */
+    --ring: 0 0% 20%;                           /* #333333 - focus ring */
+
+    --radius: 8px;                              /* Slightly rounded for modern look */
+
+    /* Custom Vercel-like grays */
+    --gray-50: 0 0% 98%;                        /* #fafafa */
+    --gray-100: 0 0% 96%;                       /* #f5f5f5 */
+    --gray-200: 0 0% 90%;                       /* #e5e5e5 */
+    --gray-300: 0 0% 83%;                       /* #d4d4d4 */
+    --gray-400: 0 0% 64%;                       /* #a3a3a3 */
+    --gray-500: 0 0% 45%;                       /* #737373 */
+    --gray-600: 0 0% 32%;                       /* #525252 */
+    --gray-700: 0 0% 25%;                       /* #404040 */
+    --gray-800: 0 0% 15%;                       /* #262626 */
+    --gray-900: 0 0% 9%;                        /* #171717 */
+
+    /* Sidebar colors for light mode */
+    --sidebar-background: 0 0% 98%;             /* #fafafa */
+    --sidebar-foreground: 0 0% 15%;             /* #262626 */
+    --sidebar-primary: 0 0% 9%;                 /* #171717 */
+    --sidebar-primary-foreground: 0 0% 100%;    /* #ffffff */
+    --sidebar-accent: 0 0% 96%;                 /* #f5f5f5 */
+    --sidebar-accent-foreground: 0 0% 15%;      /* #262626 */
+    --sidebar-border: 0 0% 90%;                 /* #e5e5e5 */
+    --sidebar-ring: 0 0% 20%;                   /* #333333 */
+  }
+
+  .dark {
+    /* Vercel-like Color System - Dark Mode */
+    --background: 0 0% 7%;                      /* #111111 - very dark */
+    --foreground: 0 0% 98%;                     /* #fafafa - very light */
+
+    --card: 0 0% 7%;                            /* #111111 */
+    --card-foreground: 0 0% 98%;                /* #fafafa */
+
+    --popover: 0 0% 7%;                         /* #111111 */
+    --popover-foreground: 0 0% 98%;             /* #fafafa */
+
+    /* Primary in dark mode */
+    --primary: 0 0% 98%;                        /* #fafafa - very light */
+    --primary-foreground: 0 0% 9%;              /* #171717 */
+
+    /* Dark mode secondary */
+    --secondary: 0 0% 10%;                      /* #1a1a1a - very dark gray */
+    --secondary-foreground: 0 0% 98%;           /* #fafafa */
+
+    /* Dark mode muted */
+    --muted: 0 0% 10%;                          /* #1a1a1a */
+    --muted-foreground: 0 0% 64%;               /* #a3a3a3 */
+
+    /* Dark mode accent */
+    --accent: 0 0% 10%;                         /* #1a1a1a */
+    --accent-foreground: 0 0% 98%;              /* #fafafa */
+
+    /* Dark mode destructive */
+    --destructive: 0 62% 30%;                   /* #991b1b */
+    --destructive-foreground: 0 0% 98%;         /* #fafafa */
+
+    /* Dark mode borders */
+    --border: 0 0% 15%;                         /* #262626 */
+    --input: 0 0% 15%;                          /* #262626 */
+    --ring: 0 0% 83%;                           /* #d4d4d4 */
+
+    /* Dark sidebar colors */
+    --sidebar-background: 0 0% 4%;              /* #0a0a0a */
+    --sidebar-foreground: 0 0% 98%;             /* #fafafa */
+    --sidebar-primary: 0 0% 98%;                /* #fafafa */
+    --sidebar-primary-foreground: 0 0% 9%;      /* #171717 */
+    --sidebar-accent: 0 0% 10%;                 /* #1a1a1a */
+    --sidebar-accent-foreground: 0 0% 98%;      /* #fafafa */
+    --sidebar-border: 0 0% 15%;                 /* #262626 */
+    --sidebar-ring: 0 0% 83%;                   /* #d4d4d4 */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+  
+  /* Ensure Geist fonts are properly applied */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans;
+  }
+  
+  code, pre {
+    @apply font-mono;
+  }
+}
+
+@layer utilities {
+  /* Vercel-like utility classes */
+  .vercel-shadow-sm { box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); }
+  .vercel-shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
+  .vercel-shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+  .vercel-shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+  .vercel-shadow-xl { box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04); }
+}
+
+/* Masaic Brand Animations */
+@keyframes slide-in {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-delayed {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+  to {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+@keyframes underline-sweep {
+  from {
+    width: 0;
+    opacity: 0.8;
+  }
+  to {
+    width: 100%;
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes badge-ring {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(46, 125, 50, 0.4);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.1);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(46, 125, 50, 0);
+  }
+}
+
+@keyframes badge-ring-delayed {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.3);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 6px rgba(34, 197, 94, 0.08);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.8s ease-out 0.3s both;
+}
+
+.animate-slide-in-delayed {
+  animation: slide-in-delayed 0.8s ease-out 0.5s both;
+}
+
+.animate-underline-sweep {
+  animation: underline-sweep 0.6s ease-out;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.4s ease-out;
+}
+
+.animate-badge-ring {
+  animation: badge-ring 2.5s ease-in-out infinite;
+}
+
+.animate-badge-ring-delayed {
+  animation: badge-ring-delayed 2.5s ease-in-out infinite 1.25s;
+}
